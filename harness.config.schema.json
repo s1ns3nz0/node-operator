@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["schemaVersion","project","paperthin","models","policies","graphs","adapters"],"properties":{"schemaVersion":{"const":1},"project":{"type":"object"},"paperthin":{"type":"object"},"models":{"type":"object"},"policies":{"type":"object"},"graphs":{"type":"object"},"adapters":{"type":"object"}}}
