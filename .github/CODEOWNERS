@@ -1,0 +1,4 @@
+# Sensitive CI/CD and policy paths require the secondary approval identity.
+/policy/ @fjybjinsu
+/.github/ @fjybjinsu
+/docs/policy-as-code.md @fjybjinsu
