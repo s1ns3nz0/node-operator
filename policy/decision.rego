@@ -11,8 +11,39 @@ violations contains violation if {
 }
 
 violations contains violation if {
+  format := object.get(object.get(input, "evidence", {}), "format", {})
+  object.get(format, "status", "") != "passed"
+  violation := finding("format.failed", "block", "formatting evidence did not pass", object.get(format, "check", "format"), "evidence.format")
+}
+
+violations contains violation if {
+  terraform := object.get(object.get(input, "evidence", {}), "terraform", {})
+  status := object.get(terraform, "status", "")
+  not status in {"passed", "not_applicable"}
+  violation := finding("terraform.validation", "block", "offline Terraform validation did not pass", "terraform", "evidence.terraform")
+}
+
+violations contains violation if {
+  scm_incomplete
+  violation := finding("scm.incomplete", "block", "pull-request posture evidence is missing or malformed", "scm", "scm")
+}
+
+violations contains violation if {
+  tool := data.nodeoperator.config.required_evidence[_]
+  result := object.get(object.get(input, "evidence", {}), tool, null)
+  result != null
+  evidence_incomplete(tool, result)
+  violation := finding("evidence.incomplete", "block", sprintf("required %s evidence is incomplete or malformed", [tool]), tool, sprintf("evidence.%s", [tool]))
+}
+
+violations contains violation if {
   item := object.get(object.get(object.get(input, "evidence", {}), "gitleaks", {}), "findings", [])[_]
   violation := finding("secret.detected", "block", "secret detection finding reported", object.get(item, "path", "unknown"), "evidence.gitleaks")
+}
+
+violations contains violation if {
+  item := object.get(object.get(object.get(input, "evidence", {}), "semgrep", {}), "findings", [])[_]
+  violation := finding("sast.semgrep", "block", "Semgrep finding reported", object.get(item, "rule_id", "unknown"), "evidence.semgrep")
 }
 
 violations contains violation if {
@@ -78,6 +109,48 @@ sensitive_change if {
   path := object.get(object.get(input, "scm", {}), "changed_files", [])[_]
   prefix := data.nodeoperator.config.sensitive_path_prefixes[_]
   startswith(path, prefix)
+}
+
+scm_incomplete if {
+  scm := object.get(input, "scm", null)
+  not is_object(scm)
+}
+
+scm_incomplete if {
+  scm := object.get(input, "scm", {})
+  is_object(scm)
+  not is_array(object.get(scm, "changed_files", null))
+}
+
+scm_incomplete if {
+  scm := object.get(input, "scm", {})
+  is_object(scm)
+  not is_array(object.get(scm, "approvers", null))
+}
+
+scm_incomplete if {
+  scm := object.get(input, "scm", {})
+  is_object(scm)
+  object.get(object.get(scm, "pull_request", {}), "head_sha", "") != object.get(object.get(input, "subject", {}), "commit_sha", "")
+}
+
+evidence_array_fields := {
+  "gitleaks": "findings",
+  "osv": "vulnerabilities",
+  "semgrep": "findings",
+  "zizmor": "findings",
+  "checkov": "failed_checks",
+}
+
+evidence_incomplete(tool, result) if {
+  evidence_array_fields[tool]
+  not is_object(result)
+}
+
+evidence_incomplete(tool, result) if {
+  is_object(result)
+  field := evidence_array_fields[tool]
+  not is_array(object.get(result, field, null))
 }
 
 invalid_exception(exception) if {

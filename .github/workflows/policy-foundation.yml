@@ -21,6 +21,8 @@ jobs:
         run: scripts/ci/test-policy.sh
       - name: Test evidence normalizer
         run: scripts/ci/test-normalizer.sh
+      - name: Test PR gate scripts
+        run: scripts/ci/test-pr-gate.sh
       - name: Install Conftest
         run: scripts/ci/install-conftest.sh
       - name: Test rendered manifests

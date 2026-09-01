@@ -1,0 +1,22 @@
+{
+  "task_id": "2026-09-01-t8-pr-gates",
+  "nodes": [
+    {"id": "T8-1", "title": "Confirm evidence contracts and safe artifact boundary", "tier": "sol", "owner": "/root", "status": "completed"},
+    {"id": "T8-2", "title": "Implement isolated collectors and normalized evidence adapter", "tier": "terra", "owner": "/root/t8_adapter", "status": "completed"},
+    {"id": "T8-3", "title": "Extend OPA decision coverage and adversarial fixtures", "tier": "terra", "owner": "/root/t8_policy", "status": "completed"},
+    {"id": "T8-4", "title": "Implement pinned least-privilege PR workflow and artifact publication", "tier": "sol", "owner": "/root", "status": "completed"},
+    {"id": "T8-5", "title": "Independently review gate failure semantics and validation evidence", "tier": "terra", "owner": "/root/t8_review", "status": "completed"},
+    {"id": "T8-6", "title": "Integrate checks and obtain clean-room debrief", "tier": "sol", "owner": "/root", "status": "completed"}
+  ],
+  "edges": [
+    {"from": "T8-1", "to": "T8-2", "kind": "blocks"},
+    {"from": "T8-1", "to": "T8-3", "kind": "blocks"},
+    {"from": "T8-2", "to": "T8-4", "kind": "blocks"},
+    {"from": "T8-3", "to": "T8-4", "kind": "blocks"},
+    {"from": "T8-2", "to": "T8-5", "kind": "blocks"},
+    {"from": "T8-3", "to": "T8-5", "kind": "blocks"},
+    {"from": "T8-4", "to": "T8-6", "kind": "blocks"},
+    {"from": "T8-5", "to": "T8-6", "kind": "blocks"}
+  ],
+  "updated_at": "2026-09-01T00:00:00Z"
+}
