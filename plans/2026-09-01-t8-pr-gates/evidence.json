@@ -1,0 +1,47 @@
+{
+  "task_id": "2026-09-01-t8-pr-gates",
+  "checks": [
+    {
+      "name": "harness structural check",
+      "command": "npm run harness:check",
+      "exit_status": 0,
+      "summary": "Validated harness configuration and both registered task graphs after T-8 graph creation."
+    },
+    {
+      "name": "T-8 task graph initialization",
+      "result": "completed",
+      "summary": "Created the contract, plan, graph, Mermaid view, and evidence register in the dedicated T-8 worktree."
+    },
+    {
+      "name": "T-7 dependency inspection",
+      "result": "completed",
+      "summary": "Confirmed the existing policy foundation provides required evidence names, normalizer, OPA evaluator, fixtures, CODEOWNERS, and adapter command boundaries."
+    },
+    {
+      "name": "model fallback",
+      "result": "not_used",
+      "summary": "No model fallback was required while creating the graph."
+    },
+    {
+      "name": "implementation validation",
+      "result": "partial",
+      "summary": "Bash syntax, collector, normalizer, SCM posture, publisher, PR-gate fixture, structural graph, and diff checks passed. OPA, Conftest, and ShellCheck commands are unavailable locally, so harness:verify remains environment-blocked."
+    },
+    {
+      "name": "independent Terra review",
+      "result": "completed",
+      "summary": "Two read-only passes found and then confirmed fixes for tool installation, offline Terraform mirror enforcement, Semgrep policy enforcement, artifact isolation, head-SHA binding, SCM posture, and validation wiring. No blocker or high finding remains."
+    },
+    {
+      "name": "clean-room debrief",
+      "result": "completed",
+      "summary": "A fresh Terra agent wrote reports/2026-09-01-t8-pr-gates-debrief.md from only the completed task bundle, relevant diff, and available checks."
+    },
+    {
+      "name": "harness policy adapter",
+      "command": "npm run harness:verify",
+      "exit_status": 1,
+      "summary": "The PR-gate fixture adapter passed. OPA, Conftest, and ShellCheck are not installed on this host, so their adapters could not run; this is an environment validation gap, not a passing claim."
+    }
+  ]
+}

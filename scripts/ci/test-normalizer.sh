@@ -6,6 +6,12 @@ source "$script_dir/lib/common.sh"
 root="$(repo_root)"
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
-"$script_dir/normalize-evidence.sh" "$root/policy/tests/fixtures/raw-evidence/clean" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$temporary_directory/normalized.json"
-jq -e '.evidence.gitleaks.findings == [] and .policy.exceptions == []' "$temporary_directory/normalized.json" >/dev/null
-if "$script_dir/normalize-evidence.sh" "$root/policy/tests/fixtures/raw-evidence/incomplete" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$temporary_directory/incomplete.json"; then printf 'incomplete evidence fixture unexpectedly normalized\n' >&2; exit 1; fi
+"$script_dir/normalize-evidence.sh" "$root/policy/tests/fixtures/raw-evidence/clean" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$root/policy/tests/fixtures/raw-evidence/clean/scm.json" "$temporary_directory/normalized.json"
+jq -e '.evidence.gitleaks.findings == [] and .evidence.format.status == "passed" and .evidence.terraform.status == "not_applicable" and .policy.exceptions == []' "$temporary_directory/normalized.json" >/dev/null
+cp -R "$root/policy/tests/fixtures/raw-evidence/clean" "$temporary_directory/secret-bearing"
+jq '.result.findings = [{path:"fixture.env", rule_id:"fixture-rule", Secret:"DO_NOT_PERSIST"}]' "$temporary_directory/secret-bearing/gitleaks.json" > "$temporary_directory/secret-bearing/gitleaks.next"
+mv "$temporary_directory/secret-bearing/gitleaks.next" "$temporary_directory/secret-bearing/gitleaks.json"
+"$script_dir/normalize-evidence.sh" "$temporary_directory/secret-bearing" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$root/policy/tests/fixtures/raw-evidence/clean/scm.json" "$temporary_directory/redacted.json"
+jq -e '.evidence.gitleaks.findings == [{path:"fixture.env",rule_id:"fixture-rule"}]' "$temporary_directory/redacted.json" >/dev/null
+if rg -l 'DO_NOT_PERSIST' "$temporary_directory/redacted.json" >/dev/null; then printf 'normalizer retained a secret-bearing Gitleaks field\n' >&2; exit 1; fi
+if "$script_dir/normalize-evidence.sh" "$root/policy/tests/fixtures/raw-evidence/incomplete" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$root/policy/tests/fixtures/raw-evidence/clean/scm.json" "$temporary_directory/incomplete.json"; then printf 'incomplete evidence fixture unexpectedly normalized\n' >&2; exit 1; fi

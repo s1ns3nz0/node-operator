@@ -1,0 +1,93 @@
+{
+  "id": "2026-09-01-t8-pr-gates",
+  "title": "Implement required OPA-governed PR gates",
+  "classification": "non-trivial",
+  "classification_reason": [
+    "security CI controls",
+    "multiple validation layers",
+    "multiple model roles"
+  ],
+  "expected_outcome": "A pull-request workflow collects the required scanner and validation evidence, normalizes it, evaluates the OPA block decision as a required gate, and preserves JSON/SARIF artifacts without exposing secrets.",
+  "dependencies": ["T-7"],
+  "constraints": [
+    "Preserve the T-7 policy foundation and one-purpose scripts/ci command boundaries.",
+    "Use pinned GitHub Actions and least-privilege workflow permissions.",
+    "Do not deploy, publish, merge, alter secrets, access AWS, or access production.",
+    "Use offline Terraform validation and non-sensitive fixtures only.",
+    "Do not upload raw secret-bearing scanner output as an artifact."
+  ],
+  "authorization": {
+    "repository_mutation": true,
+    "external_actions": [],
+    "prohibited_actions": [
+      "deploy",
+      "publish",
+      "merge",
+      "secret changes",
+      "AWS access",
+      "production access"
+    ]
+  },
+  "primary_owner": {"tier": "sol", "responsibility": "security decisions, integration, and final sign-off"},
+  "delegations": [
+    {
+      "id": "recon",
+      "tier": "luna",
+      "owner": "/root/t8_recon",
+      "files": [],
+      "worktree": "read-only",
+      "branch": "none",
+      "acceptance_checks": ["tool availability", "collector output contract", "artifact safety risks"],
+      "escalation_trigger": "a required tool or contract cannot produce non-sensitive evidence"
+    },
+    {
+      "id": "adapter",
+      "tier": "terra",
+      "owner": "/root/t8_adapter",
+      "files": ["scripts/ci/collect-pr-evidence.sh", "scripts/ci/test-pr-evidence.sh", "scripts/ci/lib/**"],
+      "worktree": "/Users/s1ns3nz0/orca/projects/node-operator-t8",
+      "branch": "task/2026-09-01-t8-pr-gates",
+      "acceptance_checks": ["collector fixture tests", "ShellCheck"],
+      "escalation_trigger": "scanner output contains secrets or cannot be safely normalized"
+    },
+    {
+      "id": "policy",
+      "tier": "terra",
+      "owner": "/root/t8_policy",
+      "files": ["policy/decision.rego", "policy/tests/**", "policy/data/**"],
+      "worktree": "/Users/s1ns3nz0/orca/projects/node-operator-t8",
+      "branch": "task/2026-09-01-t8-pr-gates",
+      "acceptance_checks": ["opa test", "required adversarial fixture coverage"],
+      "escalation_trigger": "T-8 acceptance cases cannot be represented by the current normalized schema"
+    },
+    {
+      "id": "independent-review",
+      "tier": "terra",
+      "owner": "/root/t8_review",
+      "files": [],
+      "worktree": "read-only",
+      "branch": "none",
+      "acceptance_checks": ["least-privilege workflow", "non-sensitive artifact boundary", "OPA gate reachability"],
+      "escalation_trigger": "a blocking security or correctness defect is found"
+    },
+    {
+      "id": "clean-room-debrief",
+      "tier": "terra",
+      "owner": "/root/t8_debrief",
+      "files": ["reports/2026-09-01-t8-pr-gates-debrief.md"],
+      "worktree": "/Users/s1ns3nz0/orca/projects/node-operator-t8",
+      "branch": "task/2026-09-01-t8-pr-gates",
+      "acceptance_checks": ["observed evidence distinguished from inference", "completed bundle and diff only"],
+      "escalation_trigger": "the completed bundle or validation record is missing"
+    }
+  ],
+  "model_fallbacks": [],
+  "validation": [
+    "npm run harness:check",
+    "npm run harness:verify",
+    "T-8 fixture gate checks",
+    "workflow static inspection"
+  ],
+  "worktree": "/Users/s1ns3nz0/orca/projects/node-operator-t8",
+  "status": "completed_with_local_tool_gap"
+}
