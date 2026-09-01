@@ -1,0 +1,18 @@
+{
+  "id":"2026-09-01-t9-release-evidence",
+  "title":"Add posture, build, and release-eligibility evidence",
+  "classification":"non-trivial",
+  "classification_reason":["security CI controls","multiple validation layers","multiple model roles"],
+  "expected_outcome":"Scheduled posture and build evidence is normalized into OPA decisions that block untrusted builders, digest/provenance mismatches, and stale scans, while retaining only non-sensitive artifacts keyed by commit SHA or digest.",
+  "dependencies":["T-8"],
+  "constraints":["Do not deploy, publish, merge, alter secrets, access AWS, or access production.","Preserve T-8 thin-workflow and non-sensitive artifact boundaries.","Any optional Grype result must be explicit and fail-closed when policy requires it."],
+  "authorization":{"repository_mutation":true,"external_actions":[],"prohibited_actions":["deploy","publish","merge","secret changes","AWS access","production access"]},
+  "primary_owner":{"tier":"sol","responsibility":"security decisions, integration, and final sign-off"},
+  "delegations":[
+    {"id":"recon","tier":"luna","owner":"/root/t9_recon","files":[],"worktree":"read-only","branch":"none","acceptance_checks":["tool availability","safe evidence contract"],"escalation_trigger":"artifact inputs or non-sensitive boundary are undefined"},
+    {"id":"collectors","tier":"terra","owner":"/root/t9_collectors","files":["scripts/ci/collect-release-evidence.sh","scripts/ci/test-release-evidence.sh","scripts/ci/lib/**"],"worktree":"/Users/s1ns3nz0/orca/projects/node-operator-t9","branch":"task/2026-09-01-t9-release-evidence","acceptance_checks":["synthetic collector fixtures","raw artifact redaction"],"escalation_trigger":"raw artifact data cannot be safely summarized"},
+    {"id":"policy","tier":"terra","owner":"/root/t9_policy","files":["policy/decision.rego","policy/tests/**","policy/data/**"],"worktree":"/Users/s1ns3nz0/orca/projects/node-operator-t9","branch":"task/2026-09-01-t9-release-evidence","acceptance_checks":["OPA release-evidence fixtures"],"escalation_trigger":"release eligibility cannot be represented fail-closed"}
+  ],"model_fallbacks":[],
+  "validation":["npm run harness:check","npm run harness:verify","T-9 fixture gate checks","workflow static inspection"],
+  "worktree":"/Users/s1ns3nz0/orca/projects/node-operator-t9","status":"in_progress"
+}

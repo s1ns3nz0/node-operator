@@ -105,10 +105,427 @@ violations contains violation if {
   violation := finding("review.sensitive-path", "require-approval", "sensitive-path change requires @fjybjinsu approval", "sensitive-path", "scm.approvers")
 }
 
+# Release evidence is deliberately opt-in at the input boundary: PR evidence
+# has no artifact object, while every build/release evaluation must provide one.
+# Once that object is present, every release claim below is fail-closed.
+violations contains violation if {
+  release_context
+  release_evidence_missing
+  violation := finding("release.posture.missing", "block", "required repository posture evidence is missing", "posture", "evidence.posture")
+}
+
+violations contains violation if {
+  release_context
+  not valid_artifact_digest(release_digest)
+  violation := finding("release.subject.invalid", "block", "release subject must identify one immutable sha256 artifact digest", "artifact", "subject.artifact_digest")
+}
+
+violations contains violation if {
+  release_context
+  posture_incomplete
+  violation := finding("release.posture.incomplete", "block", "repository posture evidence is incomplete or malformed", "posture", "evidence.posture")
+}
+
+violations contains violation if {
+  release_context
+  posture_complete
+  posture_drifted
+  violation := finding("release.posture.drift", "block", "repository posture has drifted from the required baseline", "posture", "evidence.posture")
+}
+
+violations contains violation if {
+  release_context
+  artifact_evidence_missing("sbom")
+  violation := finding("release.sbom.missing", "block", "SBOM evidence is missing", "sbom", "artifact.sbom")
+}
+
+violations contains violation if {
+  release_context
+  sbom_incomplete
+  violation := finding("release.sbom.incomplete", "block", "SBOM evidence is incomplete or malformed", "sbom", "artifact.sbom")
+}
+
+violations contains violation if {
+  release_context
+  sbom_complete
+  not sbom_matches_subject
+  violation := finding("release.sbom.digest-mismatch", "block", "SBOM digest does not match the release subject", "sbom", "artifact.sbom")
+}
+
+violations contains violation if {
+  release_context
+  artifact_evidence_missing("signature")
+  violation := finding("release.signature.missing", "block", "signature evidence is missing", "signature", "artifact.signature")
+}
+
+violations contains violation if {
+  release_context
+  signature_incomplete
+  violation := finding("release.signature.incomplete", "block", "signature evidence is incomplete or malformed", "signature", "artifact.signature")
+}
+
+violations contains violation if {
+  release_context
+  signature_complete
+  object.get(release_signature, "status", "") != "verified"
+  violation := finding("release.signature.unverified", "block", "artifact signature is not verified", "signature", "artifact.signature")
+}
+
+violations contains violation if {
+  release_context
+  signature_complete
+  not signature_matches_subject
+  violation := finding("release.signature.digest-mismatch", "block", "signature digest does not match the release subject", "signature", "artifact.signature")
+}
+
+violations contains violation if {
+  release_context
+  artifact_evidence_missing("provenance")
+  violation := finding("release.provenance.missing", "block", "provenance evidence is missing", "provenance", "artifact.provenance")
+}
+
+violations contains violation if {
+  release_context
+  provenance_incomplete
+  violation := finding("release.provenance.incomplete", "block", "provenance evidence is incomplete or malformed", "provenance", "artifact.provenance")
+}
+
+violations contains violation if {
+  release_context
+  provenance_complete
+  object.get(release_provenance, "status", "") != "verified"
+  violation := finding("release.provenance.unverified", "block", "artifact provenance is not verified", "provenance", "artifact.provenance")
+}
+
+violations contains violation if {
+  release_context
+  provenance_complete
+  not subject_digest_in_provenance
+  violation := finding("release.provenance.digest-mismatch", "block", "provenance subject digest does not match the release subject", "provenance", "artifact.provenance")
+}
+
+violations contains violation if {
+  release_context
+  provenance_complete
+  object.get(release_provenance, "source_commit", "") != release_commit_sha
+  violation := finding("release.provenance.source-mismatch", "block", "provenance source commit does not match the release subject", "provenance", "artifact.provenance")
+}
+
+violations contains violation if {
+  release_context
+  provenance_complete
+  not object.get(release_provenance, "builder_id", "") in data.nodeoperator.config.trusted_builder_ids
+  violation := finding("release.provenance.untrusted-builder", "block", "provenance builder is not trusted for release eligibility", object.get(release_provenance, "builder_id", "unknown"), "artifact.provenance")
+}
+
+violations contains violation if {
+  release_context
+  artifact_evidence_missing("scan")
+  violation := finding("release.scan.missing", "block", "artifact scan evidence is missing", "scan", "artifact.scan")
+}
+
+violations contains violation if {
+  release_context
+  scan_incomplete
+  violation := finding("release.scan.incomplete", "block", "artifact scan evidence is incomplete or malformed", "scan", "artifact.scan")
+}
+
+violations contains violation if {
+  release_context
+  scan_complete
+  scan_stale
+  violation := finding("release.scan.stale", "block", "artifact vulnerability scan is older than the allowed maximum age", "scan", "artifact.scan")
+}
+
+violations contains violation if {
+  release_context
+  scan_complete
+  scan_has_critical_findings
+  violation := finding("release.scan.critical", "block", "artifact scan reported critical vulnerabilities", "scan", "artifact.scan")
+}
+
 sensitive_change if {
   path := object.get(object.get(input, "scm", {}), "changed_files", [])[_]
   prefix := data.nodeoperator.config.sensitive_path_prefixes[_]
   startswith(path, prefix)
+}
+
+release_context if {
+  is_object(object.get(input, "artifact", null))
+}
+
+release_evidence_missing if {
+  required := data.nodeoperator.config.release_required_evidence[_]
+  object.get(object.get(input, "evidence", {}), required, null) == null
+}
+
+release_posture := object.get(object.get(input, "evidence", {}), "posture", null)
+
+posture_incomplete if {
+  not release_evidence_missing
+  not is_object(release_posture)
+}
+
+posture_incomplete if {
+  is_object(release_posture)
+  not is_number(object.get(release_posture, "scorecard_score", null))
+}
+
+posture_incomplete if {
+  is_object(release_posture)
+  score := object.get(release_posture, "scorecard_score", -1)
+  score < 0
+}
+
+posture_incomplete if {
+  is_object(release_posture)
+  score := object.get(release_posture, "scorecard_score", 11)
+  score > 10
+}
+
+posture_incomplete if {
+  is_object(release_posture)
+  not is_string(object.get(release_posture, "status", null))
+}
+
+posture_incomplete if {
+  is_object(release_posture)
+  field := ["branch_protection", "commit_signing", "workflow_pinning"][_]
+  not is_boolean(object.get(release_posture, field, null))
+}
+
+posture_complete if {
+  not posture_incomplete
+}
+
+posture_drifted if {
+  object.get(release_posture, "status", "") != "passed"
+}
+
+posture_drifted if {
+  field := ["branch_protection", "commit_signing", "workflow_pinning"][_]
+  object.get(release_posture, field, false) != true
+}
+
+posture_drifted if {
+  object.get(release_posture, "scorecard_score", 0) < data.nodeoperator.config.minimum_scorecard_score
+}
+
+release_artifact := object.get(input, "artifact", {})
+release_sbom := object.get(release_artifact, "sbom", null)
+release_signature := object.get(release_artifact, "signature", null)
+release_provenance := object.get(release_artifact, "provenance", null)
+release_scan := object.get(release_artifact, "scan", null)
+release_digest := object.get(object.get(input, "subject", {}), "artifact_digest", "")
+release_commit_sha := object.get(object.get(input, "subject", {}), "commit_sha", "")
+
+artifact_evidence_missing(name) if {
+  object.get(release_artifact, name, null) == null
+}
+
+valid_artifact_digest(value) if {
+  is_string(value)
+  regex.match("^sha256:[0-9a-f]{64}$", value)
+}
+
+valid_commit_sha(value) if {
+  is_string(value)
+  regex.match("^[0-9a-f]{40}$", value)
+}
+
+sbom_incomplete if {
+  not artifact_evidence_missing("sbom")
+  not is_object(release_sbom)
+}
+
+sbom_incomplete if {
+  is_object(release_sbom)
+  object.get(release_sbom, "status", "") != "complete"
+}
+
+sbom_incomplete if {
+  is_object(release_sbom)
+  not object.get(release_sbom, "format", "") in {"cyclonedx-json", "spdx-json"}
+}
+
+sbom_incomplete if {
+  is_object(release_sbom)
+  not is_number(object.get(release_sbom, "component_count", null))
+}
+
+sbom_incomplete if {
+  is_object(release_sbom)
+  object.get(release_sbom, "component_count", -1) < 0
+}
+
+sbom_incomplete if {
+  is_object(release_sbom)
+  not valid_artifact_digest(object.get(release_sbom, "artifact_digest", ""))
+}
+
+sbom_complete if {
+  not sbom_incomplete
+}
+
+sbom_matches_subject if {
+  valid_artifact_digest(release_digest)
+  object.get(release_sbom, "artifact_digest", "") == release_digest
+}
+
+signature_incomplete if {
+  not artifact_evidence_missing("signature")
+  not is_object(release_signature)
+}
+
+signature_incomplete if {
+  is_object(release_signature)
+  not valid_artifact_digest(object.get(release_signature, "artifact_digest", ""))
+}
+
+signature_incomplete if {
+  is_object(release_signature)
+  not is_array(object.get(release_signature, "identities", null))
+}
+
+signature_incomplete if {
+  is_object(release_signature)
+  is_array(object.get(release_signature, "identities", null))
+  count(object.get(release_signature, "identities", [])) == 0
+}
+
+signature_incomplete if {
+  is_object(release_signature)
+  some identity in object.get(release_signature, "identities", [])
+  not valid_signature_identity(identity)
+}
+
+valid_signature_identity(identity) if {
+  is_object(identity)
+  is_string(object.get(identity, "subject", null))
+  object.get(identity, "subject", "") != ""
+  is_string(object.get(identity, "issuer", null))
+  object.get(identity, "issuer", "") != ""
+}
+
+signature_complete if {
+  not signature_incomplete
+}
+
+signature_matches_subject if {
+  valid_artifact_digest(release_digest)
+  object.get(release_signature, "artifact_digest", "") == release_digest
+}
+
+provenance_incomplete if {
+  not artifact_evidence_missing("provenance")
+  not is_object(release_provenance)
+}
+
+provenance_incomplete if {
+  is_object(release_provenance)
+  not is_array(object.get(release_provenance, "subject_digests", null))
+}
+
+provenance_incomplete if {
+  is_object(release_provenance)
+  is_array(object.get(release_provenance, "subject_digests", null))
+  count(object.get(release_provenance, "subject_digests", [])) == 0
+}
+
+provenance_incomplete if {
+  is_object(release_provenance)
+  some digest in object.get(release_provenance, "subject_digests", [])
+  not valid_artifact_digest(digest)
+}
+
+provenance_incomplete if {
+  is_object(release_provenance)
+  field := ["status", "builder_id", "build_type", "source_commit"][_]
+  not is_string(object.get(release_provenance, field, null))
+}
+
+provenance_incomplete if {
+  is_object(release_provenance)
+  field := ["builder_id", "build_type"][_]
+  object.get(release_provenance, field, "") == ""
+}
+
+provenance_incomplete if {
+  is_object(release_provenance)
+  not valid_commit_sha(object.get(release_provenance, "source_commit", ""))
+}
+
+provenance_complete if {
+  not provenance_incomplete
+}
+
+subject_digest_in_provenance if {
+  valid_artifact_digest(release_digest)
+  release_digest in object.get(release_provenance, "subject_digests", [])
+}
+
+scan_incomplete if {
+  not artifact_evidence_missing("scan")
+  not is_object(release_scan)
+}
+
+scan_incomplete if {
+  is_object(release_scan)
+  object.get(release_scan, "status", "") != "completed"
+}
+
+scan_incomplete if {
+  is_object(release_scan)
+  object.get(release_scan, "complete", false) != true
+}
+
+scan_incomplete if {
+  is_object(release_scan)
+  not is_string(object.get(release_scan, "scanned_at", null))
+}
+
+scan_incomplete if {
+  is_object(release_scan)
+  not valid_rfc3339(object.get(release_scan, "scanned_at", ""))
+}
+
+scan_incomplete if {
+  is_object(release_scan)
+  not is_number(object.get(release_scan, "age_seconds", null))
+}
+
+scan_incomplete if {
+  is_object(release_scan)
+  age := object.get(release_scan, "age_seconds", -1)
+  age < 0
+}
+
+scan_incomplete if {
+  is_object(release_scan)
+  not is_object(object.get(release_scan, "findings", null))
+}
+
+scan_incomplete if {
+  is_object(release_scan)
+  severity := ["critical", "high", "medium", "low", "unknown"][_]
+  not is_number(object.get(object.get(release_scan, "findings", {}), severity, null))
+}
+
+scan_complete if {
+  not scan_incomplete
+}
+
+scan_stale if {
+  object.get(release_scan, "age_seconds", 0) > data.nodeoperator.config.maximum_scan_age_seconds
+}
+
+scan_has_critical_findings if {
+  object.get(object.get(release_scan, "findings", {}), "critical", 0) > 0
+}
+
+valid_rfc3339(value) if {
+  is_string(value)
+  time.parse_rfc3339_ns(value)
 }
 
 scm_incomplete if {
