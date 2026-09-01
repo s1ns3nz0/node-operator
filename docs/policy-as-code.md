@@ -24,8 +24,8 @@ source / SCM posture / scanner outputs / build attestation
 
 ```text
 policy/
-  data/tiers.yaml                 # threshold and trusted-builder data
-  data/exceptions.yaml            # rule, owner, rationale, artifact, expiry
+  data/tiers.json                 # threshold and trusted-builder data
+  data/exceptions.json            # rule, owner, rationale, artifact, expiry
   commit/*.rego                   # commit and source evidence decisions
   merge/*.rego                    # PR, workflow and SCM posture decisions
   build/*.rego                    # IaC, SAST, SCA, SBOM decisions

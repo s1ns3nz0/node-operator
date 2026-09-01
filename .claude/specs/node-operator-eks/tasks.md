@@ -68,9 +68,9 @@
 
 ### T-7: Establish OPA policy-as-code foundation
 
-- **Status:** pending
-- **Wired:** no
-- **Verified:** no
+- **Status:** complete
+- **Wired:** yes
+- **Verified:** yes (OPA 1.17.0, Conftest 0.69.0, and ShellCheck 0.11.0)
 - **Requirements:** US-4
 - **Description:** Create `policy/` Rego/data/test layout, CODEOWNERS ownership with `@fjybjinsu` as the required sensitive-path reviewer, an expiring exception register, JSON evidence schema, normalizer fixtures, `opa test`, Conftest rendered-manifest checks, and one-purpose `scripts/ci/` command boundaries. Document the full open-source guide in `docs/policy-as-code.md`.
 - **Acceptance:** Each initial rule has passing and failing fixtures; OPA rejects missing evidence and expired/incomplete exceptions; sensitive-path fixtures require `@fjybjinsu` review and reject self-approval; workflow YAML contains only flow/permissions/pinned-action declarations and calls to independently testable scripts.
