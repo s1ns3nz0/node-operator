@@ -20,6 +20,7 @@
 | D-7 | **Approved: send evidence to the private Compliance Ops ingestion API through `POST /v1/evidence`, authenticated by exporter-only EKS Pod Identity credentials and SigV4.** The exporter has only `execute-api:Invoke` for that route; it keeps encrypted non-sensitive retry data for at most 24 hours. | resolved 2026-09-01; Compliance Ops owns the API, S3, and PostgreSQL |
 | D-8 | **Approved: use GitHub identity `@fjybjinsu` as the required secondary approval identity for sensitive-path, policy-exception, and release-eligibility reviews.** | resolved 2026-09-01; account separation, not independent-human review |
 | D-9 | **Approved: OPA blocks all Critical vulnerability findings and High findings with an available fix; it warns on Medium/Low findings. Exceptions require rule, subject, owner, rationale, linked issue, and expiry of at most 30 days.** | resolved 2026-09-01 |
+| D-10 | **Approved: CI commands use Bash and `jq`, pass ShellCheck, return structured OPA decisions, pin tools/actions to immutable versions or commit SHAs, and retain only non-sensitive CI evidence for 90 days.** | resolved 2026-09-01 |
 
 ## User stories
 
@@ -86,6 +87,7 @@
 7. WHEN a CI workflow changes, THE SYSTEM SHALL express only pipeline control flow in YAML and invoke one-purpose, locally testable scripts for collection, normalization, policy evaluation, and reporting.
 8. WHEN a pull request changes `policy/**`, `.github/workflows/**`, release configuration, or the exception register, THE SYSTEM SHALL require review by `@fjybjinsu` and SHALL reject author self-approval.
 9. WHEN vulnerability evidence is evaluated, THE SYSTEM SHALL block Critical findings and High findings with an available fix, warn on Medium/Low findings, and reject any exception lacking the required fields or exceeding 30 days.
+10. WHEN a CI command is added, THE SYSTEM SHALL be a ShellCheck-clean Bash script using `jq` for JSON shaping and SHALL return OPA decisions with `id`, `class`, `reason`, `subject`, and `evidence_ref`.
 
 ## Non-functional requirements
 
@@ -95,6 +97,7 @@
 - Checkov scans `infra/terraform` with the Terraform framework and `deploy` with the Kubernetes framework. Its JSON is evidence consumed by OPA; policy exceptions live in a reviewed, expiring register rather than unreviewed Checkov suppressions, `soft_fail`, or a baseline.
 - The policy set is repository-local, protected by CODEOWNERS, has passing/failing Rego fixtures, and makes decisions from structured evidence only. A missing, failed, or truncated evidence collection is non-compliant.
 - Workflow YAML SHALL NOT contain multiline shell implementations, embedded policy logic, JSON transformation, or copied scanner flags. Reusable CI behavior lives in `scripts/ci/`, with shared functions extracted only after a second caller exists.
+- Third-party actions and tools are pinned to a full commit SHA or immutable release version. Only non-sensitive JSON/SARIF evidence is retained for 90 days; raw scanner logs and secret candidates are excluded.
 - Source-environment mutation, AWS access, deployment, publishing, merging, secret changes, and any validator/mainnet action require separate task-level authorization.
 
 ## Out of scope

@@ -60,7 +60,7 @@ Initial script boundaries are:
 - `scripts/ci/publish-evidence.sh`: create SARIF/JSON artifacts without publishing sensitive values.
 - `scripts/ci/verify-release-evidence.sh`: reuse the same normalizer/evaluator for SBOM, provenance, signature, and scan-age inputs.
 
-Scripts accept paths and explicit environment variables, write only declared artifact paths, use strict shell options, and have local fixture tests. Shared functions live in a small `scripts/ci/lib/` module only when used by more than one command; workflows never copy scanner invocations or policy logic.
+Scripts use Bash with strict shell options and `jq` for JSON shaping, pass ShellCheck, accept paths and explicit environment variables, and write only declared artifact paths. Shared functions live in a small `scripts/ci/lib/` module only when used by more than one command; workflows never copy scanner invocations or policy logic.
 
 ## Activities, evidence, and enforcement
 
@@ -83,7 +83,7 @@ Scripts accept paths and explicit environment variables, write only declared art
 
 ## Tooling contract
 
-All tools are open source and generate machine-readable output. Initial pinned versions are selected when implementation starts, recorded in the workflow and updated through reviewed dependency updates.
+All tools are open source and generate machine-readable output. Initial pinned versions are selected when implementation starts, recorded in the workflow as immutable release versions or full action commit SHAs, and updated only through reviewed dependency-update pull requests.
 
 - **OPA / Conftest:** final policy engine and configuration evaluator.
 - **Checkov:** Terraform and Kubernetes misconfiguration detection; its JSON is input to Rego, not the sole pass/fail rule.
@@ -112,7 +112,7 @@ Each collector writes one JSON object with `schema_version`, `commit_sha` or `ar
 }
 ```
 
-Rego returns structured violations with `id`, `class`, `reason`, `subject`, and `evidence_ref`. Classes are `block`, `warn`, and `require-approval`. A failed collector or missing evidence is a `block`, not a clean result.
+Rego returns structured violations with `id`, `class`, `reason`, `subject`, and `evidence_ref`. Classes are `block`, `warn`, and `require-approval`. A failed collector or missing evidence is a `block`, not a clean result. CI fails only on `block`; it retains `warn` decisions as review evidence.
 
 ## Exceptions and change control
 
@@ -131,4 +131,4 @@ The initial portfolio tier blocks deterministic integrity failures: secrets, mis
 
 ## Evidence retention
 
-Store CI evidence keyed by commit SHA or artifact digest. Retention follows the declared 90-day non-sensitive evidence policy; raw secrets, credentials, and sensitive payloads must never be logged or retained.
+Store only non-sensitive CI evidence keyed by commit SHA or artifact digest for 90 days. SARIF/JSON summaries are allowed; raw scanner logs, secret candidates, credentials, and sensitive payloads must never be logged or retained.
