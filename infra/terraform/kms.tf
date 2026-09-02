@@ -74,6 +74,26 @@ data "aws_iam_policy_document" "audit_key" {
   }
 }
 
+data "aws_iam_policy_document" "vault_key" {
+  source_policy_documents = [data.aws_iam_policy_document.eks_key.json]
+
+  statement {
+    sid    = "AllowVaultPodIdentity"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = [aws_iam_role.vault.arn]
+    }
+    actions   = ["kms:Decrypt", "kms:DescribeKey", "kms:Encrypt", "kms:CreateGrant"]
+    resources = ["*"]
+    condition {
+      test     = "Bool"
+      variable = "kms:GrantIsForAWSResource"
+      values   = ["true"]
+    }
+  }
+}
+
 resource "aws_kms_key" "eks" {
   description             = "EKS Kubernetes Secrets envelope-encryption key"
   deletion_window_in_days = 30
@@ -126,7 +146,7 @@ resource "aws_kms_key" "vault" {
   description             = "Vault auto-unseal key; never used for workload secret payloads"
   deletion_window_in_days = 30
   enable_key_rotation     = true
-  policy                  = data.aws_iam_policy_document.eks_key.json
+  policy                  = data.aws_iam_policy_document.vault_key.json
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vault-unseal"

@@ -142,3 +142,10 @@ resource "aws_eks_pod_identity_association" "ebs_csi" {
 
   depends_on = [aws_eks_addon.ebs_csi]
 }
+
+resource "aws_eks_pod_identity_association" "vault" {
+  cluster_name    = aws_eks_cluster.private.name
+  namespace       = "vault"
+  service_account = "vault"
+  role_arn        = aws_iam_role.vault.arn
+}
