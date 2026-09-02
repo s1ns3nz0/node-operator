@@ -1,0 +1,137 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: node-operator-gateway
+  labels:
+    node-operator.io/edge: controlled
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hoodi-p2p-gateway
+  namespace: node-operator-gateway
+  labels:
+    node-operator.io/egress-purpose: hoodi-p2p
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: echo
+      image: python@sha256:7415fbc3c9e4979cc717d92377ab2bc7b2b4a2af1ac03cc52b5f3f88efedaf3a
+      command: ["python", "-c"]
+      args:
+        - |
+          import socket, threading
+          def tcp(port):
+            s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(("0.0.0.0", port)); s.listen()
+            while True:
+              c, _ = s.accept(); data = c.recv(1024); c.sendall(data or b"ok"); c.close()
+          def udp(port):
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.bind(("0.0.0.0", port))
+            while True:
+              data, addr = s.recvfrom(1024); s.sendto(data, addr)
+          [threading.Thread(target=tcp, args=(p,), daemon=True).start() for p in (13000, 30303)]
+          [threading.Thread(target=udp, args=(p,), daemon=True).start() for p in (13000, 30303)]
+          threading.Event().wait()
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: [ALL]
+        readOnlyRootFilesystem: true
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 100m, memory: 64Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hoodi-https-gateway
+  namespace: node-operator-gateway
+  labels:
+    node-operator.io/egress-purpose: hoodi-https
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: echo
+      image: python@sha256:7415fbc3c9e4979cc717d92377ab2bc7b2b4a2af1ac03cc52b5f3f88efedaf3a
+      command: ["python", "-c"]
+      args:
+        - |
+          import socket
+          s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(("0.0.0.0", 443)); s.listen()
+          while True:
+            c, _ = s.accept(); data = c.recv(1024); c.sendall(data or b"ok"); c.close()
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: [ALL]
+        readOnlyRootFilesystem: true
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 100m, memory: 64Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: prysm-egress-probe
+  namespace: node-operator
+  labels:
+    app.kubernetes.io/name: prysm-beacon
+spec:
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: probe
+      image: busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
+      command: ["sh", "-c", "sleep 3600"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+        readOnlyRootFilesystem: true
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 100m, memory: 64Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nethermind-egress-probe
+  namespace: node-operator
+  labels:
+    app.kubernetes.io/name: nethermind
+    app.kubernetes.io/component: execution-client
+spec:
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: probe
+      image: busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
+      command: ["sh", "-c", "sleep 3600"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+        readOnlyRootFilesystem: true
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 100m, memory: 64Mi}
