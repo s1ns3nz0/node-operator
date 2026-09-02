@@ -12,3 +12,8 @@ output "audit_bucket_name" {
   description = "Private audit bucket name."
   value       = aws_s3_bucket.audit.id
 }
+
+output "vault_unseal_key_arn" {
+  description = "KMS key ARN for Vault auto-unseal configuration; no secret material is exposed."
+  value       = aws_kms_key.vault.arn
+}

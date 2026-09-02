@@ -102,3 +102,19 @@ resource "aws_kms_alias" "audit" {
   name          = "alias/${local.name_prefix}-audit"
   target_key_id = aws_kms_key.audit.key_id
 }
+
+resource "aws_kms_key" "vault" {
+  description             = "Vault auto-unseal key; never used for workload secret payloads"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+  policy                  = data.aws_iam_policy_document.eks_key.json
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-vault-unseal"
+  })
+}
+
+resource "aws_kms_alias" "vault" {
+  name          = "alias/${local.name_prefix}-vault-unseal"
+  target_key_id = aws_kms_key.vault.key_id
+}
