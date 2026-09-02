@@ -1,0 +1,16 @@
+{
+  "id": "2026-09-02-t1-evidence-producer",
+  "title": "Implement offline Compliance Ops evidence producer",
+  "classification": "non-trivial",
+  "classification_reason": ["cross-service security boundary", "AWS SigV4 configuration", "non-sensitive evidence handling"],
+  "expected_outcome": "A disabled-by-default Node Operator producer validates EvidenceEnvelope v1, applies Compliance Ops allow-lists and size limits, creates stable retry IDs, and builds SigV4 request configuration without endpoint invocation or AWS credentials.",
+  "dependencies": ["Compliance Ops handoff 2026-09-02", "compliance-contracts 93aa78d"],
+  "constraints": ["No API invocation, AWS access, Pod Identity association, endpoint provisioning, secret changes, publish, deploy, or merge.", "Do not log payload bodies, authorization material, validator data, or raw reports."],
+  "authorization": {"repository_mutation": true, "external_actions": [], "prohibited_actions": ["AWS access", "API invocation", "deploy", "publish", "merge", "secret changes", "production access"]},
+  "primary_owner": {"tier": "sol", "responsibility": "contract boundary, retry and SigV4 security decisions"},
+  "delegations": [],
+  "model_fallbacks": [],
+  "validation": ["contract unit tests", "mock transport tests", "npm run harness:check", "no-network assertion"],
+  "worktree": "/Users/s1ns3nz0/orca/projects/node-operator-t1",
+  "status": "in_progress"
+}

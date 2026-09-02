@@ -1,1 +1,17 @@
-{"name":"node-operator","private":true,"version":"0.1.0","engines":{"node":">=20"},"scripts":{"harness:init":"node scripts/harness-init.mjs","harness:check":"node scripts/harness-check.mjs","harness:verify":"node scripts/harness-check.mjs --run-adapters"}}
+{
+  "name": "node-operator",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "harness:init": "node scripts/harness-init.mjs",
+    "harness:check": "node scripts/harness-check.mjs",
+    "harness:verify": "node scripts/harness-check.mjs --run-adapters",
+    "test:evidence-producer": "bash scripts/ci/test-evidence-producer.sh"
+  },
+  "dependencies": {
+    "@s1ns3nz0/compliance-contracts": "1.0.0"
+  }
+}

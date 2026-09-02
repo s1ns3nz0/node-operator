@@ -38,6 +38,14 @@ jobs:
           node -e 'const lock=require("./package-lock.json"); const entry=lock.packages["node_modules/@s1ns3nz0/compliance-contracts"]; if (!entry || !entry.resolved?.startsWith("https://npm.pkg.github.com/") || !entry.integrity) process.exit(1); console.log(JSON.stringify({name:"@s1ns3nz0/compliance-contracts",version:entry.version,resolved:entry.resolved,integrity:entry.integrity}))'
         working-directory: contract-registry-probe
 
+      - name: Install and test Node Operator against the published contract
+        run: |
+          npm ci --ignore-scripts
+          npm run test:evidence-producer
+          node --input-type=module -e 'import("@s1ns3nz0/compliance-contracts").then(m => { if (m.EVIDENCE_ENVELOPE_SCHEMA_VERSION !== "1.0.0") process.exit(1) })'
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+
       - uses: actions/upload-artifact@v4
         with:
           name: compliance-contracts-registry-lockfile
