@@ -1,8 +1,8 @@
 # Private EKS Terraform baseline
 
-This directory is a contract-free, offline-only Terraform baseline for the
-node-operator infrastructure. It creates no state backend and invokes no
-remote Terraform modules. The configuration deliberately defines no Internet
+This directory is a contract-free Terraform baseline for the node-operator
+infrastructure. State uses the approved encrypted S3 backend with DynamoDB
+locking, and the configuration invokes no remote Terraform modules. It deliberately defines no Internet
 gateway, NAT gateway, public subnet, public IP assignment, or public EKS API
 endpoint.
 

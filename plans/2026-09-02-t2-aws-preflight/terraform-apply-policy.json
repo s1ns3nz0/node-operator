@@ -1,0 +1,8 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid":"StateBucket","Effect":"Allow","Action":["s3:ListBucket","s3:GetBucketLocation","s3:GetBucketVersioning","s3:PutBucketVersioning","s3:GetBucketEncryption","s3:PutBucketEncryption","s3:GetPublicAccessBlock","s3:PutPublicAccessBlock","s3:GetBucketPolicy","s3:PutBucketPolicy","s3:GetBucketTagging","s3:PutBucketTagging","s3:GetBucketOwnershipControls","s3:PutBucketOwnershipControls","s3:GetBucketAcl","s3:GetObject","s3:PutObject","s3:DeleteObject"],"Resource":["arn:aws:s3:::node-operator-tfstate-106760547719-apne2","arn:aws:s3:::node-operator-tfstate-106760547719-apne2/*","arn:aws:s3:::node-operator-baseline-audit-*","arn:aws:s3:::node-operator-baseline-audit-*/*"]},
+    {"Sid":"StateLockTable","Effect":"Allow","Action":["dynamodb:DescribeTable","dynamodb:GetItem","dynamodb:PutItem","dynamodb:DeleteItem"],"Resource":"arn:aws:dynamodb:ap-northeast-2:106760547719:table/node-operator-terraform-lock"},
+    {"Sid":"CallerIdentity","Effect":"Allow","Action":"sts:GetCallerIdentity","Resource":"*"}
+  ]
+}
