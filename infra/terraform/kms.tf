@@ -11,6 +11,25 @@ data "aws_iam_policy_document" "eks_key" {
     actions   = ["kms:*"]
     resources = ["*"]
   }
+
+  statement {
+    sid    = "AllowEKSServiceGrant"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["eks.amazonaws.com"]
+    }
+
+    actions   = ["kms:CreateGrant", "kms:DescribeKey"]
+    resources = ["*"]
+
+    condition {
+      test     = "Bool"
+      variable = "kms:GrantIsForAWSResource"
+      values   = ["true"]
+    }
+  }
 }
 
 data "aws_iam_policy_document" "audit_key" {

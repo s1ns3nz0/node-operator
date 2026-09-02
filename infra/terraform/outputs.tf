@@ -17,3 +17,8 @@ output "vault_unseal_key_arn" {
   description = "KMS key ARN for Vault auto-unseal configuration; no secret material is exposed."
   value       = aws_kms_key.vault.arn
 }
+
+output "vault_role_arn" {
+  description = "IAM role ARN for the Vault Pod Identity association."
+  value       = aws_iam_role.vault.arn
+}

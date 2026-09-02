@@ -155,6 +155,40 @@ resource "aws_iam_role" "config" {
   tags = local.common_tags
 }
 
+data "aws_iam_policy_document" "vault_pod_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole", "sts:TagSession"]
+    principals {
+      type        = "Service"
+      identifiers = ["pods.eks.amazonaws.com"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "vault_kms" {
+  statement {
+    actions   = ["kms:Decrypt", "kms:DescribeKey", "kms:Encrypt", "kms:CreateGrant"]
+    resources = [aws_kms_key.vault.arn]
+    condition {
+      test     = "Bool"
+      variable = "kms:GrantIsForAWSResource"
+      values   = ["true"]
+    }
+  }
+}
+
+resource "aws_iam_role" "vault" {
+  name               = "${local.name_prefix}-vault"
+  assume_role_policy = data.aws_iam_policy_document.vault_pod_assume_role.json
+  tags               = local.common_tags
+}
+
+resource "aws_iam_role_policy" "vault_kms" {
+  name   = "${local.name_prefix}-vault-kms"
+  role   = aws_iam_role.vault.id
+  policy = data.aws_iam_policy_document.vault_kms.json
+}
+
 resource "aws_iam_role_policy_attachment" "config" {
   role       = aws_iam_role.config.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
