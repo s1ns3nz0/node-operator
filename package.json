@@ -9,7 +9,8 @@
     "harness:init": "node scripts/harness-init.mjs",
     "harness:check": "node scripts/harness-check.mjs",
     "harness:verify": "node scripts/harness-check.mjs --run-adapters",
-    "test:evidence-producer": "bash scripts/ci/test-evidence-producer.sh"
+    "test:evidence-producer": "bash scripts/ci/test-evidence-producer.sh",
+    "test:ci-evidence-mapper": "bash scripts/ci/test-ci-evidence-mapper.sh"
   },
   "dependencies": {
     "@s1ns3nz0/compliance-contracts": "1.0.0"

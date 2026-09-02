@@ -1,0 +1,1 @@
+{"task_id":"2026-09-02-t6-ci-evidence-mapping","checks":[{"name":"mapping boundary","result":"completed","summary":"Existing collectors retain compact redacted summaries only; T-6 will not map raw scanner or log payloads."}]}
