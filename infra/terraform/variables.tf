@@ -47,7 +47,7 @@ variable "availability_zones" {
   default     = ["ap-northeast-2a", "ap-northeast-2c"]
 
   validation {
-    condition     = var.availability_zones == ["ap-northeast-2a", "ap-northeast-2c"]
+    condition     = join(",", var.availability_zones) == "ap-northeast-2a,ap-northeast-2c"
     error_message = "availability_zones must be [ap-northeast-2a, ap-northeast-2c]."
   }
 }
@@ -58,7 +58,7 @@ variable "private_subnet_cidrs" {
   default     = ["10.80.0.0/20", "10.80.16.0/20"]
 
   validation {
-    condition     = var.private_subnet_cidrs == ["10.80.0.0/20", "10.80.16.0/20"]
+    condition     = join(",", var.private_subnet_cidrs) == "10.80.0.0/20,10.80.16.0/20"
     error_message = "private_subnet_cidrs must be [10.80.0.0/20, 10.80.16.0/20]."
   }
 }
