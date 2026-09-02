@@ -1,0 +1,8 @@
+graph TD
+  T21[T2-1: boundaries] --> T22[T2-2: reconnaissance]
+  T21 --> T23[T2-3: Terraform baseline]
+  T21 --> T24[T2-4: security fixtures]
+  T22 -. informs .-> T23
+  T23 --> T25[T2-5: integration and review]
+  T24 --> T25
+  T25 --> T26[T2-6: clean-room debrief]
