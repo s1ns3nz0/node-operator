@@ -22,3 +22,7 @@ Reviewed only the completed T-6 task bundle at `plans/2026-09-02-t6-ci-evidence-
 ## Outcome
 
 T-6 has documented evidence that its local mapper and producer checks pass, and that the mapper enforces the intended redacted-summary and disabled-delivery boundary. The GitHub Actions execution remains unverified locally due to the unavailable authenticated CLI token; no external delivery or infrastructure activity is evidenced.
+
+## Post-debrief CI confirmation
+
+The integration owner subsequently confirmed GitHub Actions run `33589757290` for commit `0675dd7` succeeded in 15 seconds. It produced the `compliance-contracts-registry-lockfile` artifact with SHA-256 `7a6282147d2d619844fae6024beaf536c1c51a8004c3a71dfd069dc7b06deb6b`. The run displayed a non-blocking GitHub-hosted-runner warning that v4 actions targeting Node.js 20 were forced to Node.js 24; it does not alter the workflow's configured project runtime of Node.js 22.
