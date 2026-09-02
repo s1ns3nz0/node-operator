@@ -42,6 +42,7 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npm run test:evidence-producer
+          npm run test:ci-evidence-mapper
           node --input-type=module -e 'import("@s1ns3nz0/compliance-contracts").then(m => { if (m.EVIDENCE_ENVELOPE_SCHEMA_VERSION !== "1.0.0") process.exit(1) })'
         env:
           NODE_AUTH_TOKEN: ${{ github.token }}
