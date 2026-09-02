@@ -66,11 +66,11 @@ variable "private_subnet_cidrs" {
 variable "kubernetes_version" {
   description = "EKS Kubernetes minor version. Pin deliberately in the build change that applies this baseline."
   type        = string
-  default     = "1.31"
+  default     = "1.35"
 
   validation {
     condition     = can(regex("^1\\.[0-9]+$", var.kubernetes_version))
-    error_message = "kubernetes_version must be a Kubernetes minor version, such as 1.31."
+    error_message = "kubernetes_version must be a Kubernetes minor version, such as 1.35."
   }
 }
 

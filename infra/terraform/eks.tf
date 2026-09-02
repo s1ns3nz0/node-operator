@@ -11,6 +11,12 @@ resource "aws_eks_cluster" "private" {
   role_arn = aws_iam_role.eks_cluster.arn
   version  = var.kubernetes_version
 
+  upgrade_policy {
+    # Avoid the higher EKS extended-support control-plane charge. A cluster
+    # must be upgraded before its standard-support window ends.
+    support_type = "STANDARD"
+  }
+
   enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 
   encryption_config {
@@ -110,6 +116,8 @@ resource "aws_eks_node_group" "private" {
     aws_iam_role_policy_attachment.node_worker,
     aws_iam_role_policy_attachment.node_ecr_read_only,
     aws_iam_role_policy_attachment.node_cni,
+    aws_vpc_endpoint.required_interface,
+    aws_vpc_endpoint.s3,
   ]
 
   tags = local.common_tags
