@@ -24,3 +24,18 @@ workload references.
 
 Vault tokens, recovery keys, unseal material, secret values, and kubeconfigs are
 never committed to Git, Terraform state, CI artifacts, or compliance evidence.
+
+## Decisions for the first deployment
+
+- Run Vault as a three-replica HA StatefulSet using integrated Raft storage.
+- Give each replica a dedicated encrypted gp3 PVC (20 GiB to start); resize by
+  reviewed change, never by editing live PVCs.
+- Expose Vault only as an internal Kubernetes service. Do not create a public
+  LoadBalancer or Internet-facing ingress. Enable TLS for all client and Raft
+  traffic.
+- Use the dedicated Terraform KMS key for AWS KMS auto-unseal. The Vault
+  service identity receives only the KMS permissions needed for seal/unseal.
+- Schedule encrypted Raft snapshots to the approved private audit bucket with a
+  retention policy; restore tests are required before production use.
+- Use Kubernetes auth plus per-workload Vault roles. Root tokens and recovery
+  keys are operator-held and never injected into workloads.
