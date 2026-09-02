@@ -83,16 +83,22 @@ collect_posture() {
 collect_sbom() {
   local source="$temporary_directory/sbom.json" result="$temporary_directory/sbom-result.json"
   require_json sbom "$source"
-  jq -e '((.bomFormat == "CycloneDX") and (.components | type == "array")) or ((.spdxVersion | type == "string") and (.packages | type == "array"))' "$source" >/dev/null || {
-    printf 'SBOM must be complete CycloneDX or SPDX JSON\n' >&2
+  jq -e --arg digest "$artifact_digest" '
+    .bomFormat == "CycloneDX" and
+    (.specVersion | type == "string" and test("^1(\\.|$)")) and
+    (.components | type == "array") and
+    (.metadata.component | type == "object") and
+    (.metadata.component.version == $digest)
+  ' "$source" >/dev/null || {
+    if jq -e '.spdxVersion | type == "string"' "$source" >/dev/null 2>&1; then
+      printf 'SPDX SBOM is unsupported: no verifiable artifact-digest binding is defined\n' >&2
+    else
+      printf 'SBOM must be CycloneDX v1 JSON with metadata.component.version equal to the artifact digest\n' >&2
+    fi
     exit 1
   }
   jq -c --arg digest "$artifact_digest" '
-    if .bomFormat == "CycloneDX" then
-      {status:"complete", format:"cyclonedx-json", component_count:(.components | length), artifact_digest:$digest}
-    else
-      {status:"complete", format:"spdx-json", component_count:(.packages | length), artifact_digest:$digest}
-    end
+    {status:"complete", format:"cyclonedx-json", component_count:(.components | length), artifact_digest:$digest}
   ' "$source" > "$result"
   write_envelope "$output_directory/sbom.json" syft "$result"
 }

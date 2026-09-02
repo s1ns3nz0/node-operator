@@ -1,1 +1,15 @@
-{"task_id":"2026-09-01-t9-release-evidence","checks":[{"name":"T-9 task graph initialization","result":"completed","summary":"Created contract, plan, graph, Mermaid view, and evidence register in the dedicated T-9 worktree."},{"name":"T-8 dependency","result":"completed","summary":"T-9 worktree is based on local T-8 commit cf7cfff; no remote publish or deployment occurred."},{"name":"model fallback","result":"not_used","summary":"No fallback used while initializing T-9."},{"name":"release contract fixtures","result":"completed","summary":"Synthetic collector fixtures redact raw inputs; Terra ran OPA 1.17 with 35 passing tests for release eligibility decisions."},{"name":"build binding","result":"deferred_until_build","summary":"No artifact digest, signed payload, or provenance exists in this repository. The user directed actual Syft/Grype/Cosign/SLSA execution to the later build task."}]}
+{
+  "task_id": "2026-09-01-t9-release-evidence",
+  "checks": [
+    {"name": "T-9 task graph initialization", "result": "completed", "summary": "Created contract, plan, graph, Mermaid view, and evidence register before implementation."},
+    {"name": "T-8 dependency", "result": "completed", "summary": "The build-binding worktree is based on the local T-8 through T-5 commit chain; no merge, publish, or deployment occurred."},
+    {"name": "bundle build", "result": "passed", "summary": "The builder materializes only the recorded Git HEAD source boundary, renders Prysm and Nethermind locally, and emits deterministic tar bytes and a SHA-256 digest."},
+    {"name": "SBOM binding", "result": "passed", "summary": "Local Syft emits CycloneDX JSON whose metadata component version is the bundle digest. The collector rejects mismatched digest and unsupported SPDX inputs fail-closed."},
+    {"name": "bundle tests", "result": "passed", "summary": "scripts/ci/test-build-release-bundle.sh verified determinism, source snapshot materialization, rendered paths, digest linkage, SBOM linkage, and non-sensitive boundary."},
+    {"name": "collector tests", "result": "passed", "summary": "scripts/ci/test-release-evidence.sh passed including SBOM mismatch and SPDX rejection cases."},
+    {"name": "harness structure", "result": "passed", "summary": "npm run harness:check passed with seven registered task graphs."},
+    {"name": "harness adapters", "result": "partial", "summary": "OPA, Conftest, and ShellCheck are unavailable locally; harness:verify remains partial and the pre-existing normalizer fixture is intentionally incomplete."},
+    {"name": "independent review", "result": "completed", "summary": "Initial review found source-snapshot and SBOM relabeling defects. Both were corrected and a follow-up review found no blocking issue."},
+    {"name": "release eligibility", "result": "intentionally_blocked", "summary": "Cosign and Grype are unavailable and no approved signing identity, trusted CI provenance, or scan result exists. The local bundle remains an unsigned candidate; OPA must fail closed."}
+  ]
+}
