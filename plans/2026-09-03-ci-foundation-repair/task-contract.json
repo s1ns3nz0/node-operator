@@ -1,0 +1,17 @@
+{
+  "id": "2026-09-03-ci-foundation-repair",
+  "title": "Repair CI quality and policy-foundation regression gates",
+  "classification": "non-trivial",
+  "classification_reason": ["security-policy test contract", "repository-wide ShellCheck coverage", "remote CI verification"],
+  "expected_outcome": "The evidence-normalizer fixture reflects the approved exception registry and CI shell-script quality checks pass without concealing genuine ShellCheck findings.",
+  "constraints": ["Do not weaken policy enforcement or blanket-disable ShellCheck.", "Keep tests deterministic and secret-free.", "Do not alter cloud, Vault, GitHub secrets, or production state."],
+  "authorization": {"repository_mutation": true, "external_actions": ["push the user-approved repository changes and observe GitHub Actions results"], "prohibited_actions": ["cloud mutation", "secret change", "Vault/EKS access", "production access"]},
+  "primary_owner": {"tier": "sol", "responsibility": "security-test semantics and final integration"},
+  "delegations": [
+    {"id": "recon", "tier": "luna", "owner": "/root/ci_foundation_recon", "files": [], "worktree": "read-only", "branch": "none", "acceptance_checks": ["failure-to-source map", "minimal safe repair recommendation"], "escalation_trigger": "a policy weakening or workflow-permission change is proposed"},
+    {"id": "implementation-review", "tier": "terra", "owner": "pending", "files": ["scripts/ci/test-normalizer.sh", "scripts/ci/*.sh"], "worktree": "dedicated", "branch": "task/2026-09-03-ci-foundation-repair", "acceptance_checks": ["targeted tests", "ShellCheck", "semantic review"], "escalation_trigger": "a suppression broader than the intentional literal-command finding is needed"}
+  ],
+  "model_fallbacks": [],
+  "validation": ["targeted normalizer test", "repository shell quality test", "harness check", "policy adapter where available", "remote CI Quality and Policy Foundation", "independent clean-room debrief"],
+  "status": "in_progress"
+}

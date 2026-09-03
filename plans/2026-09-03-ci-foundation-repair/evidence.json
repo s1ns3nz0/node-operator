@@ -1,0 +1,37 @@
+{
+  "task_id": "2026-09-03-ci-foundation-repair",
+  "status": "in_progress",
+  "checks": [
+    {
+      "name": "failure diagnosis",
+      "result": "passed",
+      "observed": "The normalizer fixture expected an empty exception array despite normalize-evidence.sh intentionally loading policy/data/exceptions.json. ShellCheck 0.11 reported 27 SC2016 diagnostics, all intentional literal grep patterns in seven contract tests."
+    },
+    {
+      "name": "normalizer policy-registry assertion",
+      "result": "passed",
+      "observed": "test-normalizer.sh now compares the emitted exception list exactly with policy/data/exceptions.json while retaining clean Gitleaks, format, and Terraform assertions."
+    },
+    {
+      "name": "targeted CI contract tests",
+      "result": "passed",
+      "observed": "test-normalizer and all seven affected CodeBuild, ECR, and Vault contract tests passed when invoked with bash. The expected negative incomplete-fixture message was emitted by test-normalizer."
+    },
+    {
+      "name": "repository shell quality",
+      "result": "passed",
+      "observed": "bash -n over scripts/ci and pinned koalaman/shellcheck:v0.11.0 over every scripts/ci shell script passed with zero ShellCheck diagnostics."
+    },
+    {
+      "name": "harness structure and whitespace",
+      "result": "passed",
+      "observed": "npm run harness:check passed for 31 task graphs; git diff --check passed."
+    }
+  ],
+  "notes": [
+    "The user authorized push and CI repair on 2026-09-03.",
+    "The preceding infrastructure-plan records were pushed to origin/main before this repair task.",
+    "No workflow permission, policy exception, cloud, Vault, secret, or production-state change was made.",
+    "Remote CI evidence remains pending the user-authorized push of the repair commits."
+  ]
+}
