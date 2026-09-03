@@ -27,14 +27,16 @@ so their service principals and grants can be constrained independently.
 The baseline has no NAT gateway or public route. It therefore creates an S3
 gateway endpoint on the private route table and interface endpoints, with
 private DNS enabled in both private subnets, for `eks-auth`, `ec2`, `ecr.api`,
-`ecr.dkr`, and `kms`. The endpoint security group accepts only
-TCP/443 ingress from the managed-node security group. It has no broad CIDR or
+`ecr.dkr`, and `kms`. When the private release signer is explicitly enabled,
+it also creates private `sts` and `logs` interface endpoints. The endpoint
+security group accepts only TCP/443 ingress from the managed-node security
+group and, when enabled, the dedicated signer security group. It has no broad CIDR or
 public ingress rule.
 
 These endpoints are the must-have baseline for private node bootstrap and
 image pulls. They intentionally exclude the EKS management API endpoint
 (needed only for management callers inside the VPC) and conditional endpoints such as
-CloudWatch Logs, STS, Secrets Manager, SSM, EC2 Messages, SSM Messages, EFS,
+CloudWatch Logs and STS (except the signer pair above), Secrets Manager, SSM, EC2 Messages, SSM Messages, EFS,
 and ELB. Add a conditional endpoint only when the corresponding workload,
 add-on, logging destination, identity flow, or operations tooling has been
 approved and its endpoint security and policy requirements are specified.
@@ -61,6 +63,21 @@ outside this baseline's validation scope.
 `fixtures/offline-baseline.tfvars` and `terraform.tfvars.example` contain a
 synthetic, non-secret 12-digit account ID solely to make variable validation
 reproducible. They are not deployment inputs.
+
+## Private release signer ECR mirror
+
+`enable_release_signer_ecr_mirror=false` is the default and creates no ECR
+mirror resources. When separately reviewed with `enable_release_signer=true`,
+Terraform creates a dedicated KMS-encrypted, scan-on-push, immutable ECR
+repository. The CodeBuild signer accepts only that same-account,
+`ap-northeast-2` repository URL with an immutable SHA-256 digest; it cannot
+pull GHCR or a tag-only image from the private-only VPC.
+
+The optional GitHub OIDC mirror role is restricted to the configured
+`github_repository` and the GitHub environment `ecr-signer-mirror`. Its only
+repository actions upload image layers and manifests to this repository.
+This Terraform contract deliberately creates no mirroring workflow, image
+publication, AWS credential, or ECR image.
 
 ## Authorized AWS apply and destroy runbook
 

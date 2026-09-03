@@ -36,7 +36,10 @@ Dockerfile and its declared inputs. An image digest, rather than a mutable tag,
 must be selected for the CodeBuild environment. Tag-only runtime configuration
 is not accepted.
 
-Publishing the image, selecting its digest, and wiring that digest into the
-CodeBuild project are a separately authorized activation follow-up. This
-contract deliberately does not change the current CodeBuild image or create
-any AWS, Vault, EKS, or GitHub Actions resource.
+The reviewed GHCR signer digest must be mirrored to the same-account private
+ECR repository before it is selected by CodeBuild. The ECR mirror foundation
+uses an immutable, KMS-encrypted, scan-on-push repository and an OIDC role
+bound exactly to the `ecr-signer-mirror` GitHub environment. A future mirror
+workflow and image publication remain separately authorized. This contract
+does not perform ECR publication or create any Vault, EKS, or GitHub Actions
+runtime resource.

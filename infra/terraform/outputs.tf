@@ -37,3 +37,13 @@ output "release_artifact_replica_bucket_arn" {
   description = "Tokyo disaster-recovery release artifact bucket ARN when signer is enabled."
   value       = var.enable_release_signer ? aws_s3_bucket.release_artifacts_replica[0].arn : null
 }
+
+output "release_signer_ecr_repository_arn" {
+  description = "Private signer-image ECR repository ARN when the ECR mirror foundation is enabled."
+  value       = var.enable_release_signer_ecr_mirror ? aws_ecr_repository.release_signer[0].arn : null
+}
+
+output "release_signer_ecr_repository_url" {
+  description = "Private signer-image ECR repository URL when the ECR mirror foundation is enabled; image digests are non-secret."
+  value       = var.enable_release_signer_ecr_mirror ? aws_ecr_repository.release_signer[0].repository_url : null
+}

@@ -1,13 +1,19 @@
 # These endpoints give private managed nodes the AWS control-plane paths needed
 # during bootstrap without introducing a NAT gateway or public internet route.
+# STS and CloudWatch Logs become required only with the private release signer.
 locals {
-  required_interface_endpoint_services = toset([
+  baseline_interface_endpoint_services = toset([
     "ec2",
     "ecr.api",
     "ecr.dkr",
     "eks-auth",
     "kms",
   ])
+
+  required_interface_endpoint_services = setunion(
+    local.baseline_interface_endpoint_services,
+    var.enable_release_signer ? toset(["logs", "sts"]) : toset([]),
+  )
 }
 
 resource "aws_security_group" "endpoints" {
@@ -29,6 +35,16 @@ resource "aws_vpc_security_group_ingress_rule" "endpoints_https_from_nodes" {
   description                  = "HTTPS from managed nodes to VPC interface endpoints"
   security_group_id            = aws_security_group.endpoints.id
   referenced_security_group_id = aws_security_group.nodes.id
+  from_port                    = 443
+  to_port                      = 443
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "endpoints_https_from_release_signer" {
+  count                        = var.enable_release_signer ? 1 : 0
+  description                  = "HTTPS from private release signer to VPC interface endpoints"
+  security_group_id            = aws_security_group.endpoints.id
+  referenced_security_group_id = aws_security_group.release_signer[0].id
   from_port                    = 443
   to_port                      = 443
   ip_protocol                  = "tcp"

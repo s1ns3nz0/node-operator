@@ -23,8 +23,9 @@ test -n "$terraform_project" || fail 'release signer CodeBuild project is missin
 for required in \
   'variable "release_signer_image"' \
   'default     = ""' \
-  'ghcr\\.io/' \
+  'dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com' \
   '@sha256:' \
+  'var.enable_release_signer_ecr_mirror' \
   'image           = var.release_signer_image' \
   'subnets            = var.release_signer_subnet_ids' \
   'length(var.release_signer_subnet_ids) > 0' \
@@ -76,7 +77,7 @@ for required in \
   'release_signer_image=""' \
   'If-None-Match: *' \
   'release-signer-output.zip' \
-  'lowercase `ghcr.io/...@sha256:<digest>`' \
+  'same-account ECR `...@sha256:<digest>`' \
   'No static credentials, raw Transit response artifacts, or public Vault'; do
   grep -Fq "$required" "$contract" || fail "contract does not document activation state: $required"
 done

@@ -21,13 +21,13 @@ variable "release_signer_subnet_ids" {
 }
 
 variable "release_signer_image" {
-  description = "Digest-pinned GHCR signer image. It is required only when enable_release_signer is true."
+  description = "Digest-pinned private ECR signer image. It is required only when enable_release_signer is true."
   type        = string
   default     = ""
 
   validation {
-    condition     = var.release_signer_image == "" || can(regex("^ghcr\\.io/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", var.release_signer_image))
-    error_message = "release_signer_image must be empty while disabled or a lowercase GHCR image pinned by a sha256 digest."
+    condition     = var.release_signer_image == "" || can(regex("^[0-9]{12}\\.dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", var.release_signer_image))
+    error_message = "release_signer_image must be empty while disabled or an ap-northeast-2 ECR image pinned by a sha256 digest."
   }
 }
 
@@ -833,6 +833,28 @@ data "aws_iam_policy_document" "release_codebuild_signer" {
       values   = ["s3.${var.aws_region}.amazonaws.com"]
     }
   }
+
+  dynamic "statement" {
+    for_each = var.enable_release_signer_ecr_mirror ? [1] : []
+    content {
+      sid       = "GetEcrAuthorizationToken"
+      actions   = ["ecr:GetAuthorizationToken"]
+      resources = ["*"]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.enable_release_signer_ecr_mirror ? [1] : []
+    content {
+      sid = "PullOnlyPrivateSignerImage"
+      actions = [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer",
+      ]
+      resources = [aws_ecr_repository.release_signer[0].arn]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "release_codebuild_signer" {
@@ -976,11 +998,12 @@ resource "aws_codebuild_project" "release_signer" {
   lifecycle {
     precondition {
       condition = (
-        can(regex("^ghcr\\.io/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", var.release_signer_image)) &&
+        var.enable_release_signer_ecr_mirror &&
+        can(regex("^${var.aws_account_id}\\.dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/${local.name_prefix}-vault-release-signer@sha256:[a-f0-9]{64}$", var.release_signer_image)) &&
         length(var.release_signer_subnet_ids) > 0 &&
         alltrue([for subnet_id in var.release_signer_subnet_ids : can(regex("^subnet-[a-z0-9]+$", subnet_id))])
       )
-      error_message = "Enabled release signer requires a digest-pinned GHCR image and one or more explicit private subnet IDs."
+      error_message = "Enabled release signer requires its enabled private ECR mirror, a same-account ECR digest, and one or more explicit private subnet IDs."
     }
   }
   tags = local.common_tags

@@ -1,8 +1,9 @@
 # CodeBuild signer input and output contract
 
 This is the implemented code contract for the private CodeBuild signer. The
-Terraform project remains disabled by default: `enable_release_signer=false`
-and `release_signer_image=""` create no signer resources. It does not claim
+Terraform project remains disabled by default: `enable_release_signer=false`,
+`enable_release_signer_ecr_mirror=false`, and `release_signer_image=""`
+create no signer resources. It does not claim
 that a signer image has been published, that Terraform has been applied, or
 that a private runner, Vault route, and dynamic identity are live.
 
@@ -71,15 +72,18 @@ format-bound Transit signature inside `release-verification.json` only as the
 non-secret evidence required to prove that Vault verified the payload.
 
 The selected CodeBuild container image must be a digest, never a tag-only
-reference.
+reference. It must be the same-account private ECR repository created by the
+separate ECR mirror contract in `ap-northeast-2`; GHCR is never a private
+CodeBuild runtime dependency.
 
 ## Activation preconditions
 
 The repository code already implements the archive, project, and consumer
 portions of this contract.
 Runtime activation is an approved atomic change after plan review. It must set
-`enable_release_signer=true` together with a
-lowercase `ghcr.io/...@sha256:<digest>` `release_signer_image` and one or more
+`enable_release_signer=true` together with
+`enable_release_signer_ecr_mirror=true`, a same-account ECR `...@sha256:<digest>`
+`release_signer_image`, and one or more
 explicit private `release_signer_subnet_ids`; Terraform rejects an enabled
 project without those inputs. Terraform `aws_codebuild_project` and
 `release.yml` input archive packaging already implement the reviewed source,

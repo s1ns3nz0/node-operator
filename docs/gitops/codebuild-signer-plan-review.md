@@ -35,16 +35,15 @@ state's `private_subnet_ids` output, not this fixture. The release signer also
 requires a private Vault route and the reviewed AWS-auth role before it can
 perform a Transit operation.
 
-Do not enable the current GHCR image reference in the private-only CodeBuild
-project. The signer security group permits HTTPS only inside the VPC CIDR and
-the baseline has no NAT route, while GHCR is an external registry. AWS documents
-that VPC CodeBuild builds need a NAT path for public endpoints, and recommends
-an in-region Amazon ECR image for custom-image pull failures. The safe next
-design is to mirror the reviewed signer image to a private ECR repository in
-`ap-northeast-2`, pin its ECR digest, and keep the existing ECR API/ECR DKR and
-S3 private endpoints. The live review must additionally confirm the required
-private endpoints for the build's actual calls, including STS for Vault AWS
-authentication and CloudWatch Logs for encrypted build logs.
+The GHCR reference is not enabled in the private-only CodeBuild project. The
+signer security group permits HTTPS only inside the VPC CIDR and the baseline
+has no NAT route, while GHCR is an external registry. The next code contract
+replaces it with an immutable same-account ECR digest in `ap-northeast-2`,
+adds a KMS-encrypted scan-on-push ECR mirror repository, and limits the mirror
+OIDC role to the `ecr-signer-mirror` environment. It also adds conditional
+private STS and CloudWatch Logs endpoints with signer-security-group TCP/443
+ingress. A future live plan must confirm the actual ECR digest, subnet IDs,
+Vault private route, and AWS-auth role before any apply.
 
 No Terraform apply, AWS, Vault, or EKS action occurred during this review.
 
