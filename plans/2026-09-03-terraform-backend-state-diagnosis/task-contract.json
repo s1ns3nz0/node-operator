@@ -1,0 +1,15 @@
+{
+  "id": "2026-09-03-terraform-backend-state-diagnosis",
+  "title": "Diagnose the approved Terraform backend state without mutation",
+  "classification": "non-trivial",
+  "classification_reason": ["live AWS state metadata access", "Terraform state security boundary"],
+  "expected_outcome": "Read-only backend metadata and Terraform state-address evidence distinguish an empty/misaddressed state from a managed baseline state, without retrieving or recording sensitive state values.",
+  "dependencies": ["2026-09-03-ecr-foundation-live-plan"],
+  "constraints": ["Use only S3 object listing/head metadata, STS identity/role reads, and Terraform state-address listing. Do not print, download, persist, or commit raw state; do not write a state lock, apply, refresh, or mutate AWS/Vault/EKS/GitHub/ECR.", "Use the existing approved temporary-role profile if present; do not create or alter credentials/profiles."],
+  "authorization": {"repository_mutation": true, "external_actions": ["read AWS STS identity and assume existing approved Terraform role through its configured profile", "read S3 state bucket object metadata and prefix listing", "read Terraform remote state addresses with state locking disabled"], "prohibited_actions": ["Terraform apply", "state write or lock write", "S3 object download or mutation", "AWS resource mutation", "ECR image action", "Vault/EKS/GitHub environment access", "secret changes", "production access"]},
+  "primary_owner": {"tier":"sol", "responsibility":"state-access minimization, evidence review, and conclusion"},
+  "delegations": [{"id":"recon","tier":"luna","owner":"/root/terraform_state_recon","files":[],"worktree":"read-only","branch":"none","acceptance_checks":["safe state-address diagnostics"],"escalation_trigger":"raw state or any write would be needed"}],
+  "model_fallbacks": [],
+  "validation": ["STS role identity", "S3 object metadata/listing", "Terraform state address list with lock disabled", "harness check", "independent clean-room debrief"],
+  "status": "completed"
+}
