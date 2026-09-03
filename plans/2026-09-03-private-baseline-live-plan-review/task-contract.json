@@ -11,5 +11,5 @@
   "delegations": [{"id":"recon","tier":"luna","owner":"/root/baseline_plan_recon","files":[],"worktree":"read-only","branch":"none","acceptance_checks":["resource and review-risk map"],"escalation_trigger":"apply or any state/cloud mutation would be needed"}],
   "model_fallbacks": [],
   "validation": ["saved live plan with lock disabled", "private boundary gate", "resource-scope gate", "harness check", "independent clean-room debrief"],
-  "status": "in_progress"
+  "status": "completed"
 }

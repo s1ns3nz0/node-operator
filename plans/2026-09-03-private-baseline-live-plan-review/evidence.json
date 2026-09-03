@@ -26,6 +26,11 @@
       "name": "EKS node-group capacity",
       "result": "reviewed",
       "observed": "EKS version 1.35 with m7i.2xlarge nodes: minimum 2, desired 2, maximum 3."
+    },
+    {
+      "name": "independent clean-room debrief",
+      "result": "passed",
+      "observed": "reports/2026-09-03-private-baseline-live-plan-review-debrief.md committed as 6729ade3984f1bd9e680878a421d1ca2b693a5d6; report sha256:a167ea998982226aad6469c3e21468c008f6e299b8cd30c4c56686c90799f5e6; git diff --check passed."
     }
   ],
   "notes": [
