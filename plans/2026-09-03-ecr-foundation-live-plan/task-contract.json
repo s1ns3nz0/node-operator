@@ -1,0 +1,15 @@
+{
+  "id": "2026-09-03-ecr-foundation-live-plan",
+  "title": "Create a read-only live Terraform plan for the ECR signer foundation",
+  "classification": "non-trivial",
+  "classification_reason": ["live AWS state access", "Terraform security boundary", "pre-deployment review"],
+  "expected_outcome": "A saved, non-sensitive read-only Terraform plan evaluates only the ECR signer foundation enablement against the approved remote state, or records an evidence-backed access/configuration blocker.",
+  "dependencies": ["2026-09-03-ecr-signer-mirror-connectivity"],
+  "constraints": ["Run only AWS identity/state/provider read operations and Terraform init/plan with locking disabled. Do not apply, refresh state writes, create ECR resources, mirror images, change GitHub environments, access Vault/EKS, or alter secrets.", "Use an ephemeral non-secret tfvars file outside the repository and do not persist credentials, backend configuration, or plan output in Git."],
+  "authorization": {"repository_mutation": true, "external_actions": ["read AWS caller identity", "read approved S3 Terraform backend and DynamoDB lock metadata as required by Terraform init", "read AWS provider data during Terraform plan"], "prohibited_actions": ["Terraform apply", "AWS resource mutation", "ECR image publish or pull", "GitHub environment mutation", "Vault/EKS access", "deploy", "merge", "secret changes", "production access"]},
+  "primary_owner": {"tier":"sol", "responsibility":"live-plan safety boundary, result review, and final integration"},
+  "delegations": [{"id":"recon","tier":"luna","owner":"/root/ecr_live_plan_recon","files":[],"worktree":"read-only","branch":"none","acceptance_checks":["safe command and live input map"],"escalation_trigger":"live credentials or backend mutation would be needed"}],
+  "model_fallbacks": [],
+  "validation": ["AWS identity confirmation", "Terraform init without backend migration", "saved plan with lock disabled", "JSON plan review", "harness check", "independent clean-room debrief"],
+  "status": "in_progress"
+}
