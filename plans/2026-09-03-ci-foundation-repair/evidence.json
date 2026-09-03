@@ -26,12 +26,22 @@
       "name": "harness structure and whitespace",
       "result": "passed",
       "observed": "npm run harness:check passed for 31 task graphs; git diff --check passed."
+    },
+    {
+      "name": "remote CI Quality",
+      "result": "passed",
+      "observed": "GitHub Actions run 33745697580 completed successfully for commit ac1317e2ddec039644e4fd6f1b5095ac091ea69b."
+    },
+    {
+      "name": "remote Policy Foundation",
+      "result": "passed",
+      "observed": "GitHub Actions run 33745697518 completed successfully for commit ac1317e2ddec039644e4fd6f1b5095ac091ea69b."
     }
   ],
   "notes": [
     "The user authorized push and CI repair on 2026-09-03.",
     "The preceding infrastructure-plan records were pushed to origin/main before this repair task.",
     "No workflow permission, policy exception, cloud, Vault, secret, or production-state change was made.",
-    "The first repair push exposed one additional ShellCheck 0.9.0 SC2015 diagnostic in validate-terraform-offline.sh; it is repaired and revalidated locally. Remote CI evidence remains pending the follow-up push."
+    "The first repair push exposed one additional ShellCheck 0.9.0 SC2015 diagnostic in validate-terraform-offline.sh; it was repaired and the follow-up remote CI runs passed."
   ]
 }
