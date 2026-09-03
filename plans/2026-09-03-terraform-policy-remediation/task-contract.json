@@ -1,0 +1,48 @@
+{
+  "task_id": "2026-09-03-terraform-policy-remediation",
+  "title": "Remediate Terraform security-policy findings for the private EKS baseline",
+  "owner": "sol",
+  "authorization": {
+    "repository_mutation": true,
+    "remote_push": true,
+    "image_publish": true,
+    "cloud_mutation": false,
+    "terraform_apply": false,
+    "secrets": false,
+    "deployment": false
+  },
+  "scope": [
+    "offline Terraform design and fixture inputs",
+    "Checkov and OPA policy remediation",
+    "reproducible local and CI validation evidence"
+  ],
+  "non_goals": [
+    "AWS access or mutation",
+    "Terraform plan or apply against a remote backend",
+    "EKS deployment",
+    "credential, secret, or branch-protection changes"
+  ],
+  "acceptance": [
+    "The offline Terraform baseline passes its relevant security-policy checks without suppression-only fixes",
+    "Changes preserve private EKS and least-privilege design intent",
+    "Validation is repeatable without cloud credentials",
+    "A clean-room debrief records evidence and remaining runtime limits"
+  ],
+  "delegations": [
+    {
+      "id": "recon",
+      "tier": "luna",
+      "files": ["infra/terraform/**", "policy/**", "scripts/ci/**", ".github/workflows/ci-terraform.yml"],
+      "validation": ["identify exact Checkov/OPA findings and their design-safe remediation"],
+      "escalation_trigger": "A remediation requires AWS state, cloud credentials, or a material architecture choice"
+    },
+    {
+      "id": "implementation-review",
+      "tier": "terra",
+      "files": ["infra/terraform/**", "policy/terraform/**", "scripts/ci/test-terraform-policy.sh"],
+      "validation": ["independent review of design and offline checks"],
+      "escalation_trigger": "The policy contract conflicts with the private EKS boundary"
+    }
+  ],
+  "model_fallbacks": []
+}

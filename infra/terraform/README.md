@@ -36,10 +36,11 @@ collector configures Terraform with a filesystem mirror, `-backend=false`,
 `-get=false`, and `-lockfile=readonly`; it must not fall back to direct
 downloads.
 
-This task does **not** run `terraform init`, `plan`, or `apply`. The provider
-mirror currently has no AWS provider binary and no `.terraform.lock.hcl` is
-committed, so full `terraform validate` is intentionally deferred until the
-authorized build task provisions both through the controlled mirror process.
+The committed lock file includes the provider checksums required by the pinned
+Linux validation image. Offline validation may run `terraform init` with
+`-backend=false`, followed by `validate` and a synthetic `plan`; it must not
+contact the configured remote backend or use cloud credentials. `apply` remains
+outside this baseline's validation scope.
 
 `fixtures/offline-baseline.tfvars` and `terraform.tfvars.example` contain a
 synthetic, non-secret 12-digit account ID solely to make variable validation

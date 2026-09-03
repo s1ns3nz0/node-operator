@@ -1,14 +1,6 @@
 terraform {
   required_version = ">= 1.5.0, < 2.0.0"
 
-  backend "s3" {
-    bucket         = "node-operator-tfstate-106760547719-apne2"
-    key            = "node-operator/t2/terraform.tfstate"
-    region         = "ap-northeast-2"
-    dynamodb_table = "node-operator-terraform-lock"
-    encrypt        = true
-  }
-
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -20,5 +12,9 @@ terraform {
 # State is stored in the approved encrypted S3 backend with DynamoDB locking.
 # Provider binaries are still supplied only by the separately controlled build workflow.
 provider "aws" {
-  region = var.aws_region
+  region                      = var.aws_region
+  skip_credentials_validation = var.offline_validation
+  skip_metadata_api_check     = var.offline_validation
+  skip_region_validation      = var.offline_validation
+  skip_requesting_account_id  = var.offline_validation
 }

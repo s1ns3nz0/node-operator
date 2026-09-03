@@ -18,7 +18,8 @@ RUN curl --fail --location --silent --show-error --output /tmp/terraform.zip "ht
 RUN mkdir -p "/opt/terraform-plugin-mirror/registry.terraform.io/hashicorp/aws/${AWS_PROVIDER_VERSION}/linux_amd64" \
  && curl --fail --location --silent --show-error --output /tmp/aws-provider.zip "https://releases.hashicorp.com/terraform-provider-aws/${AWS_PROVIDER_VERSION}/terraform-provider-aws_${AWS_PROVIDER_VERSION}_linux_amd64.zip" \
  && echo "${AWS_PROVIDER_SHA256}  /tmp/aws-provider.zip" | sha256sum --check --status \
- && mv /tmp/aws-provider.zip "/opt/terraform-plugin-mirror/registry.terraform.io/hashicorp/aws/${AWS_PROVIDER_VERSION}/linux_amd64/terraform-provider-aws_${AWS_PROVIDER_VERSION}_linux_amd64.zip"
+ && unzip -q /tmp/aws-provider.zip -d "/opt/terraform-plugin-mirror/registry.terraform.io/hashicorp/aws/${AWS_PROVIDER_VERSION}/linux_amd64" \
+ && rm /tmp/aws-provider.zip
 RUN printf '%s\n' \
   'provider_installation {' \
   '  filesystem_mirror { path = "/opt/terraform-plugin-mirror" }' \

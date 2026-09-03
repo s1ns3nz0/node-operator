@@ -26,12 +26,4 @@ jobs:
           docker run --rm --user "$(id -u):$(id -g)" --network none \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             --volume "$RUNNER_TEMP:/output" \
-            --workdir /workspace/infra/terraform \
-            "$TERRAFORM_IMAGE" bash -ceu '
-              terraform fmt -check -recursive
-              terraform init -backend=false -input=false -get=false -lockfile=readonly
-              terraform validate
-              terraform plan -refresh=false -input=false -var-file=fixtures/offline-baseline.tfvars -out=/output/plan
-              terraform show -json /output/plan > /output/plan.json
-              /workspace/scripts/ci/check-plan-boundary.sh /output/plan.json
-            '
+            "$TERRAFORM_IMAGE" bash /workspace/scripts/ci/validate-terraform-offline.sh /workspace/infra/terraform /output

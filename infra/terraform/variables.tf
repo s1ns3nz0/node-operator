@@ -134,3 +134,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "offline_validation" {
+  description = "Use synthetic provider settings for network-isolated validation only. Never enable for apply."
+  type        = bool
+  default     = false
+}
