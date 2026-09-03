@@ -60,6 +60,8 @@ jobs:
             /evidence "$SUBJECT_SHA" /source
           mv "$RUNNER_TEMP/terraform-evidence/terraform.json" "$EVIDENCE_ROOT/raw/terraform.json"
       - name: Collect pull-request posture
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           pr_number="$(jq -er '.workflow_run.pull_requests[0].number' "$GITHUB_EVENT_PATH")"
           scripts/ci/collect-scm-posture.sh "$SUBJECT_SHA" "$EVIDENCE_ROOT/scm.json" "$pr_number"
