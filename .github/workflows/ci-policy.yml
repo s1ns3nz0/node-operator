@@ -1,0 +1,30 @@
+name: CI Policy
+
+on:
+  pull_request:
+    paths: ['policy/**', 'scripts/ci/**', '.github/workflows/**']
+  push:
+    branches: [main]
+    paths: ['policy/**', 'scripts/ci/**', '.github/workflows/**']
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: open-policy-agent/setup-opa@b2b258e089860efaadaaf71bf6e3aecb4a3eeff1 # v2.4.0
+        with:
+          version: v1.17.0
+      - name: Test Rego policy
+        run: scripts/ci/test-policy.sh
+      - name: Test Terraform security policy
+        run: scripts/ci/test-terraform-policy.sh
+      - name: Install Conftest
+        run: scripts/ci/install-conftest.sh
+      - name: Test rendered manifests
+        run: scripts/ci/test-conftest.sh

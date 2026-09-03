@@ -1,0 +1,1 @@
+{"task_id":"2026-09-03-ci-split","status":"validated","checks":[{"name":"npm run harness:check","status":"passed"},{"name":"YAML parse for all workflows","status":"passed"}],"notes":["Existing opa-pr-gate remains in place during migration.","No AWS or production credentials used."]}

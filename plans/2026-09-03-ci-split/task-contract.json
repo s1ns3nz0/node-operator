@@ -1,0 +1,9 @@
+{
+  "task_id": "2026-09-03-ci-split",
+  "objective": "Split CI responsibilities into quality, security, Terraform, policy, and final evidence-gate workflows without enabling AWS deployment.",
+  "scope": [".github/workflows", "plans/2026-09-03-ci-split"],
+  "out_of_scope": ["terraform apply", "Argo CD sync", "production credentials"],
+  "owner": "Sol",
+  "validation": ["npm run harness:check", "YAML syntax review", "workflow dependency review"],
+  "fallbacks": []
+}
