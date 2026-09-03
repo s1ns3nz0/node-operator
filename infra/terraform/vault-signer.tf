@@ -98,7 +98,7 @@ resource "aws_codebuild_project" "release_signer" {
   }
   vpc_config {
     vpc_id             = aws_vpc.private.id
-    subnet_ids         = var.release_signer_subnet_ids
+    subnets            = var.release_signer_subnet_ids
     security_group_ids = [aws_security_group.release_signer[0].id]
   }
   source { type = "NO_SOURCE" }
