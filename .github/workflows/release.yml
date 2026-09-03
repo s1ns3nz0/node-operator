@@ -40,6 +40,16 @@ jobs:
           zip -q -j "$RUNNER_TEMP/release-input.zip" "$RUNNER_TEMP/release/node-operator-release-bundle.tar" "$RUNNER_TEMP/release/provenance-input.json"
           aws s3 cp "$RUNNER_TEMP/release-input.zip" "s3://${INPUT_BUCKET}/release-input/${GITHUB_SHA}.zip" --region "$AWS_REGION"
           aws codebuild start-build --project-name "node-operator-baseline-release-signer" --source-version "${GITHUB_SHA}" --region "$AWS_REGION" > "$RUNNER_TEMP/codebuild.json"
+          build_id="$(jq -r .build.id "$RUNNER_TEMP/codebuild.json")"
+          for _ in $(seq 1 60); do
+            status="$(aws codebuild batch-get-builds --ids "$build_id" --region "$AWS_REGION" | jq -r '.builds[0].buildStatus')"
+            case "$status" in SUCCEEDED) break;; FAILED|FAULT|STOPPED|TIMED_OUT) echo "CodeBuild signer failed: $status" >&2; exit 1;; esac
+            sleep 10
+          done
+          [ "$status" = SUCCEEDED ] || { echo 'CodeBuild signer timed out' >&2; exit 1; }
+          aws s3 cp "s3://${INPUT_BUCKET}/release-output/${GITHUB_SHA}/signature.json" "$RUNNER_TEMP/release/signature.json" --region "$AWS_REGION"
+          jq -e '.data.signature | type == "string" and length > 0' "$RUNNER_TEMP/release/signature.json" >/dev/null
+          jq -e --arg sha "$GITHUB_SHA" '.predicate.resolvedDependencies[0].digest.gitCommit == $sha' "$RUNNER_TEMP/release/provenance-input.json" >/dev/null
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
