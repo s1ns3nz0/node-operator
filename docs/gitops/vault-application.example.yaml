@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/REPLACE_WITH_APPROVED_GITOPS_REPO.git
+    targetRevision: REPLACE_WITH_REVIEWED_COMMIT
+    path: platform/vault
+    helm:
+      values: |
+        server:
+          ha:
+            enabled: true
+            replicas: 3
+            raft:
+              enabled: true
+          dataStorage:
+            enabled: true
+            size: 20Gi
+            storageClass: gp3-encrypted
+          service:
+            type: ClusterIP
+          ingress:
+            enabled: false
+          tls:
+            enabled: true
+          extraEnvironmentVars:
+            VAULT_AWSKMS_SEAL_KEY_ID: REPLACE_WITH_VAULT_UNSEAL_KEY_ARN
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vault
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: false
