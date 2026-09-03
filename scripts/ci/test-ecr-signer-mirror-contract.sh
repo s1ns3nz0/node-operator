@@ -23,7 +23,7 @@ for required in \
   'scan_on_push = true' \
   'resource "aws_kms_key" "release_signer_ecr"' \
   'resource "aws_iam_role" "github_ecr_signer_mirror"' \
-  'repo:${var.github_repository}:environment:ecr-signer-mirror' \
+  "repo:\${var.github_repository}:environment:ecr-signer-mirror" \
   '"ecr:GetAuthorizationToken"' \
   '"ecr:BatchCheckLayerAvailability"' \
   '"ecr:CompleteLayerUpload"' \
@@ -51,7 +51,7 @@ for required in \
   '"ecr:BatchGetImage"' \
   '"ecr:GetDownloadUrlForLayer"' \
   'var.enable_release_signer_ecr_mirror' \
-  'dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/${local.name_prefix}-vault-release-signer@sha256:'; do
+  "dkr\\\\.ecr\\\\.\${var.aws_region}\\\\.amazonaws\\\\.com/\${local.name_prefix}-vault-release-signer@sha256:"; do
   grep -Fq "$required" "$signer_file" || fail "CodeBuild ECR-only contract omits: $required"
 done
 

@@ -14,17 +14,17 @@ for file in "$contract" "$values" "$runner_contract"; do
 done
 
 for required in \
-  '`vault.node-operator.internal`' \
+  "\`vault.node-operator.internal\`" \
   '**HTTPS/TCP 8200** only' \
   'internal gateway or private endpoint' \
-  'existing Kubernetes `ClusterIP` service' \
+  "existing Kubernetes \`ClusterIP\` service" \
   'public Internet DNS' \
   'private hosted zone is split-horizon' \
   'public DNS has no record' \
   'No endpoint address' \
   'load-balancer address' \
   'route target belongs in this repository' \
-  '`vault-tls`' \
+  "\`vault-tls\`" \
   'approved private CA' \
   'certificate subject/SAN includes exactly' \
   'SNI' \
@@ -32,7 +32,7 @@ for required in \
   'expiration probe' \
   'self-hosted release runner and CodeBuild are separate sources' \
   'distinct route, security-group rule' \
-  '`0.0.0.0/0`' \
+  "\`0.0.0.0/0\`" \
   'NAT/public fallback' \
   'Vault then authenticates and authorizes each request' \
   'source-network access alone never' \
@@ -51,7 +51,7 @@ done
 
 grep -Fqx '    type: ClusterIP' "$values" || fail 'Vault values must retain ClusterIP service exposure'
 grep -Fqx '    enabled: false' "$values" || fail 'Vault values must retain disabled ingress'
-grep -Fq '`vault.node-operator.internal`' "$runner_contract" || fail 'runner contract must use the same private Vault hostname'
+grep -Fq "\`vault.node-operator.internal\`" "$runner_contract" || fail 'runner contract must use the same private Vault hostname'
 
 if grep -Eq '(https?://|[[:space:]](LoadBalancer|NodePort)[[:space:]]|[[:space:]]-[[:space:]]*k([[:space:]]|`)|AWS_(ACCESS|SECRET)_ACCESS_KEY|vault[[:space:]_-]*token[[:space:]]*=)' "$contract"; then
   fail 'contains a URL, public service type, TLS bypass, or static credential pattern'

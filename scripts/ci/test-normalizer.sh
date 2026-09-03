@@ -7,7 +7,12 @@ root="$(repo_root)"
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
 "$script_dir/normalize-evidence.sh" "$root/policy/tests/fixtures/raw-evidence/clean" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$root/policy/tests/fixtures/raw-evidence/clean/scm.json" "$temporary_directory/normalized.json"
-jq -e '.evidence.gitleaks.findings == [] and .evidence.format.status == "passed" and .evidence.terraform.status == "not_applicable" and .policy.exceptions == []' "$temporary_directory/normalized.json" >/dev/null
+jq -e --slurpfile exceptions "$root/policy/data/exceptions.json" '
+  .evidence.gitleaks.findings == [] and
+  .evidence.format.status == "passed" and
+  .evidence.terraform.status == "not_applicable" and
+  .policy.exceptions == $exceptions[0].exceptions
+' "$temporary_directory/normalized.json" >/dev/null
 cp -R "$root/policy/tests/fixtures/raw-evidence/clean" "$temporary_directory/secret-bearing"
 jq '.result.findings = [{path:"fixture.env", rule_id:"fixture-rule", Secret:"DO_NOT_PERSIST"}]' "$temporary_directory/secret-bearing/gitleaks.json" > "$temporary_directory/secret-bearing/gitleaks.next"
 mv "$temporary_directory/secret-bearing/gitleaks.next" "$temporary_directory/secret-bearing/gitleaks.json"

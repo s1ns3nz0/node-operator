@@ -21,17 +21,17 @@ for required in \
   'buildspec-release-sign.yml' \
   'exactly these reviewed files' \
   'source-location override' \
-  'same `<source-revision>`' \
+  "same \`<source-revision>\`" \
   'archive-local buildspec explicitly' \
   'release-verification.json' \
   'scripts/ci/verify-release-signature.sh' \
-  'not raw `signature.json` or `verify.json`' \
+  "not raw \`signature.json\` or \`verify.json\`" \
   'bundle digest, provenance-file' \
   'CodeBuild build ID' \
   'digest, never a tag-only' \
   'approved atomic change' \
-  'Terraform `aws_codebuild_project`' \
-  '`release.yml` input archive packaging'; do
+  "Terraform \`aws_codebuild_project\`" \
+  "\`release.yml\` input archive packaging"; do
   grep -Fq "$required" "$contract" || fail "contract omits required boundary: $required"
 done
 

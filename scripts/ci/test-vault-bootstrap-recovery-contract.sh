@@ -63,8 +63,8 @@ if grep -Eqi '(vault[[:space:]]+operator[[:space:]]+(init|unseal)|vault[[:space:
 fi
 
 for required in \
-  'No `vault operator init`' \
-  '`vault operator unseal`' \
+  "No \`vault operator init\`" \
+  "\`vault operator unseal\`" \
   'or apply command is included or executable' \
   'separately authorized live rollout' \
   'Root material, recovery material, and unseal' \

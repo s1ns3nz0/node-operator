@@ -45,18 +45,18 @@ if printf '%s\n' "$terraform_project" | grep -Eq 'aws/codebuild/standard|bootstr
 fi
 
 for required in \
-  'input_archive="$RUNNER_TEMP/${GITHUB_SHA}.zip"' \
-  'input_key="release-input/sha256/${GITHUB_SHA}.zip"' \
+  "input_archive=\"\$RUNNER_TEMP/\${GITHUB_SHA}.zip\"" \
+  "input_key=\"release-input/sha256/\${GITHUB_SHA}.zip\"" \
   'buildspec-release-sign.yml' \
   'node-operator-release-bundle.tar' \
   'node-operator-release-bundle.sha256' \
   'provenance-input.json' \
   'aws s3api put-object' \
   "--if-none-match '*'" \
-  '--source-version "$source_revision"' \
-  '--source-location-override "${INPUT_BUCKET}/${input_key}"' \
+  "--source-version \"\$source_revision\"" \
+  "--source-location-override \"\${INPUT_BUCKET}/\${input_key}\"" \
   'release-verification.json' \
-  'scripts/ci/verify-release-signature.sh "$signer_output"' \
+  "scripts/ci/verify-release-signature.sh \"\$signer_output\"" \
   'release-signer-output.zip'; do
   grep -Fq -- "$required" "$workflow" || fail "release workflow omits required immutable signer boundary: $required"
 done
@@ -77,7 +77,7 @@ for required in \
   'release_signer_image=""' \
   'If-None-Match: *' \
   'release-signer-output.zip' \
-  'same-account ECR `...@sha256:<digest>`' \
+  "same-account ECR \`...@sha256:<digest>\`" \
   'No static credentials, raw Transit response artifacts, or public Vault'; do
   grep -Fq "$required" "$contract" || fail "contract does not document activation state: $required"
 done

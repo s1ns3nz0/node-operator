@@ -18,15 +18,15 @@ grep -Fqx 'ARG VAULT_VERSION=1.20.4' "$dockerfile" || fail 'Dockerfile must pin 
 grep -Fqx 'ARG VAULT_SHA256=fc5fb5d01d192f1216b139fb5c6af17e3af742aaeffc289fd861920ec55f2c9c' "$dockerfile" || fail 'Dockerfile must pin the approved Vault SHA-256'
 grep -Fq 'sha256sum --check --status' "$dockerfile" || fail 'Dockerfile must verify the Vault archive before extraction'
 grep -Fq 'unzip -q /tmp/vault.zip -d /usr/local/bin' "$dockerfile" || fail 'Dockerfile must install Vault after verification'
-grep -Fq 'io.node-operator.toolchain-input-sha="${TOOLCHAIN_INPUT_SHA}"' "$dockerfile" || fail 'Dockerfile must retain the generic toolchain input label'
+grep -Fq "io.node-operator.toolchain-input-sha=\"\${TOOLCHAIN_INPUT_SHA}\"" "$dockerfile" || fail 'Dockerfile must retain the generic toolchain input label'
 
 if grep -Eqi '(curl|wget|download|unzip)' "$buildspec"; then
   fail 'buildspec must not download or extract Vault at runtime'
 fi
 grep -Fq 'expected_vault_version="1.20.4"' "$buildspec" || fail 'buildspec must declare the expected preinstalled Vault version'
-grep -Fq 'installed_vault_version="$(vault version | awk' "$buildspec" || fail 'buildspec must parse the plaintext Vault version safely'
-grep -Fq '$1 == \"Vault\" && $2 ~ /^v[0-9]+/' "$buildspec" || fail 'buildspec must parse the plaintext Vault version safely'
-grep -Fq 'test "$installed_vault_version" = "$expected_vault_version"' "$buildspec" || fail 'buildspec must fail closed on the installed Vault version'
+grep -Fq "installed_vault_version=\"\$(vault version | awk" "$buildspec" || fail 'buildspec must parse the plaintext Vault version safely'
+grep -Fq "\$1 == \\\"Vault\\\" && \$2 ~ /^v[0-9]+/" "$buildspec" || fail 'buildspec must parse the plaintext Vault version safely'
+grep -Fq "test \"\$installed_vault_version\" = \"\$expected_vault_version\"" "$buildspec" || fail 'buildspec must fail closed on the installed Vault version'
 grep -Fq 'vault write -format=json transit/sign/node-operator-release' "$buildspec" || fail 'buildspec must sign through the preinstalled Vault CLI'
 grep -Fq 'vault write -format=json transit/verify/node-operator-release' "$buildspec" || fail 'buildspec must verify through the preinstalled Vault CLI'
 
