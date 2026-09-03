@@ -21,6 +21,10 @@ provider "aws" {
 
 # The replica provider is deliberately limited to the approved Tokyo DR Region.
 provider "aws" {
-  alias  = "audit_replica"
-  region = var.audit_replica_region
+  alias                       = "audit_replica"
+  region                      = var.audit_replica_region
+  skip_credentials_validation = var.offline_validation
+  skip_metadata_api_check     = var.offline_validation
+  skip_region_validation      = var.offline_validation
+  skip_requesting_account_id  = var.offline_validation
 }
