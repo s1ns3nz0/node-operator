@@ -41,6 +41,12 @@ variable "github_repository" {
   default     = "s1ns3nz0/node-operator"
 }
 
+variable "release_artifact_bucket_arn" {
+  description = "Dedicated release artifact bucket ARN; empty keeps signer disabled."
+  type        = string
+  default     = ""
+}
+
 resource "aws_iam_role" "github_release_runner" {
   count = var.enable_release_signer ? 1 : 0
   name  = "${local.name_prefix}-github-release-runner"
@@ -76,6 +82,14 @@ data "aws_iam_policy_document" "release_codebuild_signer" {
     sid       = "Logs"
     actions   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
     resources = ["*"]
+  }
+  dynamic "statement" {
+    for_each = var.release_artifact_bucket_arn == "" ? [] : [var.release_artifact_bucket_arn]
+    content {
+      sid       = "ReleaseArtifacts"
+      actions   = ["s3:GetObject", "s3:PutObject"]
+      resources = ["${statement.value}/release/*"]
+    }
   }
 }
 
