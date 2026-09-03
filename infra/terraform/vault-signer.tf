@@ -20,6 +20,15 @@ variable "release_signer_subnet_ids" {
   default     = []
 }
 
+resource "aws_security_group" "release_signer" {
+  count       = var.enable_release_signer ? 1 : 0
+  name_prefix = "${local.name_prefix}-signer-"
+  description = "Private release signer egress to approved VPC services only."
+  vpc_id      = aws_vpc.private.id
+  egress { from_port = 443 to_port = 443 protocol = "tcp" cidr_blocks = [var.vpc_cidr] description = "HTTPS to private Vault and service endpoints" }
+  tags = local.common_tags
+}
+
 variable "github_repository" {
   description = "GitHub repository allowed to start the release signer, owner/name."
   type        = string
@@ -82,9 +91,9 @@ resource "aws_codebuild_project" "release_signer" {
     privileged_mode = false
   }
   vpc_config {
-    vpc_id             = aws_vpc.node_operator.id
+    vpc_id             = aws_vpc.private.id
     subnet_ids         = var.release_signer_subnet_ids
-    security_group_ids = [aws_security_group.cluster.id]
+    security_group_ids = [aws_security_group.release_signer[0].id]
   }
   source { type = "NO_SOURCE" }
   tags = local.common_tags
