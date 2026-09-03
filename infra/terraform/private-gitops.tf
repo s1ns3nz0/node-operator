@@ -1,7 +1,7 @@
 variable "enable_private_gitops_foundation" {
   description = "Create the private ECR OCI foundation for Argo CD and reviewed GitOps charts."
   type        = bool
-  default     = false
+  default     = true
 }
 
 locals {
@@ -27,6 +27,12 @@ resource "aws_ecr_repository" "private_gitops" {
     Name    = each.value
     Purpose = "private-gitops-${each.key}"
   })
+
+  # These repositories retain reviewed deployment inputs. Deletion requires an
+  # explicit configuration change and a separately approved destroy plan.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_ecr_lifecycle_policy" "private_gitops" {
@@ -74,6 +80,10 @@ resource "aws_iam_role" "github_gitops_oci_mirror" {
   name               = "${local.name_prefix}-github-gitops-oci-mirror"
   assume_role_policy = data.aws_iam_policy_document.github_gitops_oci_mirror_assume_role[0].json
   tags               = local.common_tags
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 data "aws_iam_policy_document" "github_gitops_oci_mirror" {
@@ -83,6 +93,12 @@ data "aws_iam_policy_document" "github_gitops_oci_mirror" {
     resources = ["*"]
   }
   statement {
+    sid       = "ReadMirroredArtifactDigest"
+    actions   = ["ecr:DescribeImages"]
+    resources = values(aws_ecr_repository.private_gitops)[*].arn
+  }
+  statement {
+    sid       = "PushOnlyReviewedGitOpsArtifacts"
     actions   = ["ecr:BatchCheckLayerAvailability", "ecr:CompleteLayerUpload", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart"]
     resources = values(aws_ecr_repository.private_gitops)[*].arn
   }
@@ -98,4 +114,9 @@ resource "aws_iam_role_policy" "github_gitops_oci_mirror" {
 output "private_gitops_ecr_repository_urls" {
   description = "Private ECR OCI destinations; empty until the GitOps foundation is explicitly enabled."
   value       = { for key, repository in aws_ecr_repository.private_gitops : key => repository.repository_url }
+}
+
+output "github_gitops_oci_mirror_role_arn" {
+  description = "GitHub OIDC role ARN for the protected GitOps OCI mirror environment; null until enabled."
+  value       = try(aws_iam_role.github_gitops_oci_mirror[0].arn, null)
 }

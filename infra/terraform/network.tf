@@ -9,7 +9,13 @@ resource "aws_vpc" "private" {
 }
 
 data "aws_prefix_list" "s3" {
-  name = "com.amazonaws.${var.aws_region}.s3"
+  count = var.offline_validation ? 0 : 1
+  name  = "com.amazonaws.${var.aws_region}.s3"
+}
+
+moved {
+  from = data.aws_prefix_list.s3
+  to   = data.aws_prefix_list.s3[0]
 }
 
 # The default security group cannot be removed. Explicitly manage it as deny-all
@@ -141,12 +147,14 @@ resource "aws_security_group" "nodes" {
 
   # ECR image layers are fetched from S3 through the gateway endpoint. Security
   # groups still evaluate the destination against the S3 managed prefix list.
+  # The synthetic ID is used only to make an offline plan possible; no apply
+  # may run with offline_validation=true.
   egress {
     description     = "S3 gateway endpoint traffic for private image pulls"
     from_port       = 443
     to_port         = 443
     protocol        = "tcp"
-    prefix_list_ids = [data.aws_prefix_list.s3.id]
+    prefix_list_ids = [var.offline_validation ? "pl-78a54011" : data.aws_prefix_list.s3[0].id]
   }
 
   tags = merge(local.common_tags, {

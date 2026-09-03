@@ -59,6 +59,9 @@ Linux validation image. Offline validation may run `terraform init` with
 `-backend=false`, followed by `validate` and a synthetic `plan`; it must not
 contact the configured remote backend or use cloud credentials. `apply` remains
 outside this baseline's validation scope.
+For that synthetic plan alone, the node security group uses the published
+Seoul S3 managed-prefix-list identifier instead of querying AWS. A live plan
+always resolves the prefix list from AWS.
 
 `fixtures/offline-baseline.tfvars` and `terraform.tfvars.example` contain a
 synthetic, non-secret 12-digit account ID solely to make variable validation
@@ -78,6 +81,23 @@ The optional GitHub OIDC mirror role is restricted to the configured
 repository actions upload image layers and manifests to this repository.
 This Terraform contract deliberately creates no mirroring workflow, image
 publication, AWS credential, or ECR image.
+
+## Private GitOps OCI mirror
+
+`enable_private_gitops_foundation=true` is the promoted default for this live
+baseline. The two artifact repositories use `prevent_destroy`; removing the
+foundation therefore requires an explicit configuration change and a reviewed
+destroy plan. The isolated offline baseline and release-signer fixtures set
+the flag to `false` so their plans continue to test only their own scope.
+
+The `gitops-oci-mirror` GitHub Environment supplies only non-secret bootstrap
+configuration: the AWS account ID and the Terraform output
+`github_gitops_oci_mirror_role_arn`. Its GitHub OIDC role permits ECR login,
+reading a destination manifest digest, and uploading layers/manifests to the
+two dedicated repositories. It cannot delete images, modify repository policy,
+or access Vault. The manual workflow accepts a fully digest-pinned upstream
+OCI reference, uses its digest as the immutable ECR tag, and compares the ECR
+digest after the copy with the approved source digest.
 
 ## Authorized AWS apply and destroy runbook
 
