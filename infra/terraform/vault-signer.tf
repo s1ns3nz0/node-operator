@@ -113,6 +113,14 @@ data "aws_iam_policy_document" "release_codebuild_signer" {
       resources = ["${statement.value}/release/*"]
     }
   }
+  dynamic "statement" {
+    for_each = var.enable_release_signer ? [1] : []
+    content {
+      sid       = "ReleaseBucketPrefixes"
+      actions   = ["s3:GetObject", "s3:PutObject"]
+      resources = ["${aws_s3_bucket.release_artifacts[0].arn}/release-input/*", "${aws_s3_bucket.release_artifacts[0].arn}/release-output/*"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "release_codebuild_signer" {
@@ -125,7 +133,11 @@ resource "aws_codebuild_project" "release_signer" {
   name          = "${local.name_prefix}-release-signer"
   service_role  = aws_iam_role.release_codebuild_signer.arn
   build_timeout = 30
-  artifacts { type = "NO_ARTIFACTS" }
+  artifacts {
+    type      = "S3"
+    location  = aws_s3_bucket.release_artifacts[0].id
+    packaging = "NONE"
+  }
   environment {
     compute_type    = "BUILD_GENERAL1_SMALL"
     image           = "aws/codebuild/standard:7.0"
@@ -137,6 +149,9 @@ resource "aws_codebuild_project" "release_signer" {
     subnets            = var.release_signer_subnet_ids
     security_group_ids = [aws_security_group.release_signer[0].id]
   }
-  source { type = "NO_SOURCE" }
+  source {
+    type     = "S3"
+    location = "${aws_s3_bucket.release_artifacts[0].id}/release-input/latest.zip"
+  }
   tags = local.common_tags
 }
