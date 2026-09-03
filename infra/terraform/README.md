@@ -91,13 +91,16 @@ destroy plan. The isolated offline baseline and release-signer fixtures set
 the flag to `false` so their plans continue to test only their own scope.
 
 The `gitops-oci-mirror` GitHub Environment supplies only non-secret bootstrap
-configuration: the AWS account ID and the Terraform output
-`github_gitops_oci_mirror_role_arn`. Its GitHub OIDC role permits ECR login,
+configuration: the AWS account ID, the Terraform output
+`github_gitops_oci_mirror_role_arn`, and a repository-owned, digest-pinned
+`GITOPS_OCI_MIRROR_TOOL_IMAGE`. Its GitHub OIDC role permits ECR login,
 reading a destination manifest digest, and uploading layers/manifests to the
 two dedicated repositories. It cannot delete images, modify repository policy,
 or access Vault. The manual workflow accepts a fully digest-pinned upstream
 OCI reference, uses its digest as the immutable ECR tag, and compares the ECR
-digest after the copy with the approved source digest.
+digest after the copy with the approved source digest. The source must also be
+an exact entry in `.ci/gitops/approved-oci-artifacts.json`; an empty allowlist
+is a safe default that permits no publication.
 
 ## Authorized AWS apply and destroy runbook
 
