@@ -17,7 +17,7 @@ jobs:
   scanners:
     runs-on: ubuntu-24.04
     env:
-      SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:fa610d21080bc46560e0a405e310e1144dacfebfd5f02120cb7985adfb699bfa
+      SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:010ca69dc9d08d2d255c2e9d80b54544245fad8d85c670f723cce788e3bb16af
       EVIDENCE_ROOT: ${{ github.workspace }}/.security-evidence
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -31,10 +31,10 @@ jobs:
           docker pull "$SCANNER_IMAGE"
       - name: Collect redacted scanner evidence
         run: >-
-          docker run --rm --entrypoint bash
+          docker run --rm
           --volume "$GITHUB_WORKSPACE:/workspace:ro"
           --volume "$EVIDENCE_ROOT:/evidence"
-          "$SCANNER_IMAGE" /workspace/.ci/scanners/run-security-scan.sh /evidence
+          "$SCANNER_IMAGE" /evidence
           "${{ github.event.pull_request.head.sha || github.sha }}"
           "${{ github.event.pull_request.base.sha || github.sha }}"
       - name: Upload non-sensitive security evidence

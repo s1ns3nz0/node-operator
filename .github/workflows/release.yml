@@ -12,19 +12,18 @@ permissions:
 jobs:
   build-and-publish:
     runs-on: ubuntu-24.04
+    env:
+      RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:68a353d39970bb296e957f33a95fd7368ee5a42584e5b04e92c0b5b300bc5314
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@1e60f620b9541dca3f7dc9e9e5e2e1f2f4c2f4f7 # v4.4.0
-        with:
-          node-version: 22
-      - uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c5b041b4 # v4.0.1
-        with:
-          version: v1.35.0
-      - uses: anchore/sbom-action/download-syft@e11c8f3f6e1c7a5d7a7c5c4c2a2a7d4e8f4b3c2d # v0.20.6
       - name: Build release bundle and evidence
-        run: scripts/ci/build-release-bundle.sh "$RUNNER_TEMP/release"
+        run: |
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker pull "$RELEASE_BUILD_IMAGE"
+          mkdir -p "$RUNNER_TEMP/release"
+          docker run --rm --user "$(id -u):$(id -g)" --volume "$GITHUB_WORKSPACE:/workspace:ro" --volume "$RUNNER_TEMP:/output" --workdir /workspace "$RELEASE_BUILD_IMAGE" bash scripts/ci/build-release-bundle.sh /output/release
       - name: Upload signer input to S3
         env:
           AWS_ROLE_ARN: ${{ vars.RELEASE_RUNNER_ROLE_ARN }}

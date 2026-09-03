@@ -10,25 +10,25 @@ permissions:
 jobs:
   terraform:
     runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: infra/terraform
+    env:
+      TERRAFORM_IMAGE: ghcr.io/s1ns3nz0/node-operator/terraform-validation@sha256:29ff471e238a0d042724364d579ef47661503964dcb52434cafa28252f3977a7
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
-        with:
-          terraform_version: 1.5.7
-          terraform_wrapper: false
-      - name: Terraform format check
-        run: terraform fmt -check -recursive
-      - name: Terraform init without backend
-        run: terraform init -backend=false -input=false
-      - name: Terraform validate
-        run: terraform validate
-      - name: Plan and check private boundary
+      - name: Validate Terraform with pinned offline toolchain
         run: |
-          terraform plan -refresh=false -input=false -var-file=fixtures/offline-baseline.tfvars -out="$RUNNER_TEMP/plan"
-          terraform show -json "$RUNNER_TEMP/plan" > "$RUNNER_TEMP/plan.json"
-          "$GITHUB_WORKSPACE/scripts/ci/check-plan-boundary.sh" "$RUNNER_TEMP/plan.json"
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker pull "$TERRAFORM_IMAGE"
+          docker run --rm --user "$(id -u):$(id -g)" --network none \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --volume "$RUNNER_TEMP:/output" \
+            --workdir /workspace/infra/terraform \
+            "$TERRAFORM_IMAGE" bash -ceu '
+              terraform fmt -check -recursive
+              terraform init -backend=false -input=false -get=false -lockfile=readonly
+              terraform validate
+              terraform plan -refresh=false -input=false -var-file=fixtures/offline-baseline.tfvars -out=/output/plan
+              terraform show -json /output/plan > /output/plan.json
+              /workspace/scripts/ci/check-plan-boundary.sh /output/plan.json
+            '

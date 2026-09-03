@@ -1,39 +1,70 @@
 name: CI Evidence Gate
 
 on:
-  pull_request:
+  workflow_run:
+    workflows: [CI Security]
+    types: [completed]
 
 permissions:
   contents: read
   pull-requests: read
+  actions: read
 
 jobs:
   evidence-gate:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.pull_requests[0].number != null
     runs-on: ubuntu-24.04
     env:
       EVIDENCE_ROOT: ${{ github.workspace }}/.opa-evidence
-      TERRAFORM_PLUGIN_MIRROR: ${{ github.workspace }}/terraform/plugin-mirror
+      SUBJECT_SHA: ${{ github.event.workflow_run.head_sha }}
+      TERRAFORM_IMAGE: ghcr.io/s1ns3nz0/node-operator/terraform-validation@sha256:29ff471e238a0d042724364d579ef47661503964dcb52434cafa28252f3977a7
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
+          # The policy engine and collector are a trusted control-plane input:
+          # never execute them from the untrusted pull-request checkout.
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Download scanner evidence from the completed PR run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5.0.0
+        with:
+          name: security-evidence-${{ env.SUBJECT_SHA }}
+          path: ${{ env.EVIDENCE_ROOT }}/raw
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Checkout pull-request source as untrusted Terraform input
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SUBJECT_SHA }}
+          path: ${{ runner.temp }}/pr-source
+          fetch-depth: 1
           persist-credentials: false
       - uses: open-policy-agent/setup-opa@b2b258e089860efaadaaf71bf6e3aecb4a3eeff1 # v2.4.0
         with:
           version: v1.17.0
-      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
-        with:
-          terraform_version: 1.5.7
-          terraform_wrapper: false
-      - name: Install pinned PR-gate tools
-        run: scripts/ci/install-pr-tools.sh "$RUNNER_TEMP/node-operator-tools/bin"
-      - name: Collect non-sensitive evidence
-        run: scripts/ci/collect-pr-evidence.sh "$RUNNER_TEMP/node-operator-opa-evidence/raw" "${{ github.event.pull_request.head.sha }}" "$GITHUB_WORKSPACE" "${{ github.event.pull_request.base.sha }}"
+      - name: Collect Terraform evidence using the trusted collector
+        run: |
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker pull "$TERRAFORM_IMAGE"
+          mkdir -p "$RUNNER_TEMP/terraform-evidence"
+          docker run --rm --network none --user "$(id -u):$(id -g)" \
+            --env COLLECTOR_MODE=terraform \
+            --volume "$GITHUB_WORKSPACE:/trusted:ro" \
+            --volume "$RUNNER_TEMP/pr-source:/source:ro" \
+            --volume "$RUNNER_TEMP/terraform-evidence:/evidence" \
+            "$TERRAFORM_IMAGE" bash /trusted/scripts/ci/collect-pr-evidence.sh \
+            /evidence "$SUBJECT_SHA" /source
+          mv "$RUNNER_TEMP/terraform-evidence/terraform.json" "$EVIDENCE_ROOT/raw/terraform.json"
       - name: Collect pull-request posture
-        run: scripts/ci/collect-scm-posture.sh "${{ github.event.pull_request.head.sha }}" "$EVIDENCE_ROOT/scm.json"
+        run: |
+          pr_number="$(jq -er '.workflow_run.pull_requests[0].number' "$GITHUB_EVENT_PATH")"
+          scripts/ci/collect-scm-posture.sh "$SUBJECT_SHA" "$EVIDENCE_ROOT/scm.json" "$pr_number"
       - name: Normalize evidence
-        run: scripts/ci/normalize-evidence.sh "$EVIDENCE_ROOT/raw" "${{ github.event.pull_request.head.sha }}" "$EVIDENCE_ROOT/scm.json" "$EVIDENCE_ROOT/normalized/evidence.json"
+        run: scripts/ci/normalize-evidence.sh "$EVIDENCE_ROOT/raw" "$SUBJECT_SHA" "$EVIDENCE_ROOT/scm.json" "$EVIDENCE_ROOT/normalized/evidence.json"
       - name: Evaluate OPA policy
         id: policy
         continue-on-error: true
@@ -45,7 +76,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.6.2
         with:
-          name: ci-evidence-gate-${{ github.event.pull_request.head.sha }}
+          name: ci-evidence-gate-${{ env.SUBJECT_SHA }}
           path: |
             ${{ env.EVIDENCE_ROOT }}/published/evidence.json
             ${{ env.EVIDENCE_ROOT }}/published/decision.json

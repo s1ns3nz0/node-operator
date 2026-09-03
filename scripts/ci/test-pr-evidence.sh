@@ -84,3 +84,11 @@ PATH="$mock_directory:$PATH" TERRAFORM_PLUGIN_MIRROR="$temporary_directory/plugi
 jq -e '.result == {vulnerabilities:[],status:"not_applicable",reason:"no_supported_dependency_manifests"}' "$not_applicable_directory/osv.json" >/dev/null
 "$script_dir/normalize-evidence.sh" "$not_applicable_directory" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$temporary_directory/scm.json" "$temporary_directory/not-applicable-normalized.json"
 jq -e '.evidence.osv == {vulnerabilities:[],status:"not_applicable",reason:"no_supported_dependency_manifests"}' "$temporary_directory/not-applicable-normalized.json" >/dev/null
+
+terraform_only_directory="$temporary_directory/terraform-only-evidence"
+COLLECTOR_MODE=terraform PATH="$mock_directory:$PATH" TERRAFORM_PLUGIN_MIRROR="$temporary_directory/plugin-mirror" "$script_dir/collect-pr-evidence.sh" "$terraform_only_directory" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$fixture_directory"
+test -f "$terraform_only_directory/terraform.json"
+if find "$terraform_only_directory" -type f ! -name terraform.json | grep -q .; then
+  printf 'Terraform-only collection produced an unexpected scanner envelope\n' >&2
+  exit 1
+fi

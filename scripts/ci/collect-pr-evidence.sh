@@ -17,16 +17,28 @@ output_directory="$1"
 commit_sha="$2"
 source_directory="${3:-$(repo_root)}"
 base_sha="${4:-${PR_BASE_SHA:-}}"
+collector_mode="${COLLECTOR_MODE:-all}"
 
 [[ "$commit_sha" =~ ^[0-9a-f]{40}$ ]] || { printf 'commit SHA must be 40 lowercase hexadecimal characters\n' >&2; exit 64; }
 require_command git
-require_command gitleaks
-require_command osv-scanner
-require_command semgrep
-require_command zizmor
-require_command checkov
-if [ "${SKIP_TERRAFORM:-false}" != "true" ]; then require_command terraform; fi
 require_command jq
+case "$collector_mode" in
+  all)
+    require_command gitleaks
+    require_command osv-scanner
+    require_command semgrep
+    require_command zizmor
+    require_command checkov
+    if [ "${SKIP_TERRAFORM:-false}" != "true" ]; then require_command terraform; fi
+    ;;
+  terraform)
+    require_command terraform
+    ;;
+  *)
+    printf 'COLLECTOR_MODE must be all or terraform\n' >&2
+    exit 64
+    ;;
+esac
 git -C "$source_directory" rev-parse --is-inside-work-tree >/dev/null
 
 umask 077
@@ -216,6 +228,11 @@ EOF
   jq -s '{status:(if any(.[]; .status == "failed") then "failed" else "passed" end), modules:.}' "$temporary_directory/terraform-modules.ndjson" > "$result_path"
   write_envelope "$output_directory/terraform.json" terraform "$result_path"
 }
+
+if [ "$collector_mode" = "terraform" ]; then
+  collect_terraform
+  exit 0
+fi
 
 collect_gitleaks
 collect_osv

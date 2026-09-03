@@ -11,15 +11,19 @@ permissions:
 jobs:
   reproducibility:
     runs-on: ubuntu-24.04
+    env:
+      RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:68a353d39970bb296e957f33a95fd7368ee5a42584e5b04e92c0b5b300bc5314
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Build deterministic bundle twice
         run: |
-          scripts/ci/test-build-release-bundle.sh
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker pull "$RELEASE_BUILD_IMAGE"
+          docker run --rm --user "$(id -u):$(id -g)" --volume "$GITHUB_WORKSPACE:/workspace:ro" --volume "$RUNNER_TEMP:/output" --workdir /workspace "$RELEASE_BUILD_IMAGE" bash scripts/ci/test-build-release-bundle.sh
           mkdir -p "$RUNNER_TEMP/current"
-          scripts/ci/build-release-bundle.sh "$RUNNER_TEMP/current"
+          docker run --rm --user "$(id -u):$(id -g)" --volume "$GITHUB_WORKSPACE:/workspace:ro" --volume "$RUNNER_TEMP:/output" --workdir /workspace "$RELEASE_BUILD_IMAGE" bash scripts/ci/build-release-bundle.sh /output/current
       - name: Fetch previous approved release when available
         id: previous
         env:
