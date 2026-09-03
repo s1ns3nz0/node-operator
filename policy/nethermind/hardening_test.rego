@@ -8,11 +8,13 @@ test_secure_statefulset_is_accepted if {
 }
 
 test_secure_storage_class_is_accepted if {
-	count(deny with input as secure_storage_class) == 0
+	violations := deny with input as secure_storage_class
+	count(violations) == 0
 }
 
 test_secure_network_policy_is_accepted if {
-	count(deny with input as secure_network_policy) == 0
+	violations := deny with input as secure_network_policy
+	count(violations) == 0
 }
 
 test_insecure_statefulset_rejects_each_required_invariant if {
