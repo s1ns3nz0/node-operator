@@ -11,7 +11,7 @@ jobs:
   evidence-gate:
     runs-on: ubuntu-24.04
     env:
-      EVIDENCE_ROOT: ${{ runner.temp }}/node-operator-opa-evidence
+      EVIDENCE_ROOT: ${{ github.workspace }}/.opa-evidence
       TERRAFORM_PLUGIN_MIRROR: ${{ github.workspace }}/terraform/plugin-mirror
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -29,7 +29,7 @@ jobs:
       - name: Install pinned PR-gate tools
         run: scripts/ci/install-pr-tools.sh "$RUNNER_TEMP/node-operator-tools/bin"
       - name: Collect non-sensitive evidence
-        run: scripts/ci/collect-pr-evidence.sh "$EVIDENCE_ROOT/raw" "${{ github.event.pull_request.head.sha }}" "$GITHUB_WORKSPACE" "${{ github.event.pull_request.base.sha }}"
+        run: scripts/ci/collect-pr-evidence.sh "$RUNNER_TEMP/node-operator-opa-evidence/raw" "${{ github.event.pull_request.head.sha }}" "$GITHUB_WORKSPACE" "${{ github.event.pull_request.base.sha }}"
       - name: Collect pull-request posture
         run: scripts/ci/collect-scm-posture.sh "${{ github.event.pull_request.head.sha }}" "$EVIDENCE_ROOT/scm.json"
       - name: Normalize evidence
