@@ -1,0 +1,19 @@
+{
+  "id": "2026-09-03-vault-rollout-readiness",
+  "title": "Prepare private Vault release-path operational rollout",
+  "classification": "non-trivial",
+  "classification_reason": ["security boundary", "multiple validation layers", "multiple model roles"],
+  "expected_outcome": "A reviewed, non-secret GitOps and operations-ready contract can be used to provision private runner-to-Vault connectivity and transition the release workflow only after a separately authorized deployment.",
+  "dependencies": ["2026-09-03-vault-codebuild-signer"],
+  "constraints": ["Do not deploy, publish, merge, alter secrets, access AWS, or access production.", "Do not change release.yml until a private runner and Vault route are operationally authorized.", "Keep all evidence non-sensitive and fail closed for missing prerequisites."],
+  "authorization": {"repository_mutation": true, "external_actions": [], "prohibited_actions": ["deploy", "publish", "merge", "secret changes", "AWS access", "production access"]},
+  "primary_owner": {"tier": "sol", "responsibility": "security decisions, integration, and final sign-off"},
+  "delegations": [
+    {"id": "recon", "tier": "luna", "owner": "/root/vault_rollout_recon", "files": [], "worktree": "read-only", "branch": "none", "acceptance_checks": ["existing-boundary inventory"], "escalation_trigger": "the required contract needs cloud state or a secret"},
+    {"id": "implementation", "tier": "terra", "owner": "/root/vault_signer_toolchain_scaffold", "files": [".ci/toolchains/vault-release-signer.Dockerfile", "deploy/vault/buildspec-release-sign.yml", "docs/gitops/vault-codebuild-signing.md", "scripts/ci/test-vault-signer-toolchain-contract.sh", "package.json"], "worktree": "required", "branch": "task/2026-09-03-vault-rollout-readiness", "acceptance_checks": ["structural contract test", "harness check"], "escalation_trigger": "implementation would alter deployment state, a workflow, or credentials"},
+    {"id": "debrief", "tier": "terra", "owner": "pending", "files": ["reports/2026-09-03-vault-rollout-readiness-debrief.md"], "worktree": "required", "branch": "task/2026-09-03-vault-rollout-readiness", "acceptance_checks": ["clean-room summary"], "escalation_trigger": "task bundle or validation evidence is incomplete"}
+  ],
+  "model_fallbacks": [],
+  "validation": ["targeted structural test", "npm run harness:check", "npm run harness:verify", "git diff --check", "independent clean-room debrief"],
+  "status": "in_progress"
+}

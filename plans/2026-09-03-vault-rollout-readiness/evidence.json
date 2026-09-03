@@ -1,0 +1,1 @@
+{"task_id":"2026-09-03-vault-rollout-readiness","status":"in_progress","checks":[{"name":"Luna rollout-boundary inventory","status":"passed"}],"notes":["No external deployment or credential operation is authorized.","The first bounded implementation removes the runtime Vault CLI download from the future CodeBuild signer path without publishing or activating an image."]}
