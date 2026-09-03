@@ -48,10 +48,35 @@ variable "release_artifact_bucket_arn" {
 }
 
 resource "aws_s3_bucket" "release_artifacts" {
-  count         = var.enable_release_signer ? 1 : 0
-  bucket_prefix = "${local.name_prefix}-release-"
-  force_destroy = false
-  tags          = local.common_tags
+  count               = var.enable_release_signer ? 1 : 0
+  bucket_prefix       = "${local.name_prefix}-release-"
+  force_destroy       = false
+  object_lock_enabled = true
+  tags                = local.common_tags
+}
+
+data "aws_iam_policy_document" "release_artifacts" {
+  statement {
+    sid    = "DenyInsecureTransport"
+    effect = "Deny"
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+    actions   = ["s3:*"]
+    resources = [aws_s3_bucket.release_artifacts[0].arn, "${aws_s3_bucket.release_artifacts[0].arn}/*"]
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "release_artifacts" {
+  count  = var.enable_release_signer ? 1 : 0
+  bucket = aws_s3_bucket.release_artifacts[0].id
+  policy = data.aws_iam_policy_document.release_artifacts.json
 }
 
 resource "aws_s3_bucket_public_access_block" "release_artifacts" {
