@@ -3,19 +3,22 @@ phases:
   build:
     commands:
       - set -euo pipefail
+      - command -v vault >/dev/null
       - test -n "${VAULT_ADDR:-}"
-      - test -n "${VAULT_TOKEN:-}"
+      - test -n "${VAULT_AUTH_ROLE:-}"
       - test -f provenance-input.json
       - payload="$(base64 < provenance-input.json | tr -d '\n')"
+      - vault_token="$(vault write -field=token auth/aws/login role="${VAULT_AUTH_ROLE}" 2>/dev/null)"
+      - test -n "$vault_token"
       - >-
         curl --fail --silent --show-error --location
-        --header "X-Vault-Token: ${VAULT_TOKEN}"
+        --header "X-Vault-Token: ${vault_token}"
         --header 'Content-Type: application/json'
         --data "{\"input\":\"${payload}\"}"
         "${VAULT_ADDR%/}/v1/transit/sign/node-operator-release"
         > signature.json
       - jq -e '.data.signature | type == "string"' signature.json >/dev/null
-      - unset VAULT_TOKEN
+      - unset vault_token payload
 artifacts:
   files:
     - provenance-input.json
