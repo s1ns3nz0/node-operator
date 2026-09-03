@@ -8,8 +8,8 @@ temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
 
 for dockerfile in "$root/.ci/toolchains/terraform-validation.Dockerfile" "$root/.ci/toolchains/release-build.Dockerfile"; do
-  rg -qx 'FROM ubuntu@sha256:[0-9a-f]{64}' "$dockerfile"
-  if rg -q 'curl[^\n]*\|[[:space:]]*(tar|unzip|install)' "$dockerfile"; then
+  grep -Eqx 'FROM ubuntu@sha256:[0-9a-f]{64}' "$dockerfile"
+  if grep -qE 'curl[^\n]*\|[[:space:]]*(tar|unzip|install)' "$dockerfile"; then
     printf 'toolchain image must verify downloads before extraction or installation\n' >&2
     exit 1
   fi
