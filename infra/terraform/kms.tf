@@ -29,6 +29,35 @@ data "aws_iam_policy_document" "kms_key_administrator" {
     actions   = ["kms:*"]
     resources = ["*"]
   }
+
+  # Terraform executes as this role, rather than as the dedicated break-glass
+  # KMS administrator.  AWS validates that the creating principal will retain
+  # permission to manage a new key policy, so grant only the lifecycle and
+  # policy actions already scoped to the Terraform apply role.  This does not
+  # grant cryptographic use, grants, or wildcard KMS administration.
+  statement {
+    sid    = "AllowTerraformApplyKeyLifecycleManagement"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${var.aws_account_id}:role/NodeOperatorTerraformApply"]
+    }
+
+    actions = [
+      "kms:CancelKeyDeletion",
+      "kms:CreateAlias",
+      "kms:DeleteAlias",
+      "kms:DescribeKey",
+      "kms:EnableKeyRotation",
+      "kms:GetKeyPolicy",
+      "kms:ListAliases",
+      "kms:PutKeyPolicy",
+      "kms:ScheduleKeyDeletion",
+      "kms:TagResource",
+    ]
+    resources = ["*"]
+  }
 }
 
 data "aws_iam_policy_document" "audit_key" {

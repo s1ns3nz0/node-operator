@@ -53,6 +53,33 @@ data "aws_iam_policy_document" "audit_replica_key" {
     resources = ["*"]
   }
 
+  # Keep the Tokyo key independently manageable by the Terraform execution
+  # role.  The action set mirrors the primary-key policy-management statement
+  # and deliberately excludes cryptographic use, grants, and kms:*.
+  statement {
+    sid    = "AllowTerraformApplyKeyLifecycleManagement"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${var.aws_account_id}:role/NodeOperatorTerraformApply"]
+    }
+
+    actions = [
+      "kms:CancelKeyDeletion",
+      "kms:CreateAlias",
+      "kms:DeleteAlias",
+      "kms:DescribeKey",
+      "kms:EnableKeyRotation",
+      "kms:GetKeyPolicy",
+      "kms:ListAliases",
+      "kms:PutKeyPolicy",
+      "kms:ScheduleKeyDeletion",
+      "kms:TagResource",
+    ]
+    resources = ["*"]
+  }
+
   statement {
     sid    = "AllowAuditReplicationRoleToEncryptReplicaObjects"
     effect = "Allow"
