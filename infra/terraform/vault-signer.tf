@@ -25,7 +25,13 @@ resource "aws_security_group" "release_signer" {
   name_prefix = "${local.name_prefix}-signer-"
   description = "Private release signer egress to approved VPC services only."
   vpc_id      = aws_vpc.private.id
-  egress { from_port = 443 to_port = 443 protocol = "tcp" cidr_blocks = [var.vpc_cidr] description = "HTTPS to private Vault and service endpoints" }
+  egress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+    description = "HTTPS to private Vault and service endpoints"
+  }
   tags = local.common_tags
 }
 
