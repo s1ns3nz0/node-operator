@@ -22,3 +22,21 @@ release artifacts.
 No AWS resources, Vault keys, policies, or credentials are created by this
 document. Terraform implementation requires explicit approval after plan
 review.
+
+## Prebuilt signer image boundary
+
+The signer build uses the reviewed `vault-release-signer` toolchain image. It
+contains Vault `1.20.4`, installed from the release archive only after the
+documented SHA-256 is verified. The buildspec checks that exact preinstalled
+version before it accepts any release input; it never downloads or extracts
+Vault at build time.
+
+The generic toolchain release process derives the image input label from the
+Dockerfile and its declared inputs. An image digest, rather than a mutable tag,
+must be selected for the CodeBuild environment. Tag-only runtime configuration
+is not accepted.
+
+Publishing the image, selecting its digest, and wiring that digest into the
+CodeBuild project are a separately authorized activation follow-up. This
+contract deliberately does not change the current CodeBuild image or create
+any AWS, Vault, EKS, or GitHub Actions resource.

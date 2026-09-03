@@ -3,13 +3,8 @@ phases:
   build:
     commands:
       - set -euo pipefail
-      - vault_version="1.20.4"
-      - vault_sha256="fc5fb5d01d192f1216b139fb5c6af17e3af742aaeffc289fd861920ec55f2c9c"
-      - curl --fail --silent --show-error --location --output /tmp/vault.zip "https://releases.hashicorp.com/vault/${vault_version}/vault_${vault_version}_linux_amd64.zip"
-      - printf '%s  %s\n' "$vault_sha256" /tmp/vault.zip | sha256sum --check --status
-      - unzip -oq /tmp/vault.zip -d /tmp/vault-bin
-      - export PATH="/tmp/vault-bin:$PATH"
-      - vault version
+      - expected_vault_version="1.20.4"
+      - test "$(vault version -format=json | jq -er '.version')" = "$expected_vault_version"
       - test -n "${VAULT_ADDR:-}"
       - test -n "${VAULT_AUTH_ROLE:-}"
       - test -f node-operator-release-bundle.tar
@@ -24,23 +19,11 @@ phases:
       - payload="$(base64 < provenance-input.json | tr -d '\n')"
       - vault_token="$(vault write -field=token auth/aws/login role="${VAULT_AUTH_ROLE}" 2>/dev/null)"
       - test -n "$vault_token"
-      - >-
-        curl --fail --silent --show-error --location
-        --header "X-Vault-Token: ${vault_token}"
-        --header 'Content-Type: application/json'
-        --data "{\"input\":\"${payload}\"}"
-        "${VAULT_ADDR%/}/v1/transit/sign/node-operator-release"
-        > signature.json
+      - export VAULT_TOKEN="$vault_token"
+      - vault write -format=json transit/sign/node-operator-release input="$payload" > signature.json
       - jq -e '.data.signature | type == "string"' signature.json >/dev/null
       - signature="$(jq -r .data.signature signature.json)"
-      - verify_payload="$(jq -n --arg input "$payload" --arg signature "$signature" '{input:$input,signature:$signature}')"
-      - >-
-        curl --fail --silent --show-error --location
-        --header "X-Vault-Token: ${vault_token}"
-        --header 'Content-Type: application/json'
-        --data "$verify_payload"
-        "${VAULT_ADDR%/}/v1/transit/verify/node-operator-release"
-        > verify.json
+      - vault write -format=json transit/verify/node-operator-release input="$payload" signature="$signature" > verify.json
       - jq -e '.data.valid == true' verify.json >/dev/null
       - >-
         jq -n
@@ -53,6 +36,7 @@ phases:
         '{schema_version:"v1",artifact:{name:"node-operator-release-bundle.tar",digest:$bundle_digest},provenance:{sha256:$provenance_digest,subject_digest:$bundle_digest,source_revision:$source_revision,builder_id:$builder_id},transit:{key:"node-operator-release",signature:$signature,verified:true},signer:{auth_method:"aws",vault_role:env.VAULT_AUTH_ROLE},codebuild:{build_id:$build_id}}'
         > release-verification.json
       - jq -e '.schema_version == "v1" and .transit.verified == true and (.transit.signature | type == "string")' release-verification.json >/dev/null
+      - unset VAULT_TOKEN
       - unset vault_token payload
 artifacts:
   files:
