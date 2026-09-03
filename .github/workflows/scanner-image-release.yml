@@ -15,5 +15,6 @@ jobs:
       - name: Build and publish
         run: |
           image="ghcr.io/${GITHUB_REPOSITORY,,}/security-scanners:${GITHUB_SHA}"
-          docker build --tag "$image" .ci/scanners
+          docker build --tag "$image" --tag "ghcr.io/${GITHUB_REPOSITORY,,}/security-scanners:main" .ci/scanners
           docker push "$image"
+          docker push "ghcr.io/${GITHUB_REPOSITORY,,}/security-scanners:main"
