@@ -4,7 +4,8 @@ phases:
     commands:
       - set -euo pipefail
       - expected_vault_version="1.20.4"
-      - test "$(vault version -format=json | jq -er '.version')" = "$expected_vault_version"
+      - installed_vault_version="$(vault version | awk 'NR == 1 && $1 == \"Vault\" && $2 ~ /^v[0-9]+/ { sub(/^v/, \"\", $2); print $2; exit }')"
+      - test "$installed_vault_version" = "$expected_vault_version"
       - test -n "${VAULT_ADDR:-}"
       - test -n "${VAULT_AUTH_ROLE:-}"
       - test -f node-operator-release-bundle.tar

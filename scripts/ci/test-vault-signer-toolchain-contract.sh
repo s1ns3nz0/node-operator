@@ -24,7 +24,9 @@ if grep -Eqi '(curl|wget|download|unzip)' "$buildspec"; then
   fail 'buildspec must not download or extract Vault at runtime'
 fi
 grep -Fq 'expected_vault_version="1.20.4"' "$buildspec" || fail 'buildspec must declare the expected preinstalled Vault version'
-grep -Fq "vault version -format=json | jq -er '.version'" "$buildspec" || fail 'buildspec must fail closed on the installed Vault version'
+grep -Fq 'installed_vault_version="$(vault version | awk' "$buildspec" || fail 'buildspec must parse the plaintext Vault version safely'
+grep -Fq '$1 == \"Vault\" && $2 ~ /^v[0-9]+/' "$buildspec" || fail 'buildspec must parse the plaintext Vault version safely'
+grep -Fq 'test "$installed_vault_version" = "$expected_vault_version"' "$buildspec" || fail 'buildspec must fail closed on the installed Vault version'
 grep -Fq 'vault write -format=json transit/sign/node-operator-release' "$buildspec" || fail 'buildspec must sign through the preinstalled Vault CLI'
 grep -Fq 'vault write -format=json transit/verify/node-operator-release' "$buildspec" || fail 'buildspec must verify through the preinstalled Vault CLI'
 
