@@ -1,0 +1,14 @@
+{
+  "task_id": "2026-09-03-osv-not-applicable",
+  "nodes": [
+    {"id": "contract", "title": "Task contract", "tier": "sol", "owner": "/root", "status": "completed"},
+    {"id": "implementation", "title": "Narrow OSV no-source handling", "tier": "sol", "owner": "/root", "status": "completed"},
+    {"id": "validation", "title": "Collector validation", "tier": "sol", "owner": "/root", "status": "completed"},
+    {"id": "debrief", "title": "Clean-room debrief", "tier": "terra", "owner": "/root/osv_debrief", "status": "completed"}
+  ],
+  "edges": [
+    {"from": "contract", "to": "implementation", "kind": "blocks"},
+    {"from": "implementation", "to": "validation", "kind": "blocks"},
+    {"from": "validation", "to": "debrief", "kind": "blocks"}
+  ]
+}

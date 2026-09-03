@@ -77,3 +77,10 @@ if PATH="$mock_directory:$PATH" TERRAFORM_PLUGIN_MIRROR="$temporary_directory/pl
   printf 'collector accepted an incomplete OSV report\n' >&2
   exit 1
 fi
+
+write_mock osv-scanner 'printf "%s\\n" "No package sources found, --help for usage information." >&2; exit 128'
+not_applicable_directory="$temporary_directory/not-applicable-evidence"
+PATH="$mock_directory:$PATH" TERRAFORM_PLUGIN_MIRROR="$temporary_directory/plugin-mirror" "$script_dir/collect-pr-evidence.sh" "$not_applicable_directory" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$fixture_directory" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+jq -e '.result == {vulnerabilities:[],status:"not_applicable",reason:"no_supported_dependency_manifests"}' "$not_applicable_directory/osv.json" >/dev/null
+"$script_dir/normalize-evidence.sh" "$not_applicable_directory" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$temporary_directory/scm.json" "$temporary_directory/not-applicable-normalized.json"
+jq -e '.evidence.osv == {vulnerabilities:[],status:"not_applicable",reason:"no_supported_dependency_manifests"}' "$temporary_directory/not-applicable-normalized.json" >/dev/null

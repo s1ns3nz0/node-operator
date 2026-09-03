@@ -1,0 +1,10 @@
+{
+  "task_id": "2026-09-03-osv-not-applicable",
+  "status": "completed",
+  "checks": [
+    {"name": "Reproduction against published scanner image", "status": "observed", "result": "osv-scanner exits 128 with 'No package sources found' for this repository."},
+    {"name": "scripts/ci/test-pr-evidence.sh", "status": "passed", "result": "Tests valid OSV output, malformed OSV output failing closed, and the exact exit-128 no-source diagnostic becoming not_applicable evidence."},
+    {"name": "npm run harness:check", "status": "passed"},
+    {"name": "Clean-room debrief", "status": "passed", "result": "Independent review found the special case narrow and all other OSV errors fail-closed."}
+  ]
+}

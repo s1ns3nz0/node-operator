@@ -78,6 +78,14 @@ collect_gitleaks() {
 collect_osv() {
   local report_path="$temporary_directory/osv.json" result_path="$temporary_directory/osv-result.json"
   run_report "$report_path" "$temporary_directory/osv.stderr" osv-scanner scan source --format=json "$source_directory"
+  if [ "$collector_exit_code" -eq 128 ] && grep -Fqx 'No package sources found, --help for usage information.' "$temporary_directory/osv.stderr"; then
+    # OSV uses exit 128 when the repository contains no supported dependency
+    # manifest. This is not a clean dependency scan: retain that distinction
+    # in the evidence while allowing a dependency-free repository to proceed.
+    printf '%s\n' '{"vulnerabilities":[],"status":"not_applicable","reason":"no_supported_dependency_manifests"}' > "$result_path"
+    write_envelope "$output_directory/osv.json" osv "$result_path"
+    return
+  fi
   [ "$collector_exit_code" -eq 0 ] || [ "$collector_exit_code" -eq 1 ] || { printf 'osv-scanner failed before producing evidence\n' >&2; exit 1; }
   require_json_report osv "$report_path"
   require_json_shape osv "$report_path" '.results | type == "array"'
