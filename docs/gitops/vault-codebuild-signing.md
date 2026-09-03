@@ -10,9 +10,14 @@ the build with a short-lived workload identity and calls Vault Transit
 `sign/<key>`; the private key is never exported. `read`, `update`, `delete`,
 and key-management capabilities are denied.
 
-The signed payload is the digest-bound in-toto provenance statement. The
-release gate verifies the signature, artifact digest, source revision, builder
-identity, and SBOM digest before publication or Argo CD deployment.
+The signed payload is the digest-bound in-toto provenance statement. CodeBuild
+immediately calls Transit `verify` on the returned signature and emits a
+non-sensitive `release-verification.json`. It binds the verified signature to
+the bundle digest, provenance-file digest, provenance subject digest, source
+revision, builder identity, and CodeBuild build ID. The release gate recomputes
+the local digests and fails closed if that result is absent, invalid, or
+inconsistent. Vault tokens, static AWS credentials, and key material are not
+release artifacts.
 
 No AWS resources, Vault keys, policies, or credentials are created by this
 document. Terraform implementation requires explicit approval after plan
