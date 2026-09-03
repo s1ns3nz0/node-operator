@@ -1,0 +1,1 @@
+{"task_id":"2026-09-03-codebuild-signing-input-contract","status":"in_progress","checks":[{"name":"Luna source-contract mismatch inventory reuse","status":"passed"}],"notes":["Terraform and release workflow changes are intentionally out of scope."]}

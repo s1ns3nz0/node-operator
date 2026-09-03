@@ -1,0 +1,19 @@
+{
+  "id": "2026-09-03-codebuild-signing-input-contract",
+  "title": "Define CodeBuild signer input and output contract",
+  "classification": "non-trivial",
+  "classification_reason": ["release integrity boundary", "cross-component contract", "multiple validation layers"],
+  "expected_outcome": "A fail-closed, non-secret contract defines the immutable signer input archive, buildspec selection, and verification output layout that future Terraform and release workflow activation must implement together.",
+  "dependencies": ["2026-09-03-vault-bootstrap-recovery"],
+  "constraints": ["Do not alter Terraform, release.yml, AWS, Vault, EKS, or GitHub resources.", "Do not publish an image or create S3 objects.", "Do not store credentials, tokens, signatures, or endpoint addresses."],
+  "authorization": {"repository_mutation": true, "external_actions": [], "prohibited_actions": ["Terraform changes", "workflow changes", "deploy", "publish", "merge", "secret changes", "AWS access", "production access"]},
+  "primary_owner": {"tier": "sol", "responsibility": "release-integrity decision and final integration"},
+  "delegations": [
+    {"id": "recon", "tier": "luna", "owner": "/root/vault_rollout_recon", "files": [], "worktree": "read-only", "branch": "none", "acceptance_checks": ["reuse source/buildspec mismatch inventory"], "escalation_trigger": "a live artifact or AWS state is required"},
+    {"id": "implementation", "tier": "terra", "owner": "/root/codebuild_signing_input_contract", "files": ["docs/gitops/codebuild-signing-input-contract.md", "scripts/ci/test-codebuild-signing-input-contract.sh", "package.json"], "worktree": "required", "branch": "task/2026-09-03-codebuild-signing-input-contract", "acceptance_checks": ["structural contract test", "release verification gate", "harness check"], "escalation_trigger": "implementation needs Terraform, workflow, S3, CodeBuild, or credential changes"},
+    {"id": "debrief", "tier": "terra", "owner": "pending", "files": ["reports/2026-09-03-codebuild-signing-input-contract-debrief.md"], "worktree": "required", "branch": "task/2026-09-03-codebuild-signing-input-contract", "acceptance_checks": ["clean-room summary"], "escalation_trigger": "validation evidence is incomplete"}
+  ],
+  "model_fallbacks": [],
+  "validation": ["targeted structural test", "release verification gate", "npm run harness:check", "git diff --check", "independent clean-room debrief"],
+  "status": "in_progress"
+}
