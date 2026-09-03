@@ -77,7 +77,7 @@ collect_gitleaks() {
 
 collect_osv() {
   local report_path="$temporary_directory/osv.json" result_path="$temporary_directory/osv-result.json"
-  run_report "$report_path" "$temporary_directory/osv.stderr" osv-scanner scan source --format=json --recursive "$source_directory"
+  run_report "$report_path" "$temporary_directory/osv.stderr" osv-scanner scan source --format=json "$source_directory"
   [ "$collector_exit_code" -eq 0 ] || [ "$collector_exit_code" -eq 1 ] || { printf 'osv-scanner failed before producing evidence\n' >&2; exit 1; }
   require_json_report osv "$report_path"
   require_json_shape osv "$report_path" '.results | type == "array"'
