@@ -1,6 +1,8 @@
 name: Scanner Image Release
 on:
   workflow_dispatch:
+  push:
+    paths: ['.ci/scanners/**']
 permissions:
   contents: read
   packages: write

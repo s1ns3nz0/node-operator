@@ -17,7 +17,7 @@ jobs:
   scanners:
     runs-on: ubuntu-24.04
     env:
-      SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners:main
+      SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:e500955c616b8562a28a02549b1f238fbf93d02d171be7008e4d69e29e6e3af0
       EVIDENCE_ROOT: ${{ github.workspace }}/.security-evidence
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
