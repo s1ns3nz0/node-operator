@@ -127,6 +127,38 @@ data "aws_iam_policy_document" "ebs_key" {
   source_policy_documents = [data.aws_iam_policy_document.kms_key_administrator.json]
 
   statement {
+    sid    = "AllowAutoScalingToUseEbsKey"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${var.aws_account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"]
+    }
+
+    actions   = ["kms:Decrypt", "kms:DescribeKey", "kms:Encrypt", "kms:GenerateDataKey*", "kms:ReEncrypt*"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowAutoScalingToGrantEbsKeyUse"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${var.aws_account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"]
+    }
+
+    actions   = ["kms:CreateGrant"]
+    resources = ["*"]
+
+    condition {
+      test     = "Bool"
+      variable = "kms:GrantIsForAWSResource"
+      values   = ["true"]
+    }
+  }
+
+  statement {
     sid    = "AllowEBSCSIPodIdentity"
     effect = "Allow"
 

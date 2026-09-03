@@ -121,9 +121,39 @@ resource "aws_eks_node_group" "private" {
     aws_iam_role_policy_attachment.node_worker,
     aws_iam_role_policy_attachment.node_ecr_read_only,
     aws_iam_role_policy_attachment.node_cni,
+    aws_eks_addon.vpc_cni,
     aws_vpc_endpoint.required_interface,
     aws_vpc_endpoint.s3,
   ]
+
+  tags = local.common_tags
+}
+
+resource "aws_eks_addon" "vpc_cni" {
+  cluster_name                = aws_eks_cluster.private.name
+  addon_name                  = "vpc-cni"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "PRESERVE"
+
+  depends_on = [aws_eks_cluster.private]
+
+  tags = local.common_tags
+}
+
+resource "aws_eks_pod_identity_association" "ebs_csi" {
+  cluster_name    = aws_eks_cluster.private.name
+  namespace       = "kube-system"
+  service_account = "ebs-csi-controller-sa"
+  role_arn        = aws_iam_role.ebs_csi.arn
+}
+
+resource "aws_eks_addon" "pod_identity_agent" {
+  cluster_name                = aws_eks_cluster.private.name
+  addon_name                  = "eks-pod-identity-agent"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "PRESERVE"
+
+  depends_on = [aws_eks_node_group.private]
 
   tags = local.common_tags
 }
@@ -134,18 +164,16 @@ resource "aws_eks_addon" "ebs_csi" {
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
 
-  depends_on = [aws_eks_node_group.private]
+  # Pod Identity is independent of the ServiceAccount's existence.  Creating
+  # it first lets the EBS CSI controller receive AWS credentials on its first
+  # start instead of leaving the managed add-on waiting for a later reconcile.
+  depends_on = [
+    aws_eks_node_group.private,
+    aws_eks_addon.pod_identity_agent,
+    aws_eks_pod_identity_association.ebs_csi,
+  ]
 
   tags = local.common_tags
-}
-
-resource "aws_eks_pod_identity_association" "ebs_csi" {
-  cluster_name    = aws_eks_cluster.private.name
-  namespace       = "kube-system"
-  service_account = "ebs-csi-controller-sa"
-  role_arn        = aws_iam_role.ebs_csi.arn
-
-  depends_on = [aws_eks_addon.ebs_csi]
 }
 
 resource "aws_eks_pod_identity_association" "vault" {

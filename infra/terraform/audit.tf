@@ -252,12 +252,6 @@ data "aws_iam_policy_document" "audit_notifications_key" {
 
     actions   = ["kms:Decrypt", "kms:GenerateDataKey*"]
     resources = ["*"]
-
-    condition {
-      test     = "StringLike"
-      variable = "kms:EncryptionContext:aws:cloudtrail:arn"
-      values   = ["arn:aws:cloudtrail:${var.aws_region}:${var.aws_account_id}:trail/*"]
-    }
   }
 }
 
@@ -466,7 +460,9 @@ resource "aws_config_configuration_recorder" "baseline" {
 resource "aws_config_delivery_channel" "baseline" {
   name           = "${local.name_prefix}-config"
   s3_bucket_name = aws_s3_bucket.audit.id
-  s3_key_prefix  = "AWSLogs/${var.aws_account_id}/Config"
+
+  # AWS Config owns the AWSLogs/<account-id>/Config prefix; specifying it here
+  # is rejected because the service appends that reserved path automatically.
 
   snapshot_delivery_properties {
     delivery_frequency = "TwentyFour_Hours"

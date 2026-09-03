@@ -8,6 +8,10 @@ resource "aws_vpc" "private" {
   })
 }
 
+data "aws_prefix_list" "s3" {
+  name = "com.amazonaws.${var.aws_region}.s3"
+}
+
 # The default security group cannot be removed. Explicitly manage it as deny-all
 # so resources must opt into the dedicated security groups declared below.
 resource "aws_default_security_group" "private" {
@@ -133,6 +137,16 @@ resource "aws_security_group" "nodes" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = [var.vpc_cidr]
+  }
+
+  # ECR image layers are fetched from S3 through the gateway endpoint. Security
+  # groups still evaluate the destination against the S3 managed prefix list.
+  egress {
+    description     = "S3 gateway endpoint traffic for private image pulls"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    prefix_list_ids = [data.aws_prefix_list.s3.id]
   }
 
   tags = merge(local.common_tags, {

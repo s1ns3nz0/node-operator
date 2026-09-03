@@ -1,6 +1,6 @@
 {
   "task_id": "2026-09-03-private-baseline-apply",
-  "status": "in_progress",
+  "status": "verified_pending_debrief",
   "checks": [
     {
       "name": "fresh approved baseline plan",
@@ -26,6 +26,11 @@
       "name": "recovery apply authorization gate",
       "result": "blocked-by-role-and-policy",
       "observed": "A persistent apply session reached AWS and failed without creating EKS. NodeOperatorTerraformApply lacks s3:CreateBucket, s3:PutBucketPublicAccessBlock, s3:PutLifecycleConfiguration, and s3:PutBucketNotification for the baseline audit buckets. All five KMS creates were rejected with MalformedPolicyDocumentException because their key policies grant kms:* only to the newly created dedicated KMS administrator role, not the executing role required by the KMS key-policy safety check."
+    },
+    {
+      "name": "final recovery and drift verification",
+      "result": "passed",
+      "observed": "The failed workload-free managed node group was replaced and is ACTIVE with no EKS health issues. vpc-cni, eks-pod-identity-agent, and aws-ebs-csi-driver are ACTIVE with empty health issue lists. The pinned terraform-validation image then returned detailed-exitcode 0 for a full plan. Temporary logs:FilterLogEvents and sts:DecodeAuthorizationMessage recovery permissions were removed; CallerIdentity retains only sts:GetCallerIdentity."
     }
   ],
   "notes": [
@@ -33,6 +38,6 @@
     "Apply was conditioned on a fresh baseline-only 99-create plan and included no signer/ECR/release resources.",
     "No raw Terraform plan/state, secret, Vault, workload, or ECR data is recorded.",
     "The security-group ownership refactor and an update/destroy-free recovery plan are complete.",
-    "Further apply requires explicit authorization to amend the NodeOperatorTerraformApply least-privilege policy and to revise the KMS administrator policy so the executing role can satisfy the KMS key-policy safety check."
+    "The final EBS CSI recovery added the EKS Pod Identity Agent prerequisite; no workload, Vault initialization, ECR image action, or raw state/plan data was included."
   ]
 }
