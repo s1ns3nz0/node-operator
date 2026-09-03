@@ -1,0 +1,24 @@
+# Argo CD Helm chart 10.4.0 private-registry override. Apply only after every
+# referenced digest-derived tag has been verified in the private ECR mirror.
+# Tags below are source digest hex values, not mutable upstream release tags.
+global:
+  image:
+    repository: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-argocd
+    tag: 0deb1a1c917629b960ead995ae3b6069450a866992676599658687ef9a641ee8
+    imagePullPolicy: IfNotPresent
+
+dex:
+  image:
+    repository: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-argocd
+    tag: 8499afd690c437f52301efd2b05b2455da5bd2dfc20332cd697dc9937f808462
+
+redis:
+  image:
+    repository: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-argocd
+    tag: 2cc044fc5a07c9b701f8f1255a309ae9ad7856e694ac03513bf3648c01e40763
+
+server:
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: false
