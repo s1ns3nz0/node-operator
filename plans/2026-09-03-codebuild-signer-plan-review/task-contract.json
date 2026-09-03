@@ -11,5 +11,5 @@
   "delegations": [{"id":"recon","tier":"luna","owner":"/root/terraform_plan_recon","files":[],"worktree":"read-only","branch":"none","acceptance_checks":["identify enabled signer inputs and offline-plan limits"],"escalation_trigger":"live AWS state, credentials, or unknown subnet IDs are required"}],
   "model_fallbacks": [],
   "validation": ["enabled offline Terraform plan", "plan boundary check", "targeted signer activation contract", "harness check", "independent clean-room debrief"],
-  "status": "in_progress"
+  "status": "completed"
 }
