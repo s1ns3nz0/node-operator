@@ -1,0 +1,15 @@
+{
+  "id": "2026-09-03-private-baseline-live-plan-review",
+  "title": "Review the initial private EKS baseline live Terraform plan",
+  "classification": "non-trivial",
+  "classification_reason": ["initial 99-resource cloud deployment plan", "cost and security boundary", "live AWS state reads"],
+  "expected_outcome": "A saved read-only initial-baseline Terraform plan is reviewed for exact resource scope, private-network invariants, security controls, and material cost-bearing services; it does not authorize apply.",
+  "dependencies": ["2026-09-03-terraform-backend-state-diagnosis"],
+  "constraints": ["Keep enable_release_signer=false and enable_release_signer_ecr_mirror=false.", "Use the approved Terraform role and pinned provider-mirror image. Do not apply, write/lock state, create ECR resources, mirror images, access Vault/EKS, or alter secrets.", "Do not record raw Terraform plan/state values in Git evidence."],
+  "authorization": {"repository_mutation": true, "external_actions": ["read AWS provider and backend state through the approved Terraform role", "create a temporary saved Terraform plan with state locking disabled"], "prohibited_actions": ["Terraform apply", "AWS resource mutation", "state write or lock write", "ECR image action", "Vault/EKS/GitHub environment access", "secret changes", "production access"]},
+  "primary_owner": {"tier":"sol", "responsibility":"deployment-scope, security, and cost review"},
+  "delegations": [{"id":"recon","tier":"luna","owner":"/root/baseline_plan_recon","files":[],"worktree":"read-only","branch":"none","acceptance_checks":["resource and review-risk map"],"escalation_trigger":"apply or any state/cloud mutation would be needed"}],
+  "model_fallbacks": [],
+  "validation": ["saved live plan with lock disabled", "private boundary gate", "resource-scope gate", "harness check", "independent clean-room debrief"],
+  "status": "in_progress"
+}

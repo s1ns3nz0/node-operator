@@ -1,0 +1,37 @@
+{
+  "task_id": "2026-09-03-private-baseline-live-plan-review",
+  "status": "in_progress",
+  "checks": [
+    {
+      "name": "approved Terraform role identity",
+      "result": "passed",
+      "observed": "Account 106760547719 using the NodeOperatorTerraformApply assumed role."
+    },
+    {
+      "name": "saved read-only baseline Terraform plan",
+      "result": "passed",
+      "observed": "Pinned ghcr.io/s1ns3nz0/node-operator/terraform-validation@sha256:1f2ac75ec09b43b4a79eaaae94eca8f8f1655315a5aa81e7c80d3a8a14ac189a ran terraform init -reconfigure -lockfile=readonly and terraform plan -input=false -lock=false -refresh=true -detailed-exitcode. The JSON plan digest is sha256:53a16e880aa09f7b198f31ab05c35abd01394a30cca3e562d8d2bcdcfe16206c."
+    },
+    {
+      "name": "plan action and private-boundary gates",
+      "result": "passed",
+      "observed": "99 create, 0 change, 0 destroy; check-plan-boundary.sh passed; no public-network creates; both public subnets have map_public_ip_on_launch=false; EKS public endpoint=false and private endpoint=true."
+    },
+    {
+      "name": "baseline-only scope gate",
+      "result": "passed",
+      "observed": "The plan includes only the baseline scope and five interface endpoint services (ec2, ecr.api, ecr.dkr, eks-auth, kms) in ap-northeast-2. No release signer, release artifact, aws_ecr, or GitHub ECR resource address was present."
+    },
+    {
+      "name": "EKS node-group capacity",
+      "result": "reviewed",
+      "observed": "EKS version 1.35 with m7i.2xlarge nodes: minimum 2, desired 2, maximum 3."
+    }
+  ],
+  "notes": [
+    "User requested completion of existing infrastructure work before CI workflow remediation on 2026-09-03.",
+    "No apply, state write, ECR image action, or secret operation was performed or is authorized by this review.",
+    "The saved plan is intentionally not committed; evidence records only its digest and non-sensitive summary.",
+    "Material cost-bearing items requiring approval before an eventual apply include the EKS control plane and worker nodes, five cross-AZ interface endpoints, CloudTrail, AWS Config, KMS keys, S3 audit storage, and cross-region replication."
+  ]
+}
