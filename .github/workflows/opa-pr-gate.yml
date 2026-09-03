@@ -23,7 +23,7 @@ jobs:
     env:
       EVIDENCE_ROOT: ${{ github.workspace }}/.opa-evidence
       SUBJECT_SHA: ${{ github.event.workflow_run.head_sha }}
-      TERRAFORM_IMAGE: ghcr.io/s1ns3nz0/node-operator/terraform-validation@sha256:29ff471e238a0d042724364d579ef47661503964dcb52434cafa28252f3977a7
+      TERRAFORM_IMAGE: ghcr.io/s1ns3nz0/node-operator/terraform-validation@sha256:1f2ac75ec09b43b4a79eaaae94eca8f8f1655315a5aa81e7c80d3a8a14ac189a
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
