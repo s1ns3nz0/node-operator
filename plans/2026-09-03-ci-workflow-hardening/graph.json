@@ -1,0 +1,18 @@
+{
+  "task_id": "2026-09-03-ci-workflow-hardening",
+  "nodes": [
+    {"id":"T1","title":"Define trusted evidence boundary","tier":"sol","owner":"/root","status":"completed"},
+    {"id":"T2","title":"Reconnoiter workflows and independent security review","tier":"luna+terra","owner":"/root/ci_recon,/root/terra_ci_review","status":"completed"},
+    {"id":"T3","title":"Implement deduplicated scanner evidence and trusted policy consumer","tier":"sol","owner":"/root","status":"in_progress"},
+    {"id":"T4","title":"Harden scanner image and define reproducible Terraform and release toolchains","tier":"sol","owner":"/root","status":"pending"},
+    {"id":"T5","title":"Integrate validation and clean-room debrief","tier":"terra+sol","owner":"unassigned","status":"pending"}
+  ],
+  "edges": [
+    {"from":"T1","to":"T2","kind":"informs"},
+    {"from":"T2","to":"T3","kind":"blocks"},
+    {"from":"T1","to":"T4","kind":"blocks"},
+    {"from":"T3","to":"T5","kind":"blocks"},
+    {"from":"T4","to":"T5","kind":"blocks"}
+  ],
+  "updated_at": "2026-09-03T00:00:00Z"
+}

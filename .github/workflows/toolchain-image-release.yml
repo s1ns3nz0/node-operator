@@ -1,0 +1,30 @@
+name: Toolchain Image Release
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.ci/toolchains/**'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - image: terraform-validation
+            dockerfile: .ci/toolchains/terraform-validation.Dockerfile
+          - image: release-build
+            dockerfile: .ci/toolchains/release-build.Dockerfile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Login to GHCR
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Build and publish when inputs changed
+        run: .ci/toolchains/release-toolchain-image.sh "${{ matrix.image }}" "${{ matrix.dockerfile }}"

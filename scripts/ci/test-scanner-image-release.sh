@@ -7,6 +7,14 @@ root="$(cd "$script_dir/../.." && pwd)"
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
 
+rg -qx 'FROM ubuntu@sha256:[0-9a-f]{64}' "$root/.ci/scanners/Dockerfile"
+rg -q 'GITLEAKS_SHA256=[0-9a-f]{64}' "$root/.ci/scanners/Dockerfile"
+rg -q 'OSV_SCANNER_SHA256=[0-9a-f]{64}' "$root/.ci/scanners/Dockerfile"
+if rg -q 'curl[^\n]*\|[[:space:]]*(tar|install)' "$root/.ci/scanners/Dockerfile"; then
+  printf 'scanner image must verify downloads before extraction or installation\n' >&2
+  exit 1
+fi
+
 expected_input_sha="$({
   sha256sum \
     "$root/.ci/scanners/Dockerfile" \

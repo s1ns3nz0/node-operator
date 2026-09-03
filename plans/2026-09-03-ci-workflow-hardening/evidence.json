@@ -1,0 +1,24 @@
+{
+  "taskId": "2026-09-03-ci-workflow-hardening",
+  "observations": [
+    "CI Security already produces scanner evidence using a digest-pinned image.",
+    "OPA PR Gate separately installs and executes overlapping scanners.",
+    "No mutation, push, image publication, deployment, or secret operation has been authorized.",
+    "The existing Terraform plugin mirror contains only its contract README; it cannot validate the locked AWS provider offline.",
+    "Reading exact required-status-check and ruleset configuration failed with the reset GitHub credential (HTTP 401)."
+  ],
+  "checks": [
+    {"command":"scripts/ci/test-pr-evidence.sh","result":"passed (includes expected fail-closed malformed-OSV diagnostic)"},
+    {"command":"scripts/ci/test-scm-posture.sh","result":"passed"},
+    {"command":"scripts/ci/test-scanner-image-release.sh","result":"passed"},
+    {"command":"bash -n relevant shell scripts","result":"passed"},
+    {"command":"npm run harness:check","result":"passed"},
+    {"command":"scripts/ci/test-script-quality.sh","result":"not run: shellcheck is unavailable on the local host"},
+    {"command":"docker build scanner image","result":"not completed: local Docker build exceeded interactive command window and was terminated; no image was published"}
+  ],
+  "escalations": [
+    "A repository credential with Administration: read is required to inspect branch protection/rulesets accurately; do not add it as a secret without explicit authorization.",
+    "Publishing and promoting new digest-pinned scanner, Terraform, and release images requires explicit task-level authorization.",
+    "A reviewed, checksum-verified Terraform provider source must be selected for the offline mirror/toolchain image before CI can safely replace registry initialization."
+  ]
+}

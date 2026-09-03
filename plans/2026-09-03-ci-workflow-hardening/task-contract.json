@@ -1,0 +1,28 @@
+{
+  "taskId": "2026-09-03-ci-workflow-hardening",
+  "title": "Harden and de-duplicate CI policy evidence workflows",
+  "owner": "sol",
+  "authorization": {
+    "implementation": true,
+    "remotePush": true,
+    "imagePublish": true,
+    "deployment": false,
+    "secrets": false,
+    "repositoryAdministrationRead": true
+  },
+  "scope": [
+    "Eliminate repeated PR scanner installation and collection",
+    "Separate trusted platform posture collection from untrusted PR code",
+    "Harden scanner-image supply-chain inputs",
+    "Make Terraform and release build environments reproducible",
+    "Consolidate duplicated policy validation without changing required check names"
+  ],
+  "nonGoals": ["Push, publish, deploy, rotate credentials, or modify branch protection"],
+  "acceptanceCriteria": [
+    "PR policy evaluation consumes one scanner-evidence contract rather than reinstalling scanners",
+    "Trusted posture uses default-branch collector and policy code",
+    "Container base and direct binary downloads are integrity pinned",
+    "Terraform and release tool dependencies are declared reproducibly",
+    "Harness and relevant CI tests pass"
+  ]
+}
