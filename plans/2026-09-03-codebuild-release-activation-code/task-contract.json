@@ -1,0 +1,19 @@
+{
+  "id": "2026-09-03-codebuild-release-activation-code",
+  "title": "Align Terraform and release workflow to the CodeBuild signer contract",
+  "classification": "non-trivial",
+  "classification_reason": ["release workflow mutation", "Terraform security boundary", "multiple validation layers"],
+  "expected_outcome": "Terraform and the release workflow implement the reviewed immutable source archive and verification-output contract, while the signer remains disabled until a separately authorized image publish and infrastructure rollout.",
+  "dependencies": ["2026-09-03-codebuild-signing-input-contract"],
+  "constraints": ["Do not apply Terraform, publish images, create S3 objects, start CodeBuild, access Vault/AWS/EKS, or alter secrets.", "Require a digest-pinned signer image and preserve disabled-by-default behavior.", "Do not introduce static credentials, raw Transit signatures, or public Vault access."],
+  "authorization": {"repository_mutation": true, "external_actions": [], "prohibited_actions": ["Terraform apply", "image publish", "S3 write", "CodeBuild start", "Vault access", "AWS access", "deploy", "merge", "secret changes", "production access"]},
+  "primary_owner": {"tier": "sol", "responsibility": "release-integrity and infrastructure security decisions, integration, final sign-off"},
+  "delegations": [
+    {"id": "recon", "tier": "luna", "owner": "/root/vault_rollout_recon", "files": [], "worktree": "read-only", "branch": "none", "acceptance_checks": ["reuse existing CodeBuild source mismatch and signer-contract evidence"], "escalation_trigger": "live AWS state or a secret is required"},
+    {"id": "implementation", "tier": "terra", "owner": "/root/codebuild_release_activation_impl", "files": ["infra/terraform/vault-signer.tf", ".github/workflows/release.yml", "scripts/ci/test-codebuild-release-activation.sh", "docs/gitops/codebuild-signing-input-contract.md", "package.json"], "worktree": "required", "branch": "task/2026-09-03-codebuild-release-activation-code", "acceptance_checks": ["source/output contract test", "offline Terraform validation", "release verification gate", "harness check"], "escalation_trigger": "implementation would apply Terraform, publish a container, access AWS/Vault, or require an unavailable signer image digest"},
+    {"id": "debrief", "tier": "terra", "owner": "pending", "files": ["reports/2026-09-03-codebuild-release-activation-code-debrief.md"], "worktree": "required", "branch": "task/2026-09-03-codebuild-release-activation-code", "acceptance_checks": ["clean-room summary"], "escalation_trigger": "validation evidence is incomplete"}
+  ],
+  "model_fallbacks": [],
+  "validation": ["targeted activation test", "scripts/ci/validate-terraform-offline.sh", "release verification gate", "npm run harness:check", "git diff --check", "independent clean-room debrief"],
+  "status": "in_progress"
+}
