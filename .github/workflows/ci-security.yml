@@ -23,21 +23,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: open-policy-agent/setup-opa@b2b258e089860efaadaaf71bf6e3aecb4a3eeff1 # v2.4.0
-        with:
-          version: v1.17.0
-      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
-        with:
-          terraform_version: 1.5.7
-          terraform_wrapper: false
-      - name: Install pinned scanner tools
-        run: scripts/ci/install-pr-tools.sh "$RUNNER_TEMP/node-operator-tools/bin"
+      - name: Build pinned scanner image
+        run: docker build --tag node-operator-scanners:ci .ci/scanners
       - name: Collect redacted scanner evidence
         run: >-
-          scripts/ci/collect-pr-evidence.sh "$EVIDENCE_ROOT/raw"
-          "${{ github.event.pull_request.head.sha || github.sha }}"
-          "$GITHUB_WORKSPACE"
-          "${{ github.event.pull_request.base.sha || github.sha }}"
+          docker run --rm --volume "$GITHUB_WORKSPACE:/workspace:ro"
+          --volume "$EVIDENCE_ROOT:/evidence"
+          node-operator-scanners:ci
+          bash -lc 'scripts/ci/collect-pr-evidence.sh /evidence/raw "${{ github.event.pull_request.head.sha || github.sha }}" /workspace "${{ github.event.pull_request.base.sha || github.sha }}"'
       - name: Upload non-sensitive security evidence
         if: always()
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.6.2
