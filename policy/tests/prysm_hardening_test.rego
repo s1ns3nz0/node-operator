@@ -63,9 +63,12 @@ secure_network_policy := {
 }
 
 test_secure_prysm_contract_passes if {
-	count(prysm.deny with input as secure_statefulset) == 0
-	count(prysm.deny with input as secure_storage_class) == 0
-	count(prysm.deny with input as secure_network_policy) == 0
+	a := prysm.deny with input as secure_statefulset
+	b := prysm.deny with input as secure_storage_class
+	c := prysm.deny with input as secure_network_policy
+	count(a) == 0
+	count(b) == 0
+	count(c) == 0
 }
 
 test_unpinned_or_wrong_prysm_image_fails if {

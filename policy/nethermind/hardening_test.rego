@@ -3,7 +3,8 @@ package nodeoperator.nethermind
 import rego.v1
 
 test_secure_statefulset_is_accepted if {
-	count(deny with input as secure_statefulset) == 0
+	violations := deny with input as secure_statefulset
+	count(violations) == 0
 }
 
 test_secure_storage_class_is_accepted if {
