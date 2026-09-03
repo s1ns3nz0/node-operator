@@ -3,7 +3,13 @@ phases:
   build:
     commands:
       - set -euo pipefail
-      - command -v vault >/dev/null
+      - vault_version="1.20.4"
+      - vault_sha256="fc5fb5d01d192f1216b139fb5c6af17e3af742aaeffc289fd861920ec55f2c9c"
+      - curl --fail --silent --show-error --location --output /tmp/vault.zip "https://releases.hashicorp.com/vault/${vault_version}/vault_${vault_version}_linux_amd64.zip"
+      - printf '%s  %s\n' "$vault_sha256" /tmp/vault.zip | sha256sum --check --status
+      - unzip -oq /tmp/vault.zip -d /tmp/vault-bin
+      - export PATH="/tmp/vault-bin:$PATH"
+      - vault version
       - test -n "${VAULT_ADDR:-}"
       - test -n "${VAULT_AUTH_ROLE:-}"
       - test -f provenance-input.json
