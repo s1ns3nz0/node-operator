@@ -24,6 +24,12 @@
       "destination": "argocd",
       "ecrTag": "2cc044fc5a07c9b701f8f1255a309ae9ad7856e694ac03513bf3648c01e40763",
       "purpose": "Redis image 8.6.4-alpine"
+    },
+    {
+      "source": "ghcr.io/s1ns3nz0/node-operator/argocd-bootstrap@sha256:0e2c0f21b1d68945b2470a3a13f675ae205b06edc5e543d222105aa7fffbfa6f",
+      "destination": "argocd",
+      "ecrTag": "0e2c0f21b1d68945b2470a3a13f675ae205b06edc5e543d222105aa7fffbfa6f",
+      "purpose": "Private Argo CD bootstrap toolchain for commit 8a453d8"
     }
   ]
 }
