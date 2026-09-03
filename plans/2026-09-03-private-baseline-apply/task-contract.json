@@ -1,0 +1,18 @@
+{
+  "id": "2026-09-03-private-baseline-apply",
+  "title": "Apply the approved initial private EKS baseline",
+  "classification": "non-trivial",
+  "classification_reason": ["creates 99 cloud resources", "cost-bearing AWS infrastructure", "security and network perimeter"],
+  "expected_outcome": "Apply only a reconfirmed baseline-only Terraform plan in account 106760547719, then verify the persisted state and essential private-network invariants without accessing workloads, Vault, or secrets.",
+  "dependencies": ["2026-09-03-private-baseline-live-plan-review", "2026-09-03-terraform-backend-state-diagnosis"],
+  "constraints": ["Inputs must remain enable_release_signer=false and enable_release_signer_ecr_mirror=false.", "Apply only if a fresh saved plan has exactly 99 creates, no changes or destroys, passes the boundary and scope gates, and matches the approved account.", "Do not create ECR/release resources, mirror images, access Vault/EKS workloads, alter secrets, or record raw state/plan data."],
+  "authorization": {"repository_mutation": true, "external_actions": ["read AWS provider and backend state through the approved Terraform role", "create a temporary saved Terraform plan", "apply the exact reconfirmed initial private baseline Terraform plan", "read back Terraform state and non-sensitive AWS resource metadata for verification"], "prohibited_actions": ["ECR image action", "release signer activation", "Vault initialization or unseal", "workload deployment", "secret change", "production access outside account 106760547719"]},
+  "primary_owner": {"tier":"sol", "responsibility":"apply boundary, security, cost, and final integration"},
+  "delegations": [
+    {"id":"recon","tier":"luna","owner":"/root/private_baseline_apply_recon","files":[],"worktree":"read-only","branch":"none","acceptance_checks":["pre-apply verification checklist","post-apply resource verification map"],"escalation_trigger":"fresh plan differs from approved 99-create scope or shows a destructive action"},
+    {"id":"implementation-review","tier":"terra","owner":"pending","files":[],"worktree":"dedicated","branch":"task/2026-09-03-private-baseline-apply-review","acceptance_checks":["state and invariant review","evidence completeness"],"escalation_trigger":"verification requires secret, workload, or unapproved account access"}
+  ],
+  "model_fallbacks": [],
+  "validation": ["fresh saved plan", "boundary and scope gates", "Terraform apply", "post-apply state/resource verification", "harness check", "independent clean-room debrief"],
+  "status": "in_progress"
+}

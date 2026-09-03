@@ -1,0 +1,32 @@
+{
+  "task_id": "2026-09-03-private-baseline-apply",
+  "status": "in_progress",
+  "checks": [
+    {
+      "name": "fresh approved baseline plan",
+      "result": "passed",
+      "observed": "Pinned terraform-validation image generated a plan with 99 creates, 0 changes, and 0 destroys. The private-boundary and baseline-only gates passed; EKS is private-only 1.35 with m7i.2xlarge node capacity 2/2/3. Plan JSON sha256:f68862359011b7862656b0bc15c9edf756dd5c925568ff0bda2c236eb5fb29ba."
+    },
+    {
+      "name": "approved baseline apply",
+      "result": "partial-failure",
+      "observed": "Terraform began creating the approved baseline, then the Docker-hosted Terraform backend request failed with `tls: bad record MAC` before EKS existed. The S3 backend state object persisted at 133765 bytes; no retry was performed."
+    },
+    {
+      "name": "read-only partial-state inspection",
+      "result": "passed-with-blocker",
+      "observed": "VPC, S3 gateway endpoint, five private-DNS interface endpoints, and Config recorder exist. CloudTrail and EKS do not yet exist. A fresh recovery plan has 58 creates, 1 update, 0 destroys; JSON sha256:bf4475d70f7564b45ceae742e2a6a0f41c1421220bbafefb4201c06784dca3f0."
+    },
+    {
+      "name": "recovery security-group gate",
+      "result": "blocked",
+      "observed": "The sole update would remove the cluster-to-node TCP/443 and TCP/10250 ingress rules from aws_security_group.nodes because the configuration mixes an inline ingress rule with standalone aws_vpc_security_group_ingress_rule resources. Applying it could leave the separately tracked rules absent, so recovery is intentionally stopped."
+    }
+  ],
+  "notes": [
+    "The user approved task 1, the exact initial private baseline Terraform apply, on 2026-09-03.",
+    "Apply was conditioned on a fresh baseline-only 99-create plan and included no signer/ECR/release resources.",
+    "No raw Terraform plan/state, secret, Vault, workload, or ECR data is recorded.",
+    "A Terraform security-group ownership refactor and an explicit recovery plan are required before any further apply."
+  ]
+}
