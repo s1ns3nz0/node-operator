@@ -1,0 +1,5 @@
+flowchart LR
+  contract[Task contract] --> dedupe[Content-hash deduplication]
+  dedupe --> release[Publish labelled image]
+  release --> promotion[Pin final digest]
+  promotion --> debrief[Clean-room debrief]
