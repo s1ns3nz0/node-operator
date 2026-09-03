@@ -26,7 +26,8 @@ for required in \
   'scan_on_push = true' \
   'prevent_destroy = true' \
   'resource "aws_iam_role" "github_gitops_oci_mirror"' \
-  'repo:${var.github_repository}:environment:gitops-oci-mirror' \
+  'token.actions.githubusercontent.com:repository' \
+  'repo:${split("/", var.github_repository)[0]}@*/${split("/", var.github_repository)[1]}@*:environment:gitops-oci-mirror' \
   '"ecr:DescribeImages"' \
   '"ecr:PutImage"' \
   'github_gitops_oci_mirror_role_arn'; do
