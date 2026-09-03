@@ -1,4 +1,3 @@
-FROM hashicorp/terraform:1.5.7 AS terraform
 FROM ubuntu:24.04
 ARG SEMGREP_VERSION=1.159.0
 ARG CHECKOV_VERSION=3.2.522
@@ -8,4 +7,3 @@ RUN python3 -m pip install --break-system-packages --no-cache-dir "semgrep==${SE
 RUN curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz -C /usr/local/bin gitleaks
 RUN curl -fsSL https://github.com/google/osv-scanner/releases/download/v2.4.0/osv-scanner_linux_amd64 | install -m 0755 /dev/stdin /usr/local/bin/osv-scanner
 WORKDIR /workspace
-COPY --from=terraform /bin/terraform /usr/local/bin/terraform

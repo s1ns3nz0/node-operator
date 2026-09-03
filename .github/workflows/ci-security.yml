@@ -29,6 +29,7 @@ jobs:
         run: >-
           docker run --rm --volume "$GITHUB_WORKSPACE:/workspace:ro"
           --volume "$EVIDENCE_ROOT:/evidence"
+          --env SKIP_TERRAFORM=true
           node-operator-scanners:ci
           bash -lc 'scripts/ci/collect-pr-evidence.sh /evidence/raw "${{ github.event.pull_request.head.sha || github.sha }}" /workspace "${{ github.event.pull_request.base.sha || github.sha }}"'
       - name: Upload non-sensitive security evidence

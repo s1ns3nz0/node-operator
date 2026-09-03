@@ -25,7 +25,7 @@ require_command osv-scanner
 require_command semgrep
 require_command zizmor
 require_command checkov
-require_command terraform
+if [ "${SKIP_TERRAFORM:-false}" != "true" ]; then require_command terraform; fi
 require_command jq
 git -C "$source_directory" rev-parse --is-inside-work-tree >/dev/null
 
@@ -215,4 +215,8 @@ collect_semgrep
 collect_zizmor
 collect_checkov
 collect_format
-collect_terraform
+if [ "${SKIP_TERRAFORM:-false}" = "true" ]; then
+  jq -n --arg sha "$commit_sha" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{schema_version:"v1",tool:"terraform",commit_sha:$sha,collected_at:$at,result:{status:"not_run",modules:[]}}' > "$output_directory/terraform.json"
+else
+  collect_terraform
+fi
