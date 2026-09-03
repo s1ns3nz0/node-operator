@@ -1,4 +1,10 @@
 {
   "version": 1,
-  "artifacts": []
+  "artifacts": [
+    {
+      "source": "ghcr.io/argoproj/argo-helm/argo-cd@sha256:8ff18ee7a22670305555167ea31f24a88e2f912cf0a872f852e1880886d4c308",
+      "destination": "argocd",
+      "purpose": "Argo CD Helm chart 10.4.0"
+    }
+  ]
 }
