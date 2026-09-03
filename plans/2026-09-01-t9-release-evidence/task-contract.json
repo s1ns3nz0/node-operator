@@ -1,0 +1,21 @@
+{
+  "id": "2026-09-01-t9-release-evidence",
+  "title": "Add posture, build, and release-eligibility evidence",
+  "classification": "non-trivial",
+  "classification_reason": ["security CI controls", "multiple validation layers", "multiple model roles"],
+  "expected_outcome": "A deterministic, non-sensitive Kustomize release candidate is keyed by immutable digest, bound CycloneDX SBOM, and unsigned provenance input while OPA remains fail-closed for missing trusted signature, provenance, and scan evidence.",
+  "dependencies": ["T-8"],
+  "constraints": ["Do not deploy, publish, merge, alter secrets, access AWS, or access production.", "Preserve T-8 thin-workflow and non-sensitive artifact boundaries.", "Any optional Grype result must be explicit and fail-closed when policy requires it.", "The local candidate must not claim release eligibility."],
+  "authorization": {"repository_mutation": true, "external_actions": [], "prohibited_actions": ["deploy", "publish", "merge", "secret changes", "AWS access", "production access"]},
+  "primary_owner": {"tier": "sol", "responsibility": "security decisions, integration, and final sign-off"},
+  "delegations": [
+    {"id": "bundle-recon", "tier": "luna", "owner": "/root/t9_bundle_recon", "files": [], "worktree": "read-only", "branch": "none", "acceptance_checks": ["local tool inventory", "artifact boundary"], "escalation_trigger": "deterministic local build cannot be defined without external access"},
+    {"id": "bundle", "tier": "terra", "owner": "/root/t9_bundle_impl", "files": ["scripts/ci/build-release-bundle.sh", "scripts/ci/test-build-release-bundle.sh", "docs/release-bundle.md"], "worktree": "/Users/s1ns3nz0/orca/projects/node-operator-t9-build", "branch": "task/2026-09-02-t9-build-binding", "acceptance_checks": ["determinism", "HEAD snapshot materialization", "SBOM digest binding", "non-sensitive boundary"], "escalation_trigger": "artifact boundary requires signing, scanning, publication, or deployment"},
+    {"id": "collector-fix", "tier": "terra", "owner": "/root/t9_collector_fix", "files": ["scripts/ci/collect-release-evidence.sh", "scripts/ci/test-release-evidence.sh"], "worktree": "/Users/s1ns3nz0/orca/projects/node-operator-t9-build", "branch": "task/2026-09-02-t9-build-binding", "acceptance_checks": ["SBOM mismatch rejection", "unsupported SPDX rejection"], "escalation_trigger": "artifact digest cannot be verified from supplied SBOM"},
+    {"id": "review", "tier": "terra", "owner": "/root/t9_bundle_review", "files": [], "worktree": "read-only", "branch": "none", "acceptance_checks": ["independent source/digest/SBOM review"], "escalation_trigger": "a candidate can appear release-eligible without trusted CI evidence"}
+  ],
+  "model_fallbacks": [],
+  "validation": ["scripts/ci/test-build-release-bundle.sh", "scripts/ci/test-release-evidence.sh", "npm run harness:check", "npm run harness:verify", "shell syntax", "independent review"],
+  "worktree": "/Users/s1ns3nz0/orca/projects/node-operator-t9-build",
+  "status": "completed"
+}

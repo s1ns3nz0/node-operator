@@ -1,0 +1,13 @@
+{
+  "task_id": "2026-09-02-t5-nethermind-workload",
+  "checks": [
+    {"name": "task graph initialization", "result": "completed", "summary": "Created the T-5 contract, plan, graph, Mermaid view, and evidence register before execution-client implementation."},
+    {"name": "Nethermind image selection", "result": "completed", "summary": "Selected stable Nethermind 1.39.3-chiseled. Docker manifest inspection resolved linux/amd64 digest sha256:ec5f6c8158dbf82d4ddbd5500f895c930f52aa3b4c998148d9e1b452793d828e."},
+    {"name": "manifest rendering", "result": "passed", "summary": "kubectl kustomize deploy/nethermind rendered successfully without cluster access."},
+    {"name": "YAML syntax", "result": "passed", "summary": "Ruby YAML parsing accepted all Nethermind manifests and policy fixtures."},
+    {"name": "harness structure", "result": "passed", "summary": "npm run harness:check passed with seven registered task graphs."},
+    {"name": "policy fixtures", "result": "implemented_not_executed", "summary": "Nethermind Rego unit tests cover secure cases and all eight deny IDs. OPA and Conftest are unavailable locally, so policy execution is deferred to CI or a provisioned validation environment."},
+    {"name": "harness adapters", "result": "partial", "summary": "npm run harness:verify confirms structure but cannot run OPA, Conftest, or ShellCheck locally; the pre-existing normalizer fixture is also intentionally incomplete."},
+    {"name": "independent review", "result": "completed", "summary": "Terra review found missing workload-identity enforcement and stale image evidence; both were corrected before integration."}
+  ]
+}

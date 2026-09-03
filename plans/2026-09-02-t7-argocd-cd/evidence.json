@@ -1,1 +1,0 @@
-{"task_id":"2026-09-02-t7-argocd-cd","checks":[{"name":"ownership boundary","result":"passed","summary":"Terraform infrastructure and Argo CD workload delivery are explicitly separated."},{"name":"cloud deployment","result":"not_started","summary":"No cluster or workload deployment was performed."}]}

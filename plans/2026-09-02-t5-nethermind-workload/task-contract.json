@@ -1,0 +1,19 @@
+{
+  "id": "2026-09-02-t5-nethermind-workload",
+  "title": "Render Hoodi execution-client workload",
+  "classification": "non-trivial",
+  "classification_reason": ["security-sensitive Kubernetes workload", "external image selection", "multiple validation layers"],
+  "expected_outcome": "A separate hardened Nethermind Hoodi StatefulSet has a verified immutable image, encrypted 2 TiB gp3 storage, probes, anti-affinity from Prysm, and constrained network paths without deployment.",
+  "dependencies": ["T-2", "T-3"],
+  "constraints": ["No deployment, cluster/AWS access, validator keys, mainnet, image publishing, secrets, snapshots, or merge.", "Select and record a Hoodi-compatible Nethermind stable release and OCI digest before workload implementation."],
+  "authorization": {"repository_mutation": true, "external_actions": [], "prohibited_actions": ["deploy", "cluster access", "AWS access", "validator operation", "secret changes", "publish", "merge"]},
+  "primary_owner": {"tier": "sol", "responsibility": "image selection and security integration"},
+  "delegations": [
+    {"id": "recon", "tier": "luna", "owner": "/root/t5_recon", "files": [], "worktree": "read-only", "branch": "none", "acceptance_checks": ["invariant inventory", "validation command inventory"], "escalation_trigger": "manifest violates an established workload-hardening convention"},
+    {"id": "policy", "tier": "terra", "owner": "/root/t5_policy", "files": ["policy/nethermind/**"], "worktree": "/Users/s1ns3nz0/orca/projects/node-operator-t5", "branch": "task/2026-09-02-t5-nethermind-workload", "acceptance_checks": ["Rego policy tests", "no-world-egress negative case"], "escalation_trigger": "a required invariant cannot be represented against the rendered manifests"}
+  ],
+  "model_fallbacks": [],
+  "validation": ["manifest fixture policy", "Kustomize", "Conftest/OPA", "npm run harness:check"],
+  "worktree": "/Users/s1ns3nz0/orca/projects/node-operator-t5",
+  "status": "completed"
+}

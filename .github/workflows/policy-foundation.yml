@@ -19,8 +19,12 @@ jobs:
           version: v1.17.0
       - name: Test Rego policy
         run: scripts/ci/test-policy.sh
+      - name: Test Terraform security policy
+        run: scripts/ci/test-terraform-policy.sh
       - name: Test evidence normalizer
         run: scripts/ci/test-normalizer.sh
+      - name: Test PR gate scripts
+        run: scripts/ci/test-pr-gate.sh
       - name: Install Conftest
         run: scripts/ci/install-conftest.sh
       - name: Test rendered manifests
