@@ -133,6 +133,162 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_replica" {
   }
 }
 
+# This Tokyo bucket is deliberately not access-logged itself: it is the
+# non-recursive destination for the Tokyo replica bucket's S3 access logs.
+# S3 server access log delivery supports SSE-S3 but not default SSE-KMS.
+resource "aws_s3_bucket" "audit_replica_access_logs" {
+  #checkov:skip=CKV_AWS_144:Replicating this DR delivery target would create a second unbounded audit-log stream; the audited source is replicated instead.
+  #checkov:skip=CKV_AWS_145:S3 server access log delivery does not support a default SSE-KMS destination key.
+  provider      = aws.audit_replica
+  bucket_prefix = "${local.name_prefix}-al-dr-"
+  force_destroy = false
+
+  tags = merge(local.common_tags, {
+    Name    = "${local.name_prefix}-audit-dr-access-logs"
+    Purpose = "audit-replica-bucket-server-access-logs"
+  })
+}
+
+resource "aws_s3_bucket_public_access_block" "audit_replica_access_logs" {
+  provider                = aws.audit_replica
+  bucket                  = aws_s3_bucket.audit_replica_access_logs.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_ownership_controls" "audit_replica_access_logs" {
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.audit_replica_access_logs.id
+
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "audit_replica_access_logs" {
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.audit_replica_access_logs.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "audit_replica_access_logs" {
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.audit_replica_access_logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "audit_replica_access_logs" {
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.audit_replica_access_logs.id
+
+  rule {
+    id     = "retain-audit-replica-access-logs"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+
+    transition {
+      days          = 90
+      storage_class = "STANDARD_IA"
+    }
+
+    expiration {
+      days = 365
+    }
+  }
+}
+
+data "aws_iam_policy_document" "audit_replica_access_logs" {
+  statement {
+    sid    = "DenyInsecureTransport"
+    effect = "Deny"
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    actions   = ["s3:*"]
+    resources = [aws_s3_bucket.audit_replica_access_logs.arn, "${aws_s3_bucket.audit_replica_access_logs.arn}/*"]
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+
+  statement {
+    sid    = "AllowOnlyAuditReplicaServerAccessLogDelivery"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["logging.s3.amazonaws.com"]
+    }
+
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.audit_replica_access_logs.arn}/audit-replica/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [var.aws_account_id]
+    }
+
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values   = [aws_s3_bucket.audit_replica.arn]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "audit_replica_access_logs" {
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.audit_replica_access_logs.id
+  policy   = data.aws_iam_policy_document.audit_replica_access_logs.json
+
+  depends_on = [aws_s3_bucket_public_access_block.audit_replica_access_logs]
+}
+
+resource "aws_s3_bucket_logging" "audit_replica" {
+  provider      = aws.audit_replica
+  bucket        = aws_s3_bucket.audit_replica.id
+  target_bucket = aws_s3_bucket.audit_replica_access_logs.id
+  target_prefix = "audit-replica/"
+
+  depends_on = [aws_s3_bucket_policy.audit_replica_access_logs]
+}
+
+resource "aws_s3_bucket_notification" "audit_replica" {
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.audit_replica.id
+
+  eventbridge = true
+}
+
+resource "aws_s3_bucket_notification" "audit_replica_access_logs" {
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.audit_replica_access_logs.id
+
+  eventbridge = true
+}
+
 data "aws_iam_policy_document" "audit_replication_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]

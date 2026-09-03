@@ -204,6 +204,156 @@ resource "aws_s3_bucket_lifecycle_configuration" "release_artifacts" {
   }
 }
 
+# The logging destination must remain non-recursive. S3 server access log
+# delivery supports SSE-S3 but does not support a default SSE-KMS key.
+resource "aws_s3_bucket" "release_artifacts_access_logs" {
+  #checkov:skip=CKV_AWS_144:Replicating this delivery target would create a second unbounded audit-log stream; the release artifacts are replicated instead.
+  #checkov:skip=CKV_AWS_145:S3 server access log delivery does not support a default SSE-KMS destination key.
+  count         = var.enable_release_signer ? 1 : 0
+  bucket_prefix = "${local.name_prefix}-rl-"
+  force_destroy = false
+
+  tags = merge(local.common_tags, {
+    Name    = "${local.name_prefix}-release-access-logs"
+    Purpose = "release-artifact-bucket-server-access-logs"
+  })
+}
+
+resource "aws_s3_bucket_public_access_block" "release_artifacts_access_logs" {
+  count                   = var.enable_release_signer ? 1 : 0
+  bucket                  = aws_s3_bucket.release_artifacts_access_logs[0].id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_ownership_controls" "release_artifacts_access_logs" {
+  count  = var.enable_release_signer ? 1 : 0
+  bucket = aws_s3_bucket.release_artifacts_access_logs[0].id
+
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "release_artifacts_access_logs" {
+  count  = var.enable_release_signer ? 1 : 0
+  bucket = aws_s3_bucket.release_artifacts_access_logs[0].id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "release_artifacts_access_logs" {
+  count  = var.enable_release_signer ? 1 : 0
+  bucket = aws_s3_bucket.release_artifacts_access_logs[0].id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "release_artifacts_access_logs" {
+  count  = var.enable_release_signer ? 1 : 0
+  bucket = aws_s3_bucket.release_artifacts_access_logs[0].id
+
+  rule {
+    id     = "retain-release-access-logs"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+
+    transition {
+      days          = 90
+      storage_class = "STANDARD_IA"
+    }
+
+    expiration {
+      days = 365
+    }
+  }
+}
+
+data "aws_iam_policy_document" "release_artifacts_access_logs" {
+  count = var.enable_release_signer ? 1 : 0
+
+  statement {
+    sid    = "DenyInsecureTransport"
+    effect = "Deny"
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    actions   = ["s3:*"]
+    resources = [aws_s3_bucket.release_artifacts_access_logs[0].arn, "${aws_s3_bucket.release_artifacts_access_logs[0].arn}/*"]
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+
+  statement {
+    sid    = "AllowOnlyReleaseArtifactServerAccessLogDelivery"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["logging.s3.amazonaws.com"]
+    }
+
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.release_artifacts_access_logs[0].arn}/release-artifacts/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [var.aws_account_id]
+    }
+
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values   = [aws_s3_bucket.release_artifacts[0].arn]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "release_artifacts_access_logs" {
+  count  = var.enable_release_signer ? 1 : 0
+  bucket = aws_s3_bucket.release_artifacts_access_logs[0].id
+  policy = data.aws_iam_policy_document.release_artifacts_access_logs[0].json
+
+  depends_on = [aws_s3_bucket_public_access_block.release_artifacts_access_logs]
+}
+
+resource "aws_s3_bucket_logging" "release_artifacts" {
+  count         = var.enable_release_signer ? 1 : 0
+  bucket        = aws_s3_bucket.release_artifacts[0].id
+  target_bucket = aws_s3_bucket.release_artifacts_access_logs[0].id
+  target_prefix = "release-artifacts/"
+
+  depends_on = [aws_s3_bucket_policy.release_artifacts_access_logs]
+}
+
+resource "aws_s3_bucket_notification" "release_artifacts_access_logs" {
+  count  = var.enable_release_signer ? 1 : 0
+  bucket = aws_s3_bucket.release_artifacts_access_logs[0].id
+
+  eventbridge = true
+}
+
 # EventBridge is the approved in-account event integration point. Consumers
 # (for example, a SIEM forwarding rule) are intentionally not created here;
 # their destination and retention need an independent approval.
@@ -411,6 +561,165 @@ resource "aws_s3_bucket_lifecycle_configuration" "release_artifacts_replica" {
       noncurrent_days = 365
     }
   }
+}
+
+# This Tokyo bucket is a non-recursive S3 server access-log destination, not a
+# data bucket. It therefore uses the AWS-required SSE-S3 delivery mode.
+resource "aws_s3_bucket" "release_artifacts_replica_access_logs" {
+  #checkov:skip=CKV_AWS_144:Replicating this DR delivery target would create a second unbounded audit-log stream; the release artifacts are replicated instead.
+  #checkov:skip=CKV_AWS_145:S3 server access log delivery does not support a default SSE-KMS destination key.
+  count         = var.enable_release_signer ? 1 : 0
+  provider      = aws.audit_replica
+  bucket_prefix = "${local.name_prefix}-rl-dr-"
+  force_destroy = false
+
+  tags = merge(local.common_tags, {
+    Name    = "${local.name_prefix}-release-dr-access-logs"
+    Purpose = "release-artifact-replica-bucket-server-access-logs"
+  })
+}
+
+resource "aws_s3_bucket_public_access_block" "release_artifacts_replica_access_logs" {
+  count                   = var.enable_release_signer ? 1 : 0
+  provider                = aws.audit_replica
+  bucket                  = aws_s3_bucket.release_artifacts_replica_access_logs[0].id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_ownership_controls" "release_artifacts_replica_access_logs" {
+  count    = var.enable_release_signer ? 1 : 0
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.release_artifacts_replica_access_logs[0].id
+
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "release_artifacts_replica_access_logs" {
+  count    = var.enable_release_signer ? 1 : 0
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.release_artifacts_replica_access_logs[0].id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "release_artifacts_replica_access_logs" {
+  count    = var.enable_release_signer ? 1 : 0
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.release_artifacts_replica_access_logs[0].id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "release_artifacts_replica_access_logs" {
+  count    = var.enable_release_signer ? 1 : 0
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.release_artifacts_replica_access_logs[0].id
+
+  rule {
+    id     = "retain-release-replica-access-logs"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+
+    transition {
+      days          = 90
+      storage_class = "STANDARD_IA"
+    }
+
+    expiration {
+      days = 365
+    }
+  }
+}
+
+data "aws_iam_policy_document" "release_artifacts_replica_access_logs" {
+  count = var.enable_release_signer ? 1 : 0
+
+  statement {
+    sid    = "DenyInsecureTransport"
+    effect = "Deny"
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    actions   = ["s3:*"]
+    resources = [aws_s3_bucket.release_artifacts_replica_access_logs[0].arn, "${aws_s3_bucket.release_artifacts_replica_access_logs[0].arn}/*"]
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+
+  statement {
+    sid    = "AllowOnlyReleaseReplicaServerAccessLogDelivery"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["logging.s3.amazonaws.com"]
+    }
+
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.release_artifacts_replica_access_logs[0].arn}/release-artifacts-replica/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [var.aws_account_id]
+    }
+
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values   = [aws_s3_bucket.release_artifacts_replica[0].arn]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "release_artifacts_replica_access_logs" {
+  count    = var.enable_release_signer ? 1 : 0
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.release_artifacts_replica_access_logs[0].id
+  policy   = data.aws_iam_policy_document.release_artifacts_replica_access_logs[0].json
+
+  depends_on = [aws_s3_bucket_public_access_block.release_artifacts_replica_access_logs]
+}
+
+resource "aws_s3_bucket_logging" "release_artifacts_replica" {
+  count         = var.enable_release_signer ? 1 : 0
+  provider      = aws.audit_replica
+  bucket        = aws_s3_bucket.release_artifacts_replica[0].id
+  target_bucket = aws_s3_bucket.release_artifacts_replica_access_logs[0].id
+  target_prefix = "release-artifacts-replica/"
+
+  depends_on = [aws_s3_bucket_policy.release_artifacts_replica_access_logs]
+}
+
+resource "aws_s3_bucket_notification" "release_artifacts_replica_access_logs" {
+  count    = var.enable_release_signer ? 1 : 0
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.release_artifacts_replica_access_logs[0].id
+
+  eventbridge = true
 }
 
 resource "aws_s3_bucket_notification" "release_artifacts_replica" {
