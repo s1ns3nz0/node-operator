@@ -51,6 +51,7 @@ data "aws_iam_policy_document" "kms_key_administrator" {
       "kms:DescribeKey",
       "kms:EnableKeyRotation",
       "kms:GetKeyPolicy",
+      "kms:GetKeyRotationStatus",
       "kms:ListAliases",
       "kms:PutKeyPolicy",
       "kms:ScheduleKeyDeletion",

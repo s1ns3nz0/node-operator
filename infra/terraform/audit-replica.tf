@@ -72,6 +72,7 @@ data "aws_iam_policy_document" "audit_replica_key" {
       "kms:DescribeKey",
       "kms:EnableKeyRotation",
       "kms:GetKeyPolicy",
+      "kms:GetKeyRotationStatus",
       "kms:ListAliases",
       "kms:PutKeyPolicy",
       "kms:ScheduleKeyDeletion",
