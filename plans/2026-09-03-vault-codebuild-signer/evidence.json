@@ -1,1 +1,1 @@
-{"task_id":"2026-09-03-vault-codebuild-signer","status":"in_progress","checks":[{"name":"trust boundary review","status":"passed"}],"notes":["No AWS resources created; Vault keys are never exported."]}
+{"task_id":"2026-09-03-vault-codebuild-signer","status":"in_progress","checks":[{"name":"trust boundary review","status":"passed"},{"name":"Vault Transit policy review","status":"passed"}],"notes":["No AWS resources created; Vault keys are never exported."]}
