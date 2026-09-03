@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   build-and-publish:
@@ -24,6 +25,21 @@ jobs:
       - uses: anchore/sbom-action/download-syft@e11c8f3f6e1c7a5d7a7c5c4c2a2a7d4e8f4b3c2d # v0.20.6
       - name: Build release bundle and evidence
         run: scripts/ci/build-release-bundle.sh "$RUNNER_TEMP/release"
+      - name: Upload signer input to S3
+        env:
+          AWS_ROLE_ARN: ${{ vars.RELEASE_RUNNER_ROLE_ARN }}
+          AWS_REGION: ap-northeast-2
+          INPUT_BUCKET: ${{ vars.RELEASE_ARTIFACT_BUCKET }}
+        run: |
+          test -n "$AWS_ROLE_ARN"; test -n "$INPUT_BUCKET"
+          token_file="$RUNNER_TEMP/oidc-token"
+          curl --fail --silent --show-error -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" > "$token_file"
+          web_token="$(jq -r .value "$token_file")"
+          creds="$(aws sts assume-role-with-web-identity --role-arn "$AWS_ROLE_ARN" --role-session-name "release-${GITHUB_RUN_ID}" --web-identity-token "$web_token" --duration-seconds 900)"
+          export AWS_ACCESS_KEY_ID="$(jq -r .Credentials.AccessKeyId <<<"$creds")" AWS_SECRET_ACCESS_KEY="$(jq -r .Credentials.SecretAccessKey <<<"$creds")" AWS_SESSION_TOKEN="$(jq -r .Credentials.SessionToken <<<"$creds")"
+          zip -q -j "$RUNNER_TEMP/release-input.zip" "$RUNNER_TEMP/release/node-operator-release-bundle.tar" "$RUNNER_TEMP/release/provenance-input.json"
+          aws s3 cp "$RUNNER_TEMP/release-input.zip" "s3://${INPUT_BUCKET}/release-input/${GITHUB_SHA}.zip" --region "$AWS_REGION"
+          aws codebuild start-build --project-name "node-operator-baseline-release-signer" --source-version "${GITHUB_SHA}" --region "$AWS_REGION" > "$RUNNER_TEMP/codebuild.json"
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
