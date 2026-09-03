@@ -24,6 +24,16 @@ phases:
         "${VAULT_ADDR%/}/v1/transit/sign/node-operator-release"
         > signature.json
       - jq -e '.data.signature | type == "string"' signature.json >/dev/null
+      - signature="$(jq -r .data.signature signature.json)"
+      - verify_payload="$(jq -n --arg input "$payload" --arg signature "$signature" '{input:$input,signature:$signature}')"
+      - >-
+        curl --fail --silent --show-error --location
+        --header "X-Vault-Token: ${vault_token}"
+        --header 'Content-Type: application/json'
+        --data "$verify_payload"
+        "${VAULT_ADDR%/}/v1/transit/verify/node-operator-release"
+        > verify.json
+      - jq -e '.data.valid == true' verify.json >/dev/null
       - unset vault_token payload
 artifacts:
   files:

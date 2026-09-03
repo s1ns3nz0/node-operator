@@ -48,7 +48,9 @@ jobs:
           done
           [ "$status" = SUCCEEDED ] || { echo 'CodeBuild signer timed out' >&2; exit 1; }
           aws s3 cp "s3://${INPUT_BUCKET}/release-output/${GITHUB_SHA}/signature.json" "$RUNNER_TEMP/release/signature.json" --region "$AWS_REGION"
+          aws s3 cp "s3://${INPUT_BUCKET}/release-output/${GITHUB_SHA}/verify.json" "$RUNNER_TEMP/release/verify.json" --region "$AWS_REGION"
           jq -e '.data.signature | type == "string" and length > 0' "$RUNNER_TEMP/release/signature.json" >/dev/null
+          jq -e '.data.valid == true' "$RUNNER_TEMP/release/verify.json" >/dev/null
           jq -e --arg sha "$GITHUB_SHA" '.predicate.resolvedDependencies[0].digest.gitCommit == $sha' "$RUNNER_TEMP/release/provenance-input.json" >/dev/null
       - name: Create GitHub Release
         env:
