@@ -1,0 +1,15 @@
+{
+  "id": "2026-09-03-ecr-signer-mirror-connectivity",
+  "title": "Define private ECR signer image and CodeBuild connectivity contracts",
+  "classification": "non-trivial",
+  "classification_reason": ["CI supply-chain change", "Terraform network and IAM security boundary", "multiple validation layers"],
+  "expected_outcome": "Repository code requires a digest-pinned private ECR signer image, declares the approved STS and CloudWatch Logs private endpoints, and defines a least-privilege OIDC ECR mirror contract without any cloud activation.",
+  "dependencies": ["2026-09-03-codebuild-signer-plan-review"],
+  "constraints": ["Do not apply Terraform, access AWS, ECR, Vault, or EKS, publish images, alter secrets, or enable a deployed signer.", "Do not add NAT, Internet gateway, static AWS credentials, or a public registry runtime dependency.", "Preserve disabled-by-default signer behavior."],
+  "authorization": {"repository_mutation": true, "external_actions": [], "prohibited_actions": ["Terraform apply", "AWS/ECR/Vault/EKS access", "image publish", "deploy", "merge", "secret changes", "production access"]},
+  "primary_owner": {"tier":"sol", "responsibility":"supply-chain, IAM, and private-network security integration"},
+  "delegations": [{"id":"recon","tier":"luna","owner":"/root/ecr_mirror_recon","files":[],"worktree":"read-only","branch":"none","acceptance_checks":["map existing workflow, network, and signer contracts"],"escalation_trigger":"live registry, IAM, endpoint, or secrets access is required"},{"id":"implementation","tier":"terra","owner":"pending","files":["infra/terraform",".github/workflows","scripts/ci","docs/gitops","package.json"],"worktree":"required","branch":"task/2026-09-03-ecr-signer-mirror-connectivity","acceptance_checks":["offline plan", "contract tests", "harness check"],"escalation_trigger":"implementation would publish, assume an AWS role, or require an unapproved secret"}],
+  "model_fallbacks": [],
+  "validation": ["ECR signer contract test", "enabled offline Terraform plan", "network boundary check", "harness check", "independent clean-room debrief"],
+  "status": "completed"
+}
