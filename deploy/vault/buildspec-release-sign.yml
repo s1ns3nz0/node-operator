@@ -1,0 +1,22 @@
+version: 0.2
+phases:
+  build:
+    commands:
+      - set -euo pipefail
+      - test -n "${VAULT_ADDR:-}"
+      - test -n "${VAULT_TOKEN:-}"
+      - test -f provenance-input.json
+      - payload="$(base64 < provenance-input.json | tr -d '\n')"
+      - >-
+        curl --fail --silent --show-error --location
+        --header "X-Vault-Token: ${VAULT_TOKEN}"
+        --header 'Content-Type: application/json'
+        --data "{\"input\":\"${payload}\"}"
+        "${VAULT_ADDR%/}/v1/transit/sign/node-operator-release"
+        > signature.json
+      - jq -e '.data.signature | type == "string"' signature.json >/dev/null
+      - unset VAULT_TOKEN
+artifacts:
+  files:
+    - provenance-input.json
+    - signature.json
