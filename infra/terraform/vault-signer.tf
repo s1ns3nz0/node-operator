@@ -47,6 +47,28 @@ variable "release_artifact_bucket_arn" {
   default     = ""
 }
 
+resource "aws_s3_bucket" "release_artifacts" {
+  count         = var.enable_release_signer ? 1 : 0
+  bucket_prefix = "${local.name_prefix}-release-"
+  force_destroy = false
+  tags          = local.common_tags
+}
+
+resource "aws_s3_bucket_public_access_block" "release_artifacts" {
+  count                   = var.enable_release_signer ? 1 : 0
+  bucket                  = aws_s3_bucket.release_artifacts[0].id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_versioning" "release_artifacts" {
+  count  = var.enable_release_signer ? 1 : 0
+  bucket = aws_s3_bucket.release_artifacts[0].id
+  versioning_configuration { status = "Enabled" }
+}
+
 resource "aws_iam_role" "github_release_runner" {
   count = var.enable_release_signer ? 1 : 0
   name  = "${local.name_prefix}-github-release-runner"

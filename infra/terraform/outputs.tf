@@ -22,3 +22,8 @@ output "vault_role_arn" {
   description = "IAM role ARN for the Vault Pod Identity association."
   value       = aws_iam_role.vault.arn
 }
+
+output "release_artifact_bucket_arn" {
+  description = "Dedicated release artifact bucket ARN when signer is enabled."
+  value       = var.enable_release_signer ? aws_s3_bucket.release_artifacts[0].arn : null
+}
