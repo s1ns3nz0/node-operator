@@ -151,7 +151,7 @@ resource "aws_codebuild_project" "release_signer" {
   }
   source {
     type     = "S3"
-    location = "${aws_s3_bucket.release_artifacts[0].id}/release-input/latest.zip"
+    location = "${aws_s3_bucket.release_artifacts[0].id}/release-input/bootstrap.zip"
   }
   tags = local.common_tags
 }

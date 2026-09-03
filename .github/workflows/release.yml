@@ -39,7 +39,7 @@ jobs:
           export AWS_ACCESS_KEY_ID="$(jq -r .Credentials.AccessKeyId <<<"$creds")" AWS_SECRET_ACCESS_KEY="$(jq -r .Credentials.SecretAccessKey <<<"$creds")" AWS_SESSION_TOKEN="$(jq -r .Credentials.SessionToken <<<"$creds")"
           zip -q -j "$RUNNER_TEMP/release-input.zip" "$RUNNER_TEMP/release/node-operator-release-bundle.tar" "$RUNNER_TEMP/release/provenance-input.json"
           aws s3 cp "$RUNNER_TEMP/release-input.zip" "s3://${INPUT_BUCKET}/release-input/${GITHUB_SHA}.zip" --region "$AWS_REGION"
-          aws codebuild start-build --project-name "node-operator-baseline-release-signer" --source-version "${GITHUB_SHA}" --region "$AWS_REGION" > "$RUNNER_TEMP/codebuild.json"
+          aws codebuild start-build --project-name "node-operator-baseline-release-signer" --source-version "${GITHUB_SHA}" --source-location-override "${INPUT_BUCKET}/release-input/${GITHUB_SHA}.zip" --region "$AWS_REGION" > "$RUNNER_TEMP/codebuild.json"
           build_id="$(jq -r .build.id "$RUNNER_TEMP/codebuild.json")"
           for _ in $(seq 1 60); do
             status="$(aws codebuild batch-get-builds --ids "$build_id" --region "$AWS_REGION" | jq -r '.builds[0].buildStatus')"
