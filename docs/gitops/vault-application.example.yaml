@@ -10,25 +10,10 @@ spec:
     targetRevision: REPLACE_WITH_REVIEWED_COMMIT
     path: platform/vault
     helm:
-      values: |
-        server:
-          ha:
-            enabled: true
-            replicas: 3
-            raft:
-              enabled: true
-          dataStorage:
-            enabled: true
-            size: 20Gi
-            storageClass: gp3-encrypted
-          service:
-            type: ClusterIP
-          ingress:
-            enabled: false
-          tls:
-            enabled: true
-          extraEnvironmentVars:
-            VAULT_AWSKMS_SEAL_KEY_ID: REPLACE_WITH_VAULT_UNSEAL_KEY_ARN
+      # Copy vault-values.example.yaml to this approved GitOps source as
+      # platform/vault/vault-values.yaml before enabling this Application.
+      valueFiles:
+        - vault-values.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: vault
