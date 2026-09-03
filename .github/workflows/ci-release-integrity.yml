@@ -20,7 +20,29 @@ jobs:
           scripts/ci/test-build-release-bundle.sh
           mkdir -p "$RUNNER_TEMP/current"
           scripts/ci/build-release-bundle.sh "$RUNNER_TEMP/current"
+      - name: Fetch previous approved release when available
+        id: previous
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/previous"
+          tag="$(gh release list --limit 1 --json tagName,isDraft,isPrerelease --jq '.[] | select(.isDraft == false and .isPrerelease == false) | .tagName' | head -n 1)"
+          if [ -z "$tag" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'manifest.json' --pattern 'sbom.cyclonedx.json' --pattern 'provenance-input.json' \
+            --dir "$RUNNER_TEMP/previous"
+          test -f "$RUNNER_TEMP/previous/manifest.json"
+          test -f "$RUNNER_TEMP/previous/sbom.cyclonedx.json"
+          test -f "$RUNNER_TEMP/previous/provenance-input.json"
+          echo "available=true" >> "$GITHUB_OUTPUT"
+      - name: Compare with previous release
+        if: steps.previous.outputs.available == 'true'
+        run: scripts/ci/compare-release-integrity.sh "$RUNNER_TEMP/previous" "$RUNNER_TEMP/current" "$RUNNER_TEMP/current/integrity.json"
       - name: Record baseline when no prior release exists
+        if: steps.previous.outputs.available != 'true'
         run: |
           jq -n --arg sha "$GITHUB_SHA" '{schema_version:"v1",status:"baseline",source_revision:$sha}' \
             > "$RUNNER_TEMP/current/integrity.json"
