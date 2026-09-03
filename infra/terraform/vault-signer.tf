@@ -72,7 +72,11 @@ resource "aws_s3_bucket_versioning" "release_artifacts" {
 resource "aws_s3_bucket_server_side_encryption_configuration" "release_artifacts" {
   count  = var.enable_release_signer ? 1 : 0
   bucket = aws_s3_bucket.release_artifacts[0].id
-  rule { apply_server_side_encryption_by_default { sse_algorithm = "AES256" } }
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
 }
 
 resource "aws_cloudwatch_log_group" "release_signer" {
