@@ -34,12 +34,14 @@ jobs:
         run: |
           [[ "$SOURCE" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]] || { echo 'source must be an OCI reference pinned to a 64-character sha256 digest' >&2; exit 1; }
           case "$DESTINATION" in argocd|charts) ;; *) exit 1;; esac
-          jq -e --arg source "$SOURCE" --arg destination "$DESTINATION" '
-            .version == 1 and any(.artifacts[]; .source == $source and .destination == $destination)
-          ' .ci/gitops/approved-oci-artifacts.json >/dev/null || {
+          ecr_tag="$(jq -er --arg source "$SOURCE" --arg destination "$DESTINATION" '
+            select(.version == 1) | .artifacts[] | select(.source == $source and .destination == $destination) | .ecrTag
+          ' .ci/gitops/approved-oci-artifacts.json)" || {
             echo 'source digest is not in the reviewed GitOps artifact allowlist' >&2
             exit 1
           }
+          [[ "$ecr_tag" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo 'approved ECR tag is invalid' >&2; exit 1; }
+          echo "ECR_TAG=$ecr_tag" >> "$GITHUB_ENV"
       - name: Assume ECR mirror role
         env:
           AWS_ROLE_ARN: ${{ vars.GITOPS_OCI_MIRROR_ROLE_ARN }}
@@ -55,6 +57,7 @@ jobs:
         env:
           SOURCE: ${{ inputs.source }}
           DESTINATION: ${{ inputs.destination }}
+          ECR_TAG: ${{ env.ECR_TAG }}
           AWS_REGION: ap-northeast-2
           ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
           MIRROR_TOOL_IMAGE: ${{ vars.GITOPS_OCI_MIRROR_TOOL_IMAGE }}
@@ -62,13 +65,12 @@ jobs:
           test -n "$ACCOUNT_ID"
           [[ "$MIRROR_TOOL_IMAGE" =~ ^ghcr\.io/s1ns3nz0/node-operator/gitops-oci-mirror@sha256:[a-f0-9]{64}$ ]] || { echo 'mirror tool image must be a pinned repository-owned digest' >&2; exit 1; }
           source_digest="${SOURCE##*@}"
-          digest_tag="${source_digest#sha256:}"
           repository="node-operator-baseline-gitops-$DESTINATION"
-          destination_ref="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$repository:$digest_tag"
+          destination_ref="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$repository:$ECR_TAG"
           export DOCKER_CONFIG="$RUNNER_TEMP/ecr-docker-config"
           mkdir -p "$DOCKER_CONFIG"
           aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-          existing_digest="$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$repository" --image-ids "imageTag=$digest_tag" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
+          existing_digest="$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$repository" --image-ids "imageTag=$ECR_TAG" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
           if [ "$existing_digest" = "None" ]; then existing_digest=''; fi
           if [ -n "$existing_digest" ]; then
             test "$existing_digest" = "$source_digest"
@@ -79,7 +81,7 @@ jobs:
               "$MIRROR_TOOL_IMAGE" \
               copy --all "docker://$SOURCE" "docker://$destination_ref"
           fi
-          destination_digest="$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$repository" --image-ids "imageTag=$digest_tag" --query 'imageDetails[0].imageDigest' --output text)"
+          destination_digest="$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$repository" --image-ids "imageTag=$ECR_TAG" --query 'imageDetails[0].imageDigest' --output text)"
           test "$destination_digest" = "$source_digest"
           {
             echo '### GitOps OCI mirror'

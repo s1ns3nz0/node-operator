@@ -4,21 +4,25 @@
     {
       "source": "ghcr.io/argoproj/argo-helm/argo-cd@sha256:8ff18ee7a22670305555167ea31f24a88e2f912cf0a872f852e1880886d4c308",
       "destination": "argocd",
+      "ecrTag": "10.4.0",
       "purpose": "Argo CD Helm chart 10.4.0"
     },
     {
       "source": "quay.io/argoproj/argocd@sha256:0deb1a1c917629b960ead995ae3b6069450a866992676599658687ef9a641ee8",
       "destination": "argocd",
+      "ecrTag": "0deb1a1c917629b960ead995ae3b6069450a866992676599658687ef9a641ee8",
       "purpose": "Argo CD core image v3.5.1"
     },
     {
       "source": "ghcr.io/dexidp/dex@sha256:8499afd690c437f52301efd2b05b2455da5bd2dfc20332cd697dc9937f808462",
       "destination": "argocd",
+      "ecrTag": "8499afd690c437f52301efd2b05b2455da5bd2dfc20332cd697dc9937f808462",
       "purpose": "Dex image v2.45.1"
     },
     {
       "source": "public.ecr.aws/docker/library/redis@sha256:2cc044fc5a07c9b701f8f1255a309ae9ad7856e694ac03513bf3648c01e40763",
       "destination": "argocd",
+      "ecrTag": "2cc044fc5a07c9b701f8f1255a309ae9ad7856e694ac03513bf3648c01e40763",
       "purpose": "Redis image 8.6.4-alpine"
     }
   ]

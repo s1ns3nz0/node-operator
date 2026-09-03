@@ -14,7 +14,7 @@ for file in "$terraform_file" "$workflow" "$allowlist" "$dockerfile"; do
   test -f "$file" || fail "missing required file: $file"
 done
 
-jq -e '.version == 1 and (.artifacts | type == "array")' "$allowlist" >/dev/null || fail 'approved artifact allowlist has an invalid schema'
+jq -e '.version == 1 and (.artifacts | type == "array") and all(.artifacts[]; (.source | type == "string") and (.destination | type == "string") and (.ecrTag | type == "string"))' "$allowlist" >/dev/null || fail 'approved artifact allowlist has an invalid schema'
 grep -Fqx 'ENTRYPOINT ["skopeo"]' "$dockerfile" || fail 'mirror toolchain must invoke skopeo'
 grep -Fq 'apt-get install -y --no-install-recommends ca-certificates skopeo' "$dockerfile" || fail 'mirror toolchain must include skopeo'
 
@@ -44,6 +44,7 @@ for required in \
   'source must be an OCI reference pinned to a 64-character sha256 digest' \
   'reviewed GitOps artifact allowlist' \
   '.ci/gitops/approved-oci-artifacts.json' \
+  'ECR_TAG=$ecr_tag' \
   'aws sts assume-role-with-web-identity' \
   'GITOPS_OCI_MIRROR_TOOL_IMAGE' \
   'copy --all "docker://$SOURCE" "docker://$destination_ref"' \
