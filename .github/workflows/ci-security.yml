@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: ci-security-${{ github.workflow }}-${{ github.ref }}
@@ -16,6 +17,8 @@ jobs:
   scanners:
     runs-on: ubuntu-24.04
     env:
+      SCANNER_IMAGE: ${{ vars.SECURITY_SCANNER_IMAGE }}
+    env:
       EVIDENCE_ROOT: ${{ github.workspace }}/.security-evidence
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -23,14 +26,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Build pinned scanner image
-        run: docker build --tag node-operator-scanners:ci .ci/scanners
+      - name: Pull pinned scanner image
+        run: docker pull "$SCANNER_IMAGE"
       - name: Collect redacted scanner evidence
         run: >-
           docker run --rm --volume "$GITHUB_WORKSPACE:/workspace:ro"
           --volume "$EVIDENCE_ROOT:/evidence"
           --env SKIP_TERRAFORM=true
-          node-operator-scanners:ci
+          "$SCANNER_IMAGE"
           bash -lc 'git config --global --add safe.directory /workspace && scripts/ci/collect-security-evidence.sh /evidence/raw "${{ github.event.pull_request.head.sha || github.sha }}" /workspace "${{ github.event.pull_request.base.sha || github.sha }}"'
       - name: Upload non-sensitive security evidence
         if: always()
