@@ -79,6 +79,97 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
   tags = local.common_tags
 }
 
+data "aws_iam_policy_document" "audit_notifications_key" {
+  source_policy_documents = [data.aws_iam_policy_document.kms_key_administrator.json]
+
+  statement {
+    sid    = "AllowSNSToUseNotificationKey"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["sns.amazonaws.com"]
+    }
+
+    actions   = ["kms:Decrypt", "kms:GenerateDataKey*"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowCloudTrailToPublishEncryptedAuditNotifications"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+
+    actions   = ["kms:Decrypt", "kms:GenerateDataKey*"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringLike"
+      variable = "kms:EncryptionContext:aws:cloudtrail:arn"
+      values   = ["arn:aws:cloudtrail:${var.aws_region}:${var.aws_account_id}:trail/*"]
+    }
+  }
+}
+
+resource "aws_kms_key" "audit_notifications" {
+  description             = "KMS key for CloudTrail audit notifications"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+  policy                  = data.aws_iam_policy_document.audit_notifications_key.json
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-audit-notifications"
+  })
+}
+
+resource "aws_kms_alias" "audit_notifications" {
+  name          = "alias/${local.name_prefix}-audit-notifications"
+  target_key_id = aws_kms_key.audit_notifications.key_id
+}
+
+resource "aws_sns_topic" "audit_notifications" {
+  name              = "${local.name_prefix}-audit-notifications"
+  kms_master_key_id = aws_kms_key.audit_notifications.arn
+
+  tags = local.common_tags
+}
+
+data "aws_iam_policy_document" "audit_notifications" {
+  statement {
+    sid    = "AllowOnlyApprovedTrailToPublish"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+
+    actions   = ["sns:Publish"]
+    resources = [aws_sns_topic.audit_notifications.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [var.aws_account_id]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "aws:SourceArn"
+      values   = ["arn:aws:cloudtrail:${var.aws_region}:${var.aws_account_id}:trail/*"]
+    }
+  }
+}
+
+resource "aws_sns_topic_policy" "audit_notifications" {
+  arn    = aws_sns_topic.audit_notifications.arn
+  policy = data.aws_iam_policy_document.audit_notifications.json
+}
+
 data "aws_iam_policy_document" "cloudtrail_logs_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -203,12 +294,14 @@ resource "aws_cloudtrail" "audit" {
   is_multi_region_trail         = true
   enable_log_file_validation    = true
   kms_key_id                    = aws_kms_key.audit.arn
+  sns_topic_name                = aws_sns_topic.audit_notifications.name
   cloud_watch_logs_group_arn    = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
   cloud_watch_logs_role_arn     = aws_iam_role.cloudtrail_logs.arn
 
   depends_on = [
     aws_s3_bucket_policy.audit,
     aws_iam_role_policy.cloudtrail_logs,
+    aws_sns_topic_policy.audit_notifications,
   ]
 
   tags = local.common_tags

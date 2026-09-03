@@ -1,16 +1,38 @@
-data "aws_iam_policy_document" "eks_key" {
+data "aws_iam_policy_document" "kms_administrator_assume_role" {
   statement {
-    sid    = "EnableAccountIAMPermissions"
-    effect = "Allow"
+    actions = ["sts:AssumeRole"]
 
     principals {
       type        = "AWS"
       identifiers = ["arn:aws:iam::${var.aws_account_id}:root"]
     }
+  }
+}
+
+resource "aws_iam_role" "kms_administrator" {
+  name               = "${local.name_prefix}-kms-administrator"
+  assume_role_policy = data.aws_iam_policy_document.kms_administrator_assume_role.json
+
+  tags = local.common_tags
+}
+
+data "aws_iam_policy_document" "kms_key_administrator" {
+  statement {
+    sid    = "AllowDedicatedKMSAdministrator"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = [aws_iam_role.kms_administrator.arn]
+    }
 
     actions   = ["kms:*"]
     resources = ["*"]
   }
+}
+
+data "aws_iam_policy_document" "eks_key" {
+  source_policy_documents = [data.aws_iam_policy_document.kms_key_administrator.json]
 
   statement {
     sid    = "AllowEKSServiceGrant"
@@ -33,7 +55,7 @@ data "aws_iam_policy_document" "eks_key" {
 }
 
 data "aws_iam_policy_document" "audit_key" {
-  source_policy_documents = [data.aws_iam_policy_document.eks_key.json]
+  source_policy_documents = [data.aws_iam_policy_document.kms_key_administrator.json]
 
   statement {
     sid    = "AllowCloudTrailToEncryptAuditLogs"
@@ -51,6 +73,25 @@ data "aws_iam_policy_document" "audit_key" {
       test     = "StringLike"
       variable = "kms:EncryptionContext:aws:cloudtrail:arn"
       values   = ["arn:aws:cloudtrail:${var.aws_region}:${var.aws_account_id}:trail/*"]
+    }
+  }
+
+  statement {
+    sid    = "AllowAuditReplicationRoleToDecryptSourceObjects"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = [aws_iam_role.audit_replication.arn]
+    }
+
+    actions   = ["kms:Decrypt", "kms:DescribeKey"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["s3.${var.aws_region}.amazonaws.com"]
     }
   }
 
@@ -74,8 +115,38 @@ data "aws_iam_policy_document" "audit_key" {
   }
 }
 
+data "aws_iam_policy_document" "ebs_key" {
+  source_policy_documents = [data.aws_iam_policy_document.kms_key_administrator.json]
+
+  statement {
+    sid    = "AllowEBSCSIPodIdentity"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = [aws_iam_role.ebs_csi.arn]
+    }
+
+    actions = [
+      "kms:CreateGrant",
+      "kms:Decrypt",
+      "kms:DescribeKey",
+      "kms:Encrypt",
+      "kms:GenerateDataKeyWithoutPlaintext",
+      "kms:ReEncrypt*",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "Bool"
+      variable = "kms:GrantIsForAWSResource"
+      values   = ["true"]
+    }
+  }
+}
+
 data "aws_iam_policy_document" "vault_key" {
-  source_policy_documents = [data.aws_iam_policy_document.eks_key.json]
+  source_policy_documents = [data.aws_iam_policy_document.kms_key_administrator.json]
 
   statement {
     sid    = "AllowVaultPodIdentity"
@@ -114,7 +185,7 @@ resource "aws_kms_key" "ebs" {
   description             = "Managed-node and EBS CSI volume encryption key"
   deletion_window_in_days = 30
   enable_key_rotation     = true
-  policy                  = data.aws_iam_policy_document.eks_key.json
+  policy                  = data.aws_iam_policy_document.ebs_key.json
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-ebs"

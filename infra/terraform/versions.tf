@@ -18,3 +18,9 @@ provider "aws" {
   skip_region_validation      = var.offline_validation
   skip_requesting_account_id  = var.offline_validation
 }
+
+# The replica provider is deliberately limited to the approved Tokyo DR Region.
+provider "aws" {
+  alias  = "audit_replica"
+  region = var.audit_replica_region
+}

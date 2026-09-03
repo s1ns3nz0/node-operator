@@ -19,6 +19,17 @@ variable "aws_account_id" {
   }
 }
 
+variable "audit_replica_region" {
+  description = "Dedicated disaster-recovery Region for the immutable audit-log replica."
+  type        = string
+  default     = "ap-northeast-1"
+
+  validation {
+    condition     = var.audit_replica_region == "ap-northeast-1"
+    error_message = "audit_replica_region must be ap-northeast-1."
+  }
+}
+
 variable "name" {
   description = "Short, DNS-compatible name used to namespace baseline resources."
   type        = string
