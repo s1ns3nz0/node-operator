@@ -19,14 +19,20 @@
     },
     {
       "name": "recovery security-group gate",
-      "result": "blocked",
-      "observed": "The sole update would remove the cluster-to-node TCP/443 and TCP/10250 ingress rules from aws_security_group.nodes because the configuration mixes an inline ingress rule with standalone aws_vpc_security_group_ingress_rule resources. Applying it could leave the separately tracked rules absent, so recovery is intentionally stopped."
+      "result": "repaired",
+      "observed": "Node ingress ownership was unified in commits 9c58e31 and 81c8798. Existing self-rule sgr-0e06690c84f04189b was validated and imported into state; the subsequent recovery plan had 58 creates, 0 updates, and 0 destroys (JSON sha256:b40ea0163657b89d3dc1821cc0528c10a616f446abbcb50b0c51872d59b42ddc)."
+    },
+    {
+      "name": "recovery apply authorization gate",
+      "result": "blocked-by-role-and-policy",
+      "observed": "A persistent apply session reached AWS and failed without creating EKS. NodeOperatorTerraformApply lacks s3:CreateBucket, s3:PutBucketPublicAccessBlock, s3:PutLifecycleConfiguration, and s3:PutBucketNotification for the baseline audit buckets. All five KMS creates were rejected with MalformedPolicyDocumentException because their key policies grant kms:* only to the newly created dedicated KMS administrator role, not the executing role required by the KMS key-policy safety check."
     }
   ],
   "notes": [
     "The user approved task 1, the exact initial private baseline Terraform apply, on 2026-09-03.",
     "Apply was conditioned on a fresh baseline-only 99-create plan and included no signer/ECR/release resources.",
     "No raw Terraform plan/state, secret, Vault, workload, or ECR data is recorded.",
-    "A Terraform security-group ownership refactor and an explicit recovery plan are required before any further apply."
+    "The security-group ownership refactor and an update/destroy-free recovery plan are complete.",
+    "Further apply requires explicit authorization to amend the NodeOperatorTerraformApply least-privilege policy and to revise the KMS administrator policy so the executing role can satisfy the KMS key-policy safety check."
   ]
 }
