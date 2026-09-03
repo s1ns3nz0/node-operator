@@ -15,5 +15,5 @@
   "delegations": [],
   "model_fallbacks": [],
   "validation": ["toolchain release contract test", "workflow syntax inspection", "successful GitHub Actions run", "published digest inspection", "independent clean-room debrief"],
-  "status": "in_progress"
+  "status": "completed"
 }
