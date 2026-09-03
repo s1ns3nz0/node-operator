@@ -1,0 +1,1 @@
+{"task_id":"2026-09-03-vault-codebuild-signer","objective":"Define and scaffold private CodeBuild to Vault Transit signing path for release provenance.","scope":["release workflow","Terraform IAM/network contract","Vault Transit role contract"],"out_of_scope":["AWS apply","Vault production deployment","key export"],"owner":"Sol","validation":["harness check","policy review"]}
