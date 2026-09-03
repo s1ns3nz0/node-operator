@@ -31,29 +31,6 @@ data "aws_iam_policy_document" "kms_key_administrator" {
   }
 }
 
-data "aws_iam_policy_document" "eks_key" {
-  source_policy_documents = [data.aws_iam_policy_document.kms_key_administrator.json]
-
-  statement {
-    sid    = "AllowEKSServiceGrant"
-    effect = "Allow"
-
-    principals {
-      type        = "Service"
-      identifiers = ["eks.amazonaws.com"]
-    }
-
-    actions   = ["kms:CreateGrant", "kms:DescribeKey"]
-    resources = ["*"]
-
-    condition {
-      test     = "Bool"
-      variable = "kms:GrantIsForAWSResource"
-      values   = ["true"]
-    }
-  }
-}
-
 data "aws_iam_policy_document" "audit_key" {
   source_policy_documents = [data.aws_iam_policy_document.kms_key_administrator.json]
 
@@ -163,22 +140,6 @@ data "aws_iam_policy_document" "vault_key" {
       values   = ["true"]
     }
   }
-}
-
-resource "aws_kms_key" "eks" {
-  description             = "EKS Kubernetes Secrets envelope-encryption key"
-  deletion_window_in_days = 30
-  enable_key_rotation     = true
-  policy                  = data.aws_iam_policy_document.eks_key.json
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-eks-secrets"
-  })
-}
-
-resource "aws_kms_alias" "eks" {
-  name          = "alias/${local.name_prefix}-eks-secrets"
-  target_key_id = aws_kms_key.eks.key_id
 }
 
 resource "aws_kms_key" "ebs" {

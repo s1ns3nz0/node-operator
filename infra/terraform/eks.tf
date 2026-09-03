@@ -19,13 +19,10 @@ resource "aws_eks_cluster" "private" {
 
   enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 
-  encryption_config {
-    provider {
-      key_arn = aws_kms_key.eks.arn
-    }
-
-    resources = ["secrets"]
-  }
+  # EKS 1.28 and later automatically encrypts all Kubernetes API data with an
+  # AWS-owned KMS key. Do not add a customer-managed key here: application
+  # secrets belong to Vault, while AWS service encryption remains scoped to
+  # the dedicated EBS and audit keys below.
 
   vpc_config {
     subnet_ids              = aws_subnet.private[*].id
@@ -41,6 +38,13 @@ resource "aws_eks_cluster" "private" {
     aws_vpc_security_group_ingress_rule.nodes_kubelet_from_cluster,
     aws_vpc_security_group_ingress_rule.nodes_webhook_from_cluster,
   ]
+
+  lifecycle {
+    precondition {
+      condition     = tonumber(split(".", var.kubernetes_version)[1]) >= 28
+      error_message = "kubernetes_version must be 1.28 or later so EKS default envelope encryption protects all Kubernetes API data."
+    }
+  }
 
   tags = local.common_tags
 }

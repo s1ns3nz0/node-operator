@@ -6,6 +6,22 @@ locking, and the configuration invokes no remote Terraform modules. It deliberat
 gateway, NAT gateway, public subnet, public IP assignment, or public EKS API
 endpoint.
 
+## Encryption and Vault boundary
+
+The cluster version must be EKS 1.28 or later. EKS then applies its default
+AWS-owned envelope encryption to all Kubernetes API data, including Secrets.
+This baseline deliberately does not create an EKS customer-managed KMS key or
+an `encryption_config` override. That avoids treating a cluster-control-plane
+key as an application-secret store.
+
+Vault runs with EKS Pod Identity and uses the dedicated `vault-unseal` KMS key
+only for auto-unseal. Workload secret payload encryption, signing, and
+tokenization are Vault responsibilities; the unseal key must not be reused for
+those payloads. AWS-managed storage and audit paths retain separate keys:
+`ebs` encrypts node and CSI volumes, while `audit` and the replica audit key
+protect CloudTrail and control-plane log delivery. These keys remain separate
+so their service principals and grants can be constrained independently.
+
 ## Private AWS service access
 
 The baseline has no NAT gateway or public route. It therefore creates an S3
