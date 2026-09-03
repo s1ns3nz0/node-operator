@@ -69,6 +69,19 @@ resource "aws_s3_bucket_versioning" "release_artifacts" {
   versioning_configuration { status = "Enabled" }
 }
 
+resource "aws_s3_bucket_server_side_encryption_configuration" "release_artifacts" {
+  count  = var.enable_release_signer ? 1 : 0
+  bucket = aws_s3_bucket.release_artifacts[0].id
+  rule { apply_server_side_encryption_by_default { sse_algorithm = "AES256" } }
+}
+
+resource "aws_cloudwatch_log_group" "release_signer" {
+  count             = var.enable_release_signer ? 1 : 0
+  name              = "/aws/codebuild/${local.name_prefix}-release-signer"
+  retention_in_days = 90
+  tags              = local.common_tags
+}
+
 resource "aws_iam_role" "github_release_runner" {
   count = var.enable_release_signer ? 1 : 0
   name  = "${local.name_prefix}-github-release-runner"
@@ -103,7 +116,7 @@ data "aws_iam_policy_document" "release_codebuild_signer" {
   statement {
     sid       = "Logs"
     actions   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
-    resources = ["*"]
+    resources = ["${aws_cloudwatch_log_group.release_signer[0].arn}:*"]
   }
   dynamic "statement" {
     for_each = var.release_artifact_bucket_arn == "" ? [] : [var.release_artifact_bucket_arn]
