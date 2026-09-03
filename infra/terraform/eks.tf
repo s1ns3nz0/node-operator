@@ -35,6 +35,7 @@ resource "aws_eks_cluster" "private" {
     aws_cloudwatch_log_group.eks_control_plane,
     aws_iam_role_policy_attachment.eks_cluster,
     aws_vpc_security_group_ingress_rule.cluster_api_from_nodes,
+    aws_vpc_security_group_ingress_rule.nodes_self_all,
     aws_vpc_security_group_ingress_rule.nodes_kubelet_from_cluster,
     aws_vpc_security_group_ingress_rule.nodes_webhook_from_cluster,
   ]

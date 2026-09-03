@@ -127,14 +127,6 @@ resource "aws_security_group" "nodes" {
   description = "Private managed-node communication; no internet ingress."
   vpc_id      = aws_vpc.private.id
 
-  ingress {
-    description = "Node-to-node Kubernetes traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    self        = true
-  }
-
   egress {
     description = "Private VPC service traffic"
     from_port   = 0
@@ -148,9 +140,18 @@ resource "aws_security_group" "nodes" {
   })
 }
 
-# Keep cross-group rules separate from the groups themselves. Inline mutual
-# references would create a Terraform dependency cycle even though the network
-# intent is valid.
+# Keep all ingress rules separate from their groups. Inline mutual references
+# would create a Terraform dependency cycle even though the network intent is
+# valid, and mixing inline with standalone rules creates conflicting ownership.
+resource "aws_vpc_security_group_ingress_rule" "nodes_self_all" {
+  description                  = "Node-to-node Kubernetes traffic"
+  security_group_id            = aws_security_group.nodes.id
+  referenced_security_group_id = aws_security_group.nodes.id
+  from_port                    = 0
+  to_port                      = 0
+  ip_protocol                  = "-1"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "cluster_api_from_nodes" {
   description                  = "Kubernetes API from managed nodes"
   security_group_id            = aws_security_group.cluster.id
