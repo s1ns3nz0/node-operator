@@ -26,8 +26,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Pull pinned scanner image
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USERNAME: ${{ github.actor }}
         run: |
-          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
           docker pull "$SCANNER_IMAGE"
       - name: Collect redacted scanner evidence
         run: >-

@@ -1,6 +1,9 @@
 name: CI Evidence Gate
 
 on:
+  # zizmor: ignore[dangerous-triggers]
+  # This workflow consumes validated JSON only; policy and collectors are
+  # checked out from the default branch and run with read-only permissions.
   workflow_run:
     workflows: [CI Security]
     types: [completed]
@@ -47,8 +50,11 @@ jobs:
         with:
           version: v1.17.0
       - name: Collect Terraform evidence using the trusted collector
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USERNAME: ${{ github.actor }}
         run: |
-          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
           docker pull "$TERRAFORM_IMAGE"
           mkdir -p "$RUNNER_TEMP/terraform-evidence"
           docker run --rm --network none --user "$(id -u):$(id -g)" \
