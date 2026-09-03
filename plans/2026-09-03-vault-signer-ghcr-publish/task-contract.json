@@ -1,0 +1,19 @@
+{
+  "id": "2026-09-03-vault-signer-ghcr-publish",
+  "title": "Publish the digest-pinned Vault release signer toolchain image",
+  "classification": "non-trivial",
+  "classification_reason": ["external GHCR package publication", "release supply-chain boundary"],
+  "expected_outcome": "The Vault signer image is published to the repository GHCR namespace only when its Dockerfile input hash differs from the current main image; its resulting immutable digest is recorded as rollout evidence.",
+  "dependencies": ["2026-09-03-codebuild-release-activation-code"],
+  "constraints": ["Do not apply Terraform, access AWS, Vault, or EKS, alter secrets, or enable the CodeBuild signer.", "Use only the repository-owned GitHub Actions workflow and GHCR package namespace.", "Retain the input-hash skip behavior."],
+  "authorization": {
+    "repository_mutation": true,
+    "external_actions": ["push committed workflow configuration to origin/main", "dispatch repository-owned Toolchain Image Release workflow", "publish ghcr.io/s1ns3nz0/node-operator/vault-release-signer"],
+    "prohibited_actions": ["Terraform apply", "AWS access", "Vault access", "EKS access", "deploy", "merge", "secret changes", "production access"]
+  },
+  "primary_owner": {"tier": "sol", "responsibility": "supply-chain integration, authorization boundary, and final sign-off"},
+  "delegations": [],
+  "model_fallbacks": [],
+  "validation": ["toolchain release contract test", "workflow syntax inspection", "successful GitHub Actions run", "published digest inspection", "independent clean-room debrief"],
+  "status": "in_progress"
+}

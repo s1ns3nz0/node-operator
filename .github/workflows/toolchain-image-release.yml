@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - '.ci/toolchains/**'
+      - '.github/workflows/toolchain-image-release.yml'
 
 permissions:
   contents: read
@@ -20,6 +21,8 @@ jobs:
             dockerfile: .ci/toolchains/terraform-validation.Dockerfile
           - image: release-build
             dockerfile: .ci/toolchains/release-build.Dockerfile
+          - image: vault-release-signer
+            dockerfile: .ci/toolchains/vault-release-signer.Dockerfile
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
