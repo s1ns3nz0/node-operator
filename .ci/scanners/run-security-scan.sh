@@ -20,5 +20,10 @@ fi
 
 mkdir -p "$evidence_directory"
 git config --global --add safe.directory /workspace
-exec "$scanner_script_directory/collect-security-evidence.sh" \
+"$scanner_script_directory/collect-security-evidence.sh" \
   "$evidence_directory" "$commit_sha" /workspace "$base_sha"
+
+# The collector writes root-owned files with umask 077. The mounted evidence
+# directory is the sole declared output, so make it readable only after a
+# successful collection for the non-sensitive artifact uploader.
+chmod -R a+rX "$evidence_directory"
