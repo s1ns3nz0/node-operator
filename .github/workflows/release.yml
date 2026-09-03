@@ -47,8 +47,11 @@ jobs:
             sleep 10
           done
           [ "$status" = SUCCEEDED ] || { echo 'CodeBuild signer timed out' >&2; exit 1; }
-          aws s3 cp "s3://${INPUT_BUCKET}/release-output/${GITHUB_SHA}/signature.json" "$RUNNER_TEMP/release/signature.json" --region "$AWS_REGION"
-          aws s3 cp "s3://${INPUT_BUCKET}/release-output/${GITHUB_SHA}/verify.json" "$RUNNER_TEMP/release/verify.json" --region "$AWS_REGION"
+          output_location="$(aws codebuild batch-get-builds --ids "$build_id" --region "$AWS_REGION" | jq -r '.builds[0].artifacts.location')"
+          aws s3 cp "s3://${output_location#*:}" "$RUNNER_TEMP/signer-output.zip" --region "$AWS_REGION"
+          unzip -oq "$RUNNER_TEMP/signer-output.zip" -d "$RUNNER_TEMP/release/signer-output"
+          cp "$RUNNER_TEMP/release/signer-output/signature.json" "$RUNNER_TEMP/release/signature.json"
+          cp "$RUNNER_TEMP/release/signer-output/verify.json" "$RUNNER_TEMP/release/verify.json"
           jq -e '.data.signature | type == "string" and length > 0' "$RUNNER_TEMP/release/signature.json" >/dev/null
           jq -e '.data.valid == true' "$RUNNER_TEMP/release/verify.json" >/dev/null
           jq -e --arg sha "$GITHUB_SHA" '.predicate.resolvedDependencies[0].digest.gitCommit == $sha' "$RUNNER_TEMP/release/provenance-input.json" >/dev/null
