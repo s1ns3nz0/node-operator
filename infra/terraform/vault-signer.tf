@@ -980,10 +980,11 @@ resource "aws_codebuild_project" "release_signer" {
     encryption_disabled = false
   }
   environment {
-    compute_type    = "BUILD_GENERAL1_SMALL"
-    image           = var.release_signer_image
-    type            = "LINUX_CONTAINER"
-    privileged_mode = false
+    compute_type                = "BUILD_GENERAL1_SMALL"
+    image                       = var.release_signer_image
+    type                        = "LINUX_CONTAINER"
+    privileged_mode             = false
+    image_pull_credentials_type = "SERVICE_ROLE"
   }
   vpc_config {
     vpc_id             = aws_vpc.private.id

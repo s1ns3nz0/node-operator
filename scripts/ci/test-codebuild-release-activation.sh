@@ -26,7 +26,7 @@ for required in \
   'dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com' \
   '@sha256:' \
   'var.enable_release_signer_ecr_mirror' \
-  'image           = var.release_signer_image' \
+  'image                       = var.release_signer_image' \
   'subnets            = var.release_signer_subnet_ids' \
   'length(var.release_signer_subnet_ids) > 0' \
   'source-location-must-be-overridden.zip' \

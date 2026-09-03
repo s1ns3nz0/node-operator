@@ -47,6 +47,7 @@ done
 for required in \
   'GetEcrAuthorizationToken' \
   'PullOnlyPrivateSignerImage' \
+  'image_pull_credentials_type = "SERVICE_ROLE"' \
   '"ecr:BatchGetImage"' \
   '"ecr:GetDownloadUrlForLayer"' \
   'var.enable_release_signer_ecr_mirror' \

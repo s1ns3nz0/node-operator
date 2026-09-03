@@ -18,9 +18,10 @@ ECR authorization token and the layer/manifest upload API set for that single
 repository. No static AWS credential, ECR password, broad ECR wildcard, image
 delete, or repository-policy permission is defined.
 
-When `enable_release_signer` is also true, CodeBuild receives only ECR pull
-permissions for this repository plus `ecr:GetAuthorizationToken`. The VPC adds
-private STS and CloudWatch Logs interface endpoints, and their security group
+When `enable_release_signer` is also true, CodeBuild uses its service role to
+pull only from this repository, with `ecr:GetAuthorizationToken` and the
+minimum ECR layer/manifest read actions. The VPC adds private STS and
+CloudWatch Logs interface endpoints, and their security group
 permits signer ingress only from its dedicated security group on TCP/443.
 ECR API, ECR DKR, and S3 private endpoint paths already exist. This contract
 does not activate the signer, create a workflow, or access AWS, ECR, Vault, or
