@@ -17,7 +17,7 @@ jobs:
   scanners:
     runs-on: ubuntu-24.04
     env:
-      SCANNER_IMAGE: ${{ vars.SECURITY_SCANNER_IMAGE }}
+      SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners:main
     env:
       EVIDENCE_ROOT: ${{ github.workspace }}/.security-evidence
     steps:
