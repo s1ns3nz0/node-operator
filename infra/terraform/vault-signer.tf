@@ -55,6 +55,84 @@ resource "aws_s3_bucket" "release_artifacts" {
   tags                = local.common_tags
 }
 
+# Release artifacts and CodeBuild logs have separate keys so a signer role
+# cannot use its artifact key to read or write operational log data. The
+# dedicated KMS administrator role remains the break-glass administrator; the
+# account root principal does not receive direct kms:* access.
+data "aws_iam_policy_document" "release_artifacts_key" {
+  count = var.enable_release_signer ? 1 : 0
+
+  source_policy_documents = [data.aws_iam_policy_document.kms_key_administrator.json]
+
+  statement {
+    sid    = "AllowReleaseSignerToUseArtifactKeyOnlyThroughS3"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = [aws_iam_role.release_codebuild_signer[0].arn]
+    }
+
+    actions = [
+      "kms:Decrypt",
+      "kms:DescribeKey",
+      "kms:Encrypt",
+      "kms:GenerateDataKey*",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["s3.${var.aws_region}.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "kms:EncryptionContext:aws:s3:arn"
+      values   = ["${aws_s3_bucket.release_artifacts[0].arn}/*"]
+    }
+  }
+
+  statement {
+    sid    = "AllowArtifactReplicationRoleToDecryptOnlyThroughSourceS3"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = [aws_iam_role.release_artifact_replication[0].arn]
+    }
+
+    actions   = ["kms:Decrypt", "kms:DescribeKey"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["s3.${var.aws_region}.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_kms_key" "release_artifacts" {
+  count                   = var.enable_release_signer ? 1 : 0
+  description             = "Release signer artifact encryption key"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+  policy                  = data.aws_iam_policy_document.release_artifacts_key[0].json
+
+  tags = merge(local.common_tags, {
+    Name    = "${local.name_prefix}-release-artifacts"
+    Purpose = "release-artifact-encryption"
+  })
+}
+
+resource "aws_kms_alias" "release_artifacts" {
+  count         = var.enable_release_signer ? 1 : 0
+  name          = "alias/${local.name_prefix}-release-artifacts"
+  target_key_id = aws_kms_key.release_artifacts[0].key_id
+}
+
 data "aws_iam_policy_document" "release_artifacts" {
   count = var.enable_release_signer ? 1 : 0
 
@@ -96,12 +174,262 @@ resource "aws_s3_bucket_versioning" "release_artifacts" {
   versioning_configuration { status = "Enabled" }
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "release_artifacts" {
+  count  = var.enable_release_signer ? 1 : 0
+  bucket = aws_s3_bucket.release_artifacts[0].id
+
+  rule {
+    id     = "retain-releases-and-expire-stale-versions"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+
+    transition {
+      days          = 90
+      storage_class = "STANDARD_IA"
+    }
+
+    transition {
+      days          = 365
+      storage_class = "GLACIER"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 365
+    }
+  }
+}
+
+# EventBridge is the approved in-account event integration point. Consumers
+# (for example, a SIEM forwarding rule) are intentionally not created here;
+# their destination and retention need an independent approval.
+resource "aws_s3_bucket_notification" "release_artifacts" {
+  count  = var.enable_release_signer ? 1 : 0
+  bucket = aws_s3_bucket.release_artifacts[0].id
+
+  eventbridge = true
+}
+
+resource "aws_s3_bucket_object_lock_configuration" "release_artifacts" {
+  count  = var.enable_release_signer ? 1 : 0
+  bucket = aws_s3_bucket.release_artifacts[0].id
+
+  rule {
+    default_retention {
+      mode = "COMPLIANCE"
+      days = 30
+    }
+  }
+}
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "release_artifacts" {
   count  = var.enable_release_signer ? 1 : 0
   bucket = aws_s3_bucket.release_artifacts[0].id
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      kms_master_key_id = aws_kms_key.release_artifacts[0].arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
+
+data "aws_iam_policy_document" "release_signer_logs_key" {
+  count = var.enable_release_signer ? 1 : 0
+
+  source_policy_documents = [data.aws_iam_policy_document.kms_key_administrator.json]
+
+  statement {
+    sid    = "AllowCloudWatchLogsToUseReleaseSignerLogKey"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["logs.${var.aws_region}.amazonaws.com"]
+    }
+
+    actions   = ["kms:Decrypt*", "kms:Describe*", "kms:Encrypt*", "kms:GenerateDataKey*", "kms:ReEncrypt*"]
+    resources = ["*"]
+
+    condition {
+      test     = "ArnLike"
+      variable = "kms:EncryptionContext:aws:logs:arn"
+      values   = ["arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/aws/codebuild/${local.name_prefix}-release-signer"]
+    }
+  }
+}
+
+resource "aws_kms_key" "release_signer_logs" {
+  count                   = var.enable_release_signer ? 1 : 0
+  description             = "Release signer CodeBuild log encryption key"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+  policy                  = data.aws_iam_policy_document.release_signer_logs_key[0].json
+
+  tags = merge(local.common_tags, {
+    Name    = "${local.name_prefix}-release-signer-logs"
+    Purpose = "release-signer-log-encryption"
+  })
+}
+
+resource "aws_kms_alias" "release_signer_logs" {
+  count         = var.enable_release_signer ? 1 : 0
+  name          = "alias/${local.name_prefix}-release-signer-logs"
+  target_key_id = aws_kms_key.release_signer_logs[0].key_id
+}
+
+resource "aws_s3_bucket" "release_artifacts_replica" {
+  count         = var.enable_release_signer ? 1 : 0
+  provider      = aws.audit_replica
+  bucket_prefix = "${local.name_prefix}-release-dr-"
+  force_destroy = false
+
+  object_lock_enabled = true
+
+  tags = merge(local.common_tags, {
+    Name    = "${local.name_prefix}-release-dr"
+    Purpose = "release-artifact-disaster-recovery"
+  })
+}
+
+resource "aws_s3_bucket_public_access_block" "release_artifacts_replica" {
+  count                   = var.enable_release_signer ? 1 : 0
+  provider                = aws.audit_replica
+  bucket                  = aws_s3_bucket.release_artifacts_replica[0].id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_ownership_controls" "release_artifacts_replica" {
+  count    = var.enable_release_signer ? 1 : 0
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.release_artifacts_replica[0].id
+
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "release_artifacts_replica" {
+  count    = var.enable_release_signer ? 1 : 0
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.release_artifacts_replica[0].id
+
+  versioning_configuration { status = "Enabled" }
+}
+
+data "aws_iam_policy_document" "release_artifacts_replica_key" {
+  count = var.enable_release_signer ? 1 : 0
+
+  source_policy_documents = [data.aws_iam_policy_document.kms_key_administrator.json]
+
+  statement {
+    sid    = "AllowArtifactReplicationRoleToEncryptOnlyThroughReplicaS3"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = [aws_iam_role.release_artifact_replication[0].arn]
+    }
+
+    actions   = ["kms:DescribeKey", "kms:Encrypt", "kms:GenerateDataKey"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["s3.${var.audit_replica_region}.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_kms_key" "release_artifacts_replica" {
+  count                   = var.enable_release_signer ? 1 : 0
+  provider                = aws.audit_replica
+  description             = "Tokyo disaster-recovery encryption key for release signer artifacts"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+  policy                  = data.aws_iam_policy_document.release_artifacts_replica_key[0].json
+
+  tags = merge(local.common_tags, {
+    Name    = "${local.name_prefix}-release-dr"
+    Purpose = "release-artifact-disaster-recovery-encryption"
+  })
+}
+
+resource "aws_kms_alias" "release_artifacts_replica" {
+  count         = var.enable_release_signer ? 1 : 0
+  provider      = aws.audit_replica
+  name          = "alias/${local.name_prefix}-release-artifacts-dr"
+  target_key_id = aws_kms_key.release_artifacts_replica[0].key_id
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "release_artifacts_replica" {
+  count    = var.enable_release_signer ? 1 : 0
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.release_artifacts_replica[0].id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.release_artifacts_replica[0].arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "release_artifacts_replica" {
+  count    = var.enable_release_signer ? 1 : 0
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.release_artifacts_replica[0].id
+
+  rule {
+    id     = "retain-replicated-releases-and-expire-stale-versions"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+
+    transition {
+      days          = 90
+      storage_class = "STANDARD_IA"
+    }
+
+    transition {
+      days          = 365
+      storage_class = "GLACIER"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 365
+    }
+  }
+}
+
+resource "aws_s3_bucket_notification" "release_artifacts_replica" {
+  count    = var.enable_release_signer ? 1 : 0
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.release_artifacts_replica[0].id
+
+  eventbridge = true
+}
+
+resource "aws_s3_bucket_object_lock_configuration" "release_artifacts_replica" {
+  count    = var.enable_release_signer ? 1 : 0
+  provider = aws.audit_replica
+  bucket   = aws_s3_bucket.release_artifacts_replica[0].id
+
+  rule {
+    default_retention {
+      mode = "COMPLIANCE"
+      days = 30
     }
   }
 }
@@ -110,6 +438,7 @@ resource "aws_cloudwatch_log_group" "release_signer" {
   count             = var.enable_release_signer ? 1 : 0
   name              = "/aws/codebuild/${local.name_prefix}-release-signer"
   retention_in_days = 90
+  kms_key_id        = aws_kms_key.release_signer_logs[0].arn
   tags              = local.common_tags
 }
 
@@ -168,12 +497,130 @@ data "aws_iam_policy_document" "release_codebuild_signer" {
       resources = ["${aws_s3_bucket.release_artifacts[0].arn}/release-input/*", "${aws_s3_bucket.release_artifacts[0].arn}/release-output/*"]
     }
   }
+  statement {
+    sid = "UseOnlyReleaseArtifactEncryptionKeyThroughS3"
+    actions = [
+      "kms:Decrypt",
+      "kms:DescribeKey",
+      "kms:Encrypt",
+      "kms:GenerateDataKey*",
+    ]
+    resources = [aws_kms_key.release_artifacts[0].arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["s3.${var.aws_region}.amazonaws.com"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "release_codebuild_signer" {
   count  = var.enable_release_signer ? 1 : 0
   role   = aws_iam_role.release_codebuild_signer[0].id
   policy = data.aws_iam_policy_document.release_codebuild_signer[0].json
+}
+
+data "aws_iam_policy_document" "release_artifact_replication_assume_role" {
+  count = var.enable_release_signer ? 1 : 0
+
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["s3.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "release_artifact_replication" {
+  count              = var.enable_release_signer ? 1 : 0
+  name               = "${local.name_prefix}-release-artifact-replication"
+  assume_role_policy = data.aws_iam_policy_document.release_artifact_replication_assume_role[0].json
+
+  tags = local.common_tags
+}
+
+data "aws_iam_policy_document" "release_artifact_replication" {
+  count = var.enable_release_signer ? 1 : 0
+
+  statement {
+    sid = "ReadOnlyReleaseArtifactSourceVersions"
+    actions = [
+      "s3:GetObjectLegalHold",
+      "s3:GetObjectRetention",
+      "s3:GetObjectVersionAcl",
+      "s3:GetObjectVersionForReplication",
+      "s3:GetObjectVersionTagging",
+      "s3:GetReplicationConfiguration",
+      "s3:ListBucket",
+    ]
+    resources = [aws_s3_bucket.release_artifacts[0].arn, "${aws_s3_bucket.release_artifacts[0].arn}/*"]
+  }
+
+  statement {
+    sid       = "WriteOnlyReleaseArtifactReplicaVersions"
+    actions   = ["s3:ObjectOwnerOverrideToBucketOwner", "s3:ReplicateDelete", "s3:ReplicateObject", "s3:ReplicateTags"]
+    resources = ["${aws_s3_bucket.release_artifacts_replica[0].arn}/*"]
+  }
+
+  statement {
+    sid       = "UseOnlyApprovedReleaseArtifactKeys"
+    actions   = ["kms:Decrypt", "kms:DescribeKey"]
+    resources = [aws_kms_key.release_artifacts[0].arn]
+  }
+
+  statement {
+    sid       = "EncryptOnlyWithReleaseArtifactReplicaKey"
+    actions   = ["kms:DescribeKey", "kms:Encrypt", "kms:GenerateDataKey"]
+    resources = [aws_kms_key.release_artifacts_replica[0].arn]
+  }
+}
+
+resource "aws_iam_role_policy" "release_artifact_replication" {
+  count  = var.enable_release_signer ? 1 : 0
+  name   = "${local.name_prefix}-release-artifact-replication"
+  role   = aws_iam_role.release_artifact_replication[0].id
+  policy = data.aws_iam_policy_document.release_artifact_replication[0].json
+}
+
+resource "aws_s3_bucket_replication_configuration" "release_artifacts" {
+  count  = var.enable_release_signer ? 1 : 0
+  bucket = aws_s3_bucket.release_artifacts[0].id
+  role   = aws_iam_role.release_artifact_replication[0].arn
+
+  rule {
+    id     = "replicate-release-artifacts-to-tokyo"
+    status = "Enabled"
+
+    filter {}
+
+    delete_marker_replication {
+      status = "Disabled"
+    }
+
+    destination {
+      bucket        = aws_s3_bucket.release_artifacts_replica[0].arn
+      storage_class = "STANDARD"
+
+      encryption_configuration {
+        replica_kms_key_id = aws_kms_key.release_artifacts_replica[0].arn
+      }
+    }
+
+    source_selection_criteria {
+      sse_kms_encrypted_objects {
+        status = "Enabled"
+      }
+    }
+  }
+
+  depends_on = [
+    aws_s3_bucket_versioning.release_artifacts,
+    aws_s3_bucket_versioning.release_artifacts_replica,
+    aws_iam_role_policy.release_artifact_replication,
+  ]
 }
 
 resource "aws_codebuild_project" "release_signer" {

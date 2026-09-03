@@ -27,3 +27,13 @@ output "release_artifact_bucket_arn" {
   description = "Dedicated release artifact bucket ARN when signer is enabled."
   value       = var.enable_release_signer ? aws_s3_bucket.release_artifacts[0].arn : null
 }
+
+output "release_artifact_kms_key_arn" {
+  description = "Dedicated KMS key ARN for release artifacts when signer is enabled."
+  value       = var.enable_release_signer ? aws_kms_key.release_artifacts[0].arn : null
+}
+
+output "release_artifact_replica_bucket_arn" {
+  description = "Tokyo disaster-recovery release artifact bucket ARN when signer is enabled."
+  value       = var.enable_release_signer ? aws_s3_bucket.release_artifacts_replica[0].arn : null
+}
