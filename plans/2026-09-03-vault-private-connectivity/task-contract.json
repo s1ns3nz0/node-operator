@@ -1,0 +1,19 @@
+{
+  "id": "2026-09-03-vault-private-connectivity",
+  "title": "Define private runner and CodeBuild connectivity to Vault",
+  "classification": "non-trivial",
+  "classification_reason": ["security boundary", "network and TLS controls", "multiple validation layers"],
+  "expected_outcome": "A non-secret, fail-closed operating contract specifies the private DNS, TLS, routing, security-group, NetworkPolicy, and evidence requirements for approved runner and CodeBuild paths to Vault.",
+  "dependencies": ["2026-09-03-vault-rollout-readiness"],
+  "constraints": ["Do not deploy, publish, merge, alter secrets, access AWS, or access production.", "Do not change a Vault Service type, Terraform, or release.yml.", "Do not store certificate material, private endpoint addresses, account identifiers, or credentials."],
+  "authorization": {"repository_mutation": true, "external_actions": [], "prohibited_actions": ["deploy", "publish", "merge", "secret changes", "AWS access", "production access"]},
+  "primary_owner": {"tier": "sol", "responsibility": "security decisions, integration, and final sign-off"},
+  "delegations": [
+    {"id": "recon", "tier": "luna", "owner": "/root/vault_rollout_recon", "files": [], "worktree": "read-only", "branch": "none", "acceptance_checks": ["reuse prior rollout-boundary inventory"], "escalation_trigger": "new cloud state or secret is needed"},
+    {"id": "implementation", "tier": "terra", "owner": "/root/vault_private_connectivity_contract", "files": ["docs/gitops/vault-private-connectivity-contract.md", "scripts/ci/test-vault-private-connectivity-contract.sh", "package.json"], "worktree": "required", "branch": "task/2026-09-03-vault-private-connectivity", "acceptance_checks": ["structural contract test", "existing Vault contract tests", "harness check"], "escalation_trigger": "a change would create or modify network, DNS, TLS, Vault, GitHub, or cloud resources"},
+    {"id": "debrief", "tier": "terra", "owner": "pending", "files": ["reports/2026-09-03-vault-private-connectivity-debrief.md"], "worktree": "required", "branch": "task/2026-09-03-vault-private-connectivity", "acceptance_checks": ["clean-room summary"], "escalation_trigger": "validation evidence is incomplete"}
+  ],
+  "model_fallbacks": [],
+  "validation": ["targeted structural test", "existing Vault GitOps and runner contracts", "npm run harness:check", "git diff --check", "independent clean-room debrief"],
+  "status": "in_progress"
+}
