@@ -11,5 +11,5 @@
   "delegations": [{"id":"recon","tier":"luna","owner":"/root/ecr_live_plan_recon","files":[],"worktree":"read-only","branch":"none","acceptance_checks":["safe command and live input map"],"escalation_trigger":"live credentials or backend mutation would be needed"}],
   "model_fallbacks": [],
   "validation": ["AWS identity confirmation", "Terraform init without backend migration", "saved plan with lock disabled", "JSON plan review", "harness check", "independent clean-room debrief"],
-  "status": "in_progress"
+  "status": "completed"
 }
