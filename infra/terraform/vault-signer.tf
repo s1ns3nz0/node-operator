@@ -9,15 +9,15 @@ variable "vault_signer_endpoint" {
 }
 
 resource "aws_iam_role" "release_codebuild_signer" {
-  name = "${local.name_prefix}-release-signer"
-  assume_role_policy = jsonencode({Version="2012-10-17",Statement=[{Effect="Allow",Principal={Service="codebuild.amazonaws.com"},Action="sts:AssumeRole"}]})
-  tags = local.common_tags
+  name               = "${local.name_prefix}-release-signer"
+  assume_role_policy = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Principal = { Service = "codebuild.amazonaws.com" }, Action = "sts:AssumeRole" }] })
+  tags               = local.common_tags
 }
 
 data "aws_iam_policy_document" "release_codebuild_signer" {
   statement {
-    sid = "Logs"
-    actions = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+    sid       = "Logs"
+    actions   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
     resources = ["*"]
   }
 }
