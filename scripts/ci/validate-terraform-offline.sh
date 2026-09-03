@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-[ "$#" -ge 2 ] && [ "$#" -le 3 ] || { echo "usage: $0 MODULE_DIRECTORY OUTPUT_DIRECTORY [MODULE_RELATIVE_TFVARS]" >&2; exit 64; }
+if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+  echo "usage: $0 MODULE_DIRECTORY OUTPUT_DIRECTORY [MODULE_RELATIVE_TFVARS]" >&2
+  exit 64
+fi
 module_directory="$1"
 output_directory="$2"
 tfvars_path="${3:-fixtures/offline-baseline.tfvars}"
