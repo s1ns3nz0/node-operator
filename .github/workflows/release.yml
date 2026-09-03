@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@1e60f620b9541dca3f7dc9e9e5e2e1f2f4c2f4f7 # v4.4.0
+        with:
+          node-version: 22
+      - uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c5b041b4 # v4.0.1
+        with:
+          version: v1.35.0
+      - uses: anchore/sbom-action/download-syft@e11c8f3f6e1c7a5d7a7c5c4c2a2a7d4e8f4b3c2d # v0.20.6
+      - name: Build release bundle and evidence
+        run: scripts/ci/build-release-bundle.sh "$RUNNER_TEMP/release"
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          gh release create "$tag" \
+            "$RUNNER_TEMP/release/node-operator-release-bundle.tar" \
+            "$RUNNER_TEMP/release/node-operator-release-bundle.sha256" \
+            "$RUNNER_TEMP/release/manifest.json" \
+            "$RUNNER_TEMP/release/sbom.cyclonedx.json" \
+            "$RUNNER_TEMP/release/provenance-input.json" \
+            --title "$tag" --generate-notes
