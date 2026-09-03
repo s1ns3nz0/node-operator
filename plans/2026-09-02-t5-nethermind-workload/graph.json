@@ -1,0 +1,15 @@
+{
+  "task_id": "2026-09-02-t5-nethermind-workload",
+  "nodes": [
+    {"id": "T5-1", "title": "Select immutable Hoodi-compatible Nethermind image", "tier": "sol", "owner": "/root", "status": "completed"},
+    {"id": "T5-2", "title": "Implement separate hardened execution StatefulSet", "tier": "terra", "owner": "/root/t5_workload", "status": "completed"},
+    {"id": "T5-3", "title": "Add isolation and policy fixtures", "tier": "terra", "owner": "/root/t5_policy", "status": "completed"},
+    {"id": "T5-4", "title": "Integrate validation, independent review, and clean-room debrief", "tier": "sol", "owner": "/root", "status": "completed"}
+  ],
+  "edges": [
+    {"from": "T5-1", "to": "T5-2", "kind": "blocks"},
+    {"from": "T5-2", "to": "T5-3", "kind": "blocks"},
+    {"from": "T5-3", "to": "T5-4", "kind": "blocks"}
+  ],
+  "updated_at": "2026-09-02T04:00:00Z"
+}

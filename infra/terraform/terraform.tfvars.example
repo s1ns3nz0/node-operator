@@ -1,0 +1,8 @@
+# Copy this file into an approved build-only input location. It contains no
+# credentials, access keys, secret values, or backend configuration.
+aws_account_id = "123456789012"
+name           = "node-operator"
+
+# All remaining values are intentionally pinned by the Terraform defaults and
+# validations: ap-northeast-2, 10.80.0.0/16, two private subnets, two-to-three
+# m7i.2xlarge managed nodes, and a private-only EKS API endpoint.

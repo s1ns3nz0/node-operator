@@ -1,0 +1,21 @@
+{
+  "task_id": "2026-09-01-t9-release-evidence",
+  "nodes": [
+    {"id": "T9-1", "title": "Define release-evidence contracts and safety boundary", "tier": "sol", "owner": "/root", "status": "completed"},
+    {"id": "T9-2", "title": "Reconnoiter local tool and workflow integration options", "tier": "luna", "owner": "/root/t9_recon", "status": "completed"},
+    {"id": "T9-3", "title": "Implement build and posture evidence collectors", "tier": "terra", "owner": "/root/t9_collectors", "status": "completed"},
+    {"id": "T9-4", "title": "Extend OPA decisions and adversarial fixtures", "tier": "terra", "owner": "/root/t9_policy", "status": "completed"},
+    {"id": "T9-5", "title": "Build deterministic Kustomize release bundle and bind its digest", "tier": "terra+sol", "owner": "/root/t9_bundle_impl", "status": "completed"},
+    {"id": "T9-6", "title": "Clean-room debrief", "tier": "terra", "owner": "/root/t9_debrief", "status": "completed"}
+  ],
+  "edges": [
+    {"from": "T9-1", "to": "T9-2", "kind": "blocks"},
+    {"from": "T9-1", "to": "T9-3", "kind": "blocks"},
+    {"from": "T9-1", "to": "T9-4", "kind": "blocks"},
+    {"from": "T9-2", "to": "T9-3", "kind": "informs"},
+    {"from": "T9-3", "to": "T9-5", "kind": "blocks"},
+    {"from": "T9-4", "to": "T9-5", "kind": "blocks"},
+    {"from": "T9-5", "to": "T9-6", "kind": "blocks"}
+  ],
+  "updated_at": "2026-09-02T05:00:00Z"
+}
