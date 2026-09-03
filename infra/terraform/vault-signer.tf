@@ -20,6 +20,36 @@ variable "release_signer_subnet_ids" {
   default     = []
 }
 
+variable "github_repository" {
+  description = "GitHub repository allowed to start the release signer, owner/name."
+  type        = string
+  default     = "s1ns3nz0/node-operator"
+}
+
+resource "aws_iam_role" "github_release_runner" {
+  count = var.enable_release_signer ? 1 : 0
+  name  = "${local.name_prefix}-github-release-runner"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = "arn:aws:iam::${var.aws_account_id}:oidc-provider/token.actions.githubusercontent.com" }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
+        StringLike   = { "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:ref:refs/tags/v*" }
+      }
+    }]
+  })
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy" "github_release_runner" {
+  count  = var.enable_release_signer ? 1 : 0
+  role   = aws_iam_role.github_release_runner[0].id
+  policy = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Action = ["codebuild:StartBuild", "codebuild:BatchGetBuilds"], Resource = aws_codebuild_project.release_signer[0].arn }] })
+}
+
 resource "aws_iam_role" "release_codebuild_signer" {
   name               = "${local.name_prefix}-release-signer"
   assume_role_policy = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Principal = { Service = "codebuild.amazonaws.com" }, Action = "sts:AssumeRole" }] })
