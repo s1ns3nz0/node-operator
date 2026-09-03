@@ -1,0 +1,101 @@
+variable "enable_private_gitops_foundation" {
+  description = "Create the private ECR OCI foundation for Argo CD and reviewed GitOps charts."
+  type        = bool
+  default     = false
+}
+
+locals {
+  private_gitops_repositories = {
+    argocd = "${local.name_prefix}-gitops-argocd"
+    charts = "${local.name_prefix}-gitops-charts"
+  }
+}
+
+# The repositories are intentionally empty at foundation apply time. A later
+# digest-reviewed mirror action is the only permitted publisher.
+resource "aws_ecr_repository" "private_gitops" {
+  for_each = var.enable_private_gitops_foundation ? local.private_gitops_repositories : {}
+
+  name                 = each.value
+  image_tag_mutability = "IMMUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = merge(local.common_tags, {
+    Name    = each.value
+    Purpose = "private-gitops-${each.key}"
+  })
+}
+
+resource "aws_ecr_lifecycle_policy" "private_gitops" {
+  for_each = aws_ecr_repository.private_gitops
+
+  repository = each.value.name
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Retain the latest 20 immutable GitOps artifacts"
+      selection = {
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 20
+      }
+      action = { type = "expire" }
+    }]
+  })
+}
+
+data "aws_iam_policy_document" "github_gitops_oci_mirror_assume_role" {
+  count = var.enable_private_gitops_foundation ? 1 : 0
+
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    principals {
+      type        = "Federated"
+      identifiers = ["arn:aws:iam::${var.aws_account_id}:oidc-provider/token.actions.githubusercontent.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["repo:${var.github_repository}:environment:gitops-oci-mirror"]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_gitops_oci_mirror" {
+  count              = var.enable_private_gitops_foundation ? 1 : 0
+  name               = "${local.name_prefix}-github-gitops-oci-mirror"
+  assume_role_policy = data.aws_iam_policy_document.github_gitops_oci_mirror_assume_role[0].json
+  tags               = local.common_tags
+}
+
+data "aws_iam_policy_document" "github_gitops_oci_mirror" {
+  count = var.enable_private_gitops_foundation ? 1 : 0
+  statement {
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+  statement {
+    actions   = ["ecr:BatchCheckLayerAvailability", "ecr:CompleteLayerUpload", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart"]
+    resources = values(aws_ecr_repository.private_gitops)[*].arn
+  }
+}
+
+resource "aws_iam_role_policy" "github_gitops_oci_mirror" {
+  count  = var.enable_private_gitops_foundation ? 1 : 0
+  name   = "${local.name_prefix}-github-gitops-oci-mirror"
+  role   = aws_iam_role.github_gitops_oci_mirror[0].id
+  policy = data.aws_iam_policy_document.github_gitops_oci_mirror[0].json
+}
+
+output "private_gitops_ecr_repository_urls" {
+  description = "Private ECR OCI destinations; empty until the GitOps foundation is explicitly enabled."
+  value       = { for key, repository in aws_ecr_repository.private_gitops : key => repository.repository_url }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "2026-09-04-vault-helm-deploy",
+  "title": "Deploy the approved private Vault Helm release",
+  "classification": "non-trivial",
+  "classification_reason": ["creates a private HA secret-management service", "security boundary", "cost-bearing Kubernetes resources"],
+  "expected_outcome": "A three-replica, internal-only Vault Helm release is deployed to the approved EKS cluster with KMS auto-unseal configuration and Pod Identity, then verified in sealed state without creating or recording secret material.",
+  "dependencies": ["2026-09-03-private-baseline-apply", "2026-09-03-vault-rollout-readiness"],
+  "constraints": ["Use only account 106760547719 and EKS cluster node-operator.", "Use the existing vault-tls Secret only; do not create, read, modify, or record TLS, Vault, recovery, or unseal secret material.", "Do not run vault operator init or unseal, configure auth engines, create policies, deploy workloads, publish images, or enable release signing.", "Vault must not gain a public listener, LoadBalancer, or public DNS route.", "Record only non-sensitive resource metadata and boolean health/sealed results."],
+  "authorization": {"repository_mutation": true, "external_actions": ["read non-sensitive AWS and EKS metadata in account 106760547719", "create or update the approved internal Vault Helm release in namespace vault", "read non-sensitive Kubernetes resource status and Vault health headers through the private cluster path"], "prohibited_actions": ["Vault initialization", "Vault unseal", "secret read or change", "public endpoint", "workload deployment", "release signing", "production access outside account 106760547719"]},
+  "primary_owner": {"tier": "sol", "responsibility": "deployment boundary, security decision, integration"},
+  "delegations": [{"id":"recon","tier":"luna","owner":"pending","files":[],"worktree":"read-only","branch":"none","acceptance_checks":["private prerequisites map"],"escalation_trigger":"TLS Secret inspection would disclose material"},{"id":"debrief","tier":"terra","owner":"pending","files":["reports/2026-09-04-vault-helm-deploy-debrief.md"],"worktree":"required","branch":"task/2026-09-04-vault-helm-deploy","acceptance_checks":["clean-room summary"],"escalation_trigger":"evidence requires secret values"}],
+  "model_fallbacks": [],
+  "validation": ["Helm render", "private cluster status", "internal service-only invariant", "sealed health check", "harness check", "independent clean-room debrief"],
+  "status": "in_progress"
+}

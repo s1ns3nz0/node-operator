@@ -1,0 +1,57 @@
+name: GitOps OCI Mirror
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Approved upstream OCI reference including sha256 digest
+        required: true
+        type: string
+      destination:
+        description: Approved destination (argocd or charts)
+        required: true
+        type: choice
+        options: [argocd, charts]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-24.04
+    environment: gitops-oci-mirror
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - name: Validate approved digest input
+        env:
+          SOURCE: ${{ inputs.source }}
+          DESTINATION: ${{ inputs.destination }}
+        run: |
+          case "$SOURCE" in *@sha256:[a-f0-9][a-f0-9]*) ;; *) echo 'source must include a sha256 digest' >&2; exit 1;; esac
+          case "$DESTINATION" in argocd|charts) ;; *) exit 1;; esac
+      - name: Assume ECR mirror role
+        env:
+          AWS_ROLE_ARN: ${{ vars.GITOPS_OCI_MIRROR_ROLE_ARN }}
+          AWS_REGION: ap-northeast-2
+        run: |
+          test -n "$AWS_ROLE_ARN"
+          token="$(curl --fail --silent -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -er .value)"
+          aws sts assume-role-with-web-identity --role-arn "$AWS_ROLE_ARN" --role-session-name "gitops-oci-${GITHUB_RUN_ID}" --web-identity-token "$token" --duration-seconds 900 > "$RUNNER_TEMP/creds.json"
+          jq -r '.Credentials | "AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nAWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nAWS_SESSION_TOKEN=\(.SessionToken)"' "$RUNNER_TEMP/creds.json" >> "$GITHUB_ENV"
+      - name: Copy approved OCI digest to private ECR
+        env:
+          SOURCE: ${{ inputs.source }}
+          DESTINATION: ${{ inputs.destination }}
+          AWS_REGION: ap-northeast-2
+          ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+        run: |
+          test -n "$ACCOUNT_ID"
+          destination_ref="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/node-operator-baseline-gitops-$DESTINATION:$(cut -d: -f2 <<<"${SOURCE##*@}")"
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+          docker buildx imagetools create --tag "$destination_ref" "$SOURCE"
+          docker buildx imagetools inspect "$destination_ref" --raw | sha256sum | tee "$RUNNER_TEMP/mirror-digest.txt"
