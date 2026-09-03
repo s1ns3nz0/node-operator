@@ -1,0 +1,19 @@
+{
+  "id": "2026-09-03-vault-bootstrap-recovery",
+  "title": "Define Vault bootstrap, audit, and recovery evidence contract",
+  "classification": "non-trivial",
+  "classification_reason": ["security-sensitive operator workflow", "recovery controls", "multiple validation layers"],
+  "expected_outcome": "A non-secret, fail-closed operator contract defines the ordered Vault bootstrap boundary and the audit/snapshot/restore evidence required before release credentials can be enabled.",
+  "dependencies": ["2026-09-03-vault-private-connectivity"],
+  "constraints": ["Do not initialize, unseal, configure, or access a live Vault.", "Do not deploy, publish, merge, alter secrets, access AWS, or access production.", "Do not store root, recovery, unseal, AWS, Vault, or certificate material in Git, CI, or Terraform state."],
+  "authorization": {"repository_mutation": true, "external_actions": [], "prohibited_actions": ["Vault initialization", "Vault configuration", "deploy", "publish", "merge", "secret changes", "AWS access", "production access"]},
+  "primary_owner": {"tier": "sol", "responsibility": "security decisions, integration, and final sign-off"},
+  "delegations": [
+    {"id": "recon", "tier": "luna", "owner": "/root/vault_rollout_recon", "files": [], "worktree": "read-only", "branch": "none", "acceptance_checks": ["reuse known bootstrap and recovery gaps"], "escalation_trigger": "a live Vault or secret is required"},
+    {"id": "implementation", "tier": "terra", "owner": "/root/vault_bootstrap_recovery_contract", "files": ["deploy/vault/bootstrap/release-path-contract.json", "docs/gitops/vault-bootstrap-recovery-contract.md", "scripts/ci/test-vault-bootstrap-recovery-contract.sh", "package.json"], "worktree": "required", "branch": "task/2026-09-03-vault-bootstrap-recovery", "acceptance_checks": ["structural bootstrap/recovery test", "existing Vault contracts", "harness check"], "escalation_trigger": "a command or artifact would initialize, configure, or access Vault or other cloud resources"},
+    {"id": "debrief", "tier": "terra", "owner": "pending", "files": ["reports/2026-09-03-vault-bootstrap-recovery-debrief.md"], "worktree": "required", "branch": "task/2026-09-03-vault-bootstrap-recovery", "acceptance_checks": ["clean-room summary"], "escalation_trigger": "validation evidence is incomplete"}
+  ],
+  "model_fallbacks": [],
+  "validation": ["targeted structural test", "existing Vault GitOps and release contracts", "npm run harness:check", "git diff --check", "independent clean-room debrief"],
+  "status": "in_progress"
+}
