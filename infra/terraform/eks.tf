@@ -19,6 +19,13 @@ resource "aws_eks_cluster" "private" {
 
   enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 
+  # Preserve existing aws-auth compatibility while enabling Terraform-managed
+  # access entries for the dedicated, VPC-internal GitOps bootstrap identity.
+  access_config {
+    authentication_mode                         = "API_AND_CONFIG_MAP"
+    bootstrap_cluster_creator_admin_permissions = true
+  }
+
   # EKS 1.28 and later automatically encrypts all Kubernetes API data with an
   # AWS-owned KMS key. Do not add a customer-managed key here: application
   # secrets belong to Vault, while AWS service encryption remains scoped to
