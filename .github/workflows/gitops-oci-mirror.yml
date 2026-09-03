@@ -47,6 +47,8 @@ jobs:
         run: |
           test -n "$AWS_ROLE_ARN"
           token="$(curl --fail --silent -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -er .value)"
+          claims="$(printf '%s' "$token" | cut -d. -f2 | base64 --decode)"
+          printf '%s\n' "$claims" | jq -e '{sub, aud, repository, environment}'
           aws sts assume-role-with-web-identity --role-arn "$AWS_ROLE_ARN" --role-session-name "gitops-oci-${GITHUB_RUN_ID}" --web-identity-token "$token" --duration-seconds 900 > "$RUNNER_TEMP/creds.json"
           jq -r '.Credentials | "AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nAWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nAWS_SESSION_TOKEN=\(.SessionToken)"' "$RUNNER_TEMP/creds.json" >> "$GITHUB_ENV"
       - name: Copy approved OCI digest to private ECR
