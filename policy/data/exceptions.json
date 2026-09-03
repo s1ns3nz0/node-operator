@@ -1,1 +1,13 @@
-{"exceptions": []}
+{
+  "exceptions": [
+    {"rule":"iac.checkov","check_id":"CKV_AWS_109","subject":"aws_iam_policy_document.kms_key_administrator","owner":"fjybjinsu","rationale":"KMS-001","issue":"docs/security/checkov-kms-eks-exception-register.md#kms-001","expires_at":"2026-10-03T00:00:00Z"},
+    {"rule":"iac.checkov","check_id":"CKV_AWS_111","subject":"aws_iam_policy_document.kms_key_administrator","owner":"fjybjinsu","rationale":"KMS-002","issue":"docs/security/checkov-kms-eks-exception-register.md#kms-002","expires_at":"2026-10-03T00:00:00Z"},
+    {"rule":"iac.checkov","check_id":"CKV_AWS_356","subject":"aws_iam_policy_document.kms_key_administrator","owner":"fjybjinsu","rationale":"KMS-003","issue":"docs/security/checkov-kms-eks-exception-register.md#kms-003","expires_at":"2026-10-03T00:00:00Z"},
+    {"rule":"iac.checkov","check_id":"CKV_AWS_109","subject":"aws_iam_policy_document.audit_replica_key","owner":"fjybjinsu","rationale":"KMS-004","issue":"docs/security/checkov-kms-eks-exception-register.md#kms-004","expires_at":"2026-10-03T00:00:00Z"},
+    {"rule":"iac.checkov","check_id":"CKV_AWS_111","subject":"aws_iam_policy_document.audit_replica_key","owner":"fjybjinsu","rationale":"KMS-005","issue":"docs/security/checkov-kms-eks-exception-register.md#kms-005","expires_at":"2026-10-03T00:00:00Z"},
+    {"rule":"iac.checkov","check_id":"CKV_AWS_356","subject":"aws_iam_policy_document.audit_replica_key","owner":"fjybjinsu","rationale":"KMS-006","issue":"docs/security/checkov-kms-eks-exception-register.md#kms-006","expires_at":"2026-10-03T00:00:00Z"},
+    {"rule":"iac.checkov","check_id":"CKV_AWS_111","subject":"aws_iam_policy_document.audit_notifications_key","owner":"fjybjinsu","rationale":"KMS-007","issue":"docs/security/checkov-kms-eks-exception-register.md#kms-007","expires_at":"2026-10-03T00:00:00Z"},
+    {"rule":"iac.checkov","check_id":"CKV_AWS_356","subject":"aws_iam_policy_document.audit_notifications_key","owner":"fjybjinsu","rationale":"KMS-008","issue":"docs/security/checkov-kms-eks-exception-register.md#kms-008","expires_at":"2026-10-03T00:00:00Z"},
+    {"rule":"iac.checkov","check_id":"CKV_AWS_58","subject":"aws_eks_cluster.private","owner":"fjybjinsu","rationale":"EKS-001","issue":"docs/security/checkov-kms-eks-exception-register.md#eks-001","expires_at":"2026-10-03T00:00:00Z"}
+  ]
+}

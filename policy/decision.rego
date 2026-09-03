@@ -48,7 +48,7 @@ violations contains violation if {
 
 violations contains violation if {
   item := object.get(object.get(object.get(input, "evidence", {}), "checkov", {}), "failed_checks", [])[_]
-  not exception_applies("iac.checkov", object.get(item, "resource", "unknown"))
+  not exception_applies("iac.checkov", object.get(item, "resource", "unknown"), object.get(item, "check_id", "unknown"))
   violation := finding("iac.checkov", "block", object.get(item, "check_name", "IaC policy failure"), object.get(item, "resource", "unknown"), "evidence.checkov")
 }
 
@@ -571,7 +571,7 @@ evidence_incomplete(tool, result) if {
 }
 
 invalid_exception(exception) if {
-  required := ["rule", "subject", "owner", "rationale", "issue", "expires_at"][_]
+  required := ["rule", "check_id", "subject", "owner", "rationale", "issue", "expires_at"][_]
   not object.get(exception, required, "")
 }
 
@@ -585,10 +585,11 @@ invalid_exception(exception) if {
   expires_at > time.now_ns() + data.nodeoperator.config.exception_maximum_ttl_hours * 3600000000000
 }
 
-exception_applies(rule, subject) if {
+exception_applies(rule, subject, check_id) if {
   exception := object.get(object.get(input, "policy", {}), "exceptions", [])[_]
   exception.rule == rule
   exception.subject == subject
+  exception.check_id == check_id
   not invalid_exception(exception)
 }
 
