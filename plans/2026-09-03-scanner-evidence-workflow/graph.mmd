@@ -1,0 +1,5 @@
+flowchart LR
+  contract[Task contract] --> package[Package scanner entrypoint]
+  package --> workflow[CI consumes evidence]
+  workflow --> validate[Validation]
+  validate --> debrief[Clean-room debrief]

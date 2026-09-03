@@ -1,0 +1,23 @@
+{
+  "task_id": "2026-09-03-scanner-evidence-workflow",
+  "title": "Isolate security scanners in a Docker image and keep CI as an evidence consumer",
+  "owner": {"tier": "sol", "model": "gpt-5.6-sol"},
+  "scope": {
+    "include": [".ci/scanners", ".github/workflows/ci-security.yml", ".github/workflows/scanner-image-release.yml", "plans/2026-09-03-scanner-evidence-workflow", "reports/2026-09-03-scanner-evidence-workflow-debrief.md"],
+    "exclude": ["deploying", "changing secrets", "production access"]
+  },
+  "acceptance_criteria": [
+    "The scanner image contains the scan entrypoint and its required scripts.",
+    "CI Security invokes one scanner runner in the pinned image and uploads only its declared non-sensitive evidence output, while remaining compatible with the currently pinned tools-only digest.",
+    "The scanner-image workflow rebuilds when the packaged scanner scripts change.",
+    "Harness and applicable shell checks pass."
+  ],
+  "external_authorization": {
+    "authorized_by": "user",
+    "authorized_action": "Commit and push this task to GitHub; the existing Scanner Image Release workflow may publish the scanner image to GHCR.",
+    "authorized_at": "2026-09-03"
+  },
+  "model_routing": [
+    {"role": "primary integration and security decision", "requested_tier": "sol", "actual_tier": "sol", "fallback": null}
+  ]
+}

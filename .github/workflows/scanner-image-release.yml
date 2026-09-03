@@ -2,7 +2,11 @@ name: Scanner Image Release
 on:
   workflow_dispatch:
   push:
-    paths: ['.ci/scanners/**']
+    paths:
+      - '.ci/scanners/**'
+      - 'scripts/ci/collect-pr-evidence.sh'
+      - 'scripts/ci/collect-security-evidence.sh'
+      - 'scripts/ci/lib/common.sh'
 permissions:
   contents: read
   packages: write
@@ -17,6 +21,6 @@ jobs:
       - name: Build and publish
         run: |
           image="ghcr.io/${GITHUB_REPOSITORY,,}/security-scanners:${GITHUB_SHA}"
-          docker build --tag "$image" --tag "ghcr.io/${GITHUB_REPOSITORY,,}/security-scanners:main" .ci/scanners
+          docker build --file .ci/scanners/Dockerfile --tag "$image" --tag "ghcr.io/${GITHUB_REPOSITORY,,}/security-scanners:main" .
           docker push "$image"
           docker push "ghcr.io/${GITHUB_REPOSITORY,,}/security-scanners:main"

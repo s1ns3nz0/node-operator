@@ -1,0 +1,18 @@
+{
+  "task_id": "2026-09-03-scanner-evidence-workflow",
+  "status": "completed_with_environmental_validation_limits",
+  "checks": [
+    {"name": "git diff --check", "status": "passed"},
+    {"name": "bash -n .ci/scanners/run-security-scan.sh", "status": "passed"},
+    {"name": "YAML parse for both changed workflows", "status": "passed"},
+    {"name": "npm run harness:check", "status": "passed"},
+    {"name": "packaged collector scripts are executable", "status": "passed"},
+    {"name": "npm run harness:verify", "status": "blocked", "reason": "Local environment lacks opa, conftest, and shellcheck; existing raw-evidence fixtures are also absent."},
+    {"name": "docker build --file .ci/scanners/Dockerfile .", "status": "blocked", "reason": "Docker Desktop stalled while resolving the public ubuntu:24.04 manifest; the build was cancelled without publishing or changing remote state."}
+  ],
+  "observations": [
+    "Before this change, CI Security supplied the scan command through an inline docker invocation; the image supplied tools only.",
+    "The entrypoint packages the collector and shared shell library in the image, mounts source read-only, and writes only the declared evidence directory.",
+    "CI explicitly invokes the runner with bash so the already-pinned tools-only image remains compatible; when a newly released scanner-image digest is promoted, the same runner selects its packaged collector."
+  ]
+}

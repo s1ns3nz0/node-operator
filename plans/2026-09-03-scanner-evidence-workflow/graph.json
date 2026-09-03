@@ -1,0 +1,16 @@
+{
+  "task_id": "2026-09-03-scanner-evidence-workflow",
+  "nodes": [
+    {"id": "contract", "label": "Task contract", "status": "completed", "owner": "sol"},
+    {"id": "package", "label": "Package scanner entrypoint", "status": "completed", "owner": "sol"},
+    {"id": "workflow", "label": "Make CI consume evidence", "status": "completed", "owner": "sol"},
+    {"id": "validate", "label": "Validate and record evidence", "status": "completed", "owner": "sol"},
+    {"id": "debrief", "label": "Clean-room debrief", "status": "completed", "owner": "terra"}
+  ],
+  "edges": [
+    {"from": "contract", "to": "package"},
+    {"from": "package", "to": "workflow"},
+    {"from": "workflow", "to": "validate"},
+    {"from": "validate", "to": "debrief"}
+  ]
+}

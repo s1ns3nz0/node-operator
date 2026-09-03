@@ -31,16 +31,17 @@ jobs:
           docker pull "$SCANNER_IMAGE"
       - name: Collect redacted scanner evidence
         run: >-
-          docker run --rm --volume "$GITHUB_WORKSPACE:/workspace:ro"
+          docker run --rm --entrypoint bash
+          --volume "$GITHUB_WORKSPACE:/workspace:ro"
           --volume "$EVIDENCE_ROOT:/evidence"
-          --env SKIP_TERRAFORM=true
-          "$SCANNER_IMAGE"
-          bash -lc 'git config --global --add safe.directory /workspace && scripts/ci/collect-security-evidence.sh /evidence/raw "${{ github.event.pull_request.head.sha || github.sha }}" /workspace "${{ github.event.pull_request.base.sha || github.sha }}"'
+          "$SCANNER_IMAGE" /workspace/.ci/scanners/run-security-scan.sh /evidence
+          "${{ github.event.pull_request.head.sha || github.sha }}"
+          "${{ github.event.pull_request.base.sha || github.sha }}"
       - name: Upload non-sensitive security evidence
         if: success()
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.6.2
         with:
           name: security-evidence-${{ github.event.pull_request.head.sha || github.sha }}
-          path: ${{ env.EVIDENCE_ROOT }}/raw
+          path: ${{ env.EVIDENCE_ROOT }}
           if-no-files-found: error
           retention-days: 30
