@@ -27,3 +27,8 @@ jobs:
         run: terraform init -backend=false -input=false
       - name: Terraform validate
         run: terraform validate
+      - name: Plan and check private boundary
+        run: |
+          terraform plan -refresh=false -input=false -var-file=fixtures/offline-baseline.tfvars -out="$RUNNER_TEMP/plan"
+          terraform show -json "$RUNNER_TEMP/plan" > "$RUNNER_TEMP/plan.json"
+          "$GITHUB_WORKSPACE/scripts/ci/check-plan-boundary.sh" "$RUNNER_TEMP/plan.json"
