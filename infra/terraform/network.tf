@@ -8,6 +8,71 @@ resource "aws_vpc" "private" {
   })
 }
 
+# The default security group cannot be removed. Explicitly manage it as deny-all
+# so resources must opt into the dedicated security groups declared below.
+resource "aws_default_security_group" "private" {
+  vpc_id = aws_vpc.private.id
+
+  ingress = []
+  egress  = []
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-default-deny"
+  })
+}
+
+resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
+  name              = "/aws/vpc/${local.name_prefix}/flow-logs"
+  retention_in_days = 365
+  kms_key_id        = aws_kms_key.audit.arn
+
+  tags = local.common_tags
+}
+
+data "aws_iam_policy_document" "vpc_flow_logs_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["vpc-flow-logs.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "vpc_flow_logs" {
+  name               = "${local.name_prefix}-vpc-flow-logs"
+  assume_role_policy = data.aws_iam_policy_document.vpc_flow_logs_assume_role.json
+
+  tags = local.common_tags
+}
+
+data "aws_iam_policy_document" "vpc_flow_logs" {
+  statement {
+    sid       = "WriteOnlyVpcFlowLogGroup"
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    resources = ["${aws_cloudwatch_log_group.vpc_flow_logs.arn}:*"]
+  }
+}
+
+resource "aws_iam_role_policy" "vpc_flow_logs" {
+  name   = "${local.name_prefix}-vpc-flow-logs"
+  role   = aws_iam_role.vpc_flow_logs.id
+  policy = data.aws_iam_policy_document.vpc_flow_logs.json
+}
+
+resource "aws_flow_log" "private" {
+  iam_role_arn         = aws_iam_role.vpc_flow_logs.arn
+  log_destination      = aws_cloudwatch_log_group.vpc_flow_logs.arn
+  log_destination_type = "cloud-watch-logs"
+  traffic_type         = "ALL"
+  vpc_id               = aws_vpc.private.id
+
+  depends_on = [aws_iam_role_policy.vpc_flow_logs]
+
+  tags = local.common_tags
+}
+
 resource "aws_subnet" "private" {
   count = length(var.availability_zones)
 

@@ -19,7 +19,7 @@ resource "aws_s3_bucket_ownership_controls" "audit" {
   bucket = aws_s3_bucket.audit.id
 
   rule {
-    object_ownership = "BucketOwnerPreferred"
+    object_ownership = "BucketOwnerEnforced"
   }
 }
 
@@ -36,9 +36,79 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "audit" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      kms_master_key_id = aws_kms_key.audit.arn
+      sse_algorithm     = "aws:kms"
     }
   }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "audit" {
+  bucket = aws_s3_bucket.audit.id
+
+  rule {
+    id     = "retain-audit-records"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+
+    transition {
+      days          = 90
+      storage_class = "STANDARD_IA"
+    }
+
+    transition {
+      days          = 365
+      storage_class = "GLACIER"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 365
+    }
+  }
+}
+
+resource "aws_cloudwatch_log_group" "cloudtrail" {
+  name              = "/aws/cloudtrail/${local.name_prefix}-audit"
+  retention_in_days = 365
+  kms_key_id        = aws_kms_key.audit.arn
+
+  tags = local.common_tags
+}
+
+data "aws_iam_policy_document" "cloudtrail_logs_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "cloudtrail_logs" {
+  name               = "${local.name_prefix}-cloudtrail-logs"
+  assume_role_policy = data.aws_iam_policy_document.cloudtrail_logs_assume_role.json
+
+  tags = local.common_tags
+}
+
+data "aws_iam_policy_document" "cloudtrail_logs" {
+  statement {
+    sid       = "WriteOnlyCloudTrailAuditLogGroup"
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    resources = ["${aws_cloudwatch_log_group.cloudtrail.arn}:*"]
+  }
+}
+
+resource "aws_iam_role_policy" "cloudtrail_logs" {
+  name   = "${local.name_prefix}-cloudtrail-logs"
+  role   = aws_iam_role.cloudtrail_logs.id
+  policy = data.aws_iam_policy_document.cloudtrail_logs.json
 }
 
 data "aws_iam_policy_document" "audit_bucket" {
@@ -133,8 +203,13 @@ resource "aws_cloudtrail" "audit" {
   is_multi_region_trail         = true
   enable_log_file_validation    = true
   kms_key_id                    = aws_kms_key.audit.arn
+  cloud_watch_logs_group_arn    = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
+  cloud_watch_logs_role_arn     = aws_iam_role.cloudtrail_logs.arn
 
-  depends_on = [aws_s3_bucket_policy.audit]
+  depends_on = [
+    aws_s3_bucket_policy.audit,
+    aws_iam_role_policy.cloudtrail_logs,
+  ]
 
   tags = local.common_tags
 }

@@ -56,6 +56,8 @@ resource "aws_s3_bucket" "release_artifacts" {
 }
 
 data "aws_iam_policy_document" "release_artifacts" {
+  count = var.enable_release_signer ? 1 : 0
+
   statement {
     sid    = "DenyInsecureTransport"
     effect = "Deny"
@@ -76,7 +78,7 @@ data "aws_iam_policy_document" "release_artifacts" {
 resource "aws_s3_bucket_policy" "release_artifacts" {
   count  = var.enable_release_signer ? 1 : 0
   bucket = aws_s3_bucket.release_artifacts[0].id
-  policy = data.aws_iam_policy_document.release_artifacts.json
+  policy = data.aws_iam_policy_document.release_artifacts[0].json
 }
 
 resource "aws_s3_bucket_public_access_block" "release_artifacts" {
@@ -136,12 +138,15 @@ resource "aws_iam_role_policy" "github_release_runner" {
 }
 
 resource "aws_iam_role" "release_codebuild_signer" {
+  count              = var.enable_release_signer ? 1 : 0
   name               = "${local.name_prefix}-release-signer"
   assume_role_policy = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Principal = { Service = "codebuild.amazonaws.com" }, Action = "sts:AssumeRole" }] })
   tags               = local.common_tags
 }
 
 data "aws_iam_policy_document" "release_codebuild_signer" {
+  count = var.enable_release_signer ? 1 : 0
+
   statement {
     sid       = "Logs"
     actions   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
@@ -166,14 +171,15 @@ data "aws_iam_policy_document" "release_codebuild_signer" {
 }
 
 resource "aws_iam_role_policy" "release_codebuild_signer" {
-  role   = aws_iam_role.release_codebuild_signer.id
-  policy = data.aws_iam_policy_document.release_codebuild_signer.json
+  count  = var.enable_release_signer ? 1 : 0
+  role   = aws_iam_role.release_codebuild_signer[0].id
+  policy = data.aws_iam_policy_document.release_codebuild_signer[0].json
 }
 
 resource "aws_codebuild_project" "release_signer" {
   count         = var.enable_release_signer ? 1 : 0
   name          = "${local.name_prefix}-release-signer"
-  service_role  = aws_iam_role.release_codebuild_signer.arn
+  service_role  = aws_iam_role.release_codebuild_signer[0].arn
   build_timeout = 30
   artifacts {
     type      = "S3"
