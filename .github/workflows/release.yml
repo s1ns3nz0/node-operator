@@ -39,9 +39,18 @@ jobs:
           web_token="$(jq -r .value "$token_file")"
           creds="$(aws sts assume-role-with-web-identity --role-arn "$AWS_ROLE_ARN" --role-session-name "release-${GITHUB_RUN_ID}" --web-identity-token "$web_token" --duration-seconds 900)"
           export AWS_ACCESS_KEY_ID="$(jq -r .Credentials.AccessKeyId <<<"$creds")" AWS_SECRET_ACCESS_KEY="$(jq -r .Credentials.SecretAccessKey <<<"$creds")" AWS_SESSION_TOKEN="$(jq -r .Credentials.SessionToken <<<"$creds")"
-          zip -q -j "$RUNNER_TEMP/release-input.zip" "$RUNNER_TEMP/release/node-operator-release-bundle.tar" "$RUNNER_TEMP/release/provenance-input.json"
-          aws s3 cp "$RUNNER_TEMP/release-input.zip" "s3://${INPUT_BUCKET}/release-input/${GITHUB_SHA}.zip" --region "$AWS_REGION"
-          aws codebuild start-build --project-name "node-operator-baseline-release-signer" --source-version "${GITHUB_SHA}" --source-location-override "${INPUT_BUCKET}/release-input/${GITHUB_SHA}.zip" --region "$AWS_REGION" > "$RUNNER_TEMP/codebuild.json"
+          source_revision="$(jq -er '.predicate.buildDefinition.resolvedDependencies[] | select(.uri == "git+node-operator") | .digest.gitCommit' "$RUNNER_TEMP/release/provenance-input.json")"
+          test "$source_revision" = "$GITHUB_SHA"
+          cp "$GITHUB_WORKSPACE/deploy/vault/buildspec-release-sign.yml" "$RUNNER_TEMP/release/buildspec-release-sign.yml"
+          input_archive="$RUNNER_TEMP/${GITHUB_SHA}.zip"
+          input_key="release-input/sha256/${GITHUB_SHA}.zip"
+          zip -q -j "$input_archive" \
+            "$RUNNER_TEMP/release/node-operator-release-bundle.tar" \
+            "$RUNNER_TEMP/release/node-operator-release-bundle.sha256" \
+            "$RUNNER_TEMP/release/provenance-input.json" \
+            "$RUNNER_TEMP/release/buildspec-release-sign.yml"
+          aws s3api put-object --bucket "$INPUT_BUCKET" --key "$input_key" --body "$input_archive" --if-none-match '*' --region "$AWS_REGION" >/dev/null
+          aws codebuild start-build --project-name "node-operator-baseline-release-signer" --source-version "$source_revision" --source-location-override "${INPUT_BUCKET}/${input_key}" --region "$AWS_REGION" > "$RUNNER_TEMP/codebuild.json"
           build_id="$(jq -r .build.id "$RUNNER_TEMP/codebuild.json")"
           for _ in $(seq 1 60); do
             status="$(aws codebuild batch-get-builds --ids "$build_id" --region "$AWS_REGION" | jq -r '.builds[0].buildStatus')"
@@ -49,14 +58,17 @@ jobs:
             sleep 10
           done
           [ "$status" = SUCCEEDED ] || { echo 'CodeBuild signer timed out' >&2; exit 1; }
-          output_location="$(aws codebuild batch-get-builds --ids "$build_id" --region "$AWS_REGION" | jq -r '.builds[0].artifacts.location')"
-          aws s3 cp "s3://${output_location#*:}" "$RUNNER_TEMP/signer-output.zip" --region "$AWS_REGION"
-          unzip -oq "$RUNNER_TEMP/signer-output.zip" -d "$RUNNER_TEMP/release/signer-output"
-          cp "$RUNNER_TEMP/release/signer-output/signature.json" "$RUNNER_TEMP/release/signature.json"
-          cp "$RUNNER_TEMP/release/signer-output/verify.json" "$RUNNER_TEMP/release/verify.json"
-          jq -e '.data.signature | type == "string" and length > 0' "$RUNNER_TEMP/release/signature.json" >/dev/null
-          jq -e '.data.valid == true' "$RUNNER_TEMP/release/verify.json" >/dev/null
-          jq -e --arg sha "$GITHUB_SHA" '.predicate.resolvedDependencies[0].digest.gitCommit == $sha' "$RUNNER_TEMP/release/provenance-input.json" >/dev/null
+          output_location="$(aws codebuild batch-get-builds --ids "$build_id" --region "$AWS_REGION" | jq -er '.builds[0].artifacts.location')"
+          case "$output_location" in
+            arn:aws:s3:::*) output_key="${output_location#arn:aws:s3:::}" ;;
+            *) echo "unexpected CodeBuild output location: $output_location" >&2; exit 1 ;;
+          esac
+          aws s3 cp "s3://${output_key}" "$RUNNER_TEMP/release-signer-output.zip" --region "$AWS_REGION"
+          signer_output="$RUNNER_TEMP/release/signer-output"
+          unzip -oq "$RUNNER_TEMP/release-signer-output.zip" -d "$signer_output"
+          test -f "$signer_output/release-verification.json"
+          scripts/ci/verify-release-signature.sh "$signer_output"
+          jq -e --arg sha "$source_revision" '.provenance.source_revision == $sha' "$signer_output/release-verification.json" >/dev/null
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -68,4 +80,5 @@ jobs:
             "$RUNNER_TEMP/release/manifest.json" \
             "$RUNNER_TEMP/release/sbom.cyclonedx.json" \
             "$RUNNER_TEMP/release/provenance-input.json" \
+            "$RUNNER_TEMP/release/signer-output/release-verification.json" \
             --title "$tag" --generate-notes

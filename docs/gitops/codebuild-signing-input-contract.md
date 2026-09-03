@@ -1,9 +1,10 @@
 # CodeBuild signer input and output contract
 
-This is the proposed activation contract for the private CodeBuild signer. It
-documents the boundary that a separately approved Terraform and release
-workflow change must implement; it does not claim that the current project or
-workflow is wired this way.
+This is the implemented code contract for the private CodeBuild signer. The
+Terraform project remains disabled by default: `enable_release_signer=false`
+and `release_signer_image=""` create no signer resources. It does not claim
+that a signer image has been published, that Terraform has been applied, or
+that a private runner, Vault route, and dynamic identity are live.
 
 ## Immutable signer input
 
@@ -38,10 +39,17 @@ override. The source-version is the same `<source-revision>`. A mismatch among
 the archive key, source-location override, source version, bundle checksum,
 or provenance source revision fails the release.
 
+The upload uses S3's `If-None-Match: *` precondition, so a SHA-named archive
+cannot silently overwrite an existing input object. The project source has a
+deliberately unusable placeholder location and can run only with the exact
+source-location override above; its archive-local buildspec is
+`buildspec-release-sign.yml`.
+
 ## Verification output and consumer gate
 
-CodeBuild reads only the declared source archive and produces a single output
-package. It contains the four non-secret files needed by the existing release
+CodeBuild reads only the declared source archive and produces a single ZIP
+output package named `release-signer-output.zip`, under a build-ID namespace.
+It contains the four non-secret files needed by the existing release
 verification gate:
 
 ```
@@ -67,16 +75,24 @@ reference.
 
 ## Activation preconditions
 
-This contract is intentionally not a current-runtime conformance assertion.
-The future activation must be an approved atomic change that updates all of
-the following together after plan review:
+The repository code already implements the archive, project, and consumer
+portions of this contract.
+Runtime activation is an approved atomic change after plan review. It must set
+`enable_release_signer=true` together with a
+lowercase `ghcr.io/...@sha256:<digest>` `release_signer_image` and one or more
+explicit private `release_signer_subnet_ids`; Terraform rejects an enabled
+project without those inputs. Terraform `aws_codebuild_project` and
+`release.yml` input archive packaging already implement the reviewed source,
+output, and consumer fields. Runtime activation must also satisfy all of the
+following:
 
-1. Terraform `aws_codebuild_project` source type, source-location override,
-   archive-local buildspec selection, artifacts, and digest-pinned signer
-   image.
-2. `release.yml` input archive packaging, immutable S3 upload, CodeBuild
-   invocation, output download, and `verify-release-signature.sh` consumer
-   gate.
+1. The reviewed digest-pinned signer image is published and available to the
+   private CodeBuild runtime.
+2. The private runner, Vault route, and dynamic identity preconditions are
+   live and independently verified.
+3. Terraform is separately reviewed and applied with the required enablement
+   inputs; the workflow's existing OIDC-to-AWS role is reviewed against that
+   deployed project.
 
-It must not be activated until the private runner, Vault route, and dynamic
-identity preconditions are live and independently verified.
+No static credentials, raw Transit response artifacts, or public Vault
+endpoint are introduced by this code contract.

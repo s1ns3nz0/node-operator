@@ -15,9 +15,20 @@ variable "enable_release_signer" {
 }
 
 variable "release_signer_subnet_ids" {
-  description = "Private subnet IDs for the release signer CodeBuild project."
+  description = "Explicit private subnet IDs for the release signer CodeBuild project. Required when the signer is enabled."
   type        = list(string)
   default     = []
+}
+
+variable "release_signer_image" {
+  description = "Digest-pinned GHCR signer image. It is required only when enable_release_signer is true."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.release_signer_image == "" || can(regex("^ghcr\\.io/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", var.release_signer_image))
+    error_message = "release_signer_image must be empty while disabled or a lowercase GHCR image pinned by a sha256 digest."
+  }
 }
 
 resource "aws_security_group" "release_signer" {
@@ -803,7 +814,7 @@ data "aws_iam_policy_document" "release_codebuild_signer" {
     content {
       sid       = "ReleaseBucketPrefixes"
       actions   = ["s3:GetObject", "s3:PutObject"]
-      resources = ["${aws_s3_bucket.release_artifacts[0].arn}/release-input/*", "${aws_s3_bucket.release_artifacts[0].arn}/release-output/*"]
+      resources = ["${aws_s3_bucket.release_artifacts[0].arn}/release-input/*", "${aws_s3_bucket.release_artifacts[0].arn}/release-signer-output/*"]
     }
   }
   statement {
@@ -938,24 +949,39 @@ resource "aws_codebuild_project" "release_signer" {
   service_role  = aws_iam_role.release_codebuild_signer[0].arn
   build_timeout = 30
   artifacts {
-    type      = "S3"
-    location  = aws_s3_bucket.release_artifacts[0].id
-    packaging = "NONE"
+    type                = "S3"
+    location            = aws_s3_bucket.release_artifacts[0].id
+    path                = "release-signer-output"
+    name                = "release-signer-output.zip"
+    namespace_type      = "BUILD_ID"
+    packaging           = "ZIP"
+    encryption_disabled = false
   }
   environment {
     compute_type    = "BUILD_GENERAL1_SMALL"
-    image           = "aws/codebuild/standard:7.0"
+    image           = var.release_signer_image
     type            = "LINUX_CONTAINER"
     privileged_mode = false
   }
   vpc_config {
     vpc_id             = aws_vpc.private.id
-    subnets            = aws_subnet.private[*].id
+    subnets            = var.release_signer_subnet_ids
     security_group_ids = [aws_security_group.release_signer[0].id]
   }
   source {
-    type     = "S3"
-    location = "${aws_s3_bucket.release_artifacts[0].id}/release-input/bootstrap.zip"
+    type      = "S3"
+    location  = "${aws_s3_bucket.release_artifacts[0].id}/release-input/sha256/source-location-must-be-overridden.zip"
+    buildspec = "buildspec-release-sign.yml"
+  }
+  lifecycle {
+    precondition {
+      condition = (
+        can(regex("^ghcr\\.io/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", var.release_signer_image)) &&
+        length(var.release_signer_subnet_ids) > 0 &&
+        alltrue([for subnet_id in var.release_signer_subnet_ids : can(regex("^subnet-[a-z0-9]+$", subnet_id))])
+      )
+      error_message = "Enabled release signer requires a digest-pinned GHCR image and one or more explicit private subnet IDs."
+    }
   }
   tags = local.common_tags
 }
