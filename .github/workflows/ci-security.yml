@@ -31,7 +31,7 @@ jobs:
           --volume "$EVIDENCE_ROOT:/evidence"
           --env SKIP_TERRAFORM=true
           node-operator-scanners:ci
-          bash -lc 'scripts/ci/collect-security-evidence.sh /evidence/raw "${{ github.event.pull_request.head.sha || github.sha }}" /workspace "${{ github.event.pull_request.base.sha || github.sha }}"'
+          bash -lc 'git config --global --add safe.directory /workspace && scripts/ci/collect-security-evidence.sh /evidence/raw "${{ github.event.pull_request.head.sha || github.sha }}" /workspace "${{ github.event.pull_request.base.sha || github.sha }}"'
       - name: Upload non-sensitive security evidence
         if: always()
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.6.2
