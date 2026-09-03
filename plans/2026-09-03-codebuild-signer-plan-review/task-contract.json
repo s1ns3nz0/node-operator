@@ -1,0 +1,15 @@
+{
+  "id": "2026-09-03-codebuild-signer-plan-review",
+  "title": "Prepare and review the enabled CodeBuild signer Terraform plan",
+  "classification": "non-trivial",
+  "classification_reason": ["Terraform security boundary", "pre-deployment review", "multiple validation layers"],
+  "expected_outcome": "A non-secret, reproducible enabled-signer plan input and offline plan evidence are reviewed, with live-state plan requirements and no-apply boundary made explicit.",
+  "dependencies": ["2026-09-03-vault-signer-ghcr-publish"],
+  "constraints": ["Do not run Terraform apply, access AWS, Vault, EKS, or secrets, or enable a deployed signer.", "Use synthetic non-secret values only for offline validation.", "Do not claim the offline plan is a live-state deployment plan."],
+  "authorization": {"repository_mutation": true, "external_actions": [], "prohibited_actions": ["Terraform apply", "AWS access", "Vault access", "EKS access", "deploy", "publish", "merge", "secret changes", "production access"]},
+  "primary_owner": {"tier": "sol", "responsibility": "Terraform security boundary and plan-review integration"},
+  "delegations": [{"id":"recon","tier":"luna","owner":"/root/terraform_plan_recon","files":[],"worktree":"read-only","branch":"none","acceptance_checks":["identify enabled signer inputs and offline-plan limits"],"escalation_trigger":"live AWS state, credentials, or unknown subnet IDs are required"}],
+  "model_fallbacks": [],
+  "validation": ["enabled offline Terraform plan", "plan boundary check", "targeted signer activation contract", "harness check", "independent clean-room debrief"],
+  "status": "in_progress"
+}
