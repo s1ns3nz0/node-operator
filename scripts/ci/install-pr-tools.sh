@@ -24,6 +24,7 @@ go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.4.0
 cargo install --root "$tool_root" --version 1.12.1 --locked zizmor
 python3 -m pip install --ignore-installed --disable-pip-version-check --no-warn-script-location --prefix "$tool_root" 'semgrep==1.159.0' 'checkov==3.2.522'
 export PATH="$tool_root/bin:$PATH"
+[ -z "${GITHUB_PATH:-}" ] || printf '%s\n' "$tool_root/bin" >> "$GITHUB_PATH"
 
 for command in gitleaks osv-scanner zizmor semgrep checkov terraform; do
   require_command "$command"
