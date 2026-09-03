@@ -1,0 +1,16 @@
+{
+  "task_id": "2026-09-03-local-kubernetes-validation",
+  "title": "Integrate local Kind and Cilium workload-boundary validation",
+  "owner": "sol",
+  "authorization": {
+    "repository_mutation": true,
+    "local_cluster_mutation": true,
+    "remote_push": false,
+    "cloud_mutation": false,
+    "secrets": false,
+    "deployment": false
+  },
+  "scope": ["local-only Kustomize overlay", "ephemeral Kind lifecycle", "Cilium NetworkPolicy dataplane probes", "non-sensitive validation evidence"],
+  "non_goals": ["AWS or EKS access", "Terraform apply", "Hoodi synchronization", "validator keys", "persistent secrets", "remote deployment"],
+  "acceptance": ["StatefulSets remain scaled to zero", "server-side admission and RBAC are checked", "Cilium dataplane probes demonstrate expected deny and allow paths", "validation probes are deleted; pre-existing named clusters are preserved unless the user requests deletion"]
+}

@@ -10,7 +10,7 @@ if ! kubectl config get-contexts -o name | grep -Fxq "$context"; then
 fi
 
 cleanup() {
-  kubectl --context "$context" -n node-operator delete pod/local-policy-probe --ignore-not-found --wait=false >/dev/null 2>&1 || true
+  kubectl --context "$context" -n node-operator delete pod/local-policy-probe --ignore-not-found --wait=true --timeout=60s >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
