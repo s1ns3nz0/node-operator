@@ -53,6 +53,7 @@ data "aws_iam_policy_document" "kms_key_administrator" {
       "kms:GetKeyPolicy",
       "kms:GetKeyRotationStatus",
       "kms:ListAliases",
+      "kms:ListResourceTags",
       "kms:PutKeyPolicy",
       "kms:ScheduleKeyDeletion",
       "kms:TagResource",
