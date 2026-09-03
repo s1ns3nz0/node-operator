@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - '.ci/toolchains/**'
+      - 'docs/gitops/argocd-private-values.example.yaml'
       - '.github/workflows/toolchain-image-release.yml'
 
 permissions:
@@ -19,12 +20,19 @@ jobs:
         include:
           - image: terraform-validation
             dockerfile: .ci/toolchains/terraform-validation.Dockerfile
+            input_file: ''
           - image: release-build
             dockerfile: .ci/toolchains/release-build.Dockerfile
+            input_file: ''
           - image: vault-release-signer
             dockerfile: .ci/toolchains/vault-release-signer.Dockerfile
+            input_file: ''
           - image: gitops-oci-mirror
             dockerfile: .ci/toolchains/gitops-oci-mirror.Dockerfile
+            input_file: ''
+          - image: argocd-bootstrap
+            dockerfile: .ci/toolchains/argocd-bootstrap.Dockerfile
+            input_file: docs/gitops/argocd-private-values.example.yaml
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -35,4 +43,9 @@ jobs:
           REGISTRY_USERNAME: ${{ github.actor }}
         run: echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
       - name: Build and publish when inputs changed
-        run: .ci/toolchains/release-toolchain-image.sh "${{ matrix.image }}" "${{ matrix.dockerfile }}"
+        run: |
+          if [ -n "${{ matrix.input_file }}" ]; then
+            .ci/toolchains/release-toolchain-image.sh "${{ matrix.image }}" "${{ matrix.dockerfile }}" "${{ matrix.input_file }}"
+          else
+            .ci/toolchains/release-toolchain-image.sh "${{ matrix.image }}" "${{ matrix.dockerfile }}"
+          fi
