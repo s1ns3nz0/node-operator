@@ -53,6 +53,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/terraform-evidence"
           docker run --rm --network none --user "$(id -u):$(id -g)" \
             --env COLLECTOR_MODE=terraform \
+            --env TERRAFORM_PLUGIN_MIRROR=/opt/terraform-plugin-mirror \
             --volume "$GITHUB_WORKSPACE:/trusted:ro" \
             --volume "$GITHUB_WORKSPACE/.pr-source:/source:ro" \
             --volume "$RUNNER_TEMP/terraform-evidence:/evidence" \
