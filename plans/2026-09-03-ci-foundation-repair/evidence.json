@@ -1,6 +1,6 @@
 {
   "task_id": "2026-09-03-ci-foundation-repair",
-  "status": "in_progress",
+  "status": "completed",
   "checks": [
     {
       "name": "failure diagnosis",
@@ -36,6 +36,11 @@
       "name": "remote Policy Foundation",
       "result": "passed",
       "observed": "GitHub Actions run 33745697518 completed successfully for commit ac1317e2ddec039644e4fd6f1b5095ac091ea69b."
+    },
+    {
+      "name": "independent clean-room debrief",
+      "result": "passed",
+      "observed": "reports/2026-09-03-ci-foundation-repair-debrief.md committed as ecc8e10fc06461851e775c5065ab80ac4f5488eb; report sha256:a32f04159da52379f6e4cb7ea022138baa5056b8bb1b14cacd8f05b563bc29d1; git diff --check passed."
     }
   ],
   "notes": [
