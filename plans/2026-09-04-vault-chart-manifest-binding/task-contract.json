@@ -1,0 +1,14 @@
+{
+  "id": "2026-09-04-vault-chart-manifest-binding",
+  "title": "Bind Vault Helm deployment to an approved private ECR OCI manifest digest",
+  "classification": "non-trivial",
+  "classification_reason": ["private supply-chain integrity", "ECR IAM and CodeBuild execution contract", "multiple validation layers"],
+  "expected_outcome": "The approved Vault chart record includes its ECR OCI manifest digest, mirror re-runs verify it, and the bootstrap executor fails closed if the version tag resolves to any other manifest.",
+  "constraints": ["Only the reviewed private ECR chart manifest may be read.", "Do not apply Terraform, invoke CodeBuild, access EKS/Vault/Kubernetes, initialize Vault, read secrets, deploy, merge, or change workflow permissions.", "Keep evidence non-sensitive."],
+  "authorization": {"repository_mutation": true, "external_actions": ["read the private ECR chart manifest digest for the approved 0.31.0 tag"], "prohibited_actions": ["Terraform apply", "CodeBuild start", "EKS/Vault/Kubernetes access", "secret change", "deployment", "merge"]},
+  "primary_owner": {"tier":"sol","owner":"/root","responsibility":"integrity boundary and integration"},
+  "delegations": [{"id":"recon","tier":"luna","owner":"/root/vault_chart_digest_recon","files":[".ci/gitops/approved-oci-artifacts.json",".github/workflows/vault-chart-mirror.yml","infra/terraform/vault-bootstrap.tf","scripts/ci/test-vault-chart-mirror-contract.sh"],"worktree":"read-only","branch":"none","acceptance_checks":["minimal schema and ECR path map","fail-closed test recommendations"],"escalation_trigger":"a design needs mutable chart selection, broad ECR access, or external deployment"}],
+  "model_fallbacks": [],
+  "validation": ["targeted chart and Terraform contract tests", "offline Terraform prepare/enabled/revoke plans", "harness structural check", "independent clean-room debrief"],
+  "status": "in_progress"
+}

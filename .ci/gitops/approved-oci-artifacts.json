@@ -6,6 +6,7 @@
       "version": "0.31.0",
       "source": "https://helm.releases.hashicorp.com/vault-0.31.0.tgz",
       "sha256": "fe80fae6a8838c75da9fbde1398f2c10bb4b5c31c425e559507ba99373297de2",
+      "ecrManifestDigest": "sha256:85cfa6b40396a198a104fbf06c7cccaf75428db7201394f9061c272441bcd0e4",
       "destination": "vault",
       "ecrTag": "0.31.0",
       "purpose": "HashiCorp Vault Helm chart 0.31.0"

@@ -14,6 +14,7 @@ jq -e '
     .version == "0.31.0" and
     .source == "https://helm.releases.hashicorp.com/vault-0.31.0.tgz" and
     (.sha256 | test("^[a-f0-9]{64}$")) and
+    (.ecrManifestDigest | test("^sha256:[a-f0-9]{64}$")) and
     .destination == "vault" and .ecrTag == "0.31.0")
 ' "$allowlist" >/dev/null
 
@@ -21,9 +22,12 @@ for required in \
   '.helm_archives[] | select(.name == "vault")' \
   'chart_source' \
   'chart_sha256' \
+  'chart_manifest_digest' \
   'chart_destination' \
   'test "$chart_destination" = vault' \
   'sha256sum --check --status' \
+  'aws ecr describe-images' \
+  'test "$ecr_manifest_digest" = "$chart_manifest_digest"' \
   'helm push "$RUNNER_TEMP/vault-$chart_version.tgz"'; do
   grep -Fq "$required" "$workflow"
 done
