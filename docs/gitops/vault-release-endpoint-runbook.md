@@ -14,3 +14,7 @@ Before enabling a signer build, verify DNS resolves only in the VPC, the NLB
 is internal, Vault's certificate validates the release hostname, and the
 NetworkPolicy has no public CIDR. Do not print certificate, Vault-token, or
 private-key material.
+
+The release signer CodeBuild security group permits TCP 8200 only to the
+private VPC CIDR for this endpoint. It does not permit internet egress or a
+public Vault listener.
