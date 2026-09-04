@@ -23,17 +23,17 @@ for required in \
   'chart_source' \
   'chart_sha256' \
   'chart_manifest_digest' \
-  'test "$chart_destination" = cert-manager' \
+  "test \"\$chart_destination\" = cert-manager" \
   'cert-manager-keyring-2021-09-20-1020CF3C033D4F35BAE1C19E1226061C665DF13E.gpg' \
   'helm verify --keyring' \
   'sha256sum --check --status' \
   'aws ecr describe-images' \
-  'test "$ecr_manifest_digest" = "$chart_manifest_digest"' \
-  'helm push "$RUNNER_TEMP/cert-manager-$chart_version.tgz"'; do
+  "test \"\$ecr_manifest_digest\" = \"\$chart_manifest_digest\"" \
+  "helm push \"\$RUNNER_TEMP/cert-manager-\$chart_version.tgz\""; do
   grep -Fq "$required" "$workflow"
 done
 
-grep -Fq 'cert_manager_chart = "${local.name_prefix}-gitops-cert-manager/cert-manager"' "$terraform_file"
+grep -Fq "cert_manager_chart = \"\${local.name_prefix}-gitops-cert-manager/cert-manager\"" "$terraform_file"
 
 if grep -Fq 'helm pull cert-manager --repo' "$workflow"; then
   printf 'cert-manager chart mirror must not bypass the approved archive record.\n' >&2
