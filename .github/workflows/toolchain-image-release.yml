@@ -1,55 +1,83 @@
 name: Toolchain Image Release
-
 on:
   workflow_dispatch:
   push:
-    paths:
-      - '.ci/toolchains/**'
-      - 'docs/gitops/argocd-private-values.example.yaml'
-      - 'docs/gitops/vault-values.example.yaml'
-      - '.github/workflows/toolchain-image-release.yml'
-
+    paths: ['.ci/toolchains/**', 'docs/gitops/argocd-private-values.example.yaml', 'docs/gitops/vault-values.example.yaml', '.github/workflows/toolchain-image-release.yml']
 permissions:
   contents: read
-  packages: write
-
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
     strategy:
       matrix:
         include:
-          - image: terraform-validation
-            dockerfile: .ci/toolchains/terraform-validation.Dockerfile
-            input_file: ''
-          - image: release-build
-            dockerfile: .ci/toolchains/release-build.Dockerfile
-            input_file: ''
-          - image: vault-release-signer
-            dockerfile: .ci/toolchains/vault-release-signer.Dockerfile
-            input_file: ''
-          - image: gitops-oci-mirror
-            dockerfile: .ci/toolchains/gitops-oci-mirror.Dockerfile
-            input_file: ''
-          - image: argocd-bootstrap
-            dockerfile: .ci/toolchains/argocd-bootstrap.Dockerfile
-            input_file: docs/gitops/argocd-private-values.example.yaml
-          - image: vault-bootstrap
-            dockerfile: .ci/toolchains/vault-bootstrap.Dockerfile
-            input_file: docs/gitops/vault-values.example.yaml
+          - {image: terraform-validation, dockerfile: .ci/toolchains/terraform-validation.Dockerfile, input_file: ''}
+          - {image: release-build, dockerfile: .ci/toolchains/release-build.Dockerfile, input_file: ''}
+          - {image: vault-release-signer, dockerfile: .ci/toolchains/vault-release-signer.Dockerfile, input_file: ''}
+          - {image: gitops-oci-mirror, dockerfile: .ci/toolchains/gitops-oci-mirror.Dockerfile, input_file: ''}
+          - {image: argocd-bootstrap, dockerfile: .ci/toolchains/argocd-bootstrap.Dockerfile, input_file: docs/gitops/argocd-private-values.example.yaml}
+          - {image: vault-bootstrap, dockerfile: .ci/toolchains/vault-bootstrap.Dockerfile, input_file: docs/gitops/vault-values.example.yaml}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Login to GHCR
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - id: build
         env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/node-operator/${{ matrix.image }}
+          INPUT_FILE: ${{ matrix.input_file }}
+        run: |
+          set -euo pipefail
+          input_sha="$({ sha256sum "${{ matrix.dockerfile }}" ${INPUT_FILE:+"$INPUT_FILE"}; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
+          docker build --build-arg "TOOLCHAIN_INPUT_SHA=$input_sha" --file "${{ matrix.dockerfile }}" --tag "$IMAGE:build-${GITHUB_SHA}" .
+          docker save --output toolchain-image.tar "$IMAGE:build-${GITHUB_SHA}"
+          printf '%s\n' "$input_sha" > toolchain-input.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: toolchain-${{ matrix.image }}-${{ github.sha }}
+          path: |
+            toolchain-image.tar
+            toolchain-input.sha256
+          if-no-files-found: error
+          retention-days: 1
+  publish:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - {image: terraform-validation, dockerfile: .ci/toolchains/terraform-validation.Dockerfile, input_file: ''}
+          - {image: release-build, dockerfile: .ci/toolchains/release-build.Dockerfile, input_file: ''}
+          - {image: vault-release-signer, dockerfile: .ci/toolchains/vault-release-signer.Dockerfile, input_file: ''}
+          - {image: gitops-oci-mirror, dockerfile: .ci/toolchains/gitops-oci-mirror.Dockerfile, input_file: ''}
+          - {image: argocd-bootstrap, dockerfile: .ci/toolchains/argocd-bootstrap.Dockerfile, input_file: docs/gitops/argocd-private-values.example.yaml}
+          - {image: vault-bootstrap, dockerfile: .ci/toolchains/vault-bootstrap.Dockerfile, input_file: docs/gitops/vault-values.example.yaml}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - uses: actions/download-artifact@v4
+        with:
+          name: toolchain-${{ matrix.image }}-${{ github.sha }}
+          path: /tmp/toolchain-image
+      - env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/node-operator/${{ matrix.image }}
+          INPUT_FILE: ${{ matrix.input_file }}
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
-        run: echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
-      - name: Build and publish when inputs changed
         run: |
-          if [ -n "${{ matrix.input_file }}" ]; then
-            .ci/toolchains/release-toolchain-image.sh "${{ matrix.image }}" "${{ matrix.dockerfile }}" "${{ matrix.input_file }}"
-          else
-            .ci/toolchains/release-toolchain-image.sh "${{ matrix.image }}" "${{ matrix.dockerfile }}"
-          fi
+          set -euo pipefail
+          expected="$({ sha256sum "${{ matrix.dockerfile }}" ${INPUT_FILE:+"$INPUT_FILE"}; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
+          test "$expected" = "$(cat /tmp/toolchain-image/toolchain-input.sha256)"
+          docker load --input /tmp/toolchain-image/toolchain-image.tar
+          build_image="$IMAGE:build-${GITHUB_SHA}"
+          test "$expected" = "$(docker image inspect --format '{{ index .Config.Labels "io.node-operator.toolchain-input-sha" }}' "$build_image")"
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
+          docker tag "$build_image" "$IMAGE:${GITHUB_SHA}"
+          docker tag "$build_image" "$IMAGE:main"
+          docker push "$IMAGE:${GITHUB_SHA}"
+          docker push "$IMAGE:main"

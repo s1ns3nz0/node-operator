@@ -29,6 +29,8 @@ jobs:
         run: scripts/ci/test-scanner-image-release.sh
       - name: Test toolchain image release deduplication
         run: scripts/ci/test-toolchain-image-release.sh
+      - name: Test image publisher isolation
+        run: scripts/ci/test-image-publisher-isolation.sh
       - name: Test evidence normalizer
         run: scripts/ci/test-normalizer.sh
       - name: Test PR gate scripts
