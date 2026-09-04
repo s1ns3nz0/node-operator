@@ -24,6 +24,48 @@
   ],
   "artifacts": [
     {
+      "source": "ghcr.io/kyverno/charts/kyverno@sha256:61d8cd025a27bd2962e1a6daf40fc98218a97ca2164f1184d14f41d40db84efa",
+      "destination": "charts",
+      "ecrTag": "3.8.1",
+      "purpose": "Kyverno Helm chart 3.8.1"
+    },
+    {
+      "source": "ghcr.io/kyverno/kyvernopre@sha256:e4f0f36f8a8c18427394894274278a94dbef5afefed915e38cf74f5a04cf9d64",
+      "destination": "nodes",
+      "ecrTag": "e4f0f36f8a8c18427394894274278a94dbef5afefed915e38cf74f5a04cf9d64",
+      "purpose": "Kyverno preflight controller image v1.18.1"
+    },
+    {
+      "source": "ghcr.io/kyverno/kyverno@sha256:90ca6e44900da3471732b6954039505fb7348862496fea3f51f7859bdf93e508",
+      "destination": "nodes",
+      "ecrTag": "90ca6e44900da3471732b6954039505fb7348862496fea3f51f7859bdf93e508",
+      "purpose": "Kyverno admission controller image v1.18.1"
+    },
+    {
+      "source": "ghcr.io/kyverno/background-controller@sha256:071724e5ed7901633e068aa928dc4e00ae486a500f6bfb38cdb48491d6e83bca",
+      "destination": "nodes",
+      "ecrTag": "071724e5ed7901633e068aa928dc4e00ae486a500f6bfb38cdb48491d6e83bca",
+      "purpose": "Kyverno background controller image v1.18.1"
+    },
+    {
+      "source": "ghcr.io/kyverno/cleanup-controller@sha256:323bb87053050889e5e84b3281fd0a8c723aed6a11ad3a069dd467597d030038",
+      "destination": "nodes",
+      "ecrTag": "323bb87053050889e5e84b3281fd0a8c723aed6a11ad3a069dd467597d030038",
+      "purpose": "Kyverno cleanup controller image v1.18.1"
+    },
+    {
+      "source": "ghcr.io/kyverno/reports-controller@sha256:a854a474fe5c8e71ddc5371d575faecf62f2e582482bfd90e221660a9818c9e0",
+      "destination": "nodes",
+      "ecrTag": "a854a474fe5c8e71ddc5371d575faecf62f2e582482bfd90e221660a9818c9e0",
+      "purpose": "Kyverno reports controller image v1.18.1"
+    },
+    {
+      "source": "ghcr.io/kyverno/readiness-checker@sha256:65a64df8e8cbbee7f1b679843d688c5e4bca50898a4ba59a5b12b8e79797f1bc",
+      "destination": "nodes",
+      "ecrTag": "65a64df8e8cbbee7f1b679843d688c5e4bca50898a4ba59a5b12b8e79797f1bc",
+      "purpose": "Kyverno readiness checker image v1.18.1"
+    },
+    {
       "source": "nethermind/nethermind@sha256:ec5f6c8158dbf82d4ddbd5500f895c930f52aa3b4c998148d9e1b452793d828e",
       "destination": "nodes",
       "ecrTag": "ec5f6c8158dbf82d4ddbd5500f895c930f52aa3b4c998148d9e1b452793d828e",
