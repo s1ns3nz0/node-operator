@@ -1,6 +1,6 @@
 {
   "task_id": "2026-09-04-vault-helm-deploy",
-  "status": "blocked_after_codebuild_failure_and_revoke",
+  "status": "blocked_unclassified_prehelm_codebuild_failure_and_revoke",
   "checks": [
     {"name":"private EKS prerequisite route","status":"blocked","result":"The target cluster is active and private-endpoint-only. This workstation has no target-cluster kubecontext, so it cannot independently verify the externally managed vault namespace or vault-tls Secret through the required private path."},
     {"name":"initial live deploy saved-plan gate","status":"passed","result":"The first refresh-backed saved plan contained exactly one create, aws_eks_access_policy_association.vault_bootstrap_cluster_admin[0], with zero changes and zero deletes."},
@@ -9,14 +9,15 @@
     {"name":"intermediate association recovery","status":"passed","result":"A subsequent apply created the temporary association but failed while reading it because ListAssociatedAccessPolicies was absent. No CodeBuild build was started, and the exact association was immediately disassociated; post-revocation count was zero."},
     {"name":"time-bounded administrator remediation","status":"passed","result":"The user authorized a temporary Action=* Resource=* policy on the Terraform role with a DateLessThan aws:CurrentTime condition expiring 2026-09-04T13:00:00Z (22:00 KST). No permanent managed administrator policy was attached."},
     {"name":"final live deploy saved-plan gate","status":"passed","result":"The refreshed saved plan again contained exactly one create, aws_eks_access_policy_association.vault_bootstrap_cluster_admin[0], with zero changes and zero deletes. Plan JSON SHA-256: c34329d210c597d2189eee869c9b544fe0325cae49d49ec044a4a124e3de9b64."},
-    {"name":"one-purpose CodeBuild execution","status":"failed","result":"The temporary association applied and the dedicated Vault bootstrap CodeBuild project was started exactly once. The build reached FAILED status after approximately 35 seconds. Build logs and Secret data were deliberately not read, so the failure cause is unclassified."},
+    {"name":"one-purpose CodeBuild execution","status":"failed","result":"The temporary association applied and the dedicated Vault bootstrap CodeBuild project was started exactly once. The build reached FAILED status after approximately 35 seconds."},
+    {"name":"non-sensitive failure classification","status":"passed_with_limit","result":"CloudWatch build output was processed in memory only against an allowlist of failure patterns; no raw log line or Secret data was retained or displayed. The result is unclassified_pre_helm_failure: no namespace/Secret-not-found, connectivity, authorization, or Helm-command pattern was observed."},
     {"name":"immediate privilege revocation","status":"passed","result":"A fresh saved revoke plan contained exactly one delete of aws_eks_access_policy_association.vault_bootstrap_cluster_admin[0], with zero creates and changes. It applied successfully; readback confirms zero cluster-admin associations for the Vault bootstrap identity."}
   ],
   "notes": [
     "No secret material is admissible evidence.",
     "The current local Kubernetes context targets a separate local cluster; its namespace result is not evidence for the target EKS cluster.",
     "No Vault initialization, unseal, secret read, secret change, public-network change, merge, or publication occurred.",
-    "The dedicated private CodeBuild project checks the namespace and Secret name without reading data before its Helm deployment command. A failed build does not itself prove which command failed or whether Helm was reached; no successful Vault deployment evidence was observed.",
+    "The dedicated private CodeBuild project checks the namespace and Secret name without reading data before its Helm deployment command. The non-sensitive classifier found no Helm-command pattern, but it does not prove every emitted command line; no successful Vault deployment evidence was observed.",
     "The temporary EKS cluster-admin association is absent. The separately authorized time-bounded Terraform administrator policy remains effective only until 22:00 KST on 2026-09-04 unless explicitly removed earlier."
   ]
 }
