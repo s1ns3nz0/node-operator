@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   smoke:
@@ -15,8 +16,19 @@ jobs:
         with:
           persist-credentials: false
       - name: Verify ephemeral runner boundary
+        env:
+          RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:68a353d39970bb296e957f33a95fd7368ee5a42584e5b04e92c0b5b300bc5314
         run: |
           set -eu
           test -n "$CODEBUILD_BUILD_ID"
           test -n "$GITHUB_RUN_ID"
           docker version --format '{{.Server.Version}}' >/dev/null
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker pull "$RELEASE_BUILD_IMAGE" >/dev/null
+      - name: Verify private AWS service paths
+        run: |
+          set -eu
+          aws sts get-caller-identity --query Account --output text >/dev/null
+          aws eks describe-cluster --name node-operator --query 'cluster.status' --output text | grep -qx ACTIVE
+          aws ecr get-authorization-token --query 'authorizationData[0].proxyEndpoint' --output text >/dev/null
+          aws logs describe-log-groups --log-group-name-prefix /aws/codebuild/ --max-items 1 >/dev/null
