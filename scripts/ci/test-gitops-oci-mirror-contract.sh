@@ -53,6 +53,7 @@ for required in \
   '.ci/gitops/approved-oci-artifacts.json' \
   'ECR_TAG=$ecr_tag' \
   'aws sts assume-role-with-web-identity' \
+  '::add-mask::' \
   'GITOPS_OCI_MIRROR_TOOL_IMAGE' \
   'copy --all "docker://$SOURCE" "docker://$destination_ref"' \
   'aws ecr describe-images' \
