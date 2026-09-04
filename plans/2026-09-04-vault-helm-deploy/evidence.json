@@ -1,6 +1,6 @@
 {
   "task_id": "2026-09-04-vault-helm-deploy",
-  "status": "blocked_external_vault_namespace_or_tls_precondition",
+  "status": "blocked_external_vault_namespace_absent",
   "checks": [
     {"name":"private EKS prerequisite route","status":"blocked","result":"The target cluster is active and private-endpoint-only. This workstation has no target-cluster kubecontext, so it cannot independently verify the externally managed vault namespace or vault-tls Secret through the required private path."},
     {"name":"initial live deploy saved-plan gate","status":"passed","result":"The first refresh-backed saved plan contained exactly one create, aws_eks_access_policy_association.vault_bootstrap_cluster_admin[0], with zero changes and zero deletes."},
@@ -12,12 +12,13 @@
     {"name":"one-purpose CodeBuild execution","status":"failed","result":"The temporary association applied and the dedicated Vault bootstrap CodeBuild project was started exactly once. The build reached FAILED status after approximately 35 seconds."},
     {"name":"non-sensitive failure classification","status":"passed_with_limit","result":"CloudWatch build output and CodeBuild phase context were processed in memory only; no raw log line or Secret data was retained or displayed. The private EKS kubeconfig step was observed, and the last observed step was the vault-tls Secret existence precheck, which ended with a command-execution error. Helm was not observed."},
     {"name":"immediate privilege revocation","status":"passed","result":"A fresh saved revoke plan contained exactly one delete of aws_eks_access_policy_association.vault_bootstrap_cluster_admin[0], with zero creates and changes. It applied successfully; readback confirms zero cluster-admin associations for the Vault bootstrap identity."}
+    ,{"name":"verification-only CodeBuild run","status":"failed_with_precise_non_sensitive_classification","result":"A fresh 1-create-only temporary-association plan was applied, then the dedicated CodeBuild project was started once with a buildspec override containing only private EKS kubeconfig setup and namespace/Secret-name checks; it contained no Helm, ECR, or Vault command. The kubeconfig step was observed, and the namespace vault precheck was the last observed step before command-execution failure. The vault-tls Secret check was not reached. The fresh one-delete-only revoke plan applied and post-revoke cluster-admin association count is zero."}
   ],
   "notes": [
     "No secret material is admissible evidence.",
     "The current local Kubernetes context targets a separate local cluster; its namespace result is not evidence for the target EKS cluster.",
     "No Vault initialization, unseal, secret read, secret change, public-network change, merge, or publication occurred.",
-    "The dedicated private CodeBuild project checks the namespace and Secret name without reading data before its Helm deployment command. The failed precheck establishes that the externally owned vault namespace and vault-tls Secret pair must be made available to the runner; it does not distinguish a missing namespace from a missing Secret and it never reads Secret data.",
+    "The verification-only run establishes that the externally owned vault namespace is absent from the target private cluster. After it is created, a separate verification must still confirm vault-tls by name only; it must not read or retain Secret data.",
     "The temporary EKS cluster-admin association is absent. The separately authorized time-bounded Terraform administrator policy remains effective only until 22:00 KST on 2026-09-04 unless explicitly removed earlier."
   ]
 }
