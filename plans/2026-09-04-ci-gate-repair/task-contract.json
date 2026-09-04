@@ -1,0 +1,16 @@
+{
+  "id": "2026-09-04-ci-gate-repair",
+  "title": "Repair CI quality and policy-foundation failures after Vault private-delivery design",
+  "classification": "non-trivial",
+  "classification_reason": ["policy-governed CI", "multiple validation layers", "independent reconnaissance and clean-room debrief"],
+  "expected_outcome": "CI Quality and Policy Foundation have a minimally repaired, locally verified contract without weakening policy enforcement or changing Vault, cloud, or secret state.",
+  "constraints": ["Preserve policy semantics and narrow any test adjustment to the observed regression.", "Keep evidence deterministic and non-sensitive.", "Do not apply Terraform, access EKS or Vault, alter secrets, deploy, publish, merge, or change workflow permissions."],
+  "authorization": {"repository_mutation": true, "external_actions": ["commit and push the CI repair branch", "create a pull request solely to trigger and observe CI Quality and Policy Foundation"], "prohibited_actions": ["Terraform apply", "cloud mutation", "Vault/EKS access", "secret change", "deployment", "publish", "merge"]},
+  "primary_owner": {"tier": "sol", "owner": "/root", "responsibility": "security-test semantics, integration, and final sign-off"},
+  "delegations": [
+    {"id": "recon", "tier": "luna", "owner": "/root/ci_failure_recon", "files": [], "worktree": "read-only", "branch": "none", "acceptance_checks": ["exact remote failure map", "minimal safe repair recommendation"], "escalation_trigger": "a policy weakening, permission change, or external mutation is proposed"}
+  ],
+  "model_fallbacks": [],
+  "validation": ["affected CI scripts", "repository shell quality", "harness structure", "policy adapter where available", "independent clean-room debrief"],
+  "status": "awaiting_authorized_remote_validation"
+}
