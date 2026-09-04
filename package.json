@@ -19,6 +19,7 @@
     "test:vault-signer-toolchain-contract": "bash scripts/ci/test-vault-signer-toolchain-contract.sh",
     "test:vault-private-connectivity-contract": "bash scripts/ci/test-vault-private-connectivity-contract.sh",
     "test:vault-bootstrap-recovery-contract": "bash scripts/ci/test-vault-bootstrap-recovery-contract.sh",
+    "test:release-private-runner-gate": "bash scripts/ci/test-release-private-runner-gate.sh",
     "test:codebuild-signing-input-contract": "bash scripts/ci/test-codebuild-signing-input-contract.sh",
     "test:codebuild-release-activation": "bash scripts/ci/test-codebuild-release-activation.sh",
     "test:codebuild-signer-enabled-plan": "bash scripts/ci/test-codebuild-signer-enabled-plan.sh",

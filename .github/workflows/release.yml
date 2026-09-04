@@ -11,7 +11,11 @@ permissions:
 
 jobs:
   build-and-publish:
-    runs-on: ubuntu-24.04
+    # A CodeBuild-hosted runner is ephemeral per workflow job and is bound to
+    # the dedicated private project by its name plus run identity. A
+    # GitHub-hosted or broadly shared runner must never acquire this path.
+    runs-on: codebuild-node-operator-baseline-private-release-${{ github.run_id }}-${{ github.run_attempt }}
+    environment: release
     env:
       RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:68a353d39970bb296e957f33a95fd7368ee5a42584e5b04e92c0b5b300bc5314
     steps:
