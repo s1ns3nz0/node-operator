@@ -1,0 +1,5 @@
+flowchart LR
+  A[Private ECR signer image] --> B[CodeBuild signer]
+  B --> C[Private artifact S3]
+  B --> D[Vault Transit]
+  D --> E[Digest-bound verification]
