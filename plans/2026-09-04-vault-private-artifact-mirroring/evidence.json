@@ -1,13 +1,18 @@
 {
   "task_id": "2026-09-04-vault-private-artifact-mirroring",
-  "status": "in_progress",
+  "status": "completed",
   "checks": [
     {"name": "bootstrap source digest", "status": "passed", "result": "The approved GHCR Vault bootstrap source manifest is available at the recorded immutable digest."},
     {"name": "offline artifact contracts", "status": "passed", "result": "GitOps mirror, Vault chart mirror, manifest-binding, and prepare-plan contract checks passed; Terraform formatting and harness structural validation passed."},
-    {"name": "GitHub Actions mirror dispatch", "status": "blocked", "result": "The local GitHub CLI returned HTTP 401 before workflow dispatch; no workflow run, AWS call, or ECR write occurred."}
+    {"name": "GitHub CLI authentication", "status": "passed", "result": "The invalid GITHUB_TOKEN environment override was removed for GitHub CLI calls, allowing the keyring-backed repository credential to be used."},
+    {"name": "runtime and toolchain mirror", "status": "passed", "result": "GitOps OCI Mirror runs 33835471615, 33835473185, and 33835475105 completed successfully for the approved Vault server, injector, and bootstrap toolchain digests on commit f9e25bb4d2d60162224bd4b48ca9a385188bbeb0."},
+    {"name": "private ECR digest parity", "status": "passed", "result": "Read-only ECR checks confirmed all three immutable tags resolve to their approved source digests."},
+    {"name": "Vault chart mirror", "status": "passed", "result": "The initial run exposed an immutable-tag re-push failure. The workflow now verifies an existing tag's digest and skips a re-push when it matches; corrected run 33835611714 completed successfully on commit a66e619bcaec7162fa4975bc09d1af70b888507e with the approved chart checksum and ECR manifest digest."},
+    {"name": "clean-room debrief", "status": "passed", "result": "Independent Terra review found no blocking defect and confirmed that the evidence does not authorize deployment."}
   ],
   "notes": [
-    "The chart destination is Terraform-owned node-operator-baseline-gitops-vault/vault. Its creation requires a separately approved Terraform apply and was not attempted.",
-    "No Terraform apply, ECR repository creation, CodeBuild, Helm, kubectl, Vault, EKS access-policy change, secret access, merge, or deployment occurred."
+    "The Terraform-owned chart destination node-operator-baseline-gitops-vault/vault was confirmed present through read-only ECR metadata; no repository creation was attempted.",
+    "Workflow URLs: https://github.com/s1ns3nz0/node-operator/actions/runs/33835471615, https://github.com/s1ns3nz0/node-operator/actions/runs/33835473185, https://github.com/s1ns3nz0/node-operator/actions/runs/33835475105, https://github.com/s1ns3nz0/node-operator/actions/runs/33835611714.",
+    "No Terraform apply, ECR repository creation, CodeBuild, Helm deployment, kubectl, Vault, EKS access-policy change, secret access, merge, or deployment occurred."
   ]
 }
