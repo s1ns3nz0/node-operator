@@ -22,6 +22,8 @@ for required in \
   'image_tag_mutability = "IMMUTABLE"' \
   'encryption_type = "KMS"' \
   'scan_on_push = true' \
+  'resource "aws_ecr_lifecycle_policy" "release_signer"' \
+  'Keep only the newest approved signer image' \
   'resource "aws_kms_key" "release_signer_ecr"' \
   'resource "aws_iam_role" "github_ecr_signer_mirror"' \
   "repo:\${var.github_repository}:environment:ecr-signer-mirror" \

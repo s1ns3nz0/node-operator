@@ -83,6 +83,28 @@ resource "aws_ecr_repository" "release_signer" {
   })
 }
 
+# Retain only the current approved signer image.  Tags are immutable, so a
+# replacement always receives a new digest-derived tag and can be safely
+# expired after the mirror has advanced.
+resource "aws_ecr_lifecycle_policy" "release_signer" {
+  count      = var.enable_release_signer_ecr_mirror ? 1 : 0
+  repository = aws_ecr_repository.release_signer[0].name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Keep only the newest approved signer image"
+      selection = {
+        tagStatus     = "tagged"
+        tagPrefixList = ["approved-"]
+        countType     = "imageCountMoreThan"
+        countNumber   = 1
+      }
+      action = { type = "expire" }
+    }]
+  })
+}
+
 data "aws_iam_policy_document" "github_ecr_signer_mirror_assume_role" {
   count = var.enable_release_signer_ecr_mirror ? 1 : 0
 
