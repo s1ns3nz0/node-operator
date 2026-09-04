@@ -1,1 +1,16 @@
-{"task_id":"2026-09-04-vault-helm-deploy","status":"in_progress","checks":[],"notes":["No secret material is admissible evidence."]}
+{
+  "task_id": "2026-09-04-vault-helm-deploy",
+  "status": "blocked_pending_private_cluster_access",
+  "checks": [
+    {
+      "name": "private EKS prerequisite route",
+      "status": "blocked",
+      "result": "The target cluster is active and private-endpoint-only. This workstation has no target-cluster kubecontext, so it cannot verify the externally managed vault namespace or vault-tls Secret through the required private path."
+    }
+  ],
+  "notes": [
+    "No secret material is admissible evidence.",
+    "The current local Kubernetes context targets a separate local cluster; its namespace result is not evidence for the target EKS cluster.",
+    "No Helm, CodeBuild, Vault, secret read, secret change, or deployment action occurred."
+  ]
+}
