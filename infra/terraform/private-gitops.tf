@@ -109,8 +109,11 @@ data "aws_iam_policy_document" "github_gitops_oci_mirror" {
     resources = ["*"]
   }
   statement {
-    sid       = "ReadMirroredArtifactDigest"
-    actions   = ["ecr:DescribeImages"]
+    sid = "ReadMirroredArtifactDigest"
+    # Helm probes an existing OCI manifest with HEAD before pushing. ECR
+    # authorizes that probe as BatchGetImage; it is read-only and remains
+    # restricted to the reviewed GitOps repositories.
+    actions   = ["ecr:BatchGetImage", "ecr:DescribeImages"]
     resources = values(aws_ecr_repository.private_gitops)[*].arn
   }
   statement {
