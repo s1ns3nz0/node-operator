@@ -1,1 +1,17 @@
-{"validation":[],"live_actions":[],"secrets":"No secret material is recorded in this evidence file."}
+{
+  "validation": [
+    {"command":"npm run harness:check","result":"passed"},
+    {"command":"npm run test:ecr-signer-mirror-contract","result":"passed"},
+    {"command":"scripts/ci/test-script-quality.sh","result":"passed"},
+    {"command":"git diff --check","result":"passed"}
+  ],
+  "live_actions": [
+    {"action":"Created the immutable, KMS-encrypted private signer ECR repository and applied one-image approved-tag retention.","result":"verified"},
+    {"action":"Updated the signer GitHub OIDC trust to accept the exact repository claim and the protected environment's ID-bearing subject form.","result":"verified"},
+    {"action":"Dispatched ECR Signer Mirror run 33894047539 for the approved GHCR digest.","result":"succeeded"},
+    {"action":"Verified the mirrored private ECR image digest sha256:0cfcb3413265e711404cd99168d3327d5eb75b438cdf8b974fa5258f56bea839.","result":"verified"},
+    {"action":"Restored ecr-signer-mirror required reviewers and main's one-approval pull-request rule.","result":"verified"},
+    {"action":"Deleted failed run 33893649730 after its short-lived STS credentials were exposed in logs; the merged workflow now masks those values before exporting them.","result":"remediated"}
+  ],
+  "secrets":"No secret material is recorded in this evidence file. The affected STS session had a 900-second maximum duration and a single-repository ECR push boundary."
+}
