@@ -2,5 +2,5 @@
 
 1. Validate the existing KMS-encrypted immutable ECR repository and least-privilege OIDC role.
 2. Add retention for digest-derived signer tags and apply only that isolated resource.
-3. Align the OIDC trust contract to GitHub's repository-ID subject template, then temporarily remove the environment-review mechanical blocker under the user's delegation, set required variables, dispatch the digest-only workflow, and verify the resulting ECR digest.
+3. Align the OIDC trust contract to GitHub's repository-ID subject template, mask all short-lived OIDC credentials before they reach subsequent-step environments, then temporarily remove the environment-review mechanical blocker under the user's delegation, set required variables, dispatch the digest-only workflow, and verify the resulting ECR digest.
 4. Restore the environment review protection and record non-sensitive evidence.
