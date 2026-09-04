@@ -1,1 +1,32 @@
-{"name":"node-operator","private":true,"version":"0.1.0","engines":{"node":">=20"},"scripts":{"harness:init":"node scripts/harness-init.mjs","harness:check":"node scripts/harness-check.mjs","harness:verify":"node scripts/harness-check.mjs --run-adapters","test:local-kind-overlay":"bash scripts/ci/test-local-kind-overlay.sh","test:local-kind-cluster":"bash scripts/ci/test-local-kind-cluster.sh","test:local-cilium-policy":"bash scripts/ci/test-local-cilium-policy.sh","test:vault-gitops-contract":"bash scripts/ci/test-vault-gitops-contract.sh","test:vault-private-release-runner-contract":"bash scripts/ci/test-vault-private-release-runner-contract.sh","test:vault-release-verification-gate":"bash scripts/ci/test-vault-release-verification-gate.sh","test:vault-signer-toolchain-contract":"bash scripts/ci/test-vault-signer-toolchain-contract.sh","test:vault-private-connectivity-contract":"bash scripts/ci/test-vault-private-connectivity-contract.sh","test:vault-bootstrap-recovery-contract":"bash scripts/ci/test-vault-bootstrap-recovery-contract.sh","test:codebuild-signing-input-contract":"bash scripts/ci/test-codebuild-signing-input-contract.sh","test:codebuild-release-activation":"bash scripts/ci/test-codebuild-release-activation.sh","test:codebuild-signer-enabled-plan":"bash scripts/ci/test-codebuild-signer-enabled-plan.sh","test:ecr-signer-mirror-contract":"bash scripts/ci/test-ecr-signer-mirror-contract.sh","test:gitops-oci-mirror-contract":"bash scripts/ci/test-gitops-oci-mirror-contract.sh","test:gitops-oci-mirror-enabled-plan":"bash scripts/ci/test-gitops-oci-mirror-enabled-plan.sh","test:argocd-bootstrap-enabled-plan":"bash scripts/ci/test-argocd-bootstrap-enabled-plan.sh","test:private-source-vault-boundary":"bash scripts/ci/test-private-source-vault-boundary.sh","test:vault-bootstrap-enabled-plan":"bash scripts/ci/test-vault-bootstrap-enabled-plan.sh"}}
+{
+  "name": "node-operator",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "harness:init": "node scripts/harness-init.mjs",
+    "harness:check": "node scripts/harness-check.mjs",
+    "harness:bootstrap-policy-tools": "scripts/ci/install-policy-tools.sh .ci-tools/bin",
+    "harness:verify": "PATH=\"$PWD/.ci-tools/bin:$PATH\" node scripts/harness-check.mjs --run-adapters",
+    "test:local-kind-overlay": "bash scripts/ci/test-local-kind-overlay.sh",
+    "test:local-kind-cluster": "bash scripts/ci/test-local-kind-cluster.sh",
+    "test:local-cilium-policy": "bash scripts/ci/test-local-cilium-policy.sh",
+    "test:vault-gitops-contract": "bash scripts/ci/test-vault-gitops-contract.sh",
+    "test:vault-private-release-runner-contract": "bash scripts/ci/test-vault-private-release-runner-contract.sh",
+    "test:vault-release-verification-gate": "bash scripts/ci/test-vault-release-verification-gate.sh",
+    "test:vault-signer-toolchain-contract": "bash scripts/ci/test-vault-signer-toolchain-contract.sh",
+    "test:vault-private-connectivity-contract": "bash scripts/ci/test-vault-private-connectivity-contract.sh",
+    "test:vault-bootstrap-recovery-contract": "bash scripts/ci/test-vault-bootstrap-recovery-contract.sh",
+    "test:codebuild-signing-input-contract": "bash scripts/ci/test-codebuild-signing-input-contract.sh",
+    "test:codebuild-release-activation": "bash scripts/ci/test-codebuild-release-activation.sh",
+    "test:codebuild-signer-enabled-plan": "bash scripts/ci/test-codebuild-signer-enabled-plan.sh",
+    "test:ecr-signer-mirror-contract": "bash scripts/ci/test-ecr-signer-mirror-contract.sh",
+    "test:gitops-oci-mirror-contract": "bash scripts/ci/test-gitops-oci-mirror-contract.sh",
+    "test:gitops-oci-mirror-enabled-plan": "bash scripts/ci/test-gitops-oci-mirror-enabled-plan.sh",
+    "test:argocd-bootstrap-enabled-plan": "bash scripts/ci/test-argocd-bootstrap-enabled-plan.sh",
+    "test:private-source-vault-boundary": "bash scripts/ci/test-private-source-vault-boundary.sh",
+    "test:vault-bootstrap-enabled-plan": "bash scripts/ci/test-vault-bootstrap-enabled-plan.sh"
+  }
+}
