@@ -35,7 +35,7 @@ done
 # runner can obtain the reviewed build image and reach only required AWS APIs.
 for required in \
   'packages: read' \
-  'docker pull "$RELEASE_BUILD_IMAGE"' \
+  "docker pull \"\$RELEASE_BUILD_IMAGE\"" \
   'aws eks describe-cluster --name node-operator' \
   'aws ecr get-authorization-token' \
   'aws logs describe-log-groups'; do
