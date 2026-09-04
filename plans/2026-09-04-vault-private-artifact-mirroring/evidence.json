@@ -1,1 +1,13 @@
-{"task_id":"2026-09-04-vault-private-artifact-mirroring","status":"in_progress","checks":[],"notes":[]}
+{
+  "task_id": "2026-09-04-vault-private-artifact-mirroring",
+  "status": "in_progress",
+  "checks": [
+    {"name": "bootstrap source digest", "status": "passed", "result": "The approved GHCR Vault bootstrap source manifest is available at the recorded immutable digest."},
+    {"name": "offline artifact contracts", "status": "passed", "result": "GitOps mirror, Vault chart mirror, manifest-binding, and prepare-plan contract checks passed; Terraform formatting and harness structural validation passed."},
+    {"name": "GitHub Actions mirror dispatch", "status": "blocked", "result": "The local GitHub CLI returned HTTP 401 before workflow dispatch; no workflow run, AWS call, or ECR write occurred."}
+  ],
+  "notes": [
+    "The chart destination is Terraform-owned node-operator-baseline-gitops-vault/vault. Its creation requires a separately approved Terraform apply and was not attempted.",
+    "No Terraform apply, ECR repository creation, CodeBuild, Helm, kubectl, Vault, EKS access-policy change, secret access, merge, or deployment occurred."
+  ]
+}
