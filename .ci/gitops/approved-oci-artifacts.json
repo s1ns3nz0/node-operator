@@ -72,6 +72,12 @@
       "purpose": "Private Vault bootstrap toolchain for commit 005e535"
     },
     {
+      "source": "ghcr.io/s1ns3nz0/node-operator/vault-bootstrap@sha256:368207757bc326be0cc12228853897564676ddc35a44837505830c17e374337c",
+      "destination": "vault",
+      "ecrTag": "368207757bc326be0cc12228853897564676ddc35a44837505830c17e374337c",
+      "purpose": "Private Vault bootstrap toolchain containing the mTLS Raft retry_join contract"
+    },
+    {
       "source": "quay.io/jetstack/cert-manager-controller@sha256:416a2d76870d996460e62bd7f521bf14fa017be9e3e904aab92163a331fcb61a",
       "destination": "cert-manager",
       "ecrTag": "416a2d76870d996460e62bd7f521bf14fa017be9e3e904aab92163a331fcb61a",
