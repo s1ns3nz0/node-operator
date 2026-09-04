@@ -46,7 +46,13 @@ jobs:
           curl --fail --location --silent --show-error --output "$RUNNER_TEMP/vault-$chart_version.tgz" "$chart_source"
           printf '%s  %s\n' "$chart_sha256" "$RUNNER_TEMP/vault-$chart_version.tgz" | sha256sum --check --status
           aws ecr get-login-password --region "$AWS_REGION" | helm registry login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-          helm push "$RUNNER_TEMP/vault-$chart_version.tgz" "oci://$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/node-operator-baseline-gitops-vault"
+          ecr_manifest_digest="$(aws ecr describe-images --region "$AWS_REGION" --repository-name node-operator-baseline-gitops-vault/vault --image-ids "imageTag=$chart_tag" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
+          if [ "$ecr_manifest_digest" = None ]; then ecr_manifest_digest=''; fi
+          if [ -n "$ecr_manifest_digest" ]; then
+            test "$ecr_manifest_digest" = "$chart_manifest_digest"
+          else
+            helm push "$RUNNER_TEMP/vault-$chart_version.tgz" "oci://$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/node-operator-baseline-gitops-vault"
+          fi
           ecr_manifest_digest="$(aws ecr describe-images --region "$AWS_REGION" --repository-name node-operator-baseline-gitops-vault/vault --image-ids "imageTag=$chart_tag" --query 'imageDetails[0].imageDigest' --output text)"
           test "$ecr_manifest_digest" = "$chart_manifest_digest"
           printf 'Verified Vault chart OCI manifest digest: %s\n' "$ecr_manifest_digest" >> "$GITHUB_STEP_SUMMARY"

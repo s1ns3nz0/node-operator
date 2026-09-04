@@ -21,6 +21,7 @@ for required in \
   '.helm_archives[] | select(.name == "vault")' \
   'chart_source' 'chart_sha256' 'chart_manifest_digest' 'chart_destination' \
   'test "$chart_destination" = vault' 'sha256sum --check --status' \
+  'if [ -n "$ecr_manifest_digest" ]; then' \
   'aws ecr describe-images' 'test "$ecr_manifest_digest" = "$chart_manifest_digest"' \
   'helm push "$RUNNER_TEMP/vault-$chart_version.tgz"'; do
   grep -Fq "$required" "$workflow"
