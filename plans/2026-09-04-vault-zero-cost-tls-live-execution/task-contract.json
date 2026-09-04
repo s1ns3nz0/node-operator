@@ -11,5 +11,5 @@
   "delegations": [{"id":"fresh-plan-review","tier":"terra","owner":"pending","files":[],"worktree":"read-only","branch":"none","acceptance_checks":["Terraform plan allowlist", "mirror digest results", "no Secret data"],"escalation_trigger":"any unallowlisted cloud/Kubernetes action or public path"}, {"id":"debrief","tier":"terra","owner":"pending","files":["reports/2026-09-04-vault-zero-cost-tls-live-execution-debrief.md"],"worktree":"required","branch":"separate clean-room worktree","acceptance_checks":["clean-room live evidence summary"],"escalation_trigger":"evidence contains sensitive output"}],
   "model_fallbacks": [],
   "validation": ["fresh Terraform saved-plan allowlist", "GitHub mirror workflow success and ECR digest verification", "private Helm provenance/reference render", "cert-manager deployment readiness", "Certificate Ready conditions", "Secret name/key-name-only check", "NetworkPolicy presence", "harness check", "harness verify", "independent clean-room Terra debrief"],
-  "status": "in_progress"
+  "status": "completed"
 }
