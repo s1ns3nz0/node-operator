@@ -194,7 +194,10 @@ resource "aws_vpc_security_group_ingress_rule" "nodes_webhook_from_cluster" {
   description                  = "Webhook and extension API traffic from the control plane"
   security_group_id            = aws_security_group.nodes.id
   referenced_security_group_id = aws_security_group.cluster.id
-  from_port                    = 443
-  to_port                      = 443
-  ip_protocol                  = "tcp"
+  # Admission webhooks are exposed as Service port 443 but the EKS control
+  # plane connects directly to their Pod endpoint. Kyverno's HTTPS target is
+  # 9443, not the Service port.
+  from_port   = 9443
+  to_port     = 9443
+  ip_protocol = "tcp"
 }
