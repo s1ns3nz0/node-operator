@@ -9,10 +9,11 @@ fail() { printf 'FAIL %s\n' "$*" >&2; exit 1; }
 contract="$root/docs/gitops/private-release-runner-contract.md"
 test -f "$contract" || fail "missing private release runner contract"
 
+# shellcheck disable=SC2016 # The GitHub expression is a literal contract fragment.
 for required in \
-  'node-operator-private-release' \
-  'runs-on: [self-hosted, linux, x64, node-operator-release, vault-private]' \
-  "non-privileged \`gha-runner\`" \
+  'node-operator-baseline-private-release' \
+  'WORKFLOW_JOB_QUEUED' \
+  'runs-on: codebuild-node-operator-baseline-private-release-${{ github.run_id }}-${{ github.run_attempt }}' \
   'destroyed after one job' \
   "\`vault.node-operator.internal\`" \
   'TCP 8200 only to the private Vault endpoint' \
