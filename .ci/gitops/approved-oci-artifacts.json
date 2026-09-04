@@ -24,6 +24,18 @@
   ],
   "artifacts": [
     {
+      "source": "nethermind/nethermind@sha256:ec5f6c8158dbf82d4ddbd5500f895c930f52aa3b4c998148d9e1b452793d828e",
+      "destination": "nodes",
+      "ecrTag": "ec5f6c8158dbf82d4ddbd5500f895c930f52aa3b4c998148d9e1b452793d828e",
+      "purpose": "Nethermind Hoodi execution client 1.39.3-chiseled"
+    },
+    {
+      "source": "offchainlabs/prysm-beacon-chain@sha256:49f8454eb2a756402eb781025e370eef7d613668c2914bad4cca9c1aa11fafa4",
+      "destination": "nodes",
+      "ecrTag": "49f8454eb2a756402eb781025e370eef7d613668c2914bad4cca9c1aa11fafa4",
+      "purpose": "Prysm Hoodi consensus client v7.1.8"
+    },
+    {
       "source": "ghcr.io/argoproj/argo-helm/argo-cd@sha256:8ff18ee7a22670305555167ea31f24a88e2f912cf0a872f852e1880886d4c308",
       "destination": "argocd",
       "ecrTag": "10.4.0",

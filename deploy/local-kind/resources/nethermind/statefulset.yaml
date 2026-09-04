@@ -64,7 +64,7 @@ spec:
               topologyKey: kubernetes.io/hostname
       containers:
         - name: nethermind
-          image: nethermind/nethermind@sha256:ec5f6c8158dbf82d4ddbd5500f895c930f52aa3b4c998148d9e1b452793d828e
+          image: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-nodes@sha256:ec5f6c8158dbf82d4ddbd5500f895c930f52aa3b4c998148d9e1b452793d828e
           imagePullPolicy: IfNotPresent
           args:
             - --config=hoodi

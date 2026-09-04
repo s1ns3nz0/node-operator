@@ -61,7 +61,7 @@ spec:
               topologyKey: kubernetes.io/hostname
       containers:
         - name: beacon-chain
-          image: offchainlabs/prysm-beacon-chain@sha256:49f8454eb2a756402eb781025e370eef7d613668c2914bad4cca9c1aa11fafa4
+          image: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-nodes@sha256:49f8454eb2a756402eb781025e370eef7d613668c2914bad4cca9c1aa11fafa4
           imagePullPolicy: IfNotPresent
           args:
             - --accept-terms-of-use

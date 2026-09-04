@@ -1,0 +1,1 @@
+{"task_id":"2026-09-05-node-images-private-mirror","objective":"Create an immutable private ECR destination and reviewed digest-only mirror path for the Nethermind and Prysm Hoodi client images.","authority":"Explicit user authorization for implementation, merge, private ECR creation, and workflow dispatch on 2026-09-05.","owner":"Sol","model_fallbacks":[]}
