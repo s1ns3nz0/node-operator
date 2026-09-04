@@ -14,7 +14,7 @@ jq -e '
     .version == "v1.21.1" and
     .source == "https://charts.jetstack.io/charts/cert-manager-v1.21.1.tgz" and
     .sha256 == "c27101f3f3e2349fb4a9e704316105bf7b52ad73b8c8257d3498ef7f2f6a4adc" and
-    .ecrManifestDigest == "sha256:15c0b46d9006ce8eb9ff14d1bf54d1bbfcc587bb9e24cd9fe186fb8fec56af1f" and
+    .ecrManifestDigest == "sha256:62c4745561eccfd723678c6547500750ebef5a880d81ff670d33124ab335f877" and
     .destination == "cert-manager" and .ecrTag == "v1.21.1")
 ' "$allowlist" >/dev/null
 
@@ -28,6 +28,7 @@ for required in \
   'helm verify --keyring' \
   'sha256sum --check --status' \
   'aws ecr describe-images' \
+  'existing_manifest_digest' \
   "test \"\$ecr_manifest_digest\" = \"\$chart_manifest_digest\"" \
   "helm push \"\$RUNNER_TEMP/cert-manager-\$chart_version.tgz\""; do
   grep -Fq "$required" "$workflow"
