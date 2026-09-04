@@ -1,7 +1,8 @@
 # These endpoints give private managed nodes the AWS control-plane paths needed
 # during bootstrap without introducing a NAT gateway or public internet route.
 # STS and CloudWatch Logs become required with either VPC-internal CodeBuild
-# executor. Neither executor has a NAT gateway or a public egress path.
+# executor. The Argo CD executor additionally calls the EKS management API to
+# obtain the private cluster endpoint. Neither executor has public egress.
 locals {
   baseline_interface_endpoint_services = toset([
     "ec2",
@@ -14,6 +15,7 @@ locals {
   required_interface_endpoint_services = setunion(
     local.baseline_interface_endpoint_services,
     (var.enable_release_signer || var.enable_argocd_bootstrap_runner) ? toset(["logs", "sts"]) : toset([]),
+    var.enable_argocd_bootstrap_runner ? toset(["eks"]) : toset([]),
   )
 }
 

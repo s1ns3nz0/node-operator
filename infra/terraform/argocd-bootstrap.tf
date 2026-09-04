@@ -4,6 +4,12 @@ variable "enable_argocd_bootstrap_runner" {
   default     = false
 }
 
+variable "enable_argocd_bootstrap_cluster_admin" {
+  description = "Grant the temporary cluster-admin policy needed only while Helm installs the Argo CD control plane. Disable immediately after successful bootstrap."
+  type        = bool
+  default     = false
+}
+
 variable "argocd_bootstrap_subnet_ids" {
   description = "Explicit private subnet IDs for the Argo CD bootstrap executor. Required only when it is enabled."
   type        = list(string)
@@ -37,6 +43,17 @@ resource "aws_security_group" "argocd_bootstrap" {
     protocol        = "tcp"
     security_groups = [aws_security_group.cluster.id, aws_security_group.endpoints.id]
     description     = "HTTPS to the private EKS API and approved interface endpoints"
+  }
+
+  # ECR returns presigned URLs for image/chart layers in AWS-managed S3. The
+  # gateway endpoint keeps this private; its managed prefix list is narrower
+  # than a CIDR-based internet egress rule.
+  egress {
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    prefix_list_ids = [var.offline_validation ? "pl-78a54011" : data.aws_prefix_list.s3[0].id]
+    description     = "HTTPS to ECR-managed S3 layers through the gateway endpoint"
   }
 
   tags = merge(local.common_tags, {
@@ -84,6 +101,24 @@ data "aws_iam_policy_document" "argocd_bootstrap" {
     resources = [aws_eks_cluster.private.arn]
   }
 
+  # CodeBuild creates and tears down an ENI in the explicitly configured
+  # private subnets. These EC2 control-plane calls do not grant instance or
+  # security-group mutation authority.
+  statement {
+    sid = "ManageOnlyCodeBuildVpcNetworkInterface"
+    actions = [
+      "ec2:CreateNetworkInterface",
+      "ec2:CreateNetworkInterfacePermission",
+      "ec2:DeleteNetworkInterface",
+      "ec2:DescribeDhcpOptions",
+      "ec2:DescribeNetworkInterfaces",
+      "ec2:DescribeSecurityGroups",
+      "ec2:DescribeSubnets",
+      "ec2:DescribeVpcs",
+    ]
+    resources = ["*"]
+  }
+
   statement {
     sid       = "GetEcrAuthorizationToken"
     actions   = ["ecr:GetAuthorizationToken"]
@@ -127,7 +162,7 @@ resource "aws_eks_access_entry" "argocd_bootstrap" {
 }
 
 resource "aws_eks_access_policy_association" "argocd_bootstrap" {
-  count         = var.enable_argocd_bootstrap_runner ? 1 : 0
+  count         = var.enable_argocd_bootstrap_runner && var.enable_argocd_bootstrap_cluster_admin ? 1 : 0
   cluster_name  = aws_eks_cluster.private.name
   principal_arn = aws_iam_role.argocd_bootstrap[0].arn
   policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"

@@ -7,6 +7,7 @@ private_subnet_cidrs             = ["10.80.0.0/20", "10.80.16.0/20"]
 offline_validation               = true
 enable_private_gitops_foundation = true
 
-enable_argocd_bootstrap_runner = true
-argocd_bootstrap_subnet_ids    = ["subnet-0123456789abcdef0", "subnet-0123456789abcdef1"]
-argocd_bootstrap_image         = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-argocd@sha256:3674b70a8c02a7fd0734e8e0d7c7f4f33fe7701f30b4c6f21569877721d55d07"
+enable_argocd_bootstrap_runner        = true
+enable_argocd_bootstrap_cluster_admin = true
+argocd_bootstrap_subnet_ids           = ["subnet-0123456789abcdef0", "subnet-0123456789abcdef1"]
+argocd_bootstrap_image                = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-argocd@sha256:3674b70a8c02a7fd0734e8e0d7c7f4f33fe7701f30b4c6f21569877721d55d07"
