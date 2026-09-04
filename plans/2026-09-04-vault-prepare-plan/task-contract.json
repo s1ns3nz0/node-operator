@@ -1,0 +1,27 @@
+{
+  "id": "2026-09-04-vault-prepare-plan",
+  "title": "Review the Vault bootstrap prepare Terraform plan",
+  "classification": "non-trivial",
+  "classification_reason": ["reads live Terraform state", "prepares cost-bearing private infrastructure", "validates a security-sensitive EKS access boundary"],
+  "expected_outcome": "A non-sensitive, refresh-backed Terraform plan proves that the prepare configuration creates only the private Vault bootstrap runner and does not create the temporary cluster-admin association.",
+  "dependencies": ["2026-09-04-ci-gate-repair", "2026-09-04-vault-private-delivery"],
+  "constraints": [
+    "Use account 106760547719 and the existing node-operator Terraform backend only.",
+    "Read Terraform state and non-secret cloud metadata only; do not export, persist, or display credentials, kubeconfig, certificates, secret values, or raw logs.",
+    "Set enable_vault_bootstrap_runner=true and enable_vault_bootstrap_cluster_admin=false.",
+    "Do not run terraform apply, CodeBuild, Helm, kubectl, Vault, EKS access-policy mutation, OCI mirror dispatch, or any deployment."
+  ],
+  "authorization": {
+    "repository_mutation": true,
+    "external_actions": ["read-only Terraform backend initialization and refresh-backed plan against account 106760547719"],
+    "prohibited_actions": ["terraform apply", "AWS resource mutation", "Vault initialization or unseal", "secret access", "cluster-admin association", "CodeBuild execution", "Helm or kubectl execution", "merge or publish"]
+  },
+  "primary_owner": {"tier": "sol", "responsibility": "plan scope, security boundary, integration, and sign-off"},
+  "delegations": [
+    {"id": "recon", "tier": "luna", "owner": "/root/ci_failure_recon", "files": [], "worktree": "read-only", "branch": "none", "acceptance_checks": ["CI repair readiness"], "escalation_trigger": "sensitive CI evidence"},
+    {"id": "debrief", "tier": "terra", "owner": "pending", "files": ["reports/2026-09-04-vault-prepare-plan-debrief.md"], "worktree": "required", "branch": "separate review worktree", "acceptance_checks": ["independent clean-room debrief"], "escalation_trigger": "scope exceeds read-only plan"}
+  ],
+  "model_fallbacks": [],
+  "validation": ["prepare offline-plan contract", "refresh-backed Terraform plan", "Terraform JSON plan boundary assertions", "harness check", "clean-room Terra debrief"],
+  "status": "completed_with_precondition_gap"
+}

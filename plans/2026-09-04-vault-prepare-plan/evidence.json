@@ -1,0 +1,15 @@
+{
+  "task_id": "2026-09-04-vault-prepare-plan",
+  "status": "completed_with_precondition_gap",
+  "checks": [
+    {"name": "CI gate repair evidence", "status": "passed", "result": "The two failed workflows were traced to ShellCheck SC2016 and SC2251; the repair branch records later passing CI Quality and Policy Foundation runs."},
+    {"name": "live state input read", "status": "passed", "result": "Terraform backend initialization and the non-secret private_subnet_ids output read succeeded; no credentials, secrets, kubeconfig, certificates, or raw state were persisted."},
+    {"name": "approved bootstrap toolchain input", "status": "blocked", "result": "The approved OCI artifact manifest has no Vault bootstrap toolchain digest. The only available tfvars value is documented as synthetic and must never be used for a live apply."},
+    {"name": "offline prepare-plan boundary", "status": "passed", "result": "The prepare contract test passed and confirmed the CodeBuild project is planned while the temporary cluster-admin association is absent."},
+    {"name": "harness structural validation", "status": "passed", "result": "npm run harness:check passed; checked 40 task graphs."}
+  ],
+  "notes": [
+    "No refresh-backed live plan was generated because it would require an approved, real private ECR bootstrap-image digest.",
+    "No Terraform apply, cloud mutation, EKS access-policy change, CodeBuild, Helm, kubectl, Vault, secret access, OCI mirror dispatch, merge, or publish occurred."
+  ]
+}

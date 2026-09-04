@@ -1,0 +1,9 @@
+{
+  "task_id": "2026-09-04-vault-prepare-plan",
+  "nodes": [
+    {"id": "T1", "title": "Confirm CI repair and plan inputs", "tier": "luna", "owner": "/root/ci_failure_recon", "status": "completed"},
+    {"id": "T2", "title": "Generate and review read-only prepare plan", "tier": "sol", "owner": "/root", "status": "completed_with_precondition_gap"},
+    {"id": "T3", "title": "Record evidence and clean-room debrief", "tier": "terra", "owner": "/root/vault_prepare_plan_cleanroom", "status": "completed"}
+  ],
+  "edges": [{"from": "T1", "to": "T2", "kind": "blocks"}, {"from": "T2", "to": "T3", "kind": "blocks"}]
+}
