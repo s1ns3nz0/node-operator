@@ -1,6 +1,3 @@
-graph TD
-  T1[Confirm no-cost private PKI prerequisites] --> T2[Pin and mirror cert-manager artifacts]
-  T1 --> T3[Implement Vault-only CA and NetworkPolicies]
-  T2 --> T4[Gate and verify private deployment]
-  T3 --> T4
-  T4 --> T5[Clean-room debrief]
+flowchart LR
+  T1[T1: official release pins] --> T2[T2: private delivery and manifests]
+  T2 --> T3[T3: integration, debrief, live-plan approval]

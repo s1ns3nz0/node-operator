@@ -10,6 +10,16 @@
       "destination": "vault",
       "ecrTag": "0.31.0",
       "purpose": "HashiCorp Vault Helm chart 0.31.0"
+    },
+    {
+      "name": "cert-manager",
+      "version": "v1.21.1",
+      "source": "https://charts.jetstack.io/charts/cert-manager-v1.21.1.tgz",
+      "sha256": "c27101f3f3e2349fb4a9e704316105bf7b52ad73b8c8257d3498ef7f2f6a4adc",
+      "ecrManifestDigest": "sha256:15c0b46d9006ce8eb9ff14d1bf54d1bbfcc587bb9e24cd9fe186fb8fec56af1f",
+      "destination": "cert-manager",
+      "ecrTag": "v1.21.1",
+      "purpose": "cert-manager Helm chart v1.21.1, signed by the cert-manager maintainers"
     }
   ],
   "artifacts": [
@@ -60,6 +70,30 @@
       "destination": "vault",
       "ecrTag": "463fcfbf77bfb45f59484ca3381e5cc7b068af9123ac522112ff25e625575e87",
       "purpose": "Private Vault bootstrap toolchain for commit 005e535"
+    },
+    {
+      "source": "quay.io/jetstack/cert-manager-controller@sha256:416a2d76870d996460e62bd7f521bf14fa017be9e3e904aab92163a331fcb61a",
+      "destination": "cert-manager",
+      "ecrTag": "416a2d76870d996460e62bd7f521bf14fa017be9e3e904aab92163a331fcb61a",
+      "purpose": "cert-manager controller v1.21.1"
+    },
+    {
+      "source": "quay.io/jetstack/cert-manager-webhook@sha256:d8b3961b51c8c7320633f8208dc46bf88aa13804d0f7cbe48a096b2c523cee42",
+      "destination": "cert-manager",
+      "ecrTag": "d8b3961b51c8c7320633f8208dc46bf88aa13804d0f7cbe48a096b2c523cee42",
+      "purpose": "cert-manager webhook v1.21.1"
+    },
+    {
+      "source": "quay.io/jetstack/cert-manager-cainjector@sha256:ccf6b919ec0500745a47a910118f834f9636d0aac1ff221245cd2557ed8c7c98",
+      "destination": "cert-manager",
+      "ecrTag": "ccf6b919ec0500745a47a910118f834f9636d0aac1ff221245cd2557ed8c7c98",
+      "purpose": "cert-manager CA injector v1.21.1"
+    },
+    {
+      "source": "quay.io/jetstack/cert-manager-startupapicheck@sha256:d8ab6416e6e7303a86fa0a8daa82c94a8001f21c9d78eb2e7db20534e5d07ae8",
+      "destination": "cert-manager",
+      "ecrTag": "d8ab6416e6e7303a86fa0a8daa82c94a8001f21c9d78eb2e7db20534e5d07ae8",
+      "purpose": "cert-manager startup API check v1.21.1"
     }
   ]
 }

@@ -1,17 +1,12 @@
 {
   "task_id": "2026-09-04-vault-zero-cost-tls-foundation",
   "nodes": [
-    {"id": "T1", "title": "Confirm no-cost private PKI and artifact prerequisites", "tier": "luna", "owner": "/root/zero_cost_pki_recon", "status": "completed"},
-    {"id": "T2", "title": "Pin and mirror cert-manager artifacts for private EKS", "tier": "terra", "owner": "pending", "status": "pending"},
-    {"id": "T3", "title": "Implement Vault-only CA, Certificate, and NetworkPolicies", "tier": "terra", "owner": "pending", "status": "pending"},
-    {"id": "T4", "title": "Integrate, gate exact private deployment, and verify non-secret readiness", "tier": "sol", "owner": "/root", "status": "pending"},
-    {"id": "T5", "title": "Clean-room debrief", "tier": "terra", "owner": "pending", "status": "pending"}
+    {"id": "T1", "title": "Identify official pinned cert-manager release inputs", "tier": "luna", "owner": "pending", "status": "completed"},
+    {"id": "T2", "title": "Implement private mirror and no-secret Vault TLS manifests", "tier": "terra", "owner": "/root/zero_cost_pki_impl", "status": "completed"},
+    {"id": "T3", "title": "Integrate, independently debrief, and request live-plan authority", "tier": "sol", "owner": "/root", "status": "pending"}
   ],
   "edges": [
     {"from": "T1", "to": "T2", "kind": "blocks"},
-    {"from": "T1", "to": "T3", "kind": "blocks"},
-    {"from": "T2", "to": "T4", "kind": "blocks"},
-    {"from": "T3", "to": "T4", "kind": "blocks"},
-    {"from": "T4", "to": "T5", "kind": "blocks"}
+    {"from": "T2", "to": "T3", "kind": "blocks"}
   ]
 }

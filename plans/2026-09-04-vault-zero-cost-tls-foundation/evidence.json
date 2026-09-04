@@ -1,21 +1,15 @@
 {
   "task_id": "2026-09-04-vault-zero-cost-tls-foundation",
-  "status": "in_progress",
+  "status": "implementation_complete_pending_integration",
   "checks": [
-    {
-      "name": "Luna private-PKI reconnaissance",
-      "status": "passed",
-      "result": "cert-manager SelfSigned bootstrap followed by a Vault-only CA issuer can create vault-tls with no AWS Private CA charge. The cluster has no NAT/public egress, and cert-manager chart plus controller, webhook, cainjector, and startupapicheck artifacts are not yet available through private ECR."
-    },
-    {
-      "name": "Vault TLS contract",
-      "status": "passed",
-      "result": "Vault expects a pre-existing vault/vault-tls with tls.crt, tls.key, and ca.crt, while the controller must not expose Secret data."
-    }
+    {"name": "official cert-manager release metadata", "status": "passed", "result": "Pinned cert-manager v1.21.1 chart archive SHA-256, OCI manifest digest, and four component image digests were recorded from official Jetstack/Quay metadata. The chart signature verified locally against the cert-manager maintainers' published key fingerprint 1020CF3C033D4F35BAE1C19E1226061C665DF13E."},
+    {"name": "private chart and image delivery contracts", "status": "passed", "result": "Local mirror contract checks pass. The chart workflow verifies archive checksum and GPG signature before ECR push; every rendered cert-manager runtime image uses private ECR with an explicit sha256 digest."},
+    {"name": "offline Terraform mirror foundation plan", "status": "passed", "result": "The offline private-GitOps fixture plans six private ECR repositories and the narrowly scoped GitHub mirror role, with no NAT gateway, Internet gateway, or public access change."},
+    {"name": "Vault internal CA contract", "status": "passed", "result": "The manifest declares only Issuer and Certificate resources and no Kubernetes Secret resource/data. It names vault-internal-ca and vault-tls, includes Vault service and StatefulSet peer DNS SANs, and has a Vault ingress policy constrained by reviewed client labels."}
   ],
   "notes": [
-    "User chose the cluster-internal CA option after a cost comparison with AWS Private CA.",
-    "The CA key is controller-managed in Kubernetes and must remain Vault-only; trust distribution, backup/rotation, and NetworkPolicies are required deliverables.",
-    "No AWS or Kubernetes mutation, Secret access, or artifact publication has occurred in this task yet."
+    "This task has no live execution authority. No cloud/Kubernetes apply, artifact mirror, Vault action, or Secret access occurred.",
+    "Secret names and Certificate specifications are admissible; certificate contents and private key material are not.",
+    "The next task must run the signed chart/image mirror workflows, obtain a fresh saved plan for the two additional ECR repositories, and apply through the private EKS path only after explicit task-level authorization."
   ]
 }

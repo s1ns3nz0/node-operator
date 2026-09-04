@@ -6,13 +6,18 @@ variable "enable_private_gitops_foundation" {
 
 locals {
   private_gitops_repositories = {
-    argocd = "${local.name_prefix}-gitops-argocd"
-    charts = "${local.name_prefix}-gitops-charts"
-    vault  = "${local.name_prefix}-gitops-vault"
+    argocd       = "${local.name_prefix}-gitops-argocd"
+    charts       = "${local.name_prefix}-gitops-charts"
+    vault        = "${local.name_prefix}-gitops-vault"
+    cert_manager = "${local.name_prefix}-gitops-cert-manager"
     # Helm OCI appends Chart.yaml's name to the supplied registry location.
     # Keep runtime images in the root Vault repository and pre-create the
     # resulting chart path so the mirror role never needs CreateRepository.
     vault_chart = "${local.name_prefix}-gitops-vault/vault"
+    # Helm OCI appends Chart.yaml's name to the supplied registry location.
+    # Pre-create the resulting chart path so mirror delivery never needs
+    # CreateRepository and private nodes never need a public registry.
+    cert_manager_chart = "${local.name_prefix}-gitops-cert-manager/cert-manager"
   }
 }
 
