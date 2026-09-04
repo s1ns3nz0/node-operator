@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
-      - uses: azure/setup-helm@b9e51907a09c1d0c6b66e8881f33c03ca6e3cc0f
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with: {version: v3.17.3}
       - name: Verify and push approved Vault chart
         env:
