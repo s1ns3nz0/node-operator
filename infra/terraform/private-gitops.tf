@@ -9,6 +9,10 @@ locals {
     argocd = "${local.name_prefix}-gitops-argocd"
     charts = "${local.name_prefix}-gitops-charts"
     vault  = "${local.name_prefix}-gitops-vault"
+    # Helm OCI appends Chart.yaml's name to the supplied registry location.
+    # Keep runtime images in the root Vault repository and pre-create the
+    # resulting chart path so the mirror role never needs CreateRepository.
+    vault_chart = "${local.name_prefix}-gitops-vault/vault"
   }
 }
 

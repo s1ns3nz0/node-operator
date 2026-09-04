@@ -4,6 +4,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 allowlist="$root/.ci/gitops/approved-oci-artifacts.json"
 workflow="$root/.github/workflows/vault-chart-mirror.yml"
+terraform_file="$root/infra/terraform/private-gitops.tf"
 
 jq -e '
   .version == 1 and
@@ -26,6 +27,8 @@ for required in \
   'helm push "$RUNNER_TEMP/vault-$chart_version.tgz"'; do
   grep -Fq "$required" "$workflow"
 done
+
+grep -Fq 'vault_chart = "${local.name_prefix}-gitops-vault/vault"' "$terraform_file"
 
 if grep -Fq "helm pull vault --repo" "$workflow"; then
   printf 'Vault chart mirror must not bypass the approved archive record.\n' >&2

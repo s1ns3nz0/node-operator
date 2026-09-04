@@ -28,6 +28,7 @@ for required in \
   'prevent_destroy = true' \
   'resource "aws_iam_role" "github_gitops_oci_mirror"' \
   'vault  = "${local.name_prefix}-gitops-vault"' \
+  'vault_chart = "${local.name_prefix}-gitops-vault/vault"' \
   'token.actions.githubusercontent.com:repository' \
   'repo:${split("/", var.github_repository)[0]}@*/${split("/", var.github_repository)[1]}@*:environment:gitops-oci-mirror' \
   '"ecr:DescribeImages"' \
