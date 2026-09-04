@@ -19,6 +19,7 @@ data.
 | Release signer image prerequisite | Use a reviewed, same-account private-ECR digest for the signer build. | Checked the GitHub package API and private ECR repository state without modifying credentials. | The current CLI token lacks `read:packages` and the private signer repository is absent; image mirroring remains a recorded prerequisite. |
 | Vault bootstrap readiness diagnostics | Allow the private bootstrap executor to read only Pod/PVC/event state in the `vault` namespace so it can verify its own rollout. | Associated the EKS namespace-scoped `AmazonEKSViewPolicy` with the dedicated Vault bootstrap role and ran read-only diagnostics. | EKS API, encrypted PVCs, and one Vault Pod are reachable; the Vault cluster remains uninitialized and sealed, so replicas are correctly not Ready. |
 | Vault initialization | Initialize the KMS-sealed Vault HA cluster and place recovery/root material in an approved secret-management process. | Not executed. | This operation creates secret material and needs explicit secret-handling authorization; it cannot be replaced with a readiness bypass or manual pass. |
+| Signer ECR mirror live plan | Enable only the conditional signer-mirror resources from a state-aligned Terraform input set. | Ran a read-only plan with the mirror flag; did not apply it. | The plan exposed 32 unrelated destroys from stale optional state/default-input mismatch and KMS `DescribeKey` denials for the current principal. A targeted or incomplete plan is not an apply basis. |
 
 ## Operating rule for later tasks
 
