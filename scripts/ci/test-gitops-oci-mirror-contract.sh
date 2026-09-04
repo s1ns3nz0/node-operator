@@ -29,6 +29,7 @@ for required in \
   'resource "aws_iam_role" "github_gitops_oci_mirror"' \
   'vault' \
   'cert_manager' \
+  'nodes        = "${local.name_prefix}-gitops-nodes"' \
   'vault_chart = "${local.name_prefix}-gitops-vault/vault"' \
   'cert_manager_chart = "${local.name_prefix}-gitops-cert-manager/cert-manager"' \
   'token.actions.githubusercontent.com:repository' \
@@ -46,7 +47,7 @@ fi
 
 for required in \
   'environment: gitops-oci-mirror' \
-  'options: [argocd, charts, vault, cert-manager]' \
+  'options: [argocd, charts, nodes, vault, cert-manager]' \
   'id-token: write' \
   'source must be an OCI reference pinned to a 64-character sha256 digest' \
   'reviewed GitOps artifact allowlist' \

@@ -8,6 +8,7 @@ locals {
   private_gitops_repositories = {
     argocd       = "${local.name_prefix}-gitops-argocd"
     charts       = "${local.name_prefix}-gitops-charts"
+    nodes        = "${local.name_prefix}-gitops-nodes"
     vault        = "${local.name_prefix}-gitops-vault"
     cert_manager = "${local.name_prefix}-gitops-cert-manager"
     # Helm OCI appends Chart.yaml's name to the supplied registry location.
