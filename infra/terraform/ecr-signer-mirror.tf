@@ -124,8 +124,20 @@ data "aws_iam_policy_document" "github_ecr_signer_mirror_assume_role" {
 
     condition {
       test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:repository"
+      values   = [var.github_repository]
+    }
+
+    # GitHub may emit an ID-bearing subject after an organization enables the
+    # OIDC subject-template customization. The repository claim remains exact;
+    # the subject alternatives are both bound to this environment only.
+    condition {
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:environment:ecr-signer-mirror"]
+      values = [
+        "repo:${var.github_repository}:environment:ecr-signer-mirror",
+        "repo:${split("/", var.github_repository)[0]}@*/${split("/", var.github_repository)[1]}@*:environment:ecr-signer-mirror",
+      ]
     }
   }
 }
