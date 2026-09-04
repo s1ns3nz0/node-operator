@@ -50,7 +50,6 @@ resource "aws_security_group" "temporary_ssm_ops_host" {
   vpc_id      = aws_vpc.private.id
 
   ingress = []
-  egress  = []
 
   tags = merge(local.common_tags, {
     Name      = "${local.name_prefix}-temporary-ssm-ops-host"
@@ -145,7 +144,10 @@ data "aws_iam_policy_document" "temporary_ssm_ops_host_stop_assume_role" {
     condition {
       test     = "ArnEquals"
       variable = "aws:SourceArn"
-      values   = ["arn:aws:scheduler:${var.aws_region}:${var.aws_account_id}:schedule/default/${local.name_prefix}-temporary-ssm-ops-host-stop-20260904"]
+      # Scheduler supplies its schedule-group ARN when it assumes an execution
+      # role; pinning this to the default group preserves confused-deputy
+      # protection without making CreateSchedule's role validation impossible.
+      values = ["arn:aws:scheduler:${var.aws_region}:${var.aws_account_id}:schedule-group/default"]
     }
   }
 }
