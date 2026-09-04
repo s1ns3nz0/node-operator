@@ -26,6 +26,11 @@ for required in \
   '    type: ClusterIP' \
   '    enabled: false' \
   '        secretName: vault-tls' \
+  '          retry_join {' \
+  '            leader_api_addr         = "https://vault-0.vault-internal:8200"' \
+  '            leader_ca_cert_file     = "/vault/userconfig/vault-tls/ca.crt"' \
+  '            leader_client_cert_file = "/vault/userconfig/vault-tls/tls.crt"' \
+  '            leader_client_key_file  = "/vault/userconfig/vault-tls/tls.key"' \
   '        seal "awskms" {' \
   '          kms_key_id = "REPLACE_WITH_VAULT_UNSEAL_KEY_ARN"'; do
   grep -Fqx "$required" "$values" || fail "Vault values missing required boundary: $required"
