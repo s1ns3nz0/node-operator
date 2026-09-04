@@ -1,0 +1,21 @@
+{
+  "task_id": "2026-09-04-vault-zero-cost-tls-foundation",
+  "status": "in_progress",
+  "checks": [
+    {
+      "name": "Luna private-PKI reconnaissance",
+      "status": "passed",
+      "result": "cert-manager SelfSigned bootstrap followed by a Vault-only CA issuer can create vault-tls with no AWS Private CA charge. The cluster has no NAT/public egress, and cert-manager chart plus controller, webhook, cainjector, and startupapicheck artifacts are not yet available through private ECR."
+    },
+    {
+      "name": "Vault TLS contract",
+      "status": "passed",
+      "result": "Vault expects a pre-existing vault/vault-tls with tls.crt, tls.key, and ca.crt, while the controller must not expose Secret data."
+    }
+  ],
+  "notes": [
+    "User chose the cluster-internal CA option after a cost comparison with AWS Private CA.",
+    "The CA key is controller-managed in Kubernetes and must remain Vault-only; trust distribution, backup/rotation, and NetworkPolicies are required deliverables.",
+    "No AWS or Kubernetes mutation, Secret access, or artifact publication has occurred in this task yet."
+  ]
+}

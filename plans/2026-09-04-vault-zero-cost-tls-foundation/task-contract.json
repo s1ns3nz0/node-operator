@@ -1,0 +1,24 @@
+{
+  "id": "2026-09-04-vault-zero-cost-tls-foundation",
+  "title": "Deliver a zero-additional-AWS-cost private TLS foundation for Vault",
+  "classification": "non-trivial",
+  "classification_reason": ["creates a private certificate authority key and TLS Secrets", "installs a cluster-wide certificate controller", "extends the private artifact supply chain", "forms a security boundary for Vault API and Raft traffic"],
+  "expected_outcome": "The private EKS cluster can obtain and renew the Vault-only vault-tls Secret without AWS Private CA or public egress: a digest-pinned cert-manager chart and images are mirrored into approved private ECR, cert-manager bootstraps an internal Vault-only CA, and a Certificate controller writes vault-tls with tls.crt, tls.key, and ca.crt. No Secret material is read, printed, committed, or manually changed.",
+  "dependencies": ["2026-09-04-vault-delivery-remediation", "2026-09-04-vault-helm-deploy"],
+  "constraints": ["Use only account 106760547719 and EKS cluster node-operator.", "Do not create or use AWS Private CA, ACM Private CA Connector, public CA, NAT, Internet gateway, LoadBalancer, public DNS, or public listener.", "The internal CA is Vault-only; it must not become a cluster-wide or organizational trust root.", "Only cert-manager controllers may create or update cert-manager CA-key Secrets and vault/vault-tls. No human or agent may read, print, copy, commit, or log Secret data or private keys.", "All cert-manager chart and image artifacts must be version- and digest-pinned, approved, and available through private ECR before private-cluster install.", "Preserve Vault's existing internal-only service and require an explicit NetworkPolicy design before the Vault Helm deployment is unblocked.", "Record only non-sensitive identities, versions, digests, resource metadata, and boolean readiness results."],
+  "authorization": {
+    "user_approval": "User explicitly selected the cluster-internal CA option for the portfolio environment on 2026-09-04 after being informed that it has no AWS Private CA monthly charge and that the CA private key is held in a Kubernetes Secret.",
+    "repository_mutation": true,
+    "external_actions": ["read non-sensitive AWS, EKS, ECR, Kubernetes API discovery, and artifact metadata in account 106760547719", "retrieve reviewed public cert-manager release metadata and mirror only the approved chart and digest-pinned controller images into the existing approved private ECR supply chain", "install or update only the approved private cert-manager release in its dedicated namespace through the private EKS path", "apply only Vault-scoped cert-manager Issuer and Certificate manifests so cert-manager creates or updates its own CA-key Secret and vault/vault-tls", "read non-sensitive Kubernetes resource status, Certificate conditions, and Secret key names only"],
+    "prohibited_actions": ["read Secret data or private keys", "manual Secret creation or mutation", "AWS Private CA", "public endpoint or egress path", "Vault initialization or unseal", "Vault auth/policy/secret changes", "workload deployment", "release signing", "merge", "production access outside account 106760547719"]
+  },
+  "primary_owner": {"tier": "sol", "responsibility": "PKI boundary, authorization gate, final integration, and Vault deployment unblock decision"},
+  "delegations": [
+    {"id": "recon", "tier": "luna", "owner": "/root/zero_cost_pki_recon", "files": [], "worktree": "read-only", "branch": "none", "acceptance_checks": ["private supply-chain feasibility", "Vault Secret contract", "no-cost architecture boundary"], "escalation_trigger": "public egress, Secret data, or cluster-wide CA reuse is required"},
+    {"id": "implementation", "tier": "terra", "owner": "pending", "files": ["approved artifact metadata", "private cert-manager mirror automation", "Vault-scoped PKI manifests", "NetworkPolicy manifests"], "worktree": "required", "branch": "separate implementation worktree", "acceptance_checks": ["pinned artifacts", "rendered manifests", "no Secret data"], "escalation_trigger": "requires a direct Secret operation or unapproved cloud resource"},
+    {"id": "debrief", "tier": "terra", "owner": "pending", "files": ["reports/2026-09-04-vault-zero-cost-tls-foundation-debrief.md"], "worktree": "required", "branch": "separate clean-room worktree", "acceptance_checks": ["clean-room evidence summary"], "escalation_trigger": "bundle contains secret material or claims unsupported by evidence"}
+  ],
+  "model_fallbacks": [],
+  "validation": ["artifact provenance and digest checks", "offline Helm render and manifest policy checks", "private-only deployment preflight", "Certificate ready condition and Secret key-name-only check", "Vault internal-service and NetworkPolicy assertions", "npm run harness:check", "npm run harness:verify", "independent clean-room Terra debrief"],
+  "status": "in_progress"
+}
