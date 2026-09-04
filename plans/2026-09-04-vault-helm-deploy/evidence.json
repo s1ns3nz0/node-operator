@@ -1,6 +1,6 @@
 {
   "task_id": "2026-09-04-vault-helm-deploy",
-  "status": "awaiting_explicit_deploy_approval",
+  "status": "blocked_missing_scoped_deploy_permissions",
   "checks": [
     {
       "name": "private EKS prerequisite route",
@@ -11,12 +11,23 @@
       "name": "live deploy saved-plan gate",
       "status": "passed",
       "result": "A refresh-backed saved plan produced exactly one create, aws_eks_access_policy_association.vault_bootstrap_cluster_admin[0], with zero changes and zero deletes. Plan JSON SHA-256: d93bb1575b2859c31f01036d5096ad872efa96b869bfeb6eb56b98526c64e22a."
+    },
+    {
+      "name": "approved deploy-plan apply",
+      "status": "blocked",
+      "result": "The exact saved plan stopped before creating the temporary association because the Terraform role lacks eks:AssociateAccessPolicy. No partial resource was created and CodeBuild was not started."
+    },
+    {
+      "name": "post-failure boundary readback",
+      "status": "passed",
+      "result": "Read-only checks report zero associated access policies for the Vault bootstrap identity and zero builds for the Vault bootstrap CodeBuild project."
     }
   ],
   "notes": [
     "No secret material is admissible evidence.",
     "The current local Kubernetes context targets a separate local cluster; its namespace result is not evidence for the target EKS cluster.",
     "No Helm, CodeBuild, Vault, secret read, secret change, or deployment action occurred.",
-    "The dedicated private CodeBuild project is the only available target-cluster execution path. It checks the namespace and Secret name without reading data before its Helm deployment command. Applying the temporary association and starting that project remain separately awaiting explicit approval."
+    "The dedicated private CodeBuild project is the only available target-cluster execution path. It checks the namespace and Secret name without reading data before its Helm deployment command.",
+    "Resumption requires explicit approval to add only: eks:AssociateAccessPolicy and eks:DisassociateAccessPolicy for the Vault bootstrap EKS access entry; codebuild:StartBuild, codebuild:BatchGetBuilds, and codebuild:ListBuildsForProject for the dedicated Vault bootstrap project. No broader EKS, CodeBuild, IAM, secret, or network permission is required."
   ]
 }
