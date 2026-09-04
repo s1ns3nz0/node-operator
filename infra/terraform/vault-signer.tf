@@ -90,8 +90,11 @@ data "aws_iam_policy_document" "release_artifacts_key" {
     effect = "Allow"
 
     principals {
-      type        = "AWS"
-      identifiers = [aws_iam_role.release_codebuild_signer[0].arn]
+      type = "AWS"
+      identifiers = [
+        aws_iam_role.release_codebuild_signer[0].arn,
+        aws_iam_role.github_release_runner[0].arn,
+      ]
     }
 
     actions = [
@@ -791,9 +794,33 @@ resource "aws_iam_role" "github_release_runner" {
 }
 
 resource "aws_iam_role_policy" "github_release_runner" {
-  count  = var.enable_release_signer ? 1 : 0
-  role   = aws_iam_role.github_release_runner[0].id
-  policy = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Action = ["codebuild:StartBuild", "codebuild:BatchGetBuilds"], Resource = aws_codebuild_project.release_signer[0].arn }] })
+  count = var.enable_release_signer ? 1 : 0
+  role  = aws_iam_role.github_release_runner[0].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["codebuild:StartBuild", "codebuild:BatchGetBuilds"]
+        Resource = aws_codebuild_project.release_signer[0].arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = ["${aws_s3_bucket.release_artifacts[0].arn}/release-input/sha256/*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["${aws_s3_bucket.release_artifacts[0].arn}/release-signer-output/*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt", "kms:DescribeKey", "kms:Encrypt", "kms:GenerateDataKey*"]
+        Resource = [aws_kms_key.release_artifacts[0].arn]
+      },
+    ]
+  })
 }
 
 resource "aws_iam_role" "release_codebuild_signer" {
