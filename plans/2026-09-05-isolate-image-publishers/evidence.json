@@ -1,0 +1,1 @@
+{"status":"in_progress","model":"sol","fallbacks":[],"checks":["Ruby YAML parser accepted both workflow files","scripts/ci/test-scanner-image-release.sh passed","scripts/ci/test-toolchain-image-release.sh passed","scripts/ci/test-image-publisher-isolation.sh passed","npm run harness:verify passed"]}

@@ -2,24 +2,60 @@ name: Scanner Image Release
 on:
   workflow_dispatch:
   push:
-    paths:
-      - '.ci/scanners/**'
-      - 'scripts/ci/collect-pr-evidence.sh'
-      - 'scripts/ci/collect-security-evidence.sh'
-      - 'scripts/ci/lib/common.sh'
-permissions:
-  contents: read
-  packages: write
+    paths: ['.ci/scanners/**', 'scripts/ci/collect-pr-evidence.sh', 'scripts/ci/collect-security-evidence.sh', 'scripts/ci/lib/common.sh', '.github/workflows/scanner-image-release.yml']
+permissions: {contents: read}
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-24.04
+    permissions: {contents: read, packages: read}
+    outputs:
+      changed: ${{ steps.build.outputs.changed }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
-      - name: Login to GHCR
+      - id: build
         env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/node-operator/security-scanners
+        run: |
+          set -euo pipefail
+          input_sha="$({ sha256sum .ci/scanners/Dockerfile .ci/scanners/Dockerfile.dockerignore .ci/scanners/run-security-scan.sh scripts/ci/collect-pr-evidence.sh scripts/ci/collect-security-evidence.sh scripts/ci/lib/common.sh; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
+          docker build --build-arg "SCANNER_INPUT_SHA=$input_sha" --file .ci/scanners/Dockerfile --tag "$IMAGE:build-${GITHUB_SHA}" .
+          docker save --output scanner-image.tar "$IMAGE:build-${GITHUB_SHA}"
+          printf '%s\n' "$input_sha" > scanner-input.sha256
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scanner-image-${{ github.sha }}
+          path: |
+            scanner-image.tar
+            scanner-input.sha256
+          if-no-files-found: error
+          retention-days: 1
+  publish:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions: {contents: read, packages: write}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - uses: actions/download-artifact@v4
+        with:
+          name: scanner-image-${{ github.sha }}
+          path: /tmp/scanner-image
+      - env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/node-operator/security-scanners
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
-        run: echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
-      - name: Build and publish
-        run: .ci/scanners/release-scanner-image.sh
+        run: |
+          set -euo pipefail
+          expected="$({ sha256sum .ci/scanners/Dockerfile .ci/scanners/Dockerfile.dockerignore .ci/scanners/run-security-scan.sh scripts/ci/collect-pr-evidence.sh scripts/ci/collect-security-evidence.sh scripts/ci/lib/common.sh; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
+          test "$expected" = "$(cat /tmp/scanner-image/scanner-input.sha256)"
+          docker load --input /tmp/scanner-image/scanner-image.tar
+          build_image="$IMAGE:build-${GITHUB_SHA}"
+          test "$expected" = "$(docker image inspect --format '{{ index .Config.Labels "io.node-operator.scanner-input-sha" }}' "$build_image")"
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
+          docker tag "$build_image" "$IMAGE:${GITHUB_SHA}"
+          docker tag "$build_image" "$IMAGE:main"
+          docker push "$IMAGE:${GITHUB_SHA}"
+          docker push "$IMAGE:main"
