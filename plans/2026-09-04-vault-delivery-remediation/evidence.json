@@ -15,5 +15,6 @@
     {"kind":"chart-mirror","run":"33832563810","result":"Vault 0.31.0 archive SHA-256 verification and private ECR Helm push succeeded"},
     {"kind":"terraform","result":"Targeted ECR chart path creation and least-privilege mirror-role updates completed; no destroy actions"}
   ],
+  "independent_review": "reports/2026-09-04-vault-delivery-remediation-debrief.md: conditionally accepted at repository-contract level",
   "remaining_gate": "No Vault/EKS deployment was performed. Any live prepare or deploy requires a separately reviewed and approved plan."
 }

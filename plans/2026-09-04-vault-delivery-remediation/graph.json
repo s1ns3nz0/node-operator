@@ -3,7 +3,7 @@
   "nodes": [
     {"id":"T1","title":"Approve and pin delivery inputs","tier":"sol","owner":"/root","status":"completed"},
     {"id":"T2","title":"Verify and mirror approved artifacts","tier":"sol","owner":"/root","status":"completed"},
-    {"id":"T3","title":"Validate contracts and clean-room debrief","tier":"terra","owner":"/root/vault_delivery_cleanroom_debrief","status":"in_progress"},
+    {"id":"T3","title":"Validate contracts and clean-room debrief","tier":"terra","owner":"/root/vault_delivery_cleanroom_debrief","status":"completed"},
     {"id":"T4","title":"Separately approved Vault prepare or deploy","tier":"sol","owner":"/root","status":"pending"}
   ],
   "edges": [
