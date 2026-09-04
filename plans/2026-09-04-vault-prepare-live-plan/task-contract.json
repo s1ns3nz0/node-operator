@@ -1,0 +1,15 @@
+{
+  "id": "2026-09-04-vault-prepare-live-plan",
+  "title": "Generate and review the live Vault bootstrap prepare plan",
+  "classification": "non-trivial",
+  "classification_reason": ["reads current Terraform state and cloud metadata", "proposes cost-bearing private runner resources", "validates an EKS administrative-access boundary"],
+  "expected_outcome": "A refresh-backed Terraform plan using verified private artifact digests creates the prepare-stage runner resources while omitting the temporary cluster-admin association.",
+  "dependencies": ["2026-09-04-vault-private-artifact-mirroring", "2026-09-04-vault-prepare-plan"],
+  "constraints": ["Use the existing account backend and non-secret current subnet output only.", "Set enable_vault_bootstrap_runner=true and enable_vault_bootstrap_cluster_admin=false.", "Do not apply Terraform, execute CodeBuild, Helm, kubectl, Vault, or alter EKS access policies.", "Do not retain credentials, raw state, kubeconfig, secret data, or raw logs."],
+  "authorization": {"repository_mutation": true, "external_actions": ["read-only Terraform backend initialization and refresh-backed plan", "read-only ECR digest verification"], "prohibited_actions": ["terraform apply", "AWS mutation", "CodeBuild", "Helm", "kubectl", "Vault", "secret access", "cluster-admin association", "merge"]},
+  "primary_owner": {"tier": "sol", "responsibility": "security boundary, plan review, integration, and sign-off"},
+  "delegations": [{"id":"recon","tier":"luna","owner":"pending","files":[],"worktree":"read-only","branch":"none","acceptance_checks":["input and plan-boundary review"],"escalation_trigger":"sensitive state material"},{"id":"debrief","tier":"terra","owner":"pending","files":["reports/2026-09-04-vault-prepare-live-plan-debrief.md"],"worktree":"required","branch":"separate review worktree","acceptance_checks":["clean-room debrief"],"escalation_trigger":"scope exceeds plan-only authorization"}],
+  "model_fallbacks": [],
+  "validation": ["private ECR digest parity", "refresh-backed Terraform plan", "Terraform JSON plan boundary assertions", "harness check", "clean-room Terra debrief"],
+  "status": "completed_with_precondition_gap"
+}

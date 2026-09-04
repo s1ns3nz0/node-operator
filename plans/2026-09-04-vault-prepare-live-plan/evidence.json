@@ -1,0 +1,13 @@
+{
+  "task_id": "2026-09-04-vault-prepare-live-plan",
+  "status": "completed_with_precondition_gap",
+  "checks": [
+    {"name": "verified plan inputs", "status": "passed", "result": "Read-only state output returned two private subnet IDs; read-only ECR checks confirmed the approved runtime, bootstrap-toolchain, and chart manifest digests."},
+    {"name": "refresh-backed Terraform plan", "status": "blocked", "result": "The local AWS principal was denied kms:DescribeKey while Terraform refreshed existing managed KMS keys. The plan stopped before producing a plan artifact; no resource was changed."},
+    {"name": "no-refresh safety diagnostic", "status": "blocked", "result": "The diagnostic plan proposed 10 Vault prepare creates and 8 Argo CD bootstrap deletes. It was rejected because the working branch does not include the state-owned Argo CD bootstrap configuration; it is not an apply candidate."}
+  ],
+  "notes": [
+    "No Terraform apply, CodeBuild, Helm, kubectl, Vault, EKS access-policy change, secret access, or merge occurred.",
+    "A retry requires a read-only Terraform principal that can describe all state-managed KMS keys and a task branch aligned with the deployed Argo CD bootstrap configuration."
+  ]
+}
