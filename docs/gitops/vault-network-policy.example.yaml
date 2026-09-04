@@ -39,3 +39,14 @@ spec:
       ports:
         - protocol: TCP
           port: 8200
+    # The internal NLB preserves the source address for the private signer
+    # CodeBuild ENIs. Both approved private subnets are explicit; there is no
+    # public CIDR, NAT, or general Internet ingress path.
+    - from:
+        - ipBlock:
+            cidr: 10.80.0.0/20
+        - ipBlock:
+            cidr: 10.80.16.0/20
+      ports:
+        - protocol: TCP
+          port: 8200
