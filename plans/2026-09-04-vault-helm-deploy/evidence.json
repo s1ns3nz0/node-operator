@@ -1,6 +1,6 @@
 {
   "task_id": "2026-09-04-vault-helm-deploy",
-  "status": "blocked_missing_scoped_deploy_permissions",
+  "status": "blocked_missing_eks_association_read_permission",
   "checks": [
     {
       "name": "private EKS prerequisite route",
@@ -21,6 +21,16 @@
       "name": "post-failure boundary readback",
       "status": "passed",
       "result": "Read-only checks report zero associated access policies for the Vault bootstrap identity and zero builds for the Vault bootstrap CodeBuild project."
+    },
+    {
+      "name": "scoped deploy IAM remediation",
+      "status": "passed",
+      "result": "The Terraform role received only AssociateAccessPolicy and DisassociateAccessPolicy on the dedicated Vault bootstrap EKS access entry, plus StartBuild, BatchGetBuilds, and ListBuildsForProject on the dedicated Vault bootstrap CodeBuild project."
+    },
+    {
+      "name": "resumed deploy apply and emergency revocation",
+      "status": "blocked_and_recovered",
+      "result": "Terraform created the temporary association but then failed while reading it because eks:ListAssociatedAccessPolicies is absent. No CodeBuild build was started. The authorized administrative principal immediately disassociated the exact cluster-admin policy; post-revocation count is zero."
     }
   ],
   "notes": [
@@ -28,6 +38,7 @@
     "The current local Kubernetes context targets a separate local cluster; its namespace result is not evidence for the target EKS cluster.",
     "No Helm, CodeBuild, Vault, secret read, secret change, or deployment action occurred.",
     "The dedicated private CodeBuild project is the only available target-cluster execution path. It checks the namespace and Secret name without reading data before its Helm deployment command.",
-    "Resumption requires explicit approval to add only: eks:AssociateAccessPolicy and eks:DisassociateAccessPolicy for the Vault bootstrap EKS access entry; codebuild:StartBuild, codebuild:BatchGetBuilds, and codebuild:ListBuildsForProject for the dedicated Vault bootstrap project. No broader EKS, CodeBuild, IAM, secret, or network permission is required."
+    "Resumption requires explicit approval to add only eks:ListAssociatedAccessPolicies for the dedicated Vault bootstrap EKS access entry. It is required for Terraform to observe the temporary association and for the post-revoke verifier; it grants no mutation or cluster access.",
+    "No Helm, CodeBuild, Vault, secret read, secret change, or Vault deployment action occurred."
   ]
 }
