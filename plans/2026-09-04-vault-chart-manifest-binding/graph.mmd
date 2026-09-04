@@ -1,0 +1,5 @@
+flowchart LR
+  A[Approved source archive] --> B[Approved ECR OCI manifest]
+  B --> C[Mirror post-push verification]
+  B --> D[Bootstrap preflight verification]
+  D --> E[Helm install permitted]

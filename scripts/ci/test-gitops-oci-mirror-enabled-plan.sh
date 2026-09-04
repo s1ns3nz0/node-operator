@@ -15,7 +15,7 @@ fail() { printf 'FAIL GitOps OCI mirror enabled plan: %s\n' "$*" >&2; exit 1; }
 
 plan="$temporary_directory/plan.json"
 jq -e '
-  ([.resource_changes[]? | select(.change.actions | index("create")) | select(.type == "aws_ecr_repository")] | length == 3)
+  ([.resource_changes[]? | select(.change.actions | index("create")) | select(.type == "aws_ecr_repository")] | length == 6)
   and any(.resource_changes[]?; .address == "aws_iam_role.github_gitops_oci_mirror[0]" and (.change.actions | index("create")))
   and any(.resource_changes[]?; .address == "aws_iam_role_policy.github_gitops_oci_mirror[0]" and (.change.actions | index("create")))
 ' "$plan" >/dev/null || fail 'enabled plan does not create the complete ECR OCI and GitHub OIDC boundary'

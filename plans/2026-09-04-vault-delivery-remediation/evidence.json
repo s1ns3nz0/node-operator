@@ -1,0 +1,20 @@
+{
+  "task_id": "2026-09-04-vault-delivery-remediation",
+  "non_sensitive_checks": [
+    "npm run harness:check",
+    "scripts/ci/test-toolchain-image-release.sh",
+    "scripts/ci/test-vault-gitops-contract.sh",
+    "scripts/ci/test-vault-chart-mirror-contract.sh",
+    "scripts/ci/test-vault-bootstrap-revoke-plan.sh",
+    "terraform fmt -check",
+    "git diff --check"
+  ],
+  "external_results": [
+    {"kind":"toolchain-release","result":"Vault bootstrap image published at an approved immutable digest"},
+    {"kind":"runtime-mirror","result":"Vault server and injector mirrors succeeded with digest parity"},
+    {"kind":"chart-mirror","run":"33832563810","result":"Vault 0.31.0 archive SHA-256 verification and private ECR Helm push succeeded"},
+    {"kind":"terraform","result":"Targeted ECR chart path creation and least-privilege mirror-role updates completed; no destroy actions"}
+  ],
+  "independent_review": "reports/2026-09-04-vault-delivery-remediation-debrief.md: conditionally accepted at repository-contract level",
+  "remaining_gate": "No Vault/EKS deployment was performed. Any live prepare or deploy requires a separately reviewed and approved plan."
+}

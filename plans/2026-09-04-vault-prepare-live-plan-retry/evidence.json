@@ -1,0 +1,47 @@
+{
+  "task_id": "2026-09-04-vault-prepare-live-plan-retry",
+  "status": "completed",
+  "plan_identity": {
+    "branch": "codex/2026-09-04-vault-delivery-remediation",
+    "commit": "9ba3ff11e3cbcca1794dfcb338221f147a8efb1d",
+    "backend": "node-operator/t2/terraform.tfstate",
+    "plan_json_sha256": "284697d7582929880fe4b398a69ed5f579def7235b1b446cba8442e8c98d416e"
+  },
+  "effective_inputs": {
+    "enable_private_gitops_foundation": true,
+    "enable_argocd_bootstrap_runner": true,
+    "enable_argocd_bootstrap_cluster_admin": false,
+    "enable_vault_bootstrap_runner": true,
+    "enable_vault_bootstrap_cluster_admin": false,
+    "private_subnet_input": "two current private subnet IDs read from Terraform output; values not retained",
+    "vault_bootstrap_image_digest": "sha256:463fcfbf77bfb45f59484ca3381e5cc7b068af9123ac522112ff25e625575e87",
+    "vault_chart_version": "0.31.0",
+    "vault_chart_manifest_digest": "sha256:85cfa6b40396a198a104fbf06c7cccaf75428db7201394f9061c272441bcd0e4"
+  },
+  "plan_action_allowlist": [
+    {"address":"data.aws_iam_policy_document.vault_bootstrap[0]","actions":["read"]},
+    {"address":"aws_cloudwatch_log_group.vault_bootstrap[0]","actions":["create"]},
+    {"address":"aws_codebuild_project.vault_bootstrap[0]","actions":["create"]},
+    {"address":"aws_ecr_lifecycle_policy.private_gitops[\"vault\"]","actions":["create"]},
+    {"address":"aws_ecr_lifecycle_policy.private_gitops[\"vault_chart\"]","actions":["create"]},
+    {"address":"aws_eks_access_entry.vault_bootstrap[0]","actions":["create"]},
+    {"address":"aws_iam_role.vault_bootstrap[0]","actions":["create"]},
+    {"address":"aws_iam_role_policy.vault_bootstrap[0]","actions":["create"]},
+    {"address":"aws_security_group.vault_bootstrap[0]","actions":["create"]},
+    {"address":"aws_vpc_security_group_ingress_rule.cluster_api_from_vault_bootstrap[0]","actions":["create"]},
+    {"address":"aws_vpc_security_group_ingress_rule.endpoints_https_from_vault_bootstrap[0]","actions":["create"]}
+  ],
+  "checks": [
+    {"name": "planning identity", "status": "passed", "result": "AWS_PROFILE=node-operator-t2 assumed the existing ExternalId-controlled NodeOperatorTerraformApply role."},
+    {"name": "minimal planning-read remediation", "status": "passed", "result": "The existing role policy gained only eks:DescribeAccessEntry and scoped codebuild:BatchGetProjects reads after the refresh identified each missing read action."},
+    {"name": "artifact and input verification", "status": "passed", "result": "Private subnet inputs and approved private ECR runtime, toolchain, and chart manifest digests were verified read-only."},
+    {"name": "refresh-backed prepare plan", "status": "passed", "result": "The state-aligned remediation branch produced 10 creates, 0 changes, and 0 deletes."},
+    {"name": "prepare action allowlist", "status": "passed", "result": "The retained address/action allowlist is the complete non-no-op plan set: 10 creates and one local policy-document read. It has no Argo CD bootstrap address, Vault cluster-admin association, delete, replace, NAT, internet gateway, public route, or public EKS endpoint."},
+    {"name": "clean-room review", "status": "passed", "result": "Fresh Terra review found the evidence sufficient for a separate prepare-apply review, but not an apply or deployment authorization."}
+  ],
+  "notes": [
+    "The plan artifact is temporary and was not committed; evidence retains only the non-sensitive action summary.",
+    "No Terraform apply, CodeBuild execution, Helm, kubectl, Vault, secret access, EKS access-policy association or cluster-admin association, merge, or publication occurred.",
+    "Before any separately approved apply, regenerate the refresh-backed plan from the recorded commit/backend/inputs and require the same 10-create, 0-change, 0-delete address allowlist; any drift invalidates this review."
+  ]
+}

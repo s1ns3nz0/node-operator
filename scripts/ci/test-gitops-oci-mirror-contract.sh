@@ -27,9 +27,13 @@ for required in \
   'scan_on_push = true' \
   'prevent_destroy = true' \
   'resource "aws_iam_role" "github_gitops_oci_mirror"' \
-  'vault  = "${local.name_prefix}-gitops-vault"' \
+  'vault' \
+  'cert_manager' \
+  'vault_chart = "${local.name_prefix}-gitops-vault/vault"' \
+  'cert_manager_chart = "${local.name_prefix}-gitops-cert-manager/cert-manager"' \
   'token.actions.githubusercontent.com:repository' \
   'repo:${split("/", var.github_repository)[0]}@*/${split("/", var.github_repository)[1]}@*:environment:gitops-oci-mirror' \
+  '"ecr:BatchGetImage"' \
   '"ecr:DescribeImages"' \
   '"ecr:PutImage"' \
   'github_gitops_oci_mirror_role_arn'; do
@@ -42,7 +46,7 @@ fi
 
 for required in \
   'environment: gitops-oci-mirror' \
-  'options: [argocd, charts, vault]' \
+  'options: [argocd, charts, vault, cert-manager]' \
   'id-token: write' \
   'source must be an OCI reference pinned to a 64-character sha256 digest' \
   'reviewed GitOps artifact allowlist' \

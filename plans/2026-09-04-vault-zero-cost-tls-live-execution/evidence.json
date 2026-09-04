@@ -1,0 +1,16 @@
+{
+  "task_id": "2026-09-04-vault-zero-cost-tls-live-execution",
+  "status": "blocked_chart_workflow_not_on_default_branch",
+  "checks": [
+    {"name":"planning identity","status":"passed","result":"AWS_PROFILE=node-operator-t2 assumed the approved NodeOperatorTerraformApply role in account 106760547719."},
+    {"name":"first refresh-backed plan gate","status":"rejected","result":"The first plan included temporary SSM host and endpoint deletions caused by a missing enabled-host input. It was not applied."},
+    {"name":"corrected saved-plan review","status":"passed","result":"Fresh plan JSON SHA-256 9b62cd3a09251f76939c1c8141d8febc6b6fb04b3c1dfa9a0198f7a1d6d7cdb6 contains exactly four private ECR/lifecycle creates and one GitHub mirror role-policy update. Independent Terra review accepted it; no delete, public path, admin, or Secret action appears."},
+    {"name":"exact saved-plan apply","status":"passed","result":"The approved saved plan applied with 4 added, 1 changed, and 0 destroyed. The two cert-manager ECR repositories are immutable and scan-on-push."},
+    {"name":"four approved image mirrors","status":"passed","result":"Four GitOps OCI Mirror workflow runs completed successfully. ECR tag-to-digest reads matched all four approved cert-manager component digests."},
+    {"name":"cert-manager chart mirror dispatch","status":"blocked","result":"GitHub rejected dispatch because cert-manager-chart-mirror.yml is not present on the repository default branch. No direct chart download or ECR push was attempted."}
+  ],
+  "notes": [
+    "No Secret data, private key, Vault initialization/unseal, Helm install, Kubernetes apply, or public network path occurred.",
+    "The next authorized action must either publish the reviewed chart-mirror workflow to the default branch or explicitly authorize a separately reviewed direct signed-chart mirror path. It must then verify the pinned chart manifest digest before private EKS installation."
+  ]
+}

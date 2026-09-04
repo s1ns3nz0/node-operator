@@ -38,6 +38,17 @@ variable "vault_chart_version" {
   }
 }
 
+variable "vault_chart_manifest_digest" {
+  description = "Approved private ECR OCI manifest digest resolved by the pinned Vault chart version."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.vault_chart_manifest_digest == "" || can(regex("^sha256:[a-f0-9]{64}$", var.vault_chart_manifest_digest))
+    error_message = "vault_chart_manifest_digest must be empty while disabled or an approved OCI sha256 manifest digest."
+  }
+}
+
 resource "aws_security_group" "vault_bootstrap" {
   count       = var.enable_vault_bootstrap_runner ? 1 : 0
   name_prefix = "${local.name_prefix}-vault-bootstrap-"
@@ -107,9 +118,15 @@ data "aws_iam_policy_document" "vault_bootstrap" {
     resources = ["*"]
   }
   statement {
-    sid       = "PullOnlyPrivateVaultArtifacts"
-    actions   = ["ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"]
-    resources = [aws_ecr_repository.private_gitops["vault"].arn]
+    sid     = "PullOnlyPrivateVaultArtifacts"
+    actions = ["ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:DescribeImages", "ecr:GetDownloadUrlForLayer"]
+    # Keep the existing Vault pull scope stable when other private GitOps
+    # repositories are added. These deterministic names remain the only two
+    # repositories the runner can read.
+    resources = [
+      "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.private_gitops_repositories.vault}",
+      "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.private_gitops_repositories.vault_chart}",
+    ]
   }
 }
 
@@ -168,6 +185,10 @@ resource "aws_codebuild_project" "vault_bootstrap" {
       name  = "VAULT_UNSEAL_KEY_ARN"
       value = aws_kms_key.vault.arn
     }
+    environment_variable {
+      name  = "VAULT_CHART_MANIFEST_DIGEST"
+      value = var.vault_chart_manifest_digest
+    }
   }
   vpc_config {
     vpc_id             = aws_vpc.private.id
@@ -186,16 +207,18 @@ resource "aws_codebuild_project" "vault_bootstrap" {
             - kubectl get secret vault-tls --namespace vault --ignore-not-found -o name | grep -Fx 'secret/vault-tls'
             - aws ecr get-login-password --region ${var.aws_region} | helm registry login --username AWS --password-stdin ${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com
             - test -n "$VAULT_UNSEAL_KEY_ARN"
+            - test -n "$VAULT_CHART_MANIFEST_DIGEST"
+            - test "$(aws ecr describe-images --region ${var.aws_region} --repository-name ${local.private_gitops_repositories.vault_chart} --image-ids imageTag=${var.vault_chart_version} --query 'imageDetails[0].imageDigest' --output text)" = "$VAULT_CHART_MANIFEST_DIGEST"
             - sed "s|REPLACE_WITH_VAULT_UNSEAL_KEY_ARN|$VAULT_UNSEAL_KEY_ARN|g" /opt/node-operator/vault-values.template.yaml > /tmp/vault-values.yaml
             - grep -Fq 'REPLACE_WITH_VAULT_UNSEAL_KEY_ARN' /tmp/vault-values.yaml && exit 1 || true
-            - helm upgrade --install vault oci://${aws_ecr_repository.private_gitops["vault"].repository_url} --version ${var.vault_chart_version} --namespace vault --values /tmp/vault-values.yaml --atomic --timeout 15m
+            - helm upgrade --install vault oci://${aws_ecr_repository.private_gitops["vault_chart"].repository_url}@${var.vault_chart_manifest_digest} --namespace vault --values /tmp/vault-values.yaml --atomic --timeout 15m
             - kubectl wait --namespace vault --for=condition=Ready pod --selector=app.kubernetes.io/name=vault --timeout=15m
     YAML
   }
   lifecycle {
     precondition {
-      condition     = var.enable_private_gitops_foundation && var.vault_chart_version != "" && can(regex("^${var.aws_account_id}\\.dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/${local.private_gitops_repositories.vault}@sha256:[a-f0-9]{64}$", var.vault_bootstrap_image)) && length(var.vault_bootstrap_subnet_ids) > 0 && alltrue([for subnet_id in var.vault_bootstrap_subnet_ids : can(regex("^subnet-[a-z0-9]+$", subnet_id))])
-      error_message = "Enabled Vault bootstrap requires the private GitOps Vault ECR repository, a pinned toolchain digest, pinned chart version, and explicit private subnets. EKS cluster-admin is a separately gated deploy-stage association."
+      condition     = var.enable_private_gitops_foundation && var.vault_chart_version != "" && can(regex("^sha256:[a-f0-9]{64}$", var.vault_chart_manifest_digest)) && can(regex("^${var.aws_account_id}\\.dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/${local.private_gitops_repositories.vault}@sha256:[a-f0-9]{64}$", var.vault_bootstrap_image)) && length(var.vault_bootstrap_subnet_ids) > 0 && alltrue([for subnet_id in var.vault_bootstrap_subnet_ids : can(regex("^subnet-[a-z0-9]+$", subnet_id))])
+      error_message = "Enabled Vault bootstrap requires the private GitOps Vault ECR repository, pinned toolchain and chart manifest digests, a pinned chart version, and explicit private subnets. EKS cluster-admin is a separately gated deploy-stage association."
     }
   }
   tags       = local.common_tags
