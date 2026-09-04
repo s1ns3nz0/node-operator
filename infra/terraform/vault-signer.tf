@@ -41,7 +41,17 @@ resource "aws_security_group" "release_signer" {
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = [var.vpc_cidr]
-    description = "HTTPS to private Vault and service endpoints"
+    description = "HTTPS to private AWS and service endpoints"
+  }
+
+  # Vault Transit uses HTTPS over TCP 8200. The listener is an internal NLB
+  # addressed only through the private node-operator.internal hosted zone.
+  egress {
+    from_port   = 8200
+    to_port     = 8200
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+    description = "Vault Transit HTTPS to the private internal NLB"
   }
   tags = local.common_tags
 }
