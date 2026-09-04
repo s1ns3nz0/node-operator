@@ -1,0 +1,7 @@
+{
+  "task_id": "2026-09-05-node-storage-classes",
+  "objective": "Prepare the encrypted, retain-on-delete EBS StorageClasses required before private disposable Hoodi node workloads are scheduled.",
+  "scope": ["deploy/nethermind/storage-class.yaml", "deploy/prysm/storage-class.yaml", "private EKS cluster StorageClasses"],
+  "invariants": ["no node workload is created", "EBS volumes use the approved KMS alias", "PVC reclamation is Retain", "no public endpoint is added", "temporary EKS administrator access is removed after use"],
+  "acceptance": ["both named StorageClasses exist", "both use ebs.csi.aws.com gp3 with encrypted=true", "Nethermind requests 10000 IOPS and Prysm requests 6000 IOPS", "both use WaitForFirstConsumer and Retain"]
+}

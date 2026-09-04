@@ -1,0 +1,4 @@
+flowchart LR
+  A[Reviewed StorageClasses] --> B[Server-side dry-run]
+  B --> C[Apply two classes]
+  C --> D[Read-back and elevation cleanup]
