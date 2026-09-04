@@ -3,11 +3,14 @@ on:
   workflow_dispatch:
   push:
     paths: ['.ci/scanners/**', 'scripts/ci/collect-pr-evidence.sh', 'scripts/ci/collect-security-evidence.sh', 'scripts/ci/lib/common.sh', '.github/workflows/scanner-image-release.yml']
-permissions: {contents: read}
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-24.04
-    permissions: {contents: read, packages: read}
+    permissions:
+      contents: read
+      packages: read
     outputs:
       changed: ${{ steps.build.outputs.changed }}
     steps:
@@ -35,7 +38,9 @@ jobs:
     needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    permissions: {contents: read, packages: write}
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}

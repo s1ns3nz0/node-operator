@@ -3,11 +3,14 @@ on:
   workflow_dispatch:
   push:
     paths: ['.ci/toolchains/**', 'docs/gitops/argocd-private-values.example.yaml', 'docs/gitops/vault-values.example.yaml', '.github/workflows/toolchain-image-release.yml']
-permissions: {contents: read}
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-24.04
-    permissions: {contents: read, packages: read}
+    permissions:
+      contents: read
+      packages: read
     strategy:
       matrix:
         include:
@@ -42,7 +45,9 @@ jobs:
     needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    permissions: {contents: read, packages: write}
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         include:
