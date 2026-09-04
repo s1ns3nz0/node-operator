@@ -1,0 +1,63 @@
+name: ECR Signer Mirror
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Approved GHCR Vault release-signer reference pinned by sha256 digest
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-24.04
+    environment: ecr-signer-mirror
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate approved signer source
+        env:
+          SOURCE: ${{ inputs.source }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE" =~ ^ghcr\.io/s1ns3nz0/node-operator/vault-release-signer@sha256:[a-f0-9]{64}$ ]] || {
+            echo 'source must be the approved Vault signer GHCR repository pinned by a sha256 digest' >&2
+            exit 1
+          }
+          echo "SOURCE_DIGEST=${SOURCE##*@}" >> "$GITHUB_ENV"
+      - name: Assume private ECR mirror role
+        env:
+          AWS_REGION: ap-northeast-2
+          AWS_ROLE_ARN: ${{ vars.ECR_SIGNER_MIRROR_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          test -n "$AWS_ROLE_ARN"
+          token="$(curl --fail --silent --show-error -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -er .value)"
+          aws sts assume-role-with-web-identity --role-arn "$AWS_ROLE_ARN" --role-session-name "signer-mirror-${GITHUB_RUN_ID}" --web-identity-token "$token" --duration-seconds 900 > "$RUNNER_TEMP/creds.json"
+          jq -r '.Credentials | "AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nAWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nAWS_SESSION_TOKEN=\(.SessionToken)"' "$RUNNER_TEMP/creds.json" >> "$GITHUB_ENV"
+      - name: Mirror approved image to private ECR
+        env:
+          AWS_REGION: ap-northeast-2
+          ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          SOURCE: ${{ inputs.source }}
+        run: |
+          set -euo pipefail
+          test -n "$ACCOUNT_ID"
+          destination_repository='node-operator-baseline-vault-release-signer'
+          destination_registry="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+          immutable_tag="approved-${SOURCE_DIGEST#sha256:}"
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker pull "$SOURCE"
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$destination_registry"
+          docker tag "$SOURCE" "$destination_registry/$destination_repository:$immutable_tag"
+          docker push "$destination_registry/$destination_repository:$immutable_tag"
+          destination_digest="$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$destination_repository" --image-ids "imageTag=$immutable_tag" --query 'imageDetails[0].imageDigest' --output text)"
+          [[ "$destination_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          printf 'ecr_image=%s/%s@%s\n' "$destination_registry" "$destination_repository" "$destination_digest" >> "$GITHUB_OUTPUT"
+          printf '### Private signer image mirror\n\n- Source: `%s`\n- Destination digest: `%s`\n' "$SOURCE" "$destination_digest" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,7 @@
+{
+  "task_id": "2026-09-05-signer-ecr-mirror-delivery",
+  "objective": "Add a protected, digest-only GitHub workflow that can mirror an approved Vault release-signer image into the conditional same-account private ECR repository.",
+  "authority": "source-only implementation; no workflow dispatch, AWS apply, image publication, or secret changes",
+  "owner": "Sol",
+  "model_fallbacks": []
+}
