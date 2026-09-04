@@ -1,0 +1,1 @@
+{"live_diagnosis":{"vault_1_and_2":"uninitialized empty Raft stores; successfully joined through mTLS to vault-0","recovery":"all three vault pods Ready; active vault unsealed with KMS seal and Raft HA"},"validation":[],"secrets":"No recovery key, root token, or TLS private material is recorded."}
