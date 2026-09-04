@@ -12,9 +12,15 @@ reviewing the exact saved Terraform plan and non-sensitive evidence.
 Owner: Sol. Confirm the remediation bundle is accepted, the approved Vault
 chart archive is present in private ECR at version `0.31.0`, the server,
 injector, and bootstrap-toolchain artifacts retain approved immutable
-references, and no source change is pending. Re-run the applicable offline
+references, and no source change is pending. Before any live plan or
+CodeBuild approval, obtain the private-ECR OCI **manifest digest** resolved by
+the approved `0.31.0` chart tag, record it in the reviewed execution bundle,
+and bind the deployment to that exact digest (or attest immediately before the
+one-purpose run that the immutable tag resolves to it). The source archive
+SHA-256 does not replace this ECR-side binding. Re-run the applicable offline
 contract checks and a runnable policy-adapter evidence set. Stop if an action,
-digest, policy adapter, or chart version differs from the reviewed record.
+chart manifest digest, policy adapter, or chart version differs from the
+reviewed record.
 
 ## Gate 1 — live prepare plan review (no bootstrap execution)
 
@@ -43,8 +49,10 @@ ownership, and an operator-approved initialization/key-custody runbook.
 Then create a new, refresh-backed Terraform plan with the identical reviewed
 inputs but `enable_vault_bootstrap_cluster_admin=true`. The plan must differ
 from Gate 1 only by the temporary `AmazonEKSClusterAdminPolicy` association
-and necessary dependencies. A human must review and explicitly approve this
-exact saved plan and the one-purpose CodeBuild invocation separately.
+and necessary dependencies. Verify again that the chart tag resolves to the
+Gate 0-recorded OCI manifest digest. A human must review and explicitly
+approve this exact saved plan and the one-purpose CodeBuild invocation
+separately.
 
 ## Gate 3 — bounded deployment and health evidence
 
@@ -83,6 +91,7 @@ continue to release signing unless revocation passes.
 
 The future execution bundle must contain reviewed saved-plan summaries,
 non-sensitive resource/action counts, immutable artifact identifiers, the
-CodeBuild outcome, health/audit/restore attestations, and the post-revoke
-verifier result. It must explicitly distinguish observed evidence from operator
-attestation.
+CodeBuild outcome, the approved chart's private-ECR OCI manifest digest and
+tag-to-digest resolution evidence, health/audit/restore attestations, and the
+post-revoke verifier result. It must explicitly distinguish observed evidence
+from operator attestation.

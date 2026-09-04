@@ -6,13 +6,14 @@
     "Vault GitOps operations contract"
   ],
   "recon_summary": "Prepare, deploy, and revoke require independent task-level approvals. The policy-adapter evidence set is not runnable in the current environment and is a precondition for any live stage.",
+  "independent_review": "reports/2026-09-04-vault-live-prepare-deploy-plan-debrief.md: live deployment blocked until the approved private-ECR OCI chart manifest digest is bound to the Helm-installed artifact.",
   "non_actions": [
     "No Terraform plan or apply against a live backend", "No AWS/EKS/Vault/Kubernetes access", "No CodeBuild execution", "No Vault initialization, unseal, secret or TLS operation"
   ],
   "future_evidence_requirements": [
     "saved plan digest and reviewed resource allowlist for each live phase",
     "non-sensitive caller/account/region/state-workspace attestation",
-    "artifact parity and CodeBuild outcome", "health/audit/restore operator attestations",
+    "artifact parity, approved chart OCI manifest digest, tag-to-digest resolution, and CodeBuild outcome", "health/audit/restore operator attestations",
     "post-revoke cluster-admin absence verification"
   ]
 }
