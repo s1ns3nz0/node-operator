@@ -56,5 +56,5 @@
   ],
   "model_fallbacks": [],
   "validation": ["cert-manager chart signature verification", "Helm render", "manifest schema and invariant checks", "harness check", "policy adapter", "independent clean-room debrief"],
-  "status": "in_progress"
+  "status": "completed"
 }
