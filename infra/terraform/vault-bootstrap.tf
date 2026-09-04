@@ -118,9 +118,15 @@ data "aws_iam_policy_document" "vault_bootstrap" {
     resources = ["*"]
   }
   statement {
-    sid       = "PullOnlyPrivateVaultArtifacts"
-    actions   = ["ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:DescribeImages", "ecr:GetDownloadUrlForLayer"]
-    resources = [aws_ecr_repository.private_gitops["vault"].arn, aws_ecr_repository.private_gitops["vault_chart"].arn]
+    sid     = "PullOnlyPrivateVaultArtifacts"
+    actions = ["ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:DescribeImages", "ecr:GetDownloadUrlForLayer"]
+    # Keep the existing Vault pull scope stable when other private GitOps
+    # repositories are added. These deterministic names remain the only two
+    # repositories the runner can read.
+    resources = [
+      "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.private_gitops_repositories.vault}",
+      "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.private_gitops_repositories.vault_chart}",
+    ]
   }
 }
 
