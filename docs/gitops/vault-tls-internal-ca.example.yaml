@@ -49,6 +49,9 @@ spec:
   secretName: vault-tls
   commonName: vault.vault.svc
   dnsNames:
+    # The only release-facing Vault identity. It resolves solely through the
+    # private hosted zone created for the VPC-internal signer path.
+    - vault.node-operator.internal
     - vault
     - vault.vault
     - vault.vault.svc
