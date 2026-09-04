@@ -163,6 +163,7 @@ data "aws_iam_policy_document" "github_ecr_signer_mirror" {
     actions = [
       "ecr:BatchCheckLayerAvailability",
       "ecr:CompleteLayerUpload",
+      "ecr:DescribeImages",
       "ecr:InitiateLayerUpload",
       "ecr:PutImage",
       "ecr:UploadLayerPart",

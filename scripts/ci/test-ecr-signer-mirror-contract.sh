@@ -32,6 +32,7 @@ for required in \
   '"ecr:GetAuthorizationToken"' \
   '"ecr:BatchCheckLayerAvailability"' \
   '"ecr:CompleteLayerUpload"' \
+  '"ecr:DescribeImages"' \
   '"ecr:InitiateLayerUpload"' \
   '"ecr:PutImage"' \
   '"ecr:UploadLayerPart"'; do
@@ -71,7 +72,8 @@ for required in \
   "ghcr\\.io/s1ns3nz0/node-operator/vault-release-signer@sha256" \
   "destination_repository='node-operator-baseline-vault-release-signer'" \
   'docker push' \
-  'describe-images'; do
+  'describe-images' \
+  '::add-mask::'; do
   grep -Fq "$required" "$workflow" || fail "mirror workflow omits contract fragment: $required"
 done
 
