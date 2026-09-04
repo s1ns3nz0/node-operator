@@ -1,0 +1,48 @@
+{
+  "id": "2026-09-04-vault-private-delivery",
+  "title": "Establish the private Vault chart delivery path",
+  "classification": "non-trivial",
+  "classification_reason": [
+    "creates cost-bearing private CI infrastructure",
+    "prepares a security-critical secret-management deployment path",
+    "introduces registry and Kubernetes access boundaries"
+  ],
+  "expected_outcome": "A reviewed Terraform design and validation path create a dedicated private ECR destination and a one-purpose VPC CodeBuild executor that can deploy the previously approved sealed Vault Helm release after chart/image mirroring and non-secret prerequisite checks.",
+  "dependencies": ["2026-09-04-vault-helm-deploy", "2026-09-03-private-baseline-apply"],
+  "constraints": [
+    "Use only account 106760547719 and EKS cluster node-operator.",
+    "Do not initialize or unseal Vault, configure Vault, read or create any secret, or expose a public listener.",
+    "The executor may inspect only the existence and metadata of vault-tls, never its data.",
+    "All chart, runtime-image, and toolchain inputs must be digest/version pinned and available from private ECR at execution time.",
+    "Cluster-admin is prohibited by default. The only exception is a separately gated, Vault-dedicated EKS access-policy association used solely for the first Helm installation; its post-install removal is a required verification step.",
+    "Evidence contains no secret, kubeconfig, token, certificate, or raw CloudWatch log material."
+  ],
+  "authorization": {
+    "repository_mutation": true,
+    "external_actions": [
+      "read non-sensitive AWS, ECR, and EKS metadata in account 106760547719",
+      "create or update the reviewed private ECR and VPC CodeBuild infrastructure only after Terraform plan review",
+      "mirror only approved digest-pinned public OCI artifacts into the dedicated private ECR destination",
+      "run the one-purpose private executor only to render Helm and verify non-secret prerequisite existence",
+      "after explicit user approval, temporarily associate AmazonEKSClusterAdminPolicy only with the dedicated Vault bootstrap role while it installs the approved sealed Helm release, then remove that association immediately"
+    ],
+    "prohibited_actions": [
+      "Vault Helm apply before the delivery-path plan is reviewed",
+      "Vault initialization or unseal",
+      "secret read or change",
+      "public endpoint or DNS route",
+      "workload deployment",
+      "release signing",
+      "production access outside account 106760547719"
+    ]
+  },
+  "primary_owner": {"tier": "sol", "responsibility": "security boundary, Terraform integration, final sign-off"},
+  "delegations": [
+    {"id": "recon", "tier": "luna", "owner": "/root/vault_delivery_recon", "files": [], "worktree": "read-only", "branch": "none", "acceptance_checks": ["minimal private delivery design"], "escalation_trigger": "a required datum is secret material"},
+    {"id": "implementation-review", "tier": "terra", "owner": "/root", "files": ["infra/terraform/vault-bootstrap.tf", "infra/terraform/endpoints.tf", "infra/terraform/private-gitops.tf", ".ci/toolchains/vault-bootstrap.Dockerfile", ".github/workflows/toolchain-image-release.yml", "plans/2026-09-04-vault-private-delivery/*"], "worktree": "required", "branch": "task/2026-09-04-vault-private-delivery", "acceptance_checks": ["Terraform and contract validation"], "escalation_trigger": "requires privileged or public access"},
+    {"id": "debrief", "tier": "terra", "owner": "pending", "files": ["reports/2026-09-04-vault-private-delivery-debrief.md"], "worktree": "required", "branch": "task/2026-09-04-vault-private-delivery", "acceptance_checks": ["clean-room summary"], "escalation_trigger": "evidence includes prohibited material"}
+  ],
+  "model_fallbacks": [{"delegation":"implementation-review","requested_tier":"terra","used_tier":"sol","reason":"the delegated Terra worker returned no implementation before interruption; Sol completed the bounded worktree change and will obtain a fresh independent Terra review."}],
+  "validation": ["Terraform fmt and validate", "offline Terraform plan", "delivery contract test", "temporary EKS access-policy revocation check", "harness check", "independent Terra review", "clean-room debrief"],
+  "status": "in_progress"
+}

@@ -8,6 +8,7 @@ locals {
   private_gitops_repositories = {
     argocd = "${local.name_prefix}-gitops-argocd"
     charts = "${local.name_prefix}-gitops-charts"
+    vault  = "${local.name_prefix}-gitops-vault"
   }
 }
 

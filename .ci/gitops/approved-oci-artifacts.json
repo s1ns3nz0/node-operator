@@ -30,6 +30,18 @@
       "destination": "argocd",
       "ecrTag": "0e2c0f21b1d68945b2470a3a13f675ae205b06edc5e543d222105aa7fffbfa6f",
       "purpose": "Private Argo CD bootstrap toolchain for commit 8a453d8"
+    },
+    {
+      "source": "docker.io/hashicorp/vault@sha256:268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10",
+      "destination": "vault",
+      "ecrTag": "268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10",
+      "purpose": "Vault server and agent image 1.20.4 for chart 0.31.0"
+    },
+    {
+      "source": "docker.io/hashicorp/vault-k8s@sha256:8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f",
+      "destination": "vault",
+      "ecrTag": "8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f",
+      "purpose": "Vault injector image 1.7.0 for chart 0.31.0"
     }
   ]
 }

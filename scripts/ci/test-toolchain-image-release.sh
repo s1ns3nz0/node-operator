@@ -7,7 +7,7 @@ root="$(cd "$script_dir/../.." && pwd)"
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
 
-for dockerfile in "$root/.ci/toolchains/terraform-validation.Dockerfile" "$root/.ci/toolchains/release-build.Dockerfile" "$root/.ci/toolchains/argocd-bootstrap.Dockerfile"; do
+for dockerfile in "$root/.ci/toolchains/terraform-validation.Dockerfile" "$root/.ci/toolchains/release-build.Dockerfile" "$root/.ci/toolchains/argocd-bootstrap.Dockerfile" "$root/.ci/toolchains/vault-bootstrap.Dockerfile"; do
   grep -Eqx 'FROM ubuntu@sha256:[0-9a-f]{64}' "$dockerfile"
   if grep -qE 'curl[^\n]*\|[[:space:]]*(tar|unzip|install)' "$dockerfile"; then
     printf 'toolchain image must verify downloads before extraction or installation\n' >&2

@@ -11,6 +11,10 @@ server:
   serviceAccount:
     create: true
     name: vault
+  image:
+    # Digest-derived immutable tags reference the reviewed private ECR mirror.
+    repository: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault
+    tag: 268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10
   ha:
     enabled: true
     replicas: 3
@@ -66,4 +70,6 @@ server:
 # in-cluster workloads, and the private release-runner/CodeBuild paths.
 injector:
   enabled: true
-
+  image:
+    repository: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault
+    tag: 8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f

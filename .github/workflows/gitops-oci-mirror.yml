@@ -11,7 +11,7 @@ on:
         description: Approved destination (argocd or charts)
         required: true
         type: choice
-        options: [argocd, charts]
+        options: [argocd, charts, vault]
 
 permissions:
   contents: read
@@ -33,7 +33,7 @@ jobs:
           DESTINATION: ${{ inputs.destination }}
         run: |
           [[ "$SOURCE" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]] || { echo 'source must be an OCI reference pinned to a 64-character sha256 digest' >&2; exit 1; }
-          case "$DESTINATION" in argocd|charts) ;; *) exit 1;; esac
+          case "$DESTINATION" in argocd|charts|vault) ;; *) exit 1;; esac
           ecr_tag="$(jq -er --arg source "$SOURCE" --arg destination "$DESTINATION" '
             select(.version == 1) | .artifacts[] | select(.source == $source and .destination == $destination) | .ecrTag
           ' .ci/gitops/approved-oci-artifacts.json)" || {

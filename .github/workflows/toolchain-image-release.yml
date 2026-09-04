@@ -6,6 +6,7 @@ on:
     paths:
       - '.ci/toolchains/**'
       - 'docs/gitops/argocd-private-values.example.yaml'
+      - 'docs/gitops/vault-values.example.yaml'
       - '.github/workflows/toolchain-image-release.yml'
 
 permissions:
@@ -33,6 +34,9 @@ jobs:
           - image: argocd-bootstrap
             dockerfile: .ci/toolchains/argocd-bootstrap.Dockerfile
             input_file: docs/gitops/argocd-private-values.example.yaml
+          - image: vault-bootstrap
+            dockerfile: .ci/toolchains/vault-bootstrap.Dockerfile
+            input_file: docs/gitops/vault-values.example.yaml
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -14,8 +14,8 @@ locals {
 
   required_interface_endpoint_services = setunion(
     local.baseline_interface_endpoint_services,
-    (var.enable_release_signer || var.enable_argocd_bootstrap_runner) ? toset(["logs", "sts"]) : toset([]),
-    var.enable_argocd_bootstrap_runner ? toset(["eks"]) : toset([]),
+    (var.enable_release_signer || var.enable_argocd_bootstrap_runner || var.enable_vault_bootstrap_runner) ? toset(["logs", "sts"]) : toset([]),
+    (var.enable_argocd_bootstrap_runner || var.enable_vault_bootstrap_runner) ? toset(["eks"]) : toset([]),
   )
 }
 
@@ -58,6 +58,16 @@ resource "aws_vpc_security_group_ingress_rule" "endpoints_https_from_argocd_boot
   description                  = "HTTPS from private Argo CD bootstrap executor to VPC interface endpoints"
   security_group_id            = aws_security_group.endpoints.id
   referenced_security_group_id = aws_security_group.argocd_bootstrap[0].id
+  from_port                    = 443
+  to_port                      = 443
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "endpoints_https_from_vault_bootstrap" {
+  count                        = var.enable_vault_bootstrap_runner ? 1 : 0
+  description                  = "HTTPS from private Vault bootstrap executor to VPC interface endpoints"
+  security_group_id            = aws_security_group.endpoints.id
+  referenced_security_group_id = aws_security_group.vault_bootstrap[0].id
   from_port                    = 443
   to_port                      = 443
   ip_protocol                  = "tcp"
