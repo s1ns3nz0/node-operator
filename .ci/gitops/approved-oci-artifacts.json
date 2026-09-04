@@ -53,6 +53,12 @@
       "destination": "vault",
       "ecrTag": "8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f",
       "purpose": "Vault injector image 1.7.0 for chart 0.31.0"
+    },
+    {
+      "source": "ghcr.io/s1ns3nz0/node-operator/vault-bootstrap@sha256:463fcfbf77bfb45f59484ca3381e5cc7b068af9123ac522112ff25e625575e87",
+      "destination": "vault",
+      "ecrTag": "463fcfbf77bfb45f59484ca3381e5cc7b068af9123ac522112ff25e625575e87",
+      "purpose": "Private Vault bootstrap toolchain for commit 005e535"
     }
   ]
 }
