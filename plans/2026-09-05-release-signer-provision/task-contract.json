@@ -1,0 +1,7 @@
+{
+  "task_id": "2026-09-05-release-signer-provision",
+  "objective": "Provision and validate the private Vault-backed release signer without exposing credentials or release artifacts.",
+  "scope": ["infra/terraform/vault-signer.tf", "private AWS signer resources"],
+  "invariants": ["no public endpoint", "no static Vault token", "no destructive Terraform action", "temporary elevated IAM access is removed after use"],
+  "acceptance": ["CodeBuild signer project exists with a private ECR digest image", "its role has only required VPC attachment, artifact, KMS, ECR, and log permissions", "source checks pass"]
+}

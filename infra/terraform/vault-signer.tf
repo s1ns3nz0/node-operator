@@ -796,6 +796,24 @@ resource "aws_iam_role" "release_codebuild_signer" {
 data "aws_iam_policy_document" "release_codebuild_signer" {
   count = var.enable_release_signer ? 1 : 0
 
+  # CodeBuild validates the VPC attachment using its service role before it
+  # creates a build. These permissions are limited to VPC interface lifecycle
+  # and discovery; they grant neither instance control nor route management.
+  statement {
+    sid = "PrivateCodeBuildVpcAttachment"
+    actions = [
+      "ec2:CreateNetworkInterface",
+      "ec2:CreateNetworkInterfacePermission",
+      "ec2:DeleteNetworkInterface",
+      "ec2:DescribeDhcpOptions",
+      "ec2:DescribeNetworkInterfaces",
+      "ec2:DescribeSecurityGroups",
+      "ec2:DescribeSubnets",
+      "ec2:DescribeVpcs",
+    ]
+    resources = ["*"]
+  }
+
   statement {
     sid       = "Logs"
     actions   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
