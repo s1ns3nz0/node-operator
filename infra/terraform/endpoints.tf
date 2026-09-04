@@ -16,6 +16,7 @@ locals {
     local.baseline_interface_endpoint_services,
     (var.enable_release_signer || var.enable_argocd_bootstrap_runner || var.enable_vault_bootstrap_runner) ? toset(["logs", "sts"]) : toset([]),
     (var.enable_argocd_bootstrap_runner || var.enable_vault_bootstrap_runner) ? toset(["eks"]) : toset([]),
+    var.enable_temporary_ssm_ops_host ? toset(["ssm", "ssmmessages", "ec2messages"]) : toset([]),
   )
 }
 
@@ -68,6 +69,16 @@ resource "aws_vpc_security_group_ingress_rule" "endpoints_https_from_vault_boots
   description                  = "HTTPS from private Vault bootstrap executor to VPC interface endpoints"
   security_group_id            = aws_security_group.endpoints.id
   referenced_security_group_id = aws_security_group.vault_bootstrap[0].id
+  from_port                    = 443
+  to_port                      = 443
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "endpoints_https_from_temporary_ssm_ops_host" {
+  count                        = var.enable_temporary_ssm_ops_host ? 1 : 0
+  description                  = "HTTPS from the temporary SSM operations host to interface endpoints"
+  security_group_id            = aws_security_group.endpoints.id
+  referenced_security_group_id = aws_security_group.temporary_ssm_ops_host[0].id
   from_port                    = 443
   to_port                      = 443
   ip_protocol                  = "tcp"

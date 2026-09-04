@@ -8,6 +8,11 @@ output "private_subnet_ids" {
   value       = aws_subnet.private[*].id
 }
 
+output "temporary_ssm_ops_host_instance_id" {
+  description = "Temporary private SSM tunnel target instance ID, or null while disabled."
+  value       = try(aws_instance.temporary_ssm_ops_host[0].id, null)
+}
+
 output "audit_bucket_name" {
   description = "Private audit bucket name."
   value       = aws_s3_bucket.audit.id

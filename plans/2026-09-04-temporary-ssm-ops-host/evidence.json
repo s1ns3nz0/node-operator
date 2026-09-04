@@ -1,0 +1,15 @@
+{
+  "task_id": "2026-09-04-temporary-ssm-ops-host",
+  "status": "approved_for_exact_apply",
+  "checks": [
+    {"name":"local Terraform validation","status":"passed","result":"terraform fmt -check and terraform validate passed after the temporary host implementation; the existing Vault Prepare boundary test also passed."},
+    {"name":"live saved-plan gate","status":"passed","result":"Refresh-backed termination plan JSON SHA-256 b26c745a057bb64917c62413584af86d0915986568f93043a0e35c72c2a2c8c4 contains 15 creates and one local IAM-policy-document read. The creates are one private EC2 host, its two IAM roles/profile/policy attachment/policy, one no-ingress SG, two host egress rules, two SG ingress rules, three SSM interface endpoints, and one one-time termination scheduler."},
+    {"name":"saved-plan boundary assertions","status":"passed","result":"The instance has no public IP, SSH key, or user data; the host SG has zero inbound rules; the scheduler calls ec2:TerminateInstances at 22:00 Asia/Seoul on 2026-09-04. No NAT, internet gateway, key pair, EKS access-policy association, or CodeBuild action appears among changed resources."},
+    {"name":"independent Terra review","status":"passed","result":"Terra required replacement of the initial stop schedule with a one-time termination schedule and SourceAccount/exact SourceArn restrictions in the scheduler trust policy. The refreshed plan and boundary assertions satisfy that correction."}
+  ],
+  "notes": [
+    "No credentials, endpoint addresses, Kubernetes resources, or Secret material are admissible evidence.",
+    "The host is an SSM TCP tunnel target only; the operator's local AWS identity remains responsible for EKS authentication.",
+    "Independent Terra review required changing the scheduler from stop to termination so the temporary administrative path cannot remain restartable after 22:00 KST."
+  ]
+}

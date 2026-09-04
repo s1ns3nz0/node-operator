@@ -1,0 +1,15 @@
+{
+  "id": "2026-09-04-temporary-ssm-ops-host",
+  "title": "Create a temporary private SSM tunnel host for EKS administration",
+  "classification": "non-trivial",
+  "classification_reason": ["creates cost-bearing EC2 infrastructure", "enables a private administrative network path", "requires time-bounded lifecycle control"],
+  "expected_outcome": "A single private, no-inbound EC2 instance can be reached only with AWS Systems Manager and used as an SSM TCP tunnel to the private EKS endpoint; it is automatically terminated at 22:00 KST on 2026-09-04.",
+  "dependencies": ["2026-09-04-vault-prepare-apply"],
+  "constraints": ["Use only the approved node-operator VPC private subnet and no public IP or inbound security-group rule.", "Use SSM Session Manager only; do not add SSH keys, an Internet gateway, NAT, or a public endpoint.", "Do not access Kubernetes resources, Secret data, Vault, Helm, CodeBuild, or application workloads in this task.", "Use the host only as an SSM port-forward target; do not install or persist Kubernetes credentials or secret material on it.", "Create a one-time automatic termination at 22:00 KST on 2026-09-04 and record only non-sensitive resource metadata and termination-schedule evidence."],
+  "authorization": {"repository_mutation": true, "external_actions": ["create exactly one private SSM-managed EC2 operations host in the approved node-operator VPC", "create its least-privilege IAM instance role/profile, no-ingress security group, and one-time automatic termination schedule", "read non-sensitive EC2, SSM, VPC, endpoint, and Terraform state metadata for verification"], "prohibited_actions": ["public IP", "inbound rule", "SSH key", "NAT", "Internet gateway", "Kubernetes or Secret access", "Vault", "Helm", "CodeBuild", "production access outside account 106760547719", "merge"]},
+  "primary_owner": {"tier": "sol", "responsibility": "network boundary, time-bounded access, live-plan gate, and integration"},
+  "delegations": [{"id":"recon","tier":"luna","owner":"/root/temporary_ssm_ops_host_recon","files":["infra/terraform"],"worktree":"read-only","branch":"none","acceptance_checks":["private-only design", "existing SSM reachability and AMI pattern"],"escalation_trigger":"requires public network or Kubernetes credentials"},{"id":"debrief","tier":"terra","owner":"pending","files":["reports/2026-09-04-temporary-ssm-ops-host-debrief.md"],"worktree":"required","branch":"separate review worktree","acceptance_checks":["clean-room summary"],"escalation_trigger":"evidence suggests an inbound/public/admin persistence boundary"}],
+  "model_fallbacks": [],
+  "validation": ["Terraform format and validation", "live saved-plan allowlist", "post-apply EC2 private/SSM metadata check", "22:00 KST termination-schedule check", "harness check", "clean-room Terra debrief"],
+  "status": "in_progress"
+}

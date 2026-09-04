@@ -96,6 +96,12 @@ variable "node_instance_type" {
   }
 }
 
+variable "enable_temporary_ssm_ops_host" {
+  description = "Create one temporary private SSM tunnel host for local access to the private EKS API."
+  type        = bool
+  default     = false
+}
+
 variable "node_min_size" {
   description = "Minimum managed-node capacity."
   type        = number
