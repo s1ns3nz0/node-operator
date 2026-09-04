@@ -1,16 +1,22 @@
 {
   "task_id": "2026-09-04-vault-helm-deploy",
-  "status": "blocked_pending_private_cluster_access",
+  "status": "awaiting_explicit_deploy_approval",
   "checks": [
     {
       "name": "private EKS prerequisite route",
       "status": "blocked",
       "result": "The target cluster is active and private-endpoint-only. This workstation has no target-cluster kubecontext, so it cannot verify the externally managed vault namespace or vault-tls Secret through the required private path."
+    },
+    {
+      "name": "live deploy saved-plan gate",
+      "status": "passed",
+      "result": "A refresh-backed saved plan produced exactly one create, aws_eks_access_policy_association.vault_bootstrap_cluster_admin[0], with zero changes and zero deletes. Plan JSON SHA-256: d93bb1575b2859c31f01036d5096ad872efa96b869bfeb6eb56b98526c64e22a."
     }
   ],
   "notes": [
     "No secret material is admissible evidence.",
     "The current local Kubernetes context targets a separate local cluster; its namespace result is not evidence for the target EKS cluster.",
-    "No Helm, CodeBuild, Vault, secret read, secret change, or deployment action occurred."
+    "No Helm, CodeBuild, Vault, secret read, secret change, or deployment action occurred.",
+    "The dedicated private CodeBuild project is the only available target-cluster execution path. It checks the namespace and Secret name without reading data before its Helm deployment command. Applying the temporary association and starting that project remain separately awaiting explicit approval."
   ]
 }
