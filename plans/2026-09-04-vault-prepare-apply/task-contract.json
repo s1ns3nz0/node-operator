@@ -1,0 +1,15 @@
+{
+  "id": "2026-09-04-vault-prepare-apply",
+  "title": "Apply the reviewed Vault bootstrap prepare infrastructure",
+  "classification": "non-trivial",
+  "classification_reason": ["creates cost-bearing AWS infrastructure", "creates an EKS bootstrap identity", "prepares a secret-management deployment boundary"],
+  "expected_outcome": "The reviewed Vault prepare runner resources exist privately, with no cluster-admin policy association and without executing the runner or deploying Vault.",
+  "dependencies": ["2026-09-04-vault-prepare-live-plan-retry"],
+  "constraints": ["Use AWS_PROFILE=node-operator-t2 and the recorded remediation commit only.", "The only IAM mutation is to add eks:CreateAccessEntry on the node-operator cluster, codebuild:CreateProject on the Vault bootstrap project, and iam:PassRole for the Vault bootstrap role conditioned on codebuild.amazonaws.com.", "Immediately before apply, regenerate a refresh-backed plan and require only the two remaining creates, zero changes, and zero deletes.", "Set Vault runner=true and Vault cluster-admin=false; preserve Argo CD bootstrap runner=true/admin=false.", "Apply only the reviewed saved plan.", "Do not start CodeBuild, Helm, kubectl, Vault, secret access, cluster-admin association, public-network change, merge, or publication."],
+  "authorization": {"repository_mutation": true, "external_actions": ["assume the existing NodeOperatorTerraformApply role through the configured profile", "update the existing NodeOperatorT2ScopedApply policy solely with the three approved IAM actions", "read-only plan refresh and ECR verification", "apply the exact reviewed Terraform saved plan only when it has the recorded 2-create/0-change/0-delete allowlist"], "prohibited_actions": ["Terraform apply outside the approved saved plan", "any IAM action other than the three exact approved additions", "CodeBuild execution", "Helm", "kubectl", "Vault", "secret access", "EKS cluster-admin association", "public endpoint or network change", "merge"]},
+  "primary_owner": {"tier": "sol", "responsibility": "plan gate, apply scope, security boundary, and final sign-off"},
+  "delegations": [{"id":"recon","tier":"luna","owner":"pending","files":[],"worktree":"read-only","branch":"none","acceptance_checks":["apply allowlist and non-goal review"],"escalation_trigger":"plan drift or cluster-admin/public resource"},{"id":"debrief","tier":"terra","owner":"pending","files":["reports/2026-09-04-vault-prepare-apply-debrief.md"],"worktree":"required","branch":"separate review worktree","acceptance_checks":["clean-room summary"],"escalation_trigger":"evidence implies deployment or secret access"}],
+  "model_fallbacks": [],
+  "validation": ["refresh-backed plan allowlist", "exact saved-plan apply", "post-apply read-only resource and EKS policy checks", "harness check", "clean-room Terra debrief"],
+  "status": "completed"
+}
