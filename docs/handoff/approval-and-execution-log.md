@@ -1,24 +1,29 @@
 # Approval and execution log
 
-This log records each point where an execution decision was required during the
-dynamic CI/CD and Hoodi node program. It contains only non-sensitive metadata;
-it must never contain tokens, endpoint URLs, certificates, secret values, raw
-scanner output, or kubeconfig data.
+This log records execution decisions for the dynamic CI/CD and Hoodi node
+program. It contains only non-sensitive metadata; it must never contain tokens,
+endpoint URLs, certificates, secret values, raw scanner output, or kubeconfig
+data.
 
 ## 2026-09-04 — private CD prerequisite preparation
 
 | Decision point | Recommended execution | Action taken | Evidence / outcome |
 | --- | --- | --- | --- |
-| GitHub release boundary | Require an Environment approval, block self-approval and administrator bypass, and protect release tags. | Created the `release` Environment; enabled a required reviewer, self-review prevention, protected-branch policy, and a SemVer tag ruleset. | Remote readback recorded in `plans/2026-09-04-private-cd-prerequisites/evidence.json`. |
-| GitHub-to-AWS runner connection | Use a repository-scoped AWS CodeConnections GitHub connection rather than a stored runner token. | Created `node-operator-private-release`; the operator completed the GitHub App authorization. | Connection status changed from `PENDING` to `AVAILABLE`; no token was stored in this repository. |
-| Dedicated CodeBuild runner creation | Create a repository-scoped ephemeral CodeBuild runner with only log-write and connection-use permissions. | Created the dedicated CodeBuild service role and granted its connection-use action only for `node-operator-private-release`. The creating principal received the same single-connection action after the first API denial. | Project creation remains denied by CodeBuild with `OAuthProviderException`; the GitHub App connection is available but its repository authorization is not accepted by the CodeBuild source-provider API. No runner project, webhook, or deployment was created. |
-| CodeBuild credential and webhook retry | Import the approved connection as a CodeBuild GitHub App credential, then create only the `WORKFLOW_JOB_QUEUED` webhook. | Imported the connection as the CodeBuild account credential and extended the runner role with connection token read/use actions scoped to that connection. | The runner project now exists and credential import succeeds. Webhook creation reaches GitHub but fails with a GitHub API permission/limit error, so no workflow job can yet be delivered. |
-| Replacement GitHub connection and runner webhook | Replace the unusable connection, import only the replacement as the CodeBuild credential, and bind the webhook to queued workflow jobs only. | Replaced the connection, updated the runner role and creating-principal policy to the new connection ARN, then created the CodeBuild webhook. | The CodeBuild webhook is `ACTIVE`; GitHub reports one active `workflow_job` webhook. No release was dispatched. |
-| Private runner network path | Preserve the no-NAT/no-public-egress VPC baseline. Add only a reviewed, destination-allowlisted private HTTPS egress path before creating a runner that must communicate with GitHub Actions. | No NAT, internet gateway, public route, or permissive runner was created. | VPC route and endpoint readback showed only private VPC routes, S3 gateway access, and AWS interface endpoints. A CodeBuild Actions runner cannot yet be validated from this VPC. |
+| GitHub release boundary | Require release-environment approval, block self-approval and administrator bypass, and protect release tags. | Created the `release` Environment, required reviewers, protected-branch policy, and a SemVer tag ruleset. | Remote readback is recorded in the task evidence. |
+| GitHub-to-AWS runner connection | Use a repository-scoped AWS CodeConnections GitHub connection rather than a stored runner token. | Created `node-operator-private-runner`, imported it as the CodeBuild GitHub App credential, and granted only connection-use/token-read permissions to the runner role. | Connection status is `AVAILABLE`; no token was stored in the repository. |
+| Dedicated CodeBuild runner and webhook | Create a repository-scoped ephemeral runner and accept only queued workflow jobs. | Created `node-operator-baseline-private-release` with the CodeBuild GitHub Actions runner buildspec and an active `WORKFLOW_JOB_QUEUED` webhook. | A non-VPC smoke workflow completed successfully. |
+| Private service-path smoke permissions | Grant only the API actions necessary to verify runner identity, private EKS reachability, ECR authentication, and CodeBuild log-group discovery. | Added `eks:DescribeCluster` for `node-operator`, `ecr:GetAuthorizationToken`, and `logs:DescribeLogGroups` to the dedicated CodeBuild runner role; executed the same commands in the private CodeBuild project. | The VPC build completed successfully. The workflow check is committed and awaits protected-PR merge before it becomes recurring evidence. |
+| Temporary self-approval for VPC runner smoke | Permit self-review only long enough to release one manually dispatched connectivity test, then restore the protection. | Set `prevent_self_review=false`, approved the one pending `release` deployment, then restored `prevent_self_review=true` immediately after completion. | The approved run completed successfully; the normal release gate is again enforced. |
+| Private runner network path | Keep EKS private and add outbound-only egress for the runner, because GitHub Actions runner registration cannot use AWS PrivateLink. | Created an IGW, a dedicated small public NAT subnet and route table, one NAT gateway, a private-subnet default route to that NAT, and runner security-group TCP/443 egress. The private workload subnets retain no public IP assignment. | The post-change CodeBuild runner build and GitHub smoke job both succeeded. EKS remains private-endpoint only. |
+| Raw evidence retention and access control | Retain only non-sensitive digest-bound summaries; never publish raw DAST captures, certificate material, scanner candidates, or telemetry payloads. | Added the private-CD evidence retention contract. | A runtime telemetry service is explicitly still a later approval-dependent prerequisite. |
+| Release signer image prerequisite | Use a reviewed, same-account private-ECR digest for the signer build. | Checked the GitHub package API and private ECR repository state without modifying credentials. | The current CLI token lacks `read:packages` and the private signer repository is absent; image mirroring remains a recorded prerequisite. |
+| Vault bootstrap readiness diagnostics | Allow the private bootstrap executor to read only Pod/PVC/event state in the `vault` namespace so it can verify its own rollout. | Associated the EKS namespace-scoped `AmazonEKSViewPolicy` with the dedicated Vault bootstrap role and ran read-only diagnostics. | EKS API, encrypted PVCs, and one Vault Pod are reachable; the Vault cluster remains uninitialized and sealed, so replicas are correctly not Ready. |
+| Vault initialization | Initialize the KMS-sealed Vault HA cluster and place recovery/root material in an approved secret-management process. | Not executed. | This operation creates secret material and needs explicit secret-handling authorization; it cannot be replaced with a readiness bypass or manual pass. |
+| Signer ECR mirror live plan | Enable only the conditional signer-mirror resources from a state-aligned Terraform input set. | Ran a read-only plan with the mirror flag; did not apply it. | The plan exposed 32 unrelated destroys from stale optional state/default-input mismatch and KMS `DescribeKey` denials for the current principal. A targeted or incomplete plan is not an apply basis. |
 
 ## Operating rule for later tasks
 
-For each approval-dependent action, append an entry before execution with the
-decision point, recommended bounded action, actual action, and non-sensitive
-evidence. A rejected, unavailable, or pending approval is recorded as a failed
-prerequisite, not converted into a manual pass.
+For every approval-dependent action, append the decision point, bounded action,
+actual action, and non-sensitive evidence. A rejected, unavailable, or pending
+approval is recorded as a prerequisite failure, never converted into a manual
+pass.
