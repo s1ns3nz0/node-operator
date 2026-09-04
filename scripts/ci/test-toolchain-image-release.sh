@@ -15,6 +15,18 @@ for dockerfile in "$root/.ci/toolchains/terraform-validation.Dockerfile" "$root/
   fi
 done
 
+for required in \
+  'ARG CA_CERTIFICATES_VERSION=' \
+  'ARG CURL_VERSION=' \
+  'ARG TAR_VERSION=' \
+  'ARG UNZIP_VERSION=' \
+  'ca-certificates=${CA_CERTIFICATES_VERSION}' \
+  'curl=${CURL_VERSION}' \
+  'tar=${TAR_VERSION}' \
+  'unzip=${UNZIP_VERSION}'; do
+  grep -Fq "$required" "$root/.ci/toolchains/vault-bootstrap.Dockerfile"
+done
+
 expected_input_sha="$({ sha256sum "$root/.ci/toolchains/terraform-validation.Dockerfile"; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
 mkdir -p "$temporary_directory/bin"
 printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' \
@@ -31,3 +43,7 @@ test "$output" = 'terraform-validation image inputs are unchanged; skipping buil
 expected_bootstrap_input_sha="$({ sha256sum "$root/.ci/toolchains/argocd-bootstrap.Dockerfile" "$root/docs/gitops/argocd-private-values.example.yaml"; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
 output="$(cd "$root" && EXPECTED_INPUT_SHA="$expected_bootstrap_input_sha" GITHUB_REPOSITORY=s1ns3nz0/node-operator GITHUB_SHA=fixture PATH="$temporary_directory/bin:$PATH" .ci/toolchains/release-toolchain-image.sh argocd-bootstrap .ci/toolchains/argocd-bootstrap.Dockerfile docs/gitops/argocd-private-values.example.yaml)"
 test "$output" = 'argocd-bootstrap image inputs are unchanged; skipping build and push'
+
+expected_vault_bootstrap_input_sha="$({ sha256sum "$root/.ci/toolchains/vault-bootstrap.Dockerfile" "$root/docs/gitops/vault-values.example.yaml"; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
+output="$(cd "$root" && EXPECTED_INPUT_SHA="$expected_vault_bootstrap_input_sha" GITHUB_REPOSITORY=s1ns3nz0/node-operator GITHUB_SHA=fixture PATH="$temporary_directory/bin:$PATH" .ci/toolchains/release-toolchain-image.sh vault-bootstrap .ci/toolchains/vault-bootstrap.Dockerfile docs/gitops/vault-values.example.yaml)"
+test "$output" = 'vault-bootstrap image inputs are unchanged; skipping build and push'
