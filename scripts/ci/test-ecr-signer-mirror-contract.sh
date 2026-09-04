@@ -28,7 +28,7 @@ for required in \
   'resource "aws_iam_role" "github_ecr_signer_mirror"' \
   "repo:\${var.github_repository}:environment:ecr-signer-mirror" \
   'token.actions.githubusercontent.com:repository' \
-  'repo:${split("/", var.github_repository)[0]}@*/${split("/", var.github_repository)[1]}@*:environment:ecr-signer-mirror' \
+  "repo:\${split(\"/\", var.github_repository)[0]}@*/\${split(\"/\", var.github_repository)[1]}@*:environment:ecr-signer-mirror" \
   '"ecr:GetAuthorizationToken"' \
   '"ecr:BatchCheckLayerAvailability"' \
   '"ecr:CompleteLayerUpload"' \
