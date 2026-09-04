@@ -6,9 +6,10 @@ variable "enable_private_gitops_foundation" {
 
 locals {
   private_gitops_repositories = {
-    argocd = "${local.name_prefix}-gitops-argocd"
-    charts = "${local.name_prefix}-gitops-charts"
-    vault  = "${local.name_prefix}-gitops-vault"
+    argocd      = "${local.name_prefix}-gitops-argocd"
+    charts      = "${local.name_prefix}-gitops-charts"
+    vault       = "${local.name_prefix}-gitops-vault"
+    vault_chart = "${local.name_prefix}-gitops-vault/vault"
   }
 }
 
@@ -106,7 +107,7 @@ data "aws_iam_policy_document" "github_gitops_oci_mirror" {
   }
   statement {
     sid       = "ReadMirroredArtifactDigest"
-    actions   = ["ecr:DescribeImages"]
+    actions   = ["ecr:BatchGetImage", "ecr:DescribeImages"]
     resources = values(aws_ecr_repository.private_gitops)[*].arn
   }
   statement {

@@ -6,7 +6,8 @@ an EKS access-policy grant, Helm deployment, and revocation into one apply.
 1. **Prepare:** apply with `enable_vault_bootstrap_runner=true` and
    `enable_vault_bootstrap_cluster_admin=false`. This creates private runner
    infrastructure but cannot call Kubernetes APIs with administrative access.
-2. **Deploy:** after the chart and all images are verified in private ECR,
+2. **Deploy:** after the chart and all images are verified in private ECR and
+   the approved chart tag resolves to the reviewed OCI manifest digest,
    apply only the temporary EKS access-policy association with
    `enable_vault_bootstrap_cluster_admin=true`; run the one-purpose CodeBuild
    project, which deploys only sealed Vault and never initializes or unseals it.

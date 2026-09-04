@@ -1,0 +1,34 @@
+{
+  "id": "2026-09-04-vault-private-artifact-mirroring",
+  "title": "Approve and mirror the Vault bootstrap toolchain and chart",
+  "classification": "non-trivial",
+  "classification_reason": ["publishes a reviewed toolchain image", "writes approved OCI artifacts to private ECR", "feeds a security-sensitive deployment executor"],
+  "expected_outcome": "The dedicated Vault bootstrap toolchain and the SHA-verified Vault chart have approved immutable references and are copied to their private ECR destinations with recorded digest verification.",
+  "dependencies": ["2026-09-04-vault-prepare-plan", "2026-09-04-vault-private-delivery"],
+  "constraints": [
+    "Only approved immutable digests and the reviewed Vault chart 0.31.0 checksum may be published or mirrored.",
+    "Use GitHub Actions and ECR only for the scoped toolchain publication and artifact copy; retain only non-sensitive evidence.",
+    "Do not run Terraform apply, CodeBuild, Helm, kubectl, Vault, EKS access-policy mutation, secret access, or workload deployment.",
+    "Do not treat a missing nested Helm OCI repository as permission to create it outside a separately reviewed Terraform apply."
+  ],
+  "authorization": {
+    "repository_mutation": true,
+    "external_actions": [
+      "read public GHCR and Helm artifact metadata",
+      "push the reviewed task branch needed to execute its versioned GitHub Actions workflows",
+      "dispatch and monitor the reviewed GitHub Actions toolchain release workflow",
+      "publish the reviewed Vault bootstrap toolchain to the repository GHCR package",
+      "dispatch and monitor the reviewed GitOps OCI mirror workflow to copy approved digests to the existing private ECR Vault repository",
+      "read private ECR repository and image digest metadata"
+    ],
+    "prohibited_actions": ["Terraform apply", "ECR repository creation outside Terraform", "Vault initialization or unseal", "secret read or change", "cluster-admin association", "CodeBuild execution", "Helm or kubectl execution", "merge"]
+  },
+  "primary_owner": {"tier": "sol", "responsibility": "artifact approval, delivery boundary, integration, and final sign-off"},
+  "delegations": [
+    {"id": "recon", "tier": "luna", "owner": "/root/vault_artifact_mirror_recon", "files": [], "worktree": "read-only", "branch": "none", "acceptance_checks": ["minimal mirror path and prerequisites"], "escalation_trigger": "secret or permission expansion"},
+    {"id": "debrief", "tier": "terra", "owner": "pending", "files": ["reports/2026-09-04-vault-private-artifact-mirroring-debrief.md"], "worktree": "required", "branch": "separate review worktree", "acceptance_checks": ["independent clean-room debrief"], "escalation_trigger": "unapproved artifact or mutation"}
+  ],
+  "model_fallbacks": [],
+  "validation": ["toolchain release contract", "GitOps OCI mirror contract", "Vault chart checksum contract", "private ECR digest verification", "harness check", "clean-room Terra debrief"],
+  "status": "in_progress"
+}

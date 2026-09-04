@@ -1,5 +1,17 @@
 {
   "version": 1,
+  "helm_archives": [
+    {
+      "name": "vault",
+      "version": "0.31.0",
+      "source": "https://helm.releases.hashicorp.com/vault-0.31.0.tgz",
+      "sha256": "fe80fae6a8838c75da9fbde1398f2c10bb4b5c31c425e559507ba99373297de2",
+      "ecrManifestDigest": "sha256:85cfa6b40396a198a104fbf06c7cccaf75428db7201394f9061c272441bcd0e4",
+      "destination": "vault",
+      "ecrTag": "0.31.0",
+      "purpose": "HashiCorp Vault Helm chart 0.31.0"
+    }
+  ],
   "artifacts": [
     {
       "source": "ghcr.io/argoproj/argo-helm/argo-cd@sha256:8ff18ee7a22670305555167ea31f24a88e2f912cf0a872f852e1880886d4c308",
@@ -42,6 +54,12 @@
       "destination": "vault",
       "ecrTag": "8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f",
       "purpose": "Vault injector image 1.7.0 for chart 0.31.0"
+    },
+    {
+      "source": "ghcr.io/s1ns3nz0/node-operator/vault-bootstrap@sha256:463fcfbf77bfb45f59484ca3381e5cc7b068af9123ac522112ff25e625575e87",
+      "destination": "vault",
+      "ecrTag": "463fcfbf77bfb45f59484ca3381e5cc7b068af9123ac522112ff25e625575e87",
+      "purpose": "Private Vault bootstrap toolchain for reviewed Vault values template"
     }
   ]
 }

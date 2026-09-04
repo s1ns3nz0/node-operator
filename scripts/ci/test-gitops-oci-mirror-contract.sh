@@ -27,14 +27,17 @@ for required in \
   'scan_on_push = true' \
   'prevent_destroy = true' \
   'resource "aws_iam_role" "github_gitops_oci_mirror"' \
-  'vault  = "${local.name_prefix}-gitops-vault"' \
   'token.actions.githubusercontent.com:repository' \
   'repo:${split("/", var.github_repository)[0]}@*/${split("/", var.github_repository)[1]}@*:environment:gitops-oci-mirror' \
+  '"ecr:BatchGetImage"' \
   '"ecr:DescribeImages"' \
   '"ecr:PutImage"' \
   'github_gitops_oci_mirror_role_arn'; do
   grep -Fq "$required" "$terraform_file" || fail "Terraform contract omits: $required"
 done
+
+grep -Eq 'vault[[:space:]]*=[[:space:]]*"\$\{local.name_prefix\}-gitops-vault"' "$terraform_file" || fail 'Terraform contract omits the Vault runtime repository'
+grep -Eq 'vault_chart[[:space:]]*=[[:space:]]*"\$\{local.name_prefix\}-gitops-vault/vault"' "$terraform_file" || fail 'Terraform contract omits the Vault chart repository'
 
 if grep -Eq 'ecr:(DeleteRepository|DeleteImage|SetRepositoryPolicy|PutLifecyclePolicy|\*)' "$terraform_file"; then
   fail 'mirror role exceeds the required ECR read-and-push permission boundary'
