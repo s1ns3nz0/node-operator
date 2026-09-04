@@ -16,7 +16,7 @@
       "version": "v1.21.1",
       "source": "https://charts.jetstack.io/charts/cert-manager-v1.21.1.tgz",
       "sha256": "c27101f3f3e2349fb4a9e704316105bf7b52ad73b8c8257d3498ef7f2f6a4adc",
-      "ecrManifestDigest": "sha256:15c0b46d9006ce8eb9ff14d1bf54d1bbfcc587bb9e24cd9fe186fb8fec56af1f",
+      "ecrManifestDigest": "sha256:62c4745561eccfd723678c6547500750ebef5a880d81ff670d33124ab335f877",
       "destination": "cert-manager",
       "ecrTag": "v1.21.1",
       "purpose": "cert-manager Helm chart v1.21.1, signed by the cert-manager maintainers"
