@@ -3,11 +3,13 @@
 `gitops-client-ecr-publisher.tf` defines a distinct OCI-image destination for
 the private repository `s1ns3nz0/node-operator-gitops`:
 
-`ACCOUNT.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-client`
+`ACCOUNT.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-client/node-operator-client`
 
 It is deliberately not `private_gitops["nodes"]`. The pre-existing GitOps OCI
 mirror can write deployment charts and mirrored runtime inputs; this publisher
-can upload layers and manifests to only the client-image repository. It cannot
+can upload layers and manifests to only the client chart repository. Helm OCI
+derives the final path by appending the chart name, so Terraform creates that
+exact path before publishing. It cannot
 read or write the other GitOps repositories, delete images, retag an immutable
 tag, modify repository policy or lifecycle policy, access EKS or Vault, or
 assume any other AWS role.
