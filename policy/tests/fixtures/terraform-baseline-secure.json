@@ -14,7 +14,7 @@
         "address": "aws_eks_node_group.private",
         "instance_types": ["m7i.2xlarge"],
         "labels": {"node-operator.io/role": "system"},
-        "scaling": {"min_size": 0, "desired_size": 0, "max_size": 3},
+        "scaling": {"min_size": 1, "desired_size": 1, "max_size": 3},
         "availability_zones": ["ap-northeast-2a", "ap-northeast-2c"],
         "public_ip_association": false,
         "private_subnet_ids": ["subnet-private-a", "subnet-private-c"]

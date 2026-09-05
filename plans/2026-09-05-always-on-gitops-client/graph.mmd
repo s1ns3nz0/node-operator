@@ -1,0 +1,6 @@
+flowchart LR
+  recon[Luna: reconnaissance] --> source[Terra: GitOps source]
+  source --> argocd[Sol: always-on Argo CD]
+  argocd --> vault[Sol: Vault release gate]
+  vault --> client[Sol: client proof]
+  client --> review[Terra: clean-room debrief]

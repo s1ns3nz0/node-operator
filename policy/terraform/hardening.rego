@@ -102,7 +102,7 @@ deny contains violation if {
   scaling := object.get(group, "scaling", {})
   is_object(scaling)
   not valid_scaling(group, scaling)
-  violation := finding("terraform.node-group.scaling", "managed node groups must use approved scale-to-zero bounds for their role", object.get(group, "address", "managed_node_groups"))
+  violation := finding("terraform.node-group.scaling", "system nodes must remain always-on for Argo CD and platform services; Hoodi client nodes must remain scale-to-zero", object.get(group, "address", "managed_node_groups"))
 }
 
 deny contains violation if {
@@ -268,8 +268,8 @@ valid_instance_type(group) if {
 
 valid_scaling(group, scaling) if {
   pool_role(group) == "system"
-  object.get(scaling, "min_size", null) == 0
-  object.get(scaling, "desired_size", null) == 0
+  object.get(scaling, "min_size", null) == 1
+  object.get(scaling, "desired_size", null) == 1
   object.get(scaling, "max_size", null) == 3
 }
 

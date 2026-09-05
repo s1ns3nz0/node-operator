@@ -1,0 +1,17 @@
+{
+  "task_id": "2026-09-05-always-on-gitops-client",
+  "nodes": [
+    {"id":"T1","title":"Reconnaissance and live prerequisite evidence","tier":"luna","owner":"/root/always_on_recon","status":"completed"},
+    {"id":"T2","title":"Dedicated GitOps OCI publisher and source","tier":"terra","owner":"/root/gitops_publisher_infra","status":"in_progress"},
+    {"id":"T3","title":"Always-on system pool and Argo CD integration","tier":"sol","owner":"/root","status":"in_progress"},
+    {"id":"T4","title":"Network, Engine JWT, client and validator readiness","tier":"sol","owner":"/root","status":"in_progress"},
+    {"id":"T5","title":"Live proof, validation and clean-room debrief","tier":"terra","owner":"pending","status":"pending"}
+  ],
+  "edges": [
+    {"from":"T1","to":"T2","kind":"blocks"},
+    {"from":"T1","to":"T3","kind":"blocks"},
+    {"from":"T2","to":"T4","kind":"blocks"},
+    {"from":"T3","to":"T4","kind":"blocks"},
+    {"from":"T4","to":"T5","kind":"blocks"}
+  ]
+}

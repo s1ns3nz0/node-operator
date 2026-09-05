@@ -4,8 +4,9 @@ aws_account_id = "123456789012"
 name           = "node-operator"
 
 # All remaining values are intentionally pinned by the Terraform defaults and
-# validations: ap-northeast-2, 10.80.0.0/16, two private subnets, a scale-to-
-# zero system pool, and one scale-to-zero pool for each Hoodi client role.
+# validations: ap-northeast-2, 10.80.0.0/16, two private subnets, an always-on
+# one-node system pool for Argo CD and platform services, and one scale-to-zero
+# pool for each Hoodi client role.
 #
 # An authorized live apply for Hoodi workloads must supply the approved NAT
 # gateway that already serves the private subnets. Do not create a gateway in
