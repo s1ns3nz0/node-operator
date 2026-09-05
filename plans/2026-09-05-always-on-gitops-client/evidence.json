@@ -1,0 +1,9 @@
+{
+  "task": "2026-09-05-always-on-gitops-client",
+  "status": "collecting",
+  "checks": [
+    {"name":"read-only reconnaissance","status":"passed","detail":"EKS is private-only; node groups are ACTIVE at desired zero; Argo bootstrap project and private ECR artifacts exist; no Fargate profile exists."}
+  ],
+  "liveActions": [],
+  "redactions": ["No secret values, tokens, private keys, recovery material, kubeconfigs, raw signatures, or raw CI logs."]
+}

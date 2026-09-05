@@ -103,24 +103,24 @@ variable "temporary_ssm_ops_host_termination_at" {
 }
 
 variable "system_node_min_size" {
-  description = "Minimum system-pool capacity. Zero is permitted while the cluster is idle."
+  description = "Minimum system-pool capacity. One system node keeps Argo CD and platform services available."
   type        = number
-  default     = 0
+  default     = 1
 
   validation {
-    condition     = var.system_node_min_size == 0
-    error_message = "system_node_min_size must be zero; use the scale-up runbook before operating workloads."
+    condition     = var.system_node_min_size == 1
+    error_message = "system_node_min_size must remain one so Argo CD and platform services stay available."
   }
 }
 
 variable "system_node_desired_size" {
-  description = "Initial system-pool capacity. Zero keeps the idle cluster compute-free."
+  description = "Initial system-pool capacity. One system node keeps Argo CD and platform services available."
   type        = number
-  default     = 0
+  default     = 1
 
   validation {
-    condition     = var.system_node_desired_size == 0
-    error_message = "system_node_desired_size must be zero; scale it through the documented operational command."
+    condition     = var.system_node_desired_size == 1
+    error_message = "system_node_desired_size must remain one so Argo CD and platform services stay available."
   }
 }
 

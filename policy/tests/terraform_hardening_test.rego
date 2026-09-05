@@ -16,7 +16,7 @@ secure_input := {
       "address": "aws_eks_node_group.private",
       "instance_types": ["m7i.2xlarge"],
       "labels": {"node-operator.io/role": "system"},
-      "scaling": {"min_size": 0, "desired_size": 0, "max_size": 3},
+      "scaling": {"min_size": 1, "desired_size": 1, "max_size": 3},
       "availability_zones": ["ap-northeast-2a", "ap-northeast-2c"],
       "public_ip_association": false,
       "private_subnet_ids": ["subnet-private-a", "subnet-private-c"]
@@ -81,6 +81,13 @@ test_invalid_node_capacity_or_topology_is_rejected if {
   denial[_].id == "terraform.node-group.two-az"
   denial[_].id == "terraform.node-group.public-ip"
   denial[_].id == "terraform.node-group.private-subnets"
+}
+
+test_scale_to_zero_system_pool_is_rejected if {
+  idle_system := object.union(secure_input.baseline.managed_node_groups[0], {"scaling": {"min_size": 0, "desired_size": 0, "max_size": 3}})
+  fixture := object.union(secure_input, {"baseline": object.union(secure_input.baseline, {"managed_node_groups": [idle_system, secure_input.baseline.managed_node_groups[1], secure_input.baseline.managed_node_groups[2]]})})
+  denial := terraform.deny with input as fixture
+  denial[_].id == "terraform.node-group.scaling"
 }
 
 test_mutating_or_broad_data_iam_is_rejected if {
