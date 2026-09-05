@@ -92,13 +92,13 @@ variable "enable_temporary_ssm_ops_host" {
 }
 
 variable "temporary_ssm_ops_host_termination_at" {
-  description = "Optional future KST wall-clock RFC3339 timestamp for one-time termination of the temporary SSM host; empty requires an explicit manual stop or destroy."
+  description = "Optional future KST wall-clock timestamp (YYYY-MM-DDTHH:MM:SS) for one-time termination of the temporary SSM host; empty requires an explicit manual stop or destroy."
   type        = string
   default     = ""
 
   validation {
-    condition     = var.temporary_ssm_ops_host_termination_at == "" || can(timeadd(var.temporary_ssm_ops_host_termination_at, "0s"))
-    error_message = "temporary_ssm_ops_host_termination_at must be empty or an RFC3339 timestamp, for example 2026-09-06T22:00:00."
+    condition     = var.temporary_ssm_ops_host_termination_at == "" || can(regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$", var.temporary_ssm_ops_host_termination_at))
+    error_message = "temporary_ssm_ops_host_termination_at must be empty or a KST wall-clock timestamp such as 2026-09-06T22:00:00."
   }
 }
 
