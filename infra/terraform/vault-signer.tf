@@ -79,10 +79,6 @@ variable "github_oidc_subject_prefix" {
   default     = "repo:s1ns3nz0@258690008/node-operator@1353388960"
 }
 
-data "aws_prefix_list" "s3" {
-  name = "com.amazonaws.${var.aws_region}.s3"
-}
-
 resource "aws_vpc_security_group_egress_rule" "release_signer_s3_gateway_https" {
   count             = var.enable_release_signer ? 1 : 0
   description       = "HTTPS to the S3 gateway endpoint for immutable signer input and output"
@@ -90,7 +86,7 @@ resource "aws_vpc_security_group_egress_rule" "release_signer_s3_gateway_https" 
   ip_protocol       = "tcp"
   from_port         = 443
   to_port           = 443
-  prefix_list_id    = data.aws_prefix_list.s3.id
+  prefix_list_id    = data.aws_prefix_list.s3[0].id
 }
 
 variable "release_artifact_bucket_arn" {
