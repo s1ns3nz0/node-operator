@@ -7,7 +7,9 @@ approved_environment := "gitops-client-ecr-publish"
 
 required_push_actions := {
   "ecr:BatchCheckLayerAvailability",
+  "ecr:BatchGetImage",
   "ecr:CompleteLayerUpload",
+  "ecr:DescribeImages",
   "ecr:InitiateLayerUpload",
   "ecr:PutImage",
   "ecr:UploadLayerPart",
