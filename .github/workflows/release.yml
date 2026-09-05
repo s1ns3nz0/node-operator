@@ -53,7 +53,16 @@ jobs:
             "$RUNNER_TEMP/release/node-operator-release-bundle.sha256" \
             "$RUNNER_TEMP/release/provenance-input.json" \
             "$RUNNER_TEMP/release/buildspec-release-sign.yml"
-          aws s3api put-object --bucket "$INPUT_BUCKET" --key "$input_key" --body "$input_archive" --if-none-match '*' --region "$AWS_REGION" >/dev/null
+          if ! aws s3api put-object --bucket "$INPUT_BUCKET" --key "$input_key" --body "$input_archive" --if-none-match '*' --region "$AWS_REGION" >/dev/null; then
+            existing_input_dir="$(mktemp -d)"
+            trap 'rm -rf "$existing_input_dir"' EXIT
+            aws s3 cp "s3://${INPUT_BUCKET}/${input_key}" "$existing_input_dir/input.zip" --region "$AWS_REGION"
+            test "$(unzip -Z1 "$existing_input_dir/input.zip" | sort)" = "$(printf '%s\n' buildspec-release-sign.yml node-operator-release-bundle.sha256 node-operator-release-bundle.tar provenance-input.json | sort)"
+            unzip -q "$existing_input_dir/input.zip" -d "$existing_input_dir"
+            cmp "$RUNNER_TEMP/release/node-operator-release-bundle.sha256" "$existing_input_dir/node-operator-release-bundle.sha256"
+            cmp "$RUNNER_TEMP/release/provenance-input.json" "$existing_input_dir/provenance-input.json"
+            cmp "$RUNNER_TEMP/release/buildspec-release-sign.yml" "$existing_input_dir/buildspec-release-sign.yml"
+          fi
           aws codebuild start-build --project-name "node-operator-baseline-release-signer" --source-version "$source_revision" --source-location-override "${INPUT_BUCKET}/${input_key}" --region "$AWS_REGION" > "$RUNNER_TEMP/codebuild.json"
           build_id="$(jq -r .build.id "$RUNNER_TEMP/codebuild.json")"
           for _ in $(seq 1 60); do
