@@ -91,6 +91,17 @@ variable "enable_temporary_ssm_ops_host" {
   default     = false
 }
 
+variable "temporary_ssm_ops_host_termination_at" {
+  description = "Optional future KST wall-clock RFC3339 timestamp for one-time termination of the temporary SSM host; empty requires an explicit manual stop or destroy."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.temporary_ssm_ops_host_termination_at == "" || can(timeadd(var.temporary_ssm_ops_host_termination_at, "0s"))
+    error_message = "temporary_ssm_ops_host_termination_at must be empty or an RFC3339 timestamp, for example 2026-09-06T22:00:00."
+  }
+}
+
 variable "system_node_min_size" {
   description = "Minimum system-pool capacity. Zero is permitted while the cluster is idle."
   type        = number

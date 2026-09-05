@@ -75,21 +75,19 @@ the maximum bounds.
 
 ## Use the private SSM tunnel only on demand
 
-The private SSM operations host is intentionally kept **stopped** when no
-cluster operation is in progress. Starting it does not start any EKS node
-group. Find it by its exact tag, start it, and then use the existing
-`AWS-StartPortForwardingSessionToRemoteHost` tunnel procedure. Stop it again
-after the session ends.
+The private SSM operations host is intentionally disabled by default. Create
+it only for the operation window, optionally setting an explicit future
+automatic-termination timestamp. It does not start any EKS node group. Stop
+or destroy it again after the session ends.
 
 ```bash
-OPS_HOST_ID="$(aws ec2 describe-instances --region ap-northeast-2 \
-  --filters Name=tag:Name,Values=node-operator-baseline-ssm-ops-host \
-            Name=instance-state-name,Values=stopped,running \
-  --query 'Reservations[].Instances[].InstanceId' --output text)"
-
-aws ec2 start-instances --region ap-northeast-2 --instance-ids "$OPS_HOST_ID"
+terraform -chdir=infra/terraform apply \
+  -var='enable_temporary_ssm_ops_host=true' \
+  -var='temporary_ssm_ops_host_termination_at=2026-09-06T22:00:00'
 # Start the SSM port-forward session and finish the required cluster operation.
-aws ec2 stop-instances --region ap-northeast-2 --instance-ids "$OPS_HOST_ID"
+terraform -chdir=infra/terraform destroy \
+  -target=aws_instance.temporary_ssm_ops_host \
+  -var='enable_temporary_ssm_ops_host=true'
 ```
 
 Do not terminate Vault PVCs, release-artifact buckets, or the NAT gateway as
