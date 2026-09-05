@@ -1,7 +1,7 @@
 # The T-3 default-deny policy selects every pod in node-operator. These rules
-# add only the paths this execution client needs. The labelled gateway is an
-# explicit prerequisite; this workload creates neither a gateway nor a route to
-# the public internet.
+# add only the paths this execution client needs. Dynamic Hoodi peers use the
+# private NAT route, with an exact port allow-list duplicated in the dedicated
+# Hoodi node security group and VPC Flow Logs.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -27,8 +27,10 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-nethermind-controlled-egress
+  name: allow-nethermind-nat-port-egress
   namespace: node-operator
+  labels:
+    node-operator.io/egress-class: hoodi-nat-port-restricted
 spec:
   podSelector:
     matchLabels:
@@ -37,24 +39,20 @@ spec:
   policyTypes: [Egress]
   egress:
     - to:
-        - namespaceSelector:
-            matchLabels:
-              node-operator.io/edge: controlled
-          podSelector:
-            matchLabels:
-              node-operator.io/egress-purpose: hoodi-p2p
+        - ipBlock:
+            cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
           port: 30303
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
         - protocol: UDP
           port: 30303
     - to:
-        - namespaceSelector:
-            matchLabels:
-              node-operator.io/edge: controlled
-          podSelector:
-            matchLabels:
-              node-operator.io/egress-purpose: hoodi-https
+        - ipBlock:
+            cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
           port: 443

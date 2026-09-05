@@ -99,6 +99,51 @@ resource "aws_launch_template" "nodes" {
   tags = local.common_tags
 }
 
+# Hoodi clients need outbound peer discovery, unlike platform add-ons. Keep
+# their NICs in a separate security group so that this narrowly scoped egress
+# exception cannot expand the system-pool boundary.
+resource "aws_launch_template" "hoodi_nodes" {
+  name_prefix            = "${local.name_prefix}-hoodi-nodes-"
+  update_default_version = true
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      delete_on_termination = true
+      encrypted             = true
+      kms_key_id            = aws_kms_key.ebs.arn
+      volume_size           = var.node_root_volume_size
+      volume_type           = "gp3"
+    }
+  }
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_put_response_hop_limit = 1
+    http_tokens                 = "required"
+  }
+
+  network_interfaces {
+    associate_public_ip_address = false
+    security_groups             = [aws_security_group.hoodi_nodes.id]
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = merge(local.common_tags, {
+      Name = "${local.name_prefix}-hoodi-node"
+    })
+  }
+
+  tag_specifications {
+    resource_type = "volume"
+    tags          = local.common_tags
+  }
+
+  tags = local.common_tags
+}
+
 resource "aws_eks_node_group" "private" {
   cluster_name    = aws_eks_cluster.private.name
   node_group_name = "${var.name}-managed"
@@ -107,7 +152,11 @@ resource "aws_eks_node_group" "private" {
 
   ami_type       = "AL2023_x86_64_STANDARD"
   capacity_type  = "ON_DEMAND"
-  instance_types = [var.node_instance_type]
+  instance_types = ["m7i.2xlarge"]
+
+  labels = {
+    "node-operator.io/role" = "system"
+  }
 
   launch_template {
     id      = aws_launch_template.nodes.id
@@ -115,9 +164,9 @@ resource "aws_eks_node_group" "private" {
   }
 
   scaling_config {
-    min_size     = var.node_min_size
-    desired_size = var.node_desired_size
-    max_size     = var.node_max_size
+    min_size     = var.system_node_min_size
+    desired_size = var.system_node_desired_size
+    max_size     = var.system_node_max_size
   }
 
   update_config {
@@ -132,6 +181,105 @@ resource "aws_eks_node_group" "private" {
     aws_vpc_endpoint.required_interface,
     aws_vpc_endpoint.s3,
   ]
+
+  # Operators scale desired capacity up for a session and back to zero after
+  # it. Terraform owns the secure bounds but must not immediately undo that
+  # operational action between applies.
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_eks_node_group" "consensus" {
+  cluster_name    = aws_eks_cluster.private.name
+  node_group_name = "${var.name}-consensus"
+  node_role_arn   = aws_iam_role.nodes.arn
+  subnet_ids      = aws_subnet.private[*].id
+
+  ami_type       = "AL2023_x86_64_STANDARD"
+  capacity_type  = "ON_DEMAND"
+  instance_types = ["m7i.2xlarge"]
+
+  labels = {
+    "node-operator.io/network" = "hoodi"
+    "node-operator.io/role"    = "consensus"
+  }
+
+  launch_template {
+    id      = aws_launch_template.hoodi_nodes.id
+    version = aws_launch_template.hoodi_nodes.latest_version
+  }
+
+  scaling_config {
+    min_size     = var.consensus_node_min_size
+    desired_size = var.consensus_node_desired_size
+    max_size     = var.consensus_node_max_size
+  }
+
+  update_config {
+    max_unavailable = 1
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.node_worker,
+    aws_iam_role_policy_attachment.node_ecr_read_only,
+    aws_iam_role_policy_attachment.node_cni,
+    aws_eks_addon.vpc_cni,
+    aws_vpc_endpoint.required_interface,
+    aws_vpc_endpoint.s3,
+  ]
+
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_eks_node_group" "execution" {
+  cluster_name    = aws_eks_cluster.private.name
+  node_group_name = "${var.name}-execution"
+  node_role_arn   = aws_iam_role.nodes.arn
+  subnet_ids      = aws_subnet.private[*].id
+
+  ami_type       = "AL2023_x86_64_STANDARD"
+  capacity_type  = "ON_DEMAND"
+  instance_types = ["m7i.4xlarge"]
+
+  labels = {
+    "node-operator.io/network" = "hoodi"
+    "node-operator.io/role"    = "execution"
+  }
+
+  launch_template {
+    id      = aws_launch_template.hoodi_nodes.id
+    version = aws_launch_template.hoodi_nodes.latest_version
+  }
+
+  scaling_config {
+    min_size     = var.execution_node_min_size
+    desired_size = var.execution_node_desired_size
+    max_size     = var.execution_node_max_size
+  }
+
+  update_config {
+    max_unavailable = 1
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.node_worker,
+    aws_iam_role_policy_attachment.node_ecr_read_only,
+    aws_iam_role_policy_attachment.node_cni,
+    aws_eks_addon.vpc_cni,
+    aws_vpc_endpoint.required_interface,
+    aws_vpc_endpoint.s3,
+  ]
+
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
+  }
 
   tags = local.common_tags
 }

@@ -151,16 +151,43 @@ allows_world_egress if {
 }
 
 allows_world_egress if {
-	rule := object.get(object.get(input, "spec", {}), "egress", [])[_]
-	peer := object.get(rule, "to", [])[_]
-	ip_block := object.get(peer, "ipBlock", {})
-	ip_block.cidr in {"0.0.0.0/0", "::/0"}
+  rule := object.get(object.get(input, "spec", {}), "egress", [])[_]
+  peer := object.get(rule, "to", [])[_]
+  ip_block := object.get(peer, "ipBlock", {})
+  ip_block.cidr in {"0.0.0.0/0", "::/0"}
+  not approved_hoodi_nat_rule(rule)
 }
 
 allows_world_egress if {
 	rule := object.get(object.get(input, "spec", {}), "egress", [])[_]
 	peer := object.get(rule, "to", [])[_]
 	count(peer) == 0
+}
+
+approved_hoodi_nat_rule(rule) if {
+  metadata := object.get(input, "metadata", {})
+  metadata.name == "allow-prysm-nat-port-egress"
+  object.get(metadata, "labels", {})["node-operator.io/egress-class"] == "hoodi-nat-port-restricted"
+  peer := object.get(rule, "to", [])[0]
+  object.get(peer, "ipBlock", {}).cidr == "0.0.0.0/0"
+  count(object.get(rule, "to", [])) == 1
+  ports := object.get(rule, "ports", [])
+  count(ports) == 1
+  ports[0].port == 13000
+  upper(ports[0].protocol) in {"TCP", "UDP"}
+}
+
+approved_hoodi_nat_rule(rule) if {
+  metadata := object.get(input, "metadata", {})
+  metadata.name == "allow-prysm-nat-port-egress"
+  object.get(metadata, "labels", {})["node-operator.io/egress-class"] == "hoodi-nat-port-restricted"
+  peer := object.get(rule, "to", [])[0]
+  object.get(peer, "ipBlock", {}).cidr == "0.0.0.0/0"
+  count(object.get(rule, "to", [])) == 1
+  ports := object.get(rule, "ports", [])
+  count(ports) == 1
+  ports[0].port == 443
+  upper(ports[0].protocol) == "TCP"
 }
 
 allows_world_egress if {

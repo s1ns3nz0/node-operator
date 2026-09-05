@@ -85,53 +85,119 @@ variable "kubernetes_version" {
   }
 }
 
-variable "node_instance_type" {
-  description = "Approved managed-node instance type."
-  type        = string
-  default     = "m7i.2xlarge"
-
-  validation {
-    condition     = var.node_instance_type == "m7i.2xlarge"
-    error_message = "node_instance_type must be m7i.2xlarge."
-  }
-}
-
 variable "enable_temporary_ssm_ops_host" {
   description = "Create one temporary private SSM tunnel host for local access to the private EKS API."
   type        = bool
   default     = false
 }
 
-variable "node_min_size" {
-  description = "Minimum managed-node capacity."
+variable "system_node_min_size" {
+  description = "Minimum system-pool capacity. Zero is permitted while the cluster is idle."
   type        = number
-  default     = 2
+  default     = 0
 
   validation {
-    condition     = var.node_min_size == 2
-    error_message = "node_min_size must remain 2 for this baseline."
+    condition     = var.system_node_min_size == 0
+    error_message = "system_node_min_size must be zero; use the scale-up runbook before operating workloads."
   }
 }
 
-variable "node_desired_size" {
-  description = "Initial managed-node capacity."
+variable "system_node_desired_size" {
+  description = "Initial system-pool capacity. Zero keeps the idle cluster compute-free."
   type        = number
-  default     = 2
+  default     = 0
 
   validation {
-    condition     = var.node_desired_size == 2
-    error_message = "node_desired_size must remain 2 for this baseline."
+    condition     = var.system_node_desired_size == 0
+    error_message = "system_node_desired_size must be zero; scale it through the documented operational command."
   }
 }
 
-variable "node_max_size" {
-  description = "Maximum managed-node capacity."
+variable "system_node_max_size" {
+  description = "Maximum system-pool capacity."
   type        = number
   default     = 3
 
   validation {
-    condition     = var.node_max_size == 3
-    error_message = "node_max_size must remain 3 for this baseline."
+    condition     = var.system_node_max_size == 3
+    error_message = "system_node_max_size must remain 3 for this baseline."
+  }
+}
+
+variable "consensus_node_min_size" {
+  description = "Minimum consensus-pool capacity."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.consensus_node_min_size == 0
+    error_message = "consensus_node_min_size must be zero while idle."
+  }
+}
+
+variable "consensus_node_desired_size" {
+  description = "Initial consensus-pool capacity."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.consensus_node_desired_size == 0
+    error_message = "consensus_node_desired_size must be zero; use the scale-up runbook before applying Prysm."
+  }
+}
+
+variable "consensus_node_max_size" {
+  description = "Maximum consensus-pool capacity."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.consensus_node_max_size == 1
+    error_message = "consensus_node_max_size must remain one."
+  }
+}
+
+variable "execution_node_min_size" {
+  description = "Minimum execution-pool capacity."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.execution_node_min_size == 0
+    error_message = "execution_node_min_size must be zero while idle."
+  }
+}
+
+variable "execution_node_desired_size" {
+  description = "Initial execution-pool capacity."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.execution_node_desired_size == 0
+    error_message = "execution_node_desired_size must be zero; use the scale-up runbook before applying Nethermind."
+  }
+}
+
+variable "execution_node_max_size" {
+  description = "Maximum execution-pool capacity."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.execution_node_max_size == 1
+    error_message = "execution_node_max_size must remain one."
+  }
+}
+
+variable "hoodi_nat_gateway_id" {
+  description = "Existing approved NAT gateway used only by the dedicated Hoodi pools. Leave null for offline validation."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.hoodi_nat_gateway_id == null || can(regex("^nat-[0-9a-f]+$", var.hoodi_nat_gateway_id))
+    error_message = "hoodi_nat_gateway_id must be an existing NAT gateway ID such as nat-0123abcd."
   }
 }
 

@@ -67,14 +67,27 @@ deny contains violation if {
 
 deny contains violation if {
   groups := managed_node_groups
-  count(groups) != 1
-  violation := finding("terraform.node-group.count", "baseline must declare exactly one managed node group", "managed_node_groups")
+  count(groups) != 3
+  violation := finding("terraform.node-group.count", "baseline must declare exactly system, consensus, and execution managed node groups", "managed_node_groups")
 }
 
 deny contains violation if {
   group := managed_node_groups[_]
-  object.get(group, "instance_types", []) != ["m7i.2xlarge"]
-  violation := finding("terraform.node-group.instance-type", "managed node group must use m7i.2xlarge", object.get(group, "address", "managed_node_groups"))
+  not valid_pool_role(group)
+  violation := finding("terraform.node-group.role", "managed node group must declare one approved node-operator.io/role", object.get(group, "address", "managed_node_groups"))
+}
+
+deny contains violation if {
+  role := {"system", "consensus", "execution"}[_]
+  not pool_present(role)
+  violation := finding("terraform.node-group.required-pool", sprintf("baseline must declare the %s managed node group", [role]), "managed_node_groups")
+}
+
+deny contains violation if {
+  group := managed_node_groups[_]
+  valid_pool_role(group)
+  not valid_instance_type(group)
+  violation := finding("terraform.node-group.instance-type", "managed node group instance type must match its approved role", object.get(group, "address", "managed_node_groups"))
 }
 
 deny contains violation if {
@@ -88,8 +101,8 @@ deny contains violation if {
   group := managed_node_groups[_]
   scaling := object.get(group, "scaling", {})
   is_object(scaling)
-  not valid_scaling(scaling)
-  violation := finding("terraform.node-group.scaling", "managed node group must set min, desired, and max capacity to 2, 2, and 3", object.get(group, "address", "managed_node_groups"))
+  not valid_scaling(group, scaling)
+  violation := finding("terraform.node-group.scaling", "managed node groups must use approved scale-to-zero bounds for their role", object.get(group, "address", "managed_node_groups"))
 }
 
 deny contains violation if {
@@ -228,10 +241,43 @@ valid_kms_key_arn(key_arn) if {
   contains(key_arn, ":kms:")
 }
 
-valid_scaling(scaling) if {
-  object.get(scaling, "min_size", null) == 2
-  object.get(scaling, "desired_size", null) == 2
+pool_role(group) := role if {
+  labels := object.get(group, "labels", {})
+  is_object(labels)
+  role := object.get(labels, "node-operator.io/role", "")
+}
+
+pool_present(role) if {
+  group := managed_node_groups[_]
+  pool_role(group) == role
+}
+
+valid_pool_role(group) if {
+  pool_role(group) in {"system", "consensus", "execution"}
+}
+
+valid_instance_type(group) if {
+  pool_role(group) in {"system", "consensus"}
+  object.get(group, "instance_types", []) == ["m7i.2xlarge"]
+}
+
+valid_instance_type(group) if {
+  pool_role(group) == "execution"
+  object.get(group, "instance_types", []) == ["m7i.4xlarge"]
+}
+
+valid_scaling(group, scaling) if {
+  pool_role(group) == "system"
+  object.get(scaling, "min_size", null) == 0
+  object.get(scaling, "desired_size", null) == 0
   object.get(scaling, "max_size", null) == 3
+}
+
+valid_scaling(group, scaling) if {
+  pool_role(group) in {"consensus", "execution"}
+  object.get(scaling, "min_size", null) == 0
+  object.get(scaling, "desired_size", null) == 0
+  object.get(scaling, "max_size", null) == 1
 }
 
 two_distinct_azs(azs) if {
