@@ -66,10 +66,16 @@ terraform -chdir=infra/terraform apply \
   -var='enable_temporary_ssm_ops_host=true' \
   -var='temporary_ssm_ops_host_termination_at=2026-09-06T22:00:00'
 # Start the SSM port-forward session and finish the required cluster operation.
-terraform -chdir=infra/terraform destroy \
-  -target=aws_instance.temporary_ssm_ops_host \
-  -var='enable_temporary_ssm_ops_host=true'
+terraform -chdir=infra/terraform apply \
+  -var='enable_temporary_ssm_ops_host=false'
 ```
+
+Use the normal apply path with the same approved preservation variables used
+for creation so Terraform removes the instance and its count-controlled SSM
+support resources together. A targeted destroy of only
+`aws_instance.temporary_ssm_ops_host` is emergency cleanup only: it leaves the
+associated IAM, security-group, endpoint, and optional scheduler resources in
+state while `enable_temporary_ssm_ops_host=true`.
 
 Do not terminate Vault PVCs, release-artifact buckets, or the NAT gateway as
 part of an idle shutdown. Those are persistent dependencies rather than idle

@@ -1,0 +1,20 @@
+{
+  "id": "2026-09-05-operator-handoff",
+  "objective": "Record the current node-operator operational state, remaining work, and safe suspend/resume procedure in a non-sensitive handoff document.",
+  "authorization": "The user explicitly requested creation of a handoff document. No cloud, cluster, registry, GitHub setting, or secret mutation is authorized by this documentation task.",
+  "constraints": [
+    "Do not include secret values, Vault tokens, private keys, recovery material, kubeconfigs, or raw logs.",
+    "Distinguish last recorded evidence from a fresh live observation.",
+    "Document existing checked-in scripts without executing live capacity changes."
+  ],
+  "successCriteria": [
+    "The handoff identifies implemented components and their last recorded state.",
+    "The handoff gives an ordered, safe resumption and shutdown procedure.",
+    "The handoff states the external Engine-JWT custody prerequisite and validator key boundaries.",
+    "Structural and script-contract checks pass and an independent clean-room review is recorded."
+  ],
+  "owners": {
+    "sol": "integration and final sign-off",
+    "terra": "independent clean-room review"
+  }
+}
