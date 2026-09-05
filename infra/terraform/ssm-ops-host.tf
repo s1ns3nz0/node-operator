@@ -25,9 +25,10 @@ resource "aws_iam_role" "temporary_ssm_ops_host" {
   assume_role_policy = data.aws_iam_policy_document.temporary_ssm_ops_host_assume_role[0].json
 
   tags = merge(local.common_tags, {
-    Name      = "${local.name_prefix}-temporary-ssm-ops-host"
-    Purpose   = "temporary-private-eks-tunnel"
-    ExpiresAt = "2026-09-04T13:00:00Z"
+    Name    = "${local.name_prefix}-temporary-ssm-ops-host"
+    Purpose = "temporary-private-eks-tunnel"
+    }, var.temporary_ssm_ops_host_termination_at == "" ? {} : {
+    ExpiresAt = var.temporary_ssm_ops_host_termination_at
   })
 }
 
@@ -52,9 +53,10 @@ resource "aws_security_group" "temporary_ssm_ops_host" {
   ingress = []
 
   tags = merge(local.common_tags, {
-    Name      = "${local.name_prefix}-temporary-ssm-ops-host"
-    Purpose   = "temporary-private-eks-tunnel"
-    ExpiresAt = "2026-09-04T13:00:00Z"
+    Name    = "${local.name_prefix}-temporary-ssm-ops-host"
+    Purpose = "temporary-private-eks-tunnel"
+    }, var.temporary_ssm_ops_host_termination_at == "" ? {} : {
+    ExpiresAt = var.temporary_ssm_ops_host_termination_at
   })
 }
 
@@ -113,9 +115,10 @@ resource "aws_instance" "temporary_ssm_ops_host" {
   }
 
   tags = merge(local.common_tags, {
-    Name      = "${local.name_prefix}-temporary-ssm-ops-host"
-    Purpose   = "temporary-private-eks-tunnel"
-    ExpiresAt = "2026-09-04T13:00:00Z"
+    Name    = "${local.name_prefix}-temporary-ssm-ops-host"
+    Purpose = "temporary-private-eks-tunnel"
+    }, var.temporary_ssm_ops_host_termination_at == "" ? {} : {
+    ExpiresAt = var.temporary_ssm_ops_host_termination_at
   })
 
   depends_on = [
@@ -125,7 +128,7 @@ resource "aws_instance" "temporary_ssm_ops_host" {
 }
 
 data "aws_iam_policy_document" "temporary_ssm_ops_host_stop_assume_role" {
-  count = var.enable_temporary_ssm_ops_host ? 1 : 0
+  count = var.enable_temporary_ssm_ops_host && var.temporary_ssm_ops_host_termination_at != "" ? 1 : 0
 
   statement {
     actions = ["sts:AssumeRole"]
@@ -153,19 +156,20 @@ data "aws_iam_policy_document" "temporary_ssm_ops_host_stop_assume_role" {
 }
 
 resource "aws_iam_role" "temporary_ssm_ops_host_stop" {
-  count              = var.enable_temporary_ssm_ops_host ? 1 : 0
+  count              = var.enable_temporary_ssm_ops_host && var.temporary_ssm_ops_host_termination_at != "" ? 1 : 0
   name               = "${local.name_prefix}-temporary-ssm-ops-host-stop"
   assume_role_policy = data.aws_iam_policy_document.temporary_ssm_ops_host_stop_assume_role[0].json
 
   tags = merge(local.common_tags, {
-    Name      = "${local.name_prefix}-temporary-ssm-ops-host-stop"
-    Purpose   = "one-time-temporary-ops-host-stop"
-    ExpiresAt = "2026-09-04T13:00:00Z"
+    Name    = "${local.name_prefix}-temporary-ssm-ops-host-stop"
+    Purpose = "one-time-temporary-ops-host-stop"
+    }, {
+    ExpiresAt = var.temporary_ssm_ops_host_termination_at
   })
 }
 
 data "aws_iam_policy_document" "temporary_ssm_ops_host_stop" {
-  count = var.enable_temporary_ssm_ops_host ? 1 : 0
+  count = var.enable_temporary_ssm_ops_host && var.temporary_ssm_ops_host_termination_at != "" ? 1 : 0
 
   statement {
     sid       = "TerminateOnlyTheTemporaryOpsHost"
@@ -175,17 +179,17 @@ data "aws_iam_policy_document" "temporary_ssm_ops_host_stop" {
 }
 
 resource "aws_iam_role_policy" "temporary_ssm_ops_host_stop" {
-  count  = var.enable_temporary_ssm_ops_host ? 1 : 0
+  count  = var.enable_temporary_ssm_ops_host && var.temporary_ssm_ops_host_termination_at != "" ? 1 : 0
   name   = "${local.name_prefix}-temporary-ssm-ops-host-stop"
   role   = aws_iam_role.temporary_ssm_ops_host_stop[0].id
   policy = data.aws_iam_policy_document.temporary_ssm_ops_host_stop[0].json
 }
 
 resource "aws_scheduler_schedule" "temporary_ssm_ops_host_stop" {
-  count                        = var.enable_temporary_ssm_ops_host ? 1 : 0
-  name                         = "${local.name_prefix}-temporary-ssm-ops-host-stop-20260904"
-  description                  = "One-time termination of the temporary SSM operations host at 22:00 KST."
-  schedule_expression          = "at(2026-09-04T22:00:00)"
+  count                        = var.enable_temporary_ssm_ops_host && var.temporary_ssm_ops_host_termination_at != "" ? 1 : 0
+  name                         = "${local.name_prefix}-temporary-ssm-ops-host-stop"
+  description                  = "One-time termination of the temporary SSM operations host."
+  schedule_expression          = "at(${var.temporary_ssm_ops_host_termination_at})"
   schedule_expression_timezone = "Asia/Seoul"
 
   flexible_time_window {
