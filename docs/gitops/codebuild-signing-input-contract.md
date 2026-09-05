@@ -42,6 +42,10 @@ while the archive key and provenance continue to bind the Git revision. A
 mismatch among the archive key, source-location override, object version,
 bundle checksum, or provenance source revision fails the release.
 
+The private signer role has `GetObjectVersion` only under `release-input/*`,
+plus bucket-scoped `ListBucketVersions` required by CodeBuild source selection.
+It receives no object-version write or delete permission.
+
 The upload uses S3's `If-None-Match: *` precondition, so a SHA-named archive
 cannot silently overwrite an existing input object. The project source has a
 deliberately unusable placeholder location and can run only with the exact
