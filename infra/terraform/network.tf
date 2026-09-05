@@ -13,6 +13,15 @@ data "aws_prefix_list" "s3" {
   name  = "com.amazonaws.${var.aws_region}.s3"
 }
 
+# This module never creates public networking. A separately approved NAT used
+# by the private runner is supplied at apply time and read here so the Hoodi
+# egress exception cannot be enabled against a missing gateway. The route is
+# deliberately not managed here because it predates this module's state.
+data "aws_nat_gateway" "hoodi_egress" {
+  count = var.hoodi_nat_gateway_id == null ? 0 : 1
+  id    = var.hoodi_nat_gateway_id
+}
+
 moved {
   from = data.aws_prefix_list.s3
   to   = data.aws_prefix_list.s3[0]
@@ -98,7 +107,9 @@ resource "aws_subnet" "private" {
   })
 }
 
-# Deliberately no Internet gateway, NAT gateway, or public route is defined.
+# The baseline creates no Internet gateway, NAT gateway, or public route. The
+# approved private NAT route used by the disposable runner is external to this
+# module and is the only path used by the dedicated Hoodi node group below.
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.private.id
 
@@ -162,6 +173,77 @@ resource "aws_security_group" "nodes" {
   })
 }
 
+# Dynamic Hoodi peers cannot be expressed as a stable IP allow-list. This is a
+# deliberately separate node boundary: only the two P2P ports and HTTPS may
+# leave the VPC, traffic remains in private subnets, and VPC Flow Logs record
+# every accepted or rejected flow. Platform nodes continue to have no internet
+# egress rule.
+resource "aws_security_group" "hoodi_nodes" {
+  name_prefix = "${local.name_prefix}-hoodi-nodes-"
+  description = "Private Hoodi nodes with port-restricted NAT egress."
+  vpc_id      = aws_vpc.private.id
+
+  egress {
+    description = "Private VPC service traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    description     = "S3 gateway endpoint traffic for private image pulls"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    prefix_list_ids = [var.offline_validation ? "pl-78a54011" : data.aws_prefix_list.s3[0].id]
+  }
+
+  egress {
+    description = "Hoodi HTTPS through the approved private NAT"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Hoodi execution P2P TCP through the approved private NAT"
+    from_port   = 30303
+    to_port     = 30303
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Hoodi execution P2P UDP through the approved private NAT"
+    from_port   = 30303
+    to_port     = 30303
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Hoodi consensus P2P TCP through the approved private NAT"
+    from_port   = 13000
+    to_port     = 13000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Hoodi consensus P2P UDP through the approved private NAT"
+    from_port   = 13000
+    to_port     = 13000
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-hoodi-nodes"
+  })
+}
+
 # Keep all ingress rules separate from their groups. Inline mutual references
 # would create a Terraform dependency cycle even though the network intent is
 # valid, and mixing inline with standalone rules creates conflicting ownership.
@@ -169,6 +251,13 @@ resource "aws_vpc_security_group_ingress_rule" "nodes_self_all" {
   description                  = "Node-to-node Kubernetes traffic"
   security_group_id            = aws_security_group.nodes.id
   referenced_security_group_id = aws_security_group.nodes.id
+  ip_protocol                  = "-1"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "hoodi_nodes_self_all" {
+  description                  = "Hoodi node-to-node Kubernetes traffic"
+  security_group_id            = aws_security_group.hoodi_nodes.id
+  referenced_security_group_id = aws_security_group.hoodi_nodes.id
   ip_protocol                  = "-1"
 }
 
@@ -181,9 +270,27 @@ resource "aws_vpc_security_group_ingress_rule" "cluster_api_from_nodes" {
   ip_protocol                  = "tcp"
 }
 
+resource "aws_vpc_security_group_ingress_rule" "cluster_api_from_hoodi_nodes" {
+  description                  = "Kubernetes API from Hoodi managed nodes"
+  security_group_id            = aws_security_group.cluster.id
+  referenced_security_group_id = aws_security_group.hoodi_nodes.id
+  from_port                    = 443
+  to_port                      = 443
+  ip_protocol                  = "tcp"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "nodes_kubelet_from_cluster" {
   description                  = "Kubelet API from the control plane"
   security_group_id            = aws_security_group.nodes.id
+  referenced_security_group_id = aws_security_group.cluster.id
+  from_port                    = 10250
+  to_port                      = 10250
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "hoodi_nodes_kubelet_from_cluster" {
+  description                  = "Kubelet API from the control plane to Hoodi nodes"
+  security_group_id            = aws_security_group.hoodi_nodes.id
   referenced_security_group_id = aws_security_group.cluster.id
   from_port                    = 10250
   to_port                      = 10250
@@ -200,4 +307,13 @@ resource "aws_vpc_security_group_ingress_rule" "nodes_webhook_from_cluster" {
   from_port   = 9443
   to_port     = 9443
   ip_protocol = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "hoodi_nodes_webhook_from_cluster" {
+  description                  = "Webhook and extension API traffic from the control plane to Hoodi nodes"
+  security_group_id            = aws_security_group.hoodi_nodes.id
+  referenced_security_group_id = aws_security_group.cluster.id
+  from_port                    = 9443
+  to_port                      = 9443
+  ip_protocol                  = "tcp"
 }

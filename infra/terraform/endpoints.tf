@@ -45,6 +45,15 @@ resource "aws_vpc_security_group_ingress_rule" "endpoints_https_from_nodes" {
   ip_protocol                  = "tcp"
 }
 
+resource "aws_vpc_security_group_ingress_rule" "endpoints_https_from_hoodi_nodes" {
+  description                  = "HTTPS from Hoodi nodes to VPC interface endpoints"
+  security_group_id            = aws_security_group.endpoints.id
+  referenced_security_group_id = aws_security_group.hoodi_nodes.id
+  from_port                    = 443
+  to_port                      = 443
+  ip_protocol                  = "tcp"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "endpoints_https_from_release_signer" {
   count                        = var.enable_release_signer ? 1 : 0
   description                  = "HTTPS from private release signer to VPC interface endpoints"

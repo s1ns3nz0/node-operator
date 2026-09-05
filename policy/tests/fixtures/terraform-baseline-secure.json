@@ -11,9 +11,28 @@
     ],
     "managed_node_groups": [
       {
-        "address": "aws_eks_node_group.operators",
+        "address": "aws_eks_node_group.private",
         "instance_types": ["m7i.2xlarge"],
-        "scaling": {"min_size": 2, "desired_size": 2, "max_size": 3},
+        "labels": {"node-operator.io/role": "system"},
+        "scaling": {"min_size": 0, "desired_size": 0, "max_size": 3},
+        "availability_zones": ["ap-northeast-2a", "ap-northeast-2c"],
+        "public_ip_association": false,
+        "private_subnet_ids": ["subnet-private-a", "subnet-private-c"]
+      },
+      {
+        "address": "aws_eks_node_group.consensus",
+        "instance_types": ["m7i.2xlarge"],
+        "labels": {"node-operator.io/role": "consensus"},
+        "scaling": {"min_size": 0, "desired_size": 0, "max_size": 1},
+        "availability_zones": ["ap-northeast-2a", "ap-northeast-2c"],
+        "public_ip_association": false,
+        "private_subnet_ids": ["subnet-private-a", "subnet-private-c"]
+      },
+      {
+        "address": "aws_eks_node_group.execution",
+        "instance_types": ["m7i.4xlarge"],
+        "labels": {"node-operator.io/role": "execution"},
+        "scaling": {"min_size": 0, "desired_size": 0, "max_size": 1},
         "availability_zones": ["ap-northeast-2a", "ap-northeast-2c"],
         "public_ip_association": false,
         "private_subnet_ids": ["subnet-private-a", "subnet-private-c"]
