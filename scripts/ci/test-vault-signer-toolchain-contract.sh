@@ -26,10 +26,13 @@ if grep -Eqi '(curl|wget|download|unzip)' "$buildspec"; then
 fi
 grep -Fq 'expected_vault_version="1.20.4"' "$buildspec" || fail 'buildspec must declare the expected preinstalled Vault version'
 grep -Fq "installed_vault_version=\"\$(vault version | awk" "$buildspec" || fail 'buildspec must parse the plaintext Vault version safely'
-grep -Fq "\$1 == \\\"Vault\\\" && \$2 ~ /^v[0-9]+/" "$buildspec" || fail 'buildspec must parse the plaintext Vault version safely'
+grep -Fq "\$1 == \"Vault\" && \$2 ~ /^v[0-9]+/" "$buildspec" || fail 'buildspec must parse the plaintext Vault version safely'
 grep -Fq "test \"\$installed_vault_version\" = \"\$expected_vault_version\"" "$buildspec" || fail 'buildspec must fail closed on the installed Vault version'
 grep -Fq 'vault write -format=json transit/sign/node-operator-release' "$buildspec" || fail 'buildspec must sign through the preinstalled Vault CLI'
 grep -Fq 'vault write -format=json transit/verify/node-operator-release' "$buildspec" || fail 'buildspec must verify through the preinstalled Vault CLI'
+if grep -Fq '\\"' "$buildspec"; then
+  fail 'literal-shell buildspec commands must not retain YAML-irrelevant quote escapes'
+fi
 
 grep -Fqi 'image digest' "$documentation" || fail 'documentation must require digest selection'
 grep -Fqi 'separately authorized' "$documentation" || fail 'documentation must retain the separate activation boundary'
