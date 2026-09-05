@@ -227,7 +227,11 @@ resource "aws_eks_node_group" "consensus" {
     aws_iam_role_policy_attachment.node_ecr_read_only,
     aws_iam_role_policy_attachment.node_cni,
     aws_eks_addon.vpc_cni,
-    aws_vpc_endpoint.required_interface,
+    aws_vpc_endpoint.required_interface["ec2"],
+    aws_vpc_endpoint.required_interface["ecr.api"],
+    aws_vpc_endpoint.required_interface["ecr.dkr"],
+    aws_vpc_endpoint.required_interface["eks-auth"],
+    aws_vpc_endpoint.required_interface["kms"],
     aws_vpc_endpoint.s3,
   ]
 
@@ -273,7 +277,11 @@ resource "aws_eks_node_group" "execution" {
     aws_iam_role_policy_attachment.node_ecr_read_only,
     aws_iam_role_policy_attachment.node_cni,
     aws_eks_addon.vpc_cni,
-    aws_vpc_endpoint.required_interface,
+    aws_vpc_endpoint.required_interface["ec2"],
+    aws_vpc_endpoint.required_interface["ecr.api"],
+    aws_vpc_endpoint.required_interface["ecr.dkr"],
+    aws_vpc_endpoint.required_interface["eks-auth"],
+    aws_vpc_endpoint.required_interface["kms"],
     aws_vpc_endpoint.s3,
   ]
 

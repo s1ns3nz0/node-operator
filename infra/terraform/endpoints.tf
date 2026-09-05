@@ -2,7 +2,9 @@
 # during bootstrap without introducing a NAT gateway or public internet route.
 # STS and CloudWatch Logs become required with either VPC-internal CodeBuild
 # executor. The Argo CD executor additionally calls the EKS management API to
-# obtain the private cluster endpoint. Neither executor has public egress.
+# obtain the private cluster endpoint. Neither executor has public egress. The
+# Vault client-CA endpoint is pre-existing and intentionally retained outside
+# this module's endpoint inventory until its state import can be reviewed.
 locals {
   baseline_interface_endpoint_services = toset([
     "ec2",
@@ -15,7 +17,6 @@ locals {
   required_interface_endpoint_services = setunion(
     local.baseline_interface_endpoint_services,
     (var.enable_release_signer || var.enable_argocd_bootstrap_runner || var.enable_vault_bootstrap_runner) ? toset(["logs", "sts"]) : toset([]),
-    var.enable_release_signer ? toset(["secretsmanager"]) : toset([]),
     (var.enable_argocd_bootstrap_runner || var.enable_vault_bootstrap_runner) ? toset(["eks"]) : toset([]),
     var.enable_temporary_ssm_ops_host ? toset(["ssm", "ssmmessages", "ec2messages"]) : toset([]),
   )
