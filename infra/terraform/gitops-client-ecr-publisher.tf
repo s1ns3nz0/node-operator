@@ -27,7 +27,8 @@ variable "gitops_client_ecr_publisher_environment" {
 }
 
 locals {
-  gitops_client_ecr_repository_name = "${local.name_prefix}-gitops-client"
+  gitops_client_ecr_repository_name   = "${local.name_prefix}-gitops-client"
+  gitops_client_chart_repository_name = "${local.gitops_client_ecr_repository_name}/node-operator-client"
 }
 
 # This repository is intentionally separate from private_gitops["nodes"].
@@ -52,6 +53,28 @@ resource "aws_ecr_repository" "gitops_client" {
   }
 }
 
+# Helm OCI appends Chart.yaml's name to the registry path. Keep the original
+# boundary repository for audit continuity and create the exact chart path
+# before publication, so the GitHub publisher never needs CreateRepository.
+resource "aws_ecr_repository" "gitops_client_chart" {
+  count                = var.enable_gitops_client_ecr_publisher ? 1 : 0
+  name                 = local.gitops_client_chart_repository_name
+  image_tag_mutability = "IMMUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = merge(local.common_tags, {
+    Name    = local.gitops_client_chart_repository_name
+    Purpose = "private-gitops-client-chart"
+  })
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
 resource "aws_ecr_lifecycle_policy" "gitops_client" {
   count      = var.enable_gitops_client_ecr_publisher ? 1 : 0
   repository = aws_ecr_repository.gitops_client[0].name
@@ -60,6 +83,24 @@ resource "aws_ecr_lifecycle_policy" "gitops_client" {
     rules = [{
       rulePriority = 1
       description  = "Retain the latest 10 immutable GitOps client images"
+      selection = {
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 10
+      }
+      action = { type = "expire" }
+    }]
+  })
+}
+
+resource "aws_ecr_lifecycle_policy" "gitops_client_chart" {
+  count      = var.enable_gitops_client_ecr_publisher ? 1 : 0
+  repository = aws_ecr_repository.gitops_client_chart[0].name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Retain the latest 10 immutable GitOps client charts"
       selection = {
         tagStatus   = "any"
         countType   = "imageCountMoreThan"
@@ -140,7 +181,7 @@ data "aws_iam_policy_document" "github_gitops_client_ecr_publisher" {
       "ecr:PutImage",
       "ecr:UploadLayerPart",
     ]
-    resources = [aws_ecr_repository.gitops_client[0].arn]
+    resources = [aws_ecr_repository.gitops_client_chart[0].arn]
   }
 }
 
@@ -152,8 +193,8 @@ resource "aws_iam_role_policy" "github_gitops_client_ecr_publisher" {
 }
 
 output "gitops_client_ecr_repository_url" {
-  description = "Private immutable ECR URL for the GitOps client image, or null while the dedicated publisher boundary is disabled."
-  value       = try(aws_ecr_repository.gitops_client[0].repository_url, null)
+  description = "Private immutable ECR Helm chart URL for the GitOps client, or null while the dedicated publisher boundary is disabled."
+  value       = try(aws_ecr_repository.gitops_client_chart[0].repository_url, null)
 }
 
 output "github_gitops_client_ecr_publisher_role_arn" {
