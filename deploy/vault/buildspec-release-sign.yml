@@ -1,4 +1,6 @@
 version: 0.2
+env:
+  shell: bash
 phases:
   build:
     commands:
@@ -45,7 +47,8 @@ phases:
         > release-verification.json
       - jq -e '.schema_version == "v1" and .transit.verified == true and (.transit.signature | type == "string")' release-verification.json >/dev/null
       - unset VAULT_TOKEN
-      - unset VAULT_TOKEN VAULT_CACERT vault_token payload signature
+      - unset VAULT_TOKEN VAULT_CACERT
+      - unset vault_token payload signature
 artifacts:
   files:
     - node-operator-release-bundle.tar
