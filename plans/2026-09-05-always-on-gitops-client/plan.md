@@ -6,7 +6,7 @@
 4. Register pinned GitOps applications, retaining manual prune and self-heal controls during the first proof.
 5. Bring Vault online, verify private TLS, audit, Raft health, and restricted Transit signing.
 6. Model validator use cases and their separate signing-key, withdrawal-credential, remote-signer, slashing-protection, backup, and incident-recovery boundaries.
-7. Scale consensus and execution pools, let Argo CD sync the client workloads, then prove readiness and allowed network paths without importing a real validator key.
+7. After the separately controlled Vault custody procedure makes the shared Engine-JWT available without exposing it to Git, CI, Terraform, or this automation, scale consensus and execution pools, enable the reviewed client chart, and prove readiness and allowed network paths without importing a real validator key.
 8. Scale Hoodi pools down after proof, retain the system pool for Argo CD, record evidence, run validation, and obtain an independent clean-room debrief.
 
 Escalate instead of bypassing a failure involving private endpoint access, TLS, Vault sealing/audit/backup, immutable image/source pinning, or workload network policy.

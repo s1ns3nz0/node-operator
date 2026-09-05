@@ -2,8 +2,16 @@
   "task": "2026-09-05-always-on-gitops-client",
   "status": "collecting",
   "checks": [
-    {"name":"read-only reconnaissance","status":"passed","detail":"EKS is private-only; node groups are ACTIVE at desired zero; Argo bootstrap project and private ECR artifacts exist; no Fargate profile exists."}
+    {"name":"read-only reconnaissance","status":"passed","detail":"EKS is private-only; node groups are ACTIVE at desired zero; Argo bootstrap project and private ECR artifacts exist; no Fargate profile exists."},
+    {"name":"Argo CD private ECR OCI credential refresh","status":"passed","detail":"Dedicated Pod Identity role and private-ECR-only policy were applied. A private CodeBuild run applied the refresher CronJob, completed its initial Job, and verified the pinned Application as Synced and Healthy. Temporary bootstrap cluster-admin access was removed afterward."},
+    {"name":"EKS VPC CNI NetworkPolicy enforcement","status":"passed","detail":"The managed vpc-cni add-on accepted configuration {enableNetworkPolicy:true} and reached ACTIVE. This makes the reviewed Kubernetes NetworkPolicy resources enforceable at runtime."},
+    {"name":"private GitOps client OCI revision","status":"passed","detail":"The private GitOps repository published immutable chart version 0.1.6. Argo CD is pinned to that revision; its client StatefulSets remain intentionally disabled until the external Engine-JWT custody preflight is completed."},
+    {"name":"validator UC-2 through UC-5 runtime contracts","status":"passed","detail":"Rendered Kubernetes boundary and Vault-policy templates passed the non-secret runtime contract test. No validator key, withdrawal credential, Vault token, or remote signer image was introduced."}
   ],
-  "liveActions": [],
+  "liveActions": [
+    {"action":"applied argocd ECR credential refresher Pod Identity","result":"3 scoped IAM/EKS resources added; no deletions."},
+    {"action":"enabled VPC CNI NetworkPolicy enforcement","result":"vpc-cni update reached ACTIVE."},
+    {"action":"synced private OCI Application revision 0.1.6","result":"private CodeBuild completed successfully; Application reported Synced and Healthy; bootstrap cluster-admin association removed."}
+  ],
   "redactions": ["No secret values, tokens, private keys, recovery material, kubeconfigs, raw signatures, or raw CI logs."]
 }
