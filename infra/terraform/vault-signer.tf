@@ -73,6 +73,22 @@ variable "github_repository" {
   default     = "s1ns3nz0/node-operator"
 }
 
+variable "github_oidc_subject_prefix" {
+  description = "Immutable GitHub OIDC subject prefix for this repository, including owner and repository IDs."
+  type        = string
+  default     = "repo:s1ns3nz0@258690008/node-operator@1353388960"
+}
+
+resource "aws_vpc_security_group_egress_rule" "release_signer_s3_gateway_https" {
+  count             = var.enable_release_signer ? 1 : 0
+  description       = "HTTPS to the S3 gateway endpoint for immutable signer input and output"
+  security_group_id = aws_security_group.release_signer[0].id
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+  prefix_list_id    = data.aws_prefix_list.s3[0].id
+}
+
 variable "release_artifact_bucket_arn" {
   description = "Dedicated release artifact bucket ARN; empty keeps signer disabled."
   type        = string
@@ -796,8 +812,10 @@ resource "aws_iam_role" "github_release_runner" {
       Principal = { Federated = "arn:aws:iam::${var.aws_account_id}:oidc-provider/token.actions.githubusercontent.com" }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
-        StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
-        StringLike   = { "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:ref:refs/tags/v*" }
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:sub" = "${var.github_oidc_subject_prefix}:environment:release"
+        }
       }
     }]
   })

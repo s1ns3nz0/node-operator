@@ -53,6 +53,8 @@ for required in \
   'provenance-input.json' \
   'aws s3api put-object' \
   "--if-none-match '*'" \
+  "aws s3 cp \"s3://\${INPUT_BUCKET}/\${input_key}\"" \
+  "cmp \"\$RUNNER_TEMP/release/node-operator-release-bundle.sha256\"" \
   "--source-version \"\$source_revision\"" \
   "--source-location-override \"\${INPUT_BUCKET}/\${input_key}\"" \
   'release-verification.json' \
