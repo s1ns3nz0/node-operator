@@ -297,6 +297,12 @@ resource "aws_eks_addon" "vpc_cni" {
   addon_name                  = "vpc-cni"
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
+  # NetworkPolicy resources are a security boundary only when the EKS VPC CNI
+  # agent enforces them. Keep the supported add-on switch in Terraform so an
+  # add-on update cannot silently turn the boundary into documentation.
+  configuration_values = jsonencode({
+    enableNetworkPolicy = "true"
+  })
 
   depends_on = [aws_eks_cluster.private]
 
