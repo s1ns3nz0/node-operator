@@ -31,6 +31,8 @@
     "test:gitops-oci-mirror-enabled-plan": "bash scripts/ci/test-gitops-oci-mirror-enabled-plan.sh",
     "test:argocd-bootstrap-enabled-plan": "bash scripts/ci/test-argocd-bootstrap-enabled-plan.sh",
     "test:private-source-vault-boundary": "bash scripts/ci/test-private-source-vault-boundary.sh",
+    "test:argocd-ecr-oci-contract": "bash scripts/ci/test-argocd-ecr-oci-contract.sh",
+    "test:validator-runtime-contract": "bash scripts/ci/test-validator-runtime-contract.sh",
     "test:vault-bootstrap-enabled-plan": "bash scripts/ci/test-vault-bootstrap-enabled-plan.sh"
   }
 }

@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: node-operator-client
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-client
+    chart: node-operator-client
+    targetRevision: 0.1.5
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: node-operator
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=false
