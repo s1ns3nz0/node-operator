@@ -72,3 +72,26 @@ aws eks update-nodegroup-config --region ap-northeast-2 --cluster-name node-oper
 Terraform ignores operational `desiredSize` drift so an intervening plan does
 not unexpectedly stop an active session. It still owns the zero minimum and
 the maximum bounds.
+
+## Use the private SSM tunnel only on demand
+
+The private SSM operations host is intentionally kept **stopped** when no
+cluster operation is in progress. Starting it does not start any EKS node
+group. Find it by its exact tag, start it, and then use the existing
+`AWS-StartPortForwardingSessionToRemoteHost` tunnel procedure. Stop it again
+after the session ends.
+
+```bash
+OPS_HOST_ID="$(aws ec2 describe-instances --region ap-northeast-2 \
+  --filters Name=tag:Name,Values=node-operator-baseline-ssm-ops-host \
+            Name=instance-state-name,Values=stopped,running \
+  --query 'Reservations[].Instances[].InstanceId' --output text)"
+
+aws ec2 start-instances --region ap-northeast-2 --instance-ids "$OPS_HOST_ID"
+# Start the SSM port-forward session and finish the required cluster operation.
+aws ec2 stop-instances --region ap-northeast-2 --instance-ids "$OPS_HOST_ID"
+```
+
+Do not terminate Vault PVCs, release-artifact buckets, or the NAT gateway as
+part of an idle shutdown. Those are persistent dependencies rather than idle
+worker compute.
