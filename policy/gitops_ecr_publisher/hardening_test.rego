@@ -10,7 +10,9 @@ test_dedicated_publisher_fixture_passes if {
     "permissions": [
       {"name": "ecr:GetAuthorizationToken", "resource": "*"},
       {"name": "ecr:BatchCheckLayerAvailability", "resource": "arn:aws:ecr:ap-northeast-2:123456789012:repository/node-operator-baseline-gitops-client"},
+      {"name": "ecr:BatchGetImage", "resource": "arn:aws:ecr:ap-northeast-2:123456789012:repository/node-operator-baseline-gitops-client"},
       {"name": "ecr:CompleteLayerUpload", "resource": "arn:aws:ecr:ap-northeast-2:123456789012:repository/node-operator-baseline-gitops-client"},
+      {"name": "ecr:DescribeImages", "resource": "arn:aws:ecr:ap-northeast-2:123456789012:repository/node-operator-baseline-gitops-client"},
       {"name": "ecr:InitiateLayerUpload", "resource": "arn:aws:ecr:ap-northeast-2:123456789012:repository/node-operator-baseline-gitops-client"},
       {"name": "ecr:PutImage", "resource": "arn:aws:ecr:ap-northeast-2:123456789012:repository/node-operator-baseline-gitops-client"},
       {"name": "ecr:UploadLayerPart", "resource": "arn:aws:ecr:ap-northeast-2:123456789012:repository/node-operator-baseline-gitops-client"},
