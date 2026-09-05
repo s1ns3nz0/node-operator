@@ -13,6 +13,7 @@ for file in "$dockerfile" "$buildspec" "$documentation"; do
   test -f "$file" || fail "missing contract file: $file"
 done
 
+grep -Fqx '  shell: bash' "$buildspec" || fail 'signer buildspec must select Bash for pipefail-dependent commands'
 grep -Fqx 'FROM ubuntu@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517' "$dockerfile" || fail 'Dockerfile base image must be pinned by digest'
 grep -Fqx 'ARG VAULT_VERSION=1.20.4' "$dockerfile" || fail 'Dockerfile must pin Vault 1.20.4'
 grep -Fqx 'ARG VAULT_SHA256=fc5fb5d01d192f1216b139fb5c6af17e3af742aaeffc289fd861920ec55f2c9c' "$dockerfile" || fail 'Dockerfile must pin the approved Vault SHA-256'
