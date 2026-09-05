@@ -45,7 +45,7 @@ for expected in \
   'kind: Application' \
   'name: node-operator-client' \
   'chart: node-operator-client' \
-  'targetRevision: 0.1.5' \
+  'targetRevision: 0.1.6' \
   'prune: false' \
   'selfHeal: false'; do
   grep -Fq "$expected" "$application" || fail "missing Application invariant: $expected"
