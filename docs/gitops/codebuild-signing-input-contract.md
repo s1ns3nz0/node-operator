@@ -36,15 +36,19 @@ S3, branch, or tag buildspec is permitted.
 
 The CodeBuild invocation uses that same `<input-bucket>` and exact
 `release-input/sha256/<source-revision>.zip` value for its S3 source-location
-override. The source-version is the same `<source-revision>`. A mismatch among
-the archive key, source-location override, source version, bundle checksum,
-or provenance source revision fails the release.
+override. The source-version is the S3 VersionId read from that exact object,
+not the Git SHA. This binds CodeBuild to the immutable stored object version
+while the archive key and provenance continue to bind the Git revision. A
+mismatch among the archive key, source-location override, object version,
+bundle checksum, or provenance source revision fails the release.
 
 The upload uses S3's `If-None-Match: *` precondition, so a SHA-named archive
 cannot silently overwrite an existing input object. The project source has a
 deliberately unusable placeholder location and can run only with the exact
 source-location override above; its archive-local buildspec is
-`buildspec-release-sign.yml`.
+`buildspec-release-sign.yml`. If the object already exists, the runner reads
+and compares the reviewed archive members before reusing its immutable S3
+version; it cannot replace the input.
 
 ## Verification output and consumer gate
 
