@@ -834,11 +834,19 @@ resource "aws_iam_role_policy" "github_release_runner" {
         Resource = aws_codebuild_project.release_signer[0].arn
       },
       {
+        Sid      = "WriteImmutableSignerInputs"
         Effect   = "Allow"
         Action   = ["s3:PutObject"]
         Resource = ["${aws_s3_bucket.release_artifacts[0].arn}/release-input/sha256/*"]
       },
       {
+        Sid      = "ReadImmutableSignerInputs"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["${aws_s3_bucket.release_artifacts[0].arn}/release-input/sha256/*"]
+      },
+      {
+        Sid      = "ReadSignerOutputs"
         Effect   = "Allow"
         Action   = ["s3:GetObject"]
         Resource = ["${aws_s3_bucket.release_artifacts[0].arn}/release-signer-output/*"]
@@ -905,6 +913,14 @@ data "aws_iam_policy_document" "release_codebuild_signer" {
       sid       = "ReleaseBucketPrefixes"
       actions   = ["s3:GetObject", "s3:PutObject"]
       resources = ["${aws_s3_bucket.release_artifacts[0].arn}/release-input/*", "${aws_s3_bucket.release_artifacts[0].arn}/release-signer-output/*"]
+    }
+  }
+  dynamic "statement" {
+    for_each = var.enable_release_signer ? [1] : []
+    content {
+      sid       = "ListReleaseArtifactVersionsForSignerSource"
+      actions   = ["s3:ListBucketVersions"]
+      resources = [aws_s3_bucket.release_artifacts[0].arn]
     }
   }
   statement {

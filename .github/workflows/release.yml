@@ -63,7 +63,9 @@ jobs:
             cmp "$RUNNER_TEMP/release/provenance-input.json" "$existing_input_dir/provenance-input.json"
             cmp "$RUNNER_TEMP/release/buildspec-release-sign.yml" "$existing_input_dir/buildspec-release-sign.yml"
           fi
-          aws codebuild start-build --project-name "node-operator-baseline-release-signer" --source-version "$source_revision" --source-location-override "${INPUT_BUCKET}/${input_key}" --region "$AWS_REGION" > "$RUNNER_TEMP/codebuild.json"
+          input_version="$(aws s3api head-object --bucket "$INPUT_BUCKET" --key "$input_key" --query VersionId --output text --region "$AWS_REGION")"
+          test -n "$input_version"; test "$input_version" != "None"
+          aws codebuild start-build --project-name "node-operator-baseline-release-signer" --source-version "$input_version" --source-location-override "${INPUT_BUCKET}/${input_key}" --region "$AWS_REGION" > "$RUNNER_TEMP/codebuild.json"
           build_id="$(jq -r .build.id "$RUNNER_TEMP/codebuild.json")"
           for _ in $(seq 1 60); do
             status="$(aws codebuild batch-get-builds --ids "$build_id" --region "$AWS_REGION" | jq -r '.builds[0].buildStatus')"
