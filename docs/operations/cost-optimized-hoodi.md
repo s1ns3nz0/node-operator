@@ -25,18 +25,13 @@ TCP/UDP 30303, and TCP/UDP 13000 beyond the VPC. Flow Logs remain enabled.
 
 ## Start a Hoodi session
 
-Run these commands with the approved AWS identity. The system pool is kept at
-one node by Terraform; verify it before scaling workload pools.
+Use the checked-in operator script from a private EKS access path. It requires
+an explicit `--yes`, checks only the presence of the externally delivered
+Engine-JWT Secret object (never its data), scales the two worker pools, and
+waits for both reviewed StatefulSets to become Ready.
 
 ```bash
-kubectl wait --for=condition=Ready nodes --all --timeout=15m
-
-aws eks update-nodegroup-config --region ap-northeast-2 --cluster-name node-operator \
-  --nodegroup-name node-operator-consensus \
-  --scaling-config minSize=0,desiredSize=1,maxSize=1
-aws eks update-nodegroup-config --region ap-northeast-2 --cluster-name node-operator \
-  --nodegroup-name node-operator-execution \
-  --scaling-config minSize=0,desiredSize=1,maxSize=1
+scripts/ops/hoodi-session.sh start --yes
 ```
 
 Confirm node labels before applying the two StatefulSets:
@@ -48,19 +43,11 @@ kubectl get pods -n kube-system
 
 ## Stop a Hoodi session
 
-Scale clients down first and wait for their StatefulSets to terminate. This
-does not delete retained EBS volumes. Leave the system pool running for Argo CD.
+Scale clients down before worker pools. This does not delete retained EBS
+volumes. It leaves the system pool and Argo CD running for a fast resume.
 
 ```bash
-kubectl scale statefulset -n node-operator nethermind-execution prysm-beacon --replicas=0
-kubectl wait --for=delete pod -n node-operator -l app.kubernetes.io/part-of=hoodi-node --timeout=15m
-
-aws eks update-nodegroup-config --region ap-northeast-2 --cluster-name node-operator \
-  --nodegroup-name node-operator-consensus \
-  --scaling-config minSize=0,desiredSize=0,maxSize=1
-aws eks update-nodegroup-config --region ap-northeast-2 --cluster-name node-operator \
-  --nodegroup-name node-operator-execution \
-  --scaling-config minSize=0,desiredSize=0,maxSize=1
+scripts/ops/hoodi-session.sh stop --yes
 ```
 
 Terraform ignores operational client-pool `desiredSize` drift so an intervening
