@@ -15,6 +15,7 @@ locals {
   required_interface_endpoint_services = setunion(
     local.baseline_interface_endpoint_services,
     (var.enable_release_signer || var.enable_argocd_bootstrap_runner || var.enable_vault_bootstrap_runner) ? toset(["logs", "sts"]) : toset([]),
+    var.enable_release_signer ? toset(["secretsmanager"]) : toset([]),
     (var.enable_argocd_bootstrap_runner || var.enable_vault_bootstrap_runner) ? toset(["eks"]) : toset([]),
     var.enable_temporary_ssm_ops_host ? toset(["ssm", "ssmmessages", "ec2messages"]) : toset([]),
   )

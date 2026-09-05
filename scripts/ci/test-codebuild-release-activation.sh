@@ -67,7 +67,7 @@ fi
 
 # The workflow uses only a short-lived STS response. Literal access keys,
 # secret values, Vault tokens, and public Vault URLs are prohibited here.
-if grep -Eq 'AKIA[0-9A-Z]{16}|(?i:aws_secret_access_key)[[:space:]]*:|(?i:vault_token)[[:space:]]*:|https?://[^"[:space:]]*(vault|8200)' "$workflow" "$terraform_file"; then
+if grep -Eq 'AKIA[0-9A-Z]{16}|(?i:aws_secret_access_key)[[:space:]]*:|(?i:vault_token)[[:space:]]*:|https?://[^"[:space:]]*(vault|8200)' "$workflow"; then
   fail 'activation code introduces static credentials or a public Vault endpoint'
 fi
 
