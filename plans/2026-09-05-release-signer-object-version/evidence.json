@@ -1,0 +1,1 @@
+{"observed":[{"source":"CodeBuild b064c5f7-ce5b-4f42-a386-84ad1f85dbcd","fact":"DOWNLOAD_SOURCE failed because the signer role lacked s3:GetObjectVersion for release-input/sha256/deb40a85d42a021a7584b0eb1580e708e7f9638a.zip."}],"checks":[{"command":"live inline IAM policy update","result":"GetObjectVersion added only to release-input/*"}]}

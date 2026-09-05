@@ -918,6 +918,14 @@ data "aws_iam_policy_document" "release_codebuild_signer" {
   dynamic "statement" {
     for_each = var.enable_release_signer ? [1] : []
     content {
+      sid       = "ReadImmutableSignerInputVersions"
+      actions   = ["s3:GetObjectVersion"]
+      resources = ["${aws_s3_bucket.release_artifacts[0].arn}/release-input/*"]
+    }
+  }
+  dynamic "statement" {
+    for_each = var.enable_release_signer ? [1] : []
+    content {
       sid       = "ListReleaseArtifactVersionsForSignerSource"
       actions   = ["s3:ListBucketVersions"]
       resources = [aws_s3_bucket.release_artifacts[0].arn]

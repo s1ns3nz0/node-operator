@@ -18,6 +18,7 @@ terraform_project="$(awk '
   in_project { print }
   in_project && /^}$/ { exit }
 ' "$terraform_file")"
+expected_input_version_resource="resources = [\"\${aws_s3_bucket.release_artifacts[0].arn}/release-input/*\"]"
 test -n "$terraform_project" || fail 'release signer CodeBuild project is missing'
 
 for required in \
@@ -42,6 +43,9 @@ printf '%s\n' "$terraform_project" | grep -Fq 'type      = "S3"' || fail 'CodeBu
 printf '%s\n' "$terraform_project" | grep -Fq 'encryption_disabled = false' || fail 'CodeBuild output must remain encrypted'
 grep -Fq 'sid       = "ListReleaseArtifactVersionsForSignerSource"' "$terraform_file" || fail 'signer role lacks version-list access for immutable S3 source selection'
 grep -Fq 'actions   = ["s3:ListBucketVersions"]' "$terraform_file" || fail 'signer role lacks ListBucketVersions for immutable S3 source selection'
+grep -Fq 'sid       = "ReadImmutableSignerInputVersions"' "$terraform_file" || fail 'signer role lacks a distinct immutable-input version-read statement'
+grep -Fq 'actions   = ["s3:GetObjectVersion"]' "$terraform_file" || fail 'signer role lacks immutable object-version read access'
+grep -Fq "$expected_input_version_resource" "$terraform_file" || fail 'signer object-version read scope is missing or broadened'
 if printf '%s\n' "$terraform_project" | grep -Eq 'aws/codebuild/standard|bootstrap\.zip|aws_subnet\.private'; then
   fail 'CodeBuild project retains a public standard-image fallback, bootstrap input, or implicit subnet selection'
 fi
