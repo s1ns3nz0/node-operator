@@ -12,12 +12,14 @@ data "aws_iam_policy_document" "argocd_ecr_refresher_assume_role" {
 }
 
 resource "aws_iam_role" "argocd_ecr_refresher" {
+  count              = var.enable_gitops_client_ecr_publisher ? 1 : 0
   name               = "${local.name_prefix}-argocd-ecr-refresher"
   assume_role_policy = data.aws_iam_policy_document.argocd_ecr_refresher_assume_role.json
   tags               = local.common_tags
 }
 
 data "aws_iam_policy_document" "argocd_ecr_refresher" {
+  count = var.enable_gitops_client_ecr_publisher ? 1 : 0
   statement {
     sid       = "GetEcrAuthorizationToken"
     actions   = ["ecr:GetAuthorizationToken"]
@@ -31,20 +33,22 @@ data "aws_iam_policy_document" "argocd_ecr_refresher" {
 }
 
 resource "aws_iam_role_policy" "argocd_ecr_refresher" {
+  count  = var.enable_gitops_client_ecr_publisher ? 1 : 0
   name   = "${local.name_prefix}-argocd-ecr-refresher"
-  role   = aws_iam_role.argocd_ecr_refresher.id
-  policy = data.aws_iam_policy_document.argocd_ecr_refresher.json
+  role   = aws_iam_role.argocd_ecr_refresher[0].id
+  policy = data.aws_iam_policy_document.argocd_ecr_refresher[0].json
 }
 
 resource "aws_eks_pod_identity_association" "argocd_ecr_refresher" {
+  count           = var.enable_gitops_client_ecr_publisher ? 1 : 0
   cluster_name    = aws_eks_cluster.private.name
   namespace       = "argocd"
   service_account = "argocd-ecr-refresher"
-  role_arn        = aws_iam_role.argocd_ecr_refresher.arn
+  role_arn        = aws_iam_role.argocd_ecr_refresher[0].arn
   depends_on      = [aws_eks_addon.pod_identity_agent]
 }
 
 output "argocd_ecr_refresher_role_arn" {
-  value       = aws_iam_role.argocd_ecr_refresher.arn
+  value       = try(aws_iam_role.argocd_ecr_refresher[0].arn, null)
   description = "Pod Identity role that can refresh only Argo CD's private ECR chart credentials."
 }
