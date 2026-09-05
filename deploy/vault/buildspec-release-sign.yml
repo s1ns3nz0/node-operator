@@ -8,6 +8,13 @@ phases:
       - test "$installed_vault_version" = "$expected_vault_version"
       - test -n "${VAULT_ADDR:-}"
       - test -n "${VAULT_AUTH_ROLE:-}"
+      - test -n "${VAULT_CA_CERT:-}"
+      - umask 077
+      - printf '%s' "$VAULT_CA_CERT" > /tmp/vault-ca.crt
+      - export VAULT_CACERT=/tmp/vault-ca.crt
+      - unset VAULT_CA_CERT
+      - export AWS_DEFAULT_REGION="${AWS_REGION:?missing AWS region}"
+      - export AWS_STS_REGIONAL_ENDPOINTS=regional
       - test -f node-operator-release-bundle.tar
       - test -f node-operator-release-bundle.sha256
       - test -f provenance-input.json
@@ -18,7 +25,7 @@ phases:
       - builder_id="$(jq -er '.predicate.runDetails.builder.id' provenance-input.json)"
       - jq -e --arg digest "${bundle_digest#sha256:}" '.subject == [{name:"node-operator-release-bundle.tar",digest:{sha256:$digest}}]' provenance-input.json >/dev/null
       - payload="$(base64 < provenance-input.json | tr -d '\n')"
-      - vault_token="$(vault write -field=token auth/aws/login role="${VAULT_AUTH_ROLE}" 2>/dev/null)"
+      - vault_token="$(vault login -method=aws -token-only role="${VAULT_AUTH_ROLE}" region="${AWS_REGION}")"
       - test -n "$vault_token"
       - export VAULT_TOKEN="$vault_token"
       - vault write -format=json transit/sign/node-operator-release input="$payload" > signature.json
@@ -38,7 +45,7 @@ phases:
         > release-verification.json
       - jq -e '.schema_version == "v1" and .transit.verified == true and (.transit.signature | type == "string")' release-verification.json >/dev/null
       - unset VAULT_TOKEN
-      - unset vault_token payload
+      - unset VAULT_TOKEN VAULT_CACERT vault_token payload signature
 artifacts:
   files:
     - node-operator-release-bundle.tar

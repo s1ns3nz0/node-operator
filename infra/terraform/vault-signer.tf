@@ -3,9 +3,15 @@ variable "vault_signer_endpoint" {
   type        = string
   default     = ""
   validation {
-    condition     = var.vault_signer_endpoint == "" || can(regex("^https://", var.vault_signer_endpoint))
-    error_message = "vault_signer_endpoint must be HTTPS when configured."
+    condition     = var.vault_signer_endpoint == "" || can(regex("^https://[^/]+:8200$", var.vault_signer_endpoint))
+    error_message = "vault_signer_endpoint must be an HTTPS endpoint explicitly using TCP port 8200 when configured."
   }
+}
+
+variable "vault_signer_auth_role" {
+  description = "Vault AWS auth role used only by the private release signer."
+  type        = string
+  default     = "release-signer"
 }
 
 variable "enable_release_signer" {
@@ -29,6 +35,11 @@ variable "release_signer_image" {
     condition     = var.release_signer_image == "" || can(regex("^[0-9]{12}\\.dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", var.release_signer_image))
     error_message = "release_signer_image must be empty while disabled or an ap-northeast-2 ECR image pinned by a sha256 digest."
   }
+}
+
+data "aws_secretsmanager_secret" "vault_client_ca" {
+  count = var.enable_release_signer ? 1 : 0
+  name  = "${local.name_prefix}-vault-client-ca"
 }
 
 resource "aws_security_group" "release_signer" {
@@ -856,6 +867,12 @@ data "aws_iam_policy_document" "release_codebuild_signer" {
     actions   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
     resources = ["${aws_cloudwatch_log_group.release_signer[0].arn}:*"]
   }
+
+  statement {
+    sid       = "ReadOnlyVaultClientTrustAnchor"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [data.aws_secretsmanager_secret.vault_client_ca[0].arn]
+  }
   dynamic "statement" {
     for_each = var.release_artifact_bucket_arn == "" ? [] : [var.release_artifact_bucket_arn]
     content {
@@ -1040,6 +1057,22 @@ resource "aws_codebuild_project" "release_signer" {
     type                        = "LINUX_CONTAINER"
     privileged_mode             = false
     image_pull_credentials_type = "SERVICE_ROLE"
+
+    environment_variable {
+      name  = "VAULT_ADDR"
+      value = var.vault_signer_endpoint
+    }
+
+    environment_variable {
+      name  = "VAULT_AUTH_ROLE"
+      value = var.vault_signer_auth_role
+    }
+
+    environment_variable {
+      name  = "VAULT_CA_CERT"
+      value = data.aws_secretsmanager_secret.vault_client_ca[0].arn
+      type  = "SECRETS_MANAGER"
+    }
   }
   vpc_config {
     vpc_id             = aws_vpc.private.id
@@ -1055,6 +1088,7 @@ resource "aws_codebuild_project" "release_signer" {
     precondition {
       condition = (
         var.enable_release_signer_ecr_mirror &&
+        var.vault_signer_endpoint != "" &&
         can(regex("^${var.aws_account_id}\\.dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/${local.name_prefix}-vault-release-signer@sha256:[a-f0-9]{64}$", var.release_signer_image)) &&
         length(var.release_signer_subnet_ids) > 0 &&
         alltrue([for subnet_id in var.release_signer_subnet_ids : can(regex("^subnet-[a-z0-9]+$", subnet_id))])
