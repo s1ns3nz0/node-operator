@@ -25,6 +25,7 @@
     "test:codebuild-signer-enabled-plan": "bash scripts/ci/test-codebuild-signer-enabled-plan.sh",
     "test:ecr-signer-mirror-contract": "bash scripts/ci/test-ecr-signer-mirror-contract.sh",
     "test:gitops-oci-mirror-contract": "bash scripts/ci/test-gitops-oci-mirror-contract.sh",
+    "test:gitops-client-ecr-publisher-contract": "bash scripts/ci/test-gitops-client-ecr-publisher-contract.sh",
     "test:cert-manager-chart-mirror-contract": "bash scripts/ci/test-cert-manager-chart-mirror-contract.sh",
     "test:vault-internal-tls-contract": "bash scripts/ci/test-vault-internal-tls-contract.sh",
     "test:gitops-oci-mirror-enabled-plan": "bash scripts/ci/test-gitops-oci-mirror-enabled-plan.sh",
