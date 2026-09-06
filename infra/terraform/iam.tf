@@ -120,7 +120,13 @@ data "aws_iam_policy_document" "ebs_csi" {
 
   statement {
     sid       = "UseOnlyBaselineEBSKey"
-    actions   = ["kms:CreateGrant", "kms:Decrypt", "kms:DescribeKey", "kms:Encrypt", "kms:GenerateDataKeyWithoutPlaintext", "kms:ReEncrypt*"]
+    actions   = ["kms:Decrypt", "kms:DescribeKey", "kms:Encrypt", "kms:GenerateDataKeyWithoutPlaintext", "kms:ReEncrypt*"]
+    resources = [aws_kms_key.ebs.arn]
+  }
+
+  statement {
+    sid       = "CreateOnlyAWSResourceGrantsForBaselineEBSKey"
+    actions   = ["kms:CreateGrant"]
     resources = [aws_kms_key.ebs.arn]
 
     condition {
