@@ -13,6 +13,7 @@
       "read non-sensitive EKS, Argo CD, Hoodi node-pool, StatefulSet, and Secret metadata",
       "publish the reviewed immutable private GitOps client chart and promote the Argo CD Application revision after explicit user approval",
       "create and later remove the reviewed temporary private SSM operations host using an approved state-aligned Terraform input set or an explicitly approved SSM-only recovery apply",
+      "correct the temporary SSM host's least-privilege HTTPS rule to reference the EKS-managed private API security group, then verify private EKS access",
       "if and only if all documented prerequisites are observed, temporarily start and subsequently stop the approved Hoodi UC-1 client session"
     ],
     "prohibited_actions": [

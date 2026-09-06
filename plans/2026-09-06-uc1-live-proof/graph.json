@@ -1,8 +1,8 @@
 {
   "task_id": "2026-09-06-uc1-live-proof",
   "nodes": [
-    {"id":"T1","title":"Terraform execution-basis reconciliation","tier":"sol","owner":"/root","status":"completed"},
-    {"id":"T2","title":"Private prerequisite readback","tier":"sol","owner":"/root","status":"completed"},
+    {"id":"T1","title":"Terraform execution-basis reconciliation","tier":"sol","owner":"/root","status":"in_progress"},
+    {"id":"T2","title":"Private prerequisite readback","tier":"sol","owner":"/root","status":"pending"},
     {"id":"T3","title":"Conditional Hoodi UC-1 proof and safe stop","tier":"sol","owner":"/root","status":"pending"},
     {"id":"T4","title":"UC-2 through UC-5 boundary validation","tier":"terra","owner":"pending","status":"pending"},
     {"id":"T5","title":"Validation and clean-room debrief","tier":"terra","owner":"pending","status":"pending"}

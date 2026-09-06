@@ -3,8 +3,10 @@
 1. Establish one safe infrastructure execution basis: a full state-aligned
    Terraform plan with no unrelated changes, or an explicitly approved
    SSM-only recovery plan that creates no unrelated cloud resource changes.
-2. Create the reviewed temporary private SSM operations host, then open a
-   TLS-verified private EKS tunnel without persisting its identifiers.
+2. Ensure the temporary host's TCP/443 rule targets the EKS-managed API
+   security group, then create the reviewed temporary private SSM operations
+   host and open a TLS-verified private EKS tunnel without persisting its
+   identifiers.
 3. Re-check private EKS access, Argo Application state, node-pool capacity,
    client StatefulSet presence, and `engine-api-jwt` object metadata without
    fetching Secret data.

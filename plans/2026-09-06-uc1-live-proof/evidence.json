@@ -1,6 +1,6 @@
 {
   "task": "2026-09-06-uc1-live-proof",
-  "status": "collecting",
+  "status": "partially-verified",
   "checks": [
     {"name":"AWS EKS metadata readback","status":"passed","detail":"The cluster was ACTIVE with private endpoint enabled and public endpoint disabled; consensus and execution node groups were ACTIVE at desired capacity zero."},
     {"name":"temporary SSM operations-host discovery","status":"passed","detail":"A temporary private SSM host and one-time termination schedule were created through an explicitly approved, 12-create/zero-change/zero-destroy recovery apply."},
@@ -9,11 +9,17 @@
     {"name":"npm run harness:check","status":"passed","detail":"Harness configuration and 69 task graphs passed structural validation."},
     {"name":"npm run test:hoodi-session-contract","status":"passed","detail":"The Hoodi operator script retained explicit confirmation and no-Secret-data invariants."}
     ,{"name":"GitOps client OCI publication","status":"passed","detail":"Reviewed client-runtime chart version 0.1.7 was published successfully from GitOps merge commit 0b7655946b8df7ed1d0792d4ccf1573abdd2b1e7; immutable artifact digest was verified by the publishing workflow."}
+    ,{"name":"Argo CD revision promotion","status":"passed","detail":"Source PR #54 passed quality and security CI and was merged as cfe37369bdda0696e827e11155d056ad8e2e50af, changing only node-operator-client targetRevision from 0.1.6 to 0.1.7."}
+    ,{"name":"post-promotion private EKS status readback","status":"inconclusive","detail":"A fresh temporary SSM host became Online but forwarding to the private EKS API repeatedly timed out during TLS handshake. No Kubernetes write, Secret-data read, node-pool expansion, Vault action, or validator action was performed."}
+    ,{"name":"post-promotion temporary SSM cleanup","status":"passed","detail":"The exact 12-resource temporary SSM recovery set was destroyed after the inconclusive readback; the EC2 instance was confirmed terminated and Terraform state retained only non-managed data sources."}
+    ,{"name":"temporary SSM security-group diagnosis","status":"passed","detail":"The failed forwarding route was traced to the temporary host allowing TCP/443 only to the additional cluster security group while EKS reported a distinct managed cluster security group for its private API. The corrective rule remains limited to TCP/443 and will reference that managed group."}
+    ,{"name":"local corrective-change validation","status":"passed","detail":"Terraform formatting and validation, harness structural validation, and the policy adapter verification completed successfully. Negative insecure-policy fixture failures reported by Conftest are expected assertions; the adapter passed."}
   ],
   "liveActions": [
     {"action":"temporary private SSM access recovery","result":"Created only the reviewed temporary host, minimal IAM, private HTTPS rules, and automatic termination scheduler; no unrelated Terraform changes were applied."},
     {"action":"private preflight and recovery cleanup","result":"Verified the non-sensitive EKS, Argo, workload, and Vault StatefulSet metadata, then removed the temporary host and all associated support resources."},
     {"action":"prepare Argo CD client revision promotion","result":"Changed the client Application only from chart revision 0.1.6 to the successfully published immutable revision 0.1.7; no workload or Secret mutation has occurred yet."},
+    {"action":"merge Argo CD client revision promotion","result":"Merged the CI-passing source declaration for revision 0.1.7. Private-cluster reconciliation remains unverified because the access tunnel failed TLS handshake."},
     {"action":"No client, Vault, Secret, or validator mutation performed","result":"Stopped at the documented fail-closed prerequisites; no node pool was expanded and no Secret data was read."}
   ],
   "redactions": ["No Secret values, tokens, private keys, recovery material, kubeconfigs, endpoint URLs, certificates, or raw logs."]
