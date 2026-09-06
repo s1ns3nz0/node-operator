@@ -71,10 +71,12 @@ resource "aws_vpc_security_group_egress_rule" "temporary_ssm_ops_host_to_endpoin
 }
 
 resource "aws_vpc_security_group_egress_rule" "temporary_ssm_ops_host_to_cluster" {
-  count                        = var.enable_temporary_ssm_ops_host ? 1 : 0
-  description                  = "HTTPS TCP tunnel from temporary SSM host to private EKS API"
-  security_group_id            = aws_security_group.temporary_ssm_ops_host[0].id
-  referenced_security_group_id = aws_security_group.cluster.id
+  count             = var.enable_temporary_ssm_ops_host ? 1 : 0
+  description       = "HTTPS TCP tunnel from temporary SSM host to private EKS API"
+  security_group_id = aws_security_group.temporary_ssm_ops_host[0].id
+  # The private EKS API endpoint is attached to EKS's managed cluster security
+  # group, not the additional security group supplied at cluster creation.
+  referenced_security_group_id = aws_eks_cluster.private.vpc_config[0].cluster_security_group_id
   from_port                    = 443
   to_port                      = 443
   ip_protocol                  = "tcp"
@@ -83,7 +85,7 @@ resource "aws_vpc_security_group_egress_rule" "temporary_ssm_ops_host_to_cluster
 resource "aws_vpc_security_group_ingress_rule" "cluster_api_from_temporary_ssm_ops_host" {
   count                        = var.enable_temporary_ssm_ops_host ? 1 : 0
   description                  = "Kubernetes API TCP tunnel from temporary SSM operations host"
-  security_group_id            = aws_security_group.cluster.id
+  security_group_id            = aws_eks_cluster.private.vpc_config[0].cluster_security_group_id
   referenced_security_group_id = aws_security_group.temporary_ssm_ops_host[0].id
   from_port                    = 443
   to_port                      = 443
