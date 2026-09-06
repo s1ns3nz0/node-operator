@@ -1,0 +1,22 @@
+{
+  "schema_version": "v1",
+  "name": "node-operator-hoodi",
+  "network": "hoodi",
+  "region": "ap-northeast-2",
+  "client_chart": {
+    "name": "node-operator-client",
+    "revision": "0.1.13"
+  },
+  "bootstrap": {
+    "entrypoint": "source/scripts/release/node-operator-release.sh",
+    "supported_commands": ["verify", "bootstrap plan", "bootstrap apply"],
+    "requires": ["AWS credentials for the approved account", "Terraform", "a reviewed non-secret tfvars file"],
+    "forbidden_inputs": ["Kubernetes Secret data", "Vault token", "Vault recovery material", "validator key", "withdrawal credential"]
+  },
+  "post_bootstrap_gates": [
+    "Publish and verify immutable private GitOps OCI artifacts.",
+    "Run the separately approved private Argo CD bootstrap path.",
+    "Promote the pinned client Application revision and verify Argo health.",
+    "Use the separately managed operations-access command for private EKS access."
+  ]
+}
