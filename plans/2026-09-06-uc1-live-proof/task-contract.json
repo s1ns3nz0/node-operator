@@ -1,0 +1,43 @@
+{
+  "id": "2026-09-06-uc1-live-proof",
+  "objective": "Reconcile the private EKS operating path and execute a bounded Hoodi UC-1 Nethermind/Prysm redeployment proof, while retaining fail-closed validator and Vault-secret boundaries.",
+  "classification": "non-trivial",
+  "classification_reason": [
+    "queries a private production EKS control plane",
+    "may temporarily create an SSM tunnel host and scale cost-bearing node pools and StatefulSets",
+    "must preserve Vault, Secret, and validator-key boundaries"
+  ],
+  "authorization": {
+    "repository_mutation": true,
+    "external_actions": [
+      "read non-sensitive EKS, Argo CD, Hoodi node-pool, StatefulSet, and Secret metadata",
+      "publish the reviewed immutable private GitOps client chart and promote the Argo CD Application revision after explicit user approval",
+      "create and later remove the reviewed temporary private SSM operations host using an approved state-aligned Terraform input set or an explicitly approved SSM-only recovery apply",
+      "if and only if all documented prerequisites are observed, temporarily start and subsequently stop the approved Hoodi UC-1 client session"
+    ],
+    "prohibited_actions": [
+      "read, create, modify, decode, or print Secret data",
+      "initialize, unseal, reconfigure, or read data from Vault",
+      "deploy validator keys, withdrawal credentials, or a remote signer",
+      "change public endpoint, cluster access, or network policy boundaries"
+    ]
+  },
+  "constraints": [
+    "Use private EKS access only and retain TLS hostname verification.",
+    "Never record endpoint URLs, kubeconfig content, tokens, certificates, Secret values, keys, or raw logs in evidence.",
+    "Do not bypass absent Engine-JWT custody, a disabled client chart, or an unhealthy private Argo Application.",
+    "UC-2 through UC-5 remain contract and isolation verification only until separately approved validator-key, withdrawal-credential, remote-signer, slashing-history, backup, and recovery custody are available.",
+    "Return consensus and execution pools and client StatefulSets to the recorded cost-suspended state after a successful proof."
+  ],
+  "primary_owner": {"tier": "sol", "responsibility": "security decision, live-operation integration, and sign-off"},
+  "delegations": [],
+  "model_fallbacks": [],
+  "validation": [
+    "state-aligned Terraform plan or explicitly approved SSM-only recovery plan",
+    "non-sensitive live prerequisite readback",
+    "npm run harness:check",
+    "npm run test:hoodi-session-contract",
+    "clean-room debrief before completion"
+  ],
+  "status": "in_progress"
+}
