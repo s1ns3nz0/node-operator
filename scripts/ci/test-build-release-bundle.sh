@@ -34,6 +34,10 @@ for required_path in \
   source/deploy/argocd/node-operator-client-application.yaml \
   source/deploy/validator/onboarding-contract.yaml \
   source/infra/terraform/eks.tf \
+  source/infra/bootstrap-state/main.tf \
+  source/infra/foundation-network/main.tf \
+  source/infra/ops-access/main.tf \
+  source/infra/baseline/variables.tf \
   source/release/hoodi-release-contract.json \
   source/scripts/release/node-operator-release.sh \
   source/policy/decision.rego; do

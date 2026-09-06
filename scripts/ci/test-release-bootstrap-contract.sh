@@ -7,8 +7,9 @@ root="$(repo_root)"
 contract="$root/release/hoodi-release-contract.json"
 template="$root/release/hoodi.ap-northeast-2.tfvars.example"
 entrypoint="$root/scripts/release/node-operator-release.sh"
+ops_entrypoint="$root/scripts/release/node-operator-ops-access.sh"
 
-for file in "$contract" "$template" "$entrypoint" "$root/docs/operations/release-bootstrap.md" "$root/docs/operations/terraform-ssm-state-migration.md"; do
+for file in "$contract" "$template" "$entrypoint" "$ops_entrypoint" "$root/docs/operations/release-bootstrap.md" "$root/docs/operations/terraform-ssm-state-migration.md"; do
   [ -f "$file" ] || { printf 'missing release foundation file: %s\n' "$file" >&2; exit 1; }
 done
 
@@ -23,6 +24,11 @@ rg -Fx 'enable_argocd_bootstrap_cluster_admin = false' "$template" >/dev/null
 rg -Fx 'enable_vault_bootstrap_cluster_admin  = false' "$template" >/dev/null
 rg -F 'SSM operations access belongs to the isolated ops-access command' "$entrypoint" >/dev/null
 rg -F 'temporary cluster-admin bootstrap requires its separately approved phase' "$entrypoint" >/dev/null
+rg -F 'plan|apply|destroy' "$ops_entrypoint" >/dev/null
+if rg -n 'scheduler|vault' "$ops_entrypoint"; then
+  printf 'ops-access command crosses its intended boundary\n' >&2
+  exit 1
+fi
 
 if rg -n -i 'vault(_token)?[[:space:]]*=[[:space:]]*[^"[:space:]]+|private[_-]?key[[:space:]]*=[[:space:]]*[^"[:space:]]+|seed_phrase[[:space:]]*=[[:space:]]*[^"[:space:]]+|withdrawal_credential[[:space:]]*=[[:space:]]*[^"[:space:]]+' "$template" "$entrypoint"; then
   printf 'release foundation contains a prohibited credential literal\n' >&2
