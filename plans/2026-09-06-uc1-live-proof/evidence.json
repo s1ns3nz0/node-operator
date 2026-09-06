@@ -1,0 +1,20 @@
+{
+  "task": "2026-09-06-uc1-live-proof",
+  "status": "collecting",
+  "checks": [
+    {"name":"AWS EKS metadata readback","status":"passed","detail":"The cluster was ACTIVE with private endpoint enabled and public endpoint disabled; consensus and execution node groups were ACTIVE at desired capacity zero."},
+    {"name":"temporary SSM operations-host discovery","status":"passed","detail":"A temporary private SSM host and one-time termination schedule were created through an explicitly approved, 12-create/zero-change/zero-destroy recovery apply."},
+    {"name":"private EKS UC-1 prerequisite readback","status":"blocked","detail":"The Argo client Application was Synced and Healthy, but the externally owned engine-api-jwt object and both client StatefulSets were absent. Both Hoodi pools remained ACTIVE at desired zero. Vault's StatefulSet reported desired zero."},
+    {"name":"temporary SSM recovery cleanup","status":"passed","detail":"The local tunnel was closed and the same explicit 12-resource recovery set was destroyed. Subsequent metadata checks found zero temporary hosts and no managed temporary cloud resources."},
+    {"name":"npm run harness:check","status":"passed","detail":"Harness configuration and 69 task graphs passed structural validation."},
+    {"name":"npm run test:hoodi-session-contract","status":"passed","detail":"The Hoodi operator script retained explicit confirmation and no-Secret-data invariants."}
+    ,{"name":"GitOps client OCI publication","status":"passed","detail":"Reviewed client-runtime chart version 0.1.7 was published successfully from GitOps merge commit 0b7655946b8df7ed1d0792d4ccf1573abdd2b1e7; immutable artifact digest was verified by the publishing workflow."}
+  ],
+  "liveActions": [
+    {"action":"temporary private SSM access recovery","result":"Created only the reviewed temporary host, minimal IAM, private HTTPS rules, and automatic termination scheduler; no unrelated Terraform changes were applied."},
+    {"action":"private preflight and recovery cleanup","result":"Verified the non-sensitive EKS, Argo, workload, and Vault StatefulSet metadata, then removed the temporary host and all associated support resources."},
+    {"action":"prepare Argo CD client revision promotion","result":"Changed the client Application only from chart revision 0.1.6 to the successfully published immutable revision 0.1.7; no workload or Secret mutation has occurred yet."},
+    {"action":"No client, Vault, Secret, or validator mutation performed","result":"Stopped at the documented fail-closed prerequisites; no node pool was expanded and no Secret data was read."}
+  ],
+  "redactions": ["No Secret values, tokens, private keys, recovery material, kubeconfigs, endpoint URLs, certificates, or raw logs."]
+}
