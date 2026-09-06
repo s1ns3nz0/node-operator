@@ -35,6 +35,7 @@
     "test:eks-network-policy-enforcement": "bash scripts/ci/test-eks-network-policy-enforcement.sh",
     "test:hoodi-session-contract": "bash scripts/ci/test-hoodi-session-contract.sh",
     "test:validator-runtime-contract": "bash scripts/ci/test-validator-runtime-contract.sh",
-    "test:vault-bootstrap-enabled-plan": "bash scripts/ci/test-vault-bootstrap-enabled-plan.sh"
+    "test:vault-bootstrap-enabled-plan": "bash scripts/ci/test-vault-bootstrap-enabled-plan.sh",
+    "test:release-bootstrap-contract": "bash scripts/ci/test-release-bootstrap-contract.sh"
   }
 }

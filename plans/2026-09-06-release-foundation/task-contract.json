@@ -1,0 +1,18 @@
+{
+  "id": "2026-09-06-release-foundation",
+  "title": "Reproducible Hoodi release foundation",
+  "classification": "non-trivial",
+  "expected_outcome": "A non-secret release bundle exposes a verified bootstrap contract for the private Hoodi baseline, while Terraform state ownership and SSM extraction are documented and mechanically guarded.",
+  "scope": {
+    "include": ["release baseline manifest", "bootstrap plan/apply command", "non-secret environment template", "Terraform state migration plan", "release boundary tests"],
+    "exclude": ["live Terraform apply", "SSM module implementation", "Vault initialization or unseal", "validator key or signer activation", "CI/CD supply-chain changes"]
+  },
+  "authorization": {
+    "repository_mutation": true,
+    "external_actions": ["read non-sensitive AWS and Git metadata needed for the release baseline"],
+    "prohibited_actions": ["Terraform apply", "SSM host lifecycle change", "secret or Vault read", "validator key generation", "production access outside the approved account"]
+  },
+  "primary_owner": {"tier": "sol", "responsibility": "release security boundary and integration"},
+  "model_fallbacks": [],
+  "status": "in_progress"
+}
