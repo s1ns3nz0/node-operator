@@ -261,6 +261,27 @@ resource "aws_vpc_security_group_ingress_rule" "hoodi_nodes_self_all" {
   ip_protocol                  = "-1"
 }
 
+# Hoodi workload Pods resolve private AWS endpoint names through CoreDNS on
+# the system node pool. Permit only DNS from the Hoodi node security group;
+# endpoint HTTPS remains governed by the dedicated endpoint security group.
+resource "aws_vpc_security_group_ingress_rule" "nodes_dns_from_hoodi_nodes_udp" {
+  description                  = "DNS UDP from Hoodi nodes to system-pool CoreDNS"
+  security_group_id            = aws_security_group.nodes.id
+  referenced_security_group_id = aws_security_group.hoodi_nodes.id
+  from_port                    = 53
+  to_port                      = 53
+  ip_protocol                  = "udp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "nodes_dns_from_hoodi_nodes_tcp" {
+  description                  = "DNS TCP from Hoodi nodes to system-pool CoreDNS"
+  security_group_id            = aws_security_group.nodes.id
+  referenced_security_group_id = aws_security_group.hoodi_nodes.id
+  from_port                    = 53
+  to_port                      = 53
+  ip_protocol                  = "tcp"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "cluster_api_from_nodes" {
   description                  = "Kubernetes API from managed nodes"
   security_group_id            = aws_security_group.cluster.id
