@@ -239,6 +239,14 @@ resource "aws_security_group" "hoodi_nodes" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  egress {
+    description = "Hoodi Prysm discovery UDP through the approved private NAT"
+    from_port   = 12000
+    to_port     = 12000
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-hoodi-nodes"
   })
