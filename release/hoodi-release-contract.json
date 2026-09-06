@@ -14,6 +14,7 @@
     "forbidden_inputs": ["Kubernetes Secret data", "Vault token", "Vault recovery material", "validator key", "withdrawal credential"]
   },
   "post_bootstrap_gates": [
+    "Create the local-state bootstrap backend, then foundation-network before the baseline.",
     "Publish and verify immutable private GitOps OCI artifacts.",
     "Run the separately approved private Argo CD bootstrap path.",
     "Promote the pinned client Application revision and verify Argo health.",
