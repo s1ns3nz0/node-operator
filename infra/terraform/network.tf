@@ -247,6 +247,24 @@ resource "aws_security_group" "hoodi_nodes" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # The canonical Hoodi consensus bootnodes advertise TCP and UDP port 9000.
+  # This is destination-only egress; no internet ingress is introduced.
+  egress {
+    description = "Hoodi consensus bootnode TCP through the approved private NAT"
+    from_port   = 9000
+    to_port     = 9000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Hoodi consensus bootnode UDP through the approved private NAT"
+    from_port   = 9000
+    to_port     = 9000
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-hoodi-nodes"
   })
