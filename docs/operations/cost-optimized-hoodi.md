@@ -21,8 +21,9 @@ The Terraform apply input must set `hoodi_nat_gateway_id` to the already
 approved NAT gateway that is the default route for both private worker
 subnets. Terraform only reads that gateway; it does not create or alter public
 networking. The dedicated Hoodi security group permits only TCP/443,
-TCP/UDP 30303, TCP/UDP 13000 (Prysm TCP and QUIC), and UDP 12000 (Prysm
-discovery) beyond the VPC. Flow Logs remain enabled.
+TCP/UDP 30303, TCP/UDP 9000 (Hoodi consensus bootnodes), TCP/UDP 13000
+(Prysm TCP and QUIC), and UDP 12000 (Prysm discovery) beyond the VPC. Flow
+Logs remain enabled.
 
 ## Start a Hoodi session
 
