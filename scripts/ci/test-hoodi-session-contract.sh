@@ -18,8 +18,8 @@ for required in \
   'jsonpath='"'"'{.metadata.name}'"'"'' \
   'desiredSize=1' \
   'desiredSize=0' \
-  'rollout status statefulset/nethermind-execution' \
-  'rollout status statefulset/prysm-beacon' \
+  'wait --for=condition=Ready pod -l app.kubernetes.io/name=nethermind' \
+  'wait --for=condition=Ready pod -l app.kubernetes.io/name=prysm-beacon' \
   'scale statefulset nethermind-execution prysm-beacon --replicas=0'; do
   grep -Fq "$required" "$script" || fail "missing safety invariant: $required"
 done

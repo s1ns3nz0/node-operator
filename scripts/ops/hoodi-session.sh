@@ -66,8 +66,11 @@ start() {
   kubectl wait --for=condition=Ready node -l node-operator.io/role=consensus --timeout=20m
   kubectl wait --for=condition=Ready node -l node-operator.io/role=execution --timeout=20m
   kubectl -n "$namespace" scale statefulset nethermind-execution prysm-beacon --replicas=1
-  kubectl -n "$namespace" rollout status statefulset/nethermind-execution --timeout=30m
-  kubectl -n "$namespace" rollout status statefulset/prysm-beacon --timeout=30m
+  # The reviewed client StatefulSets deliberately use OnDelete updates. Their
+  # readiness must therefore be checked at the Pod level, rather than through
+  # kubectl rollout status (which only supports RollingUpdate StatefulSets).
+  kubectl -n "$namespace" wait --for=condition=Ready pod -l app.kubernetes.io/name=nethermind --timeout=30m
+  kubectl -n "$namespace" wait --for=condition=Ready pod -l app.kubernetes.io/name=prysm-beacon --timeout=30m
 }
 
 stop() {
