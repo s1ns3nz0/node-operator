@@ -14,6 +14,10 @@ unredacted Vault request/response value.
 The internal Prysm beacon source is authoritative for operational readiness.
 Etherscan and Beaconcha.in are asynchronous, public corroboration only. Their
 availability must never decide whether validator duties start or stop.
+Etherscan V2 (Hoodi chain ID `560048`) confirms only the deposit receipt and
+DepositContract event. Beaconcha.in V2 requires a Bearer API token and an
+explicit `chain: "hoodi"`; it corroborates public status and duty history only
+after an index exists.
 
 All timestamps are UTC. `correlation_id` is generated once per lifecycle
 change and propagated as a Vault correlation header where supported, Kubernetes

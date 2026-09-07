@@ -3,6 +3,11 @@ flowchart LR
   T1 --> T4[Workload collector]
   T3 --> T4 --> T5[Vault audit] --> T6[Archive delivery]
   T6 --> T7[Search index]
-  T6 --> T8[Internal observer] --> T9[Etherscan] --> T11[Disagreement]
-  T8 --> T10[Beaconcha.in] --> T11
-  T11 --> T12[UC-1 wallet gate] --> T13[UC-2] --> T14[UC-3] --> T15[UC-4] --> T16[UC-5] --> T17[Restore tests]
+  T6 --> T8[Internal state observer]
+  T8 --> T9[Etherscan deposit]
+  T8 --> T10[Beaconcha.in V2]
+  T8 --> T11[Internal duty observer]
+  T9 --> T12[Disagreement]
+  T10 --> T12
+  T11 --> T12
+  T12 --> T13[UC-1 wallet gate] --> T14[UC-2] --> T15[UC-3] --> T16[UC-4] --> T17[UC-5] --> T18[Restore tests]

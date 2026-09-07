@@ -53,25 +53,30 @@ evidence from custody through its first observed duties. The earlier
 8. **T8 — internal chain observer.** Collect private Prysm beacon sync, deposit
    observation, activation state, validator index, and duty status.
 9. **T9 — external execution observer.** Confirm the human-submitted Hoodi
-   deposit transaction and event via Etherscan without using explorer output as
-   an operational source of truth.
-10. **T10 — external consensus observer.** Confirm validator status and duty
-    activity by public key through Beaconcha.in, recording URL, timestamp and
-    response hash only.
-11. **T11 — disagreement handling.** Alert on disagreement between internal
-    and external sources and distinguish explorer delay/failure from node
-    failure.
-12. **T12 — UC-1.** Fresh-key ceremony, deposit attestation, human signing
+   deposit transaction and DepositContract event via Etherscan V2 (chain ID
+   `560048`). Etherscan never establishes activation or duty.
+10. **T10 — external consensus observer.** Query authenticated Beaconcha.in
+    V2 with `chain: "hoodi"` for public-key status. Once it has an index,
+    collect attestation/proposal history and sync-committee history only as
+    external corroboration.
+11. **T11 — internal duty observer.** Query the private Beacon API for current
+    and next attester/proposer/sync assignments, then correlate these with
+    Prysm validator and Web3Signer audit logs. This is the operational source
+    of truth for duty outcomes.
+12. **T12 — disagreement handling.** Alert on disagreement between internal
+    and external sources and distinguish explorer indexing/API failures from
+    node failure.
+13. **T13 — UC-1.** Fresh-key ceremony, deposit attestation, human signing
     gate, and Etherscan transaction evidence.
-13. **T13 — UC-2.** Scoped Vault onboarding, persistent authenticated slashing
+14. **T14 — UC-2.** Scoped Vault onboarding, persistent authenticated slashing
     database, signer transport boundary, and audit evidence.
-14. **T14 — UC-3.** Deposit-to-activation timeline and independently observed
+15. **T15 — UC-3.** Deposit-to-activation timeline and independently observed
     validator index.
-15. **T15 — UC-4.** Validator client duties, signer correlation, fence lease,
+16. **T16 — UC-4.** Validator client duties, signer correlation, fence lease,
     and external duty confirmation.
-16. **T16 — UC-5.** Revoke/fence/recovery procedure with slashing continuity
+17. **T17 — UC-5.** Revoke/fence/recovery procedure with slashing continuity
     and first post-recovery duty evidence.
-17. **T17 — restoration and failure tests.** Reindex, archive recovery,
+18. **T18 — restoration and failure tests.** Reindex, archive recovery,
     delivery failure, Vault audit failure, and explorer delay tests.
 
 ## Evidence authority
