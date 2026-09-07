@@ -8,17 +8,17 @@
     {"id":"T5","title":"Implement Vault audit durability and health","tier":"sol","owner":"/root","status":"in_progress"},
     {"id":"T6","title":"Deliver hot logs and immutable archive manifests","tier":"sol","owner":"/root","status":"in_progress"},
     {"id":"T7","title":"Build derived search index and reindex path","tier":"sol","owner":"/root","status":"in_progress"},
-    {"id":"T8","title":"Implement internal Hoodi chain observer","tier":"sol","owner":"/root","status":"in_progress"},
-    {"id":"T9","title":"Implement external Etherscan deposit observer","tier":"sol","owner":"/root","status":"in_progress"},
-    {"id":"T10","title":"Implement external Beaconcha.in duty observer","tier":"sol","owner":"/root","status":"in_progress"},
-    {"id":"T11","title":"Implement internal Beacon duty observer","tier":"sol","owner":"/root","status":"in_progress"},
-    {"id":"T12","title":"Implement source disagreement handling","tier":"sol","owner":"/root","status":"in_progress"},
+    {"id":"T8","title":"Implement internal Hoodi chain observer","tier":"sol","owner":"/root","status":"completed"},
+    {"id":"T9","title":"Implement external Etherscan deposit observer","tier":"sol","owner":"/root","status":"completed"},
+    {"id":"T10","title":"Implement external Beaconcha.in duty observer","tier":"sol","owner":"/root","status":"completed"},
+    {"id":"T11","title":"Implement internal Beacon duty observer","tier":"sol","owner":"/root","status":"completed"},
+    {"id":"T12","title":"Implement source disagreement handling","tier":"sol","owner":"/root","status":"completed"},
     {"id":"T13","title":"Exercise UC-1 with human wallet signing gate","tier":"human","owner":"user","status":"pending"},
     {"id":"T14","title":"Exercise UC-2 operational signer onboarding","tier":"sol","owner":"/root","status":"in_progress"},
     {"id":"T15","title":"Exercise UC-3 deposit to activation timeline","tier":"sol","owner":"/root","status":"pending"},
     {"id":"T16","title":"Exercise UC-4 duties and fencing","tier":"sol","owner":"/root","status":"in_progress"},
     {"id":"T17","title":"Exercise UC-5 revoke and recovery","tier":"sol","owner":"/root","status":"in_progress"},
-    {"id":"T18","title":"Test archive restoration and failure paths","tier":"sol","owner":"/root","status":"pending"}
+    {"id":"T18","title":"Test archive restoration and failure paths","tier":"sol","owner":"/root","status":"in_progress"}
   ],
   "edges": [
     {"from":"T1","to":"T2","kind":"blocks"},{"from":"T1","to":"T4","kind":"blocks"},{"from":"T2","to":"T3","kind":"blocks"},{"from":"T3","to":"T4","kind":"blocks"},{"from":"T4","to":"T5","kind":"blocks"},{"from":"T5","to":"T6","kind":"blocks"},{"from":"T6","to":"T7","kind":"blocks"},{"from":"T6","to":"T8","kind":"blocks"},{"from":"T8","to":"T9","kind":"blocks"},{"from":"T8","to":"T10","kind":"blocks"},{"from":"T8","to":"T11","kind":"blocks"},{"from":"T9","to":"T12","kind":"blocks"},{"from":"T10","to":"T12","kind":"blocks"},{"from":"T11","to":"T12","kind":"blocks"},{"from":"T12","to":"T13","kind":"blocks"},{"from":"T13","to":"T14","kind":"blocks"},{"from":"T14","to":"T15","kind":"blocks"},{"from":"T15","to":"T16","kind":"blocks"},{"from":"T16","to":"T17","kind":"blocks"},{"from":"T17","to":"T18","kind":"blocks"}
