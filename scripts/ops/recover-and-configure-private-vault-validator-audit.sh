@@ -26,7 +26,9 @@ for pod in vault-0 vault-1 vault-2; do
   kubectl -n vault get pod "$pod" -o json | jq -e '[.status.containerStatuses[] | select(.name == "vault-validator-audit-relay") | .ready] == [true]' >/dev/null || {
     printf 'Vault audit relay is not ready: %s\n' "$pod" >&2; exit 65;
   }
-  kubectl -n vault exec "$pod" -c vault-validator-audit-relay -- test -S /vault/audit/validator-audit.sock || {
+  # The relay is intentionally a scratch image and has no shell/coreutils.
+  # Check the shared audit PVC from the Vault container instead.
+  kubectl -n vault exec "$pod" -c vault -- sh -ec 'test -S /vault/audit/validator-audit.sock' || {
     printf 'Vault audit socket is not bound: %s\n' "$pod" >&2; exit 65;
   }
 done
