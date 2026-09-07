@@ -14,7 +14,7 @@
     {"id":"T11","title":"Implement internal Beacon duty observer","tier":"sol","owner":"/root","status":"in_progress"},
     {"id":"T12","title":"Implement source disagreement handling","tier":"sol","owner":"/root","status":"in_progress"},
     {"id":"T13","title":"Exercise UC-1 with human wallet signing gate","tier":"human","owner":"user","status":"pending"},
-    {"id":"T14","title":"Exercise UC-2 operational signer onboarding","tier":"sol","owner":"/root","status":"pending"},
+    {"id":"T14","title":"Exercise UC-2 operational signer onboarding","tier":"sol","owner":"/root","status":"in_progress"},
     {"id":"T15","title":"Exercise UC-3 deposit to activation timeline","tier":"sol","owner":"/root","status":"pending"},
     {"id":"T16","title":"Exercise UC-4 duties and fencing","tier":"sol","owner":"/root","status":"pending"},
     {"id":"T17","title":"Exercise UC-5 revoke and recovery","tier":"sol","owner":"/root","status":"pending"},

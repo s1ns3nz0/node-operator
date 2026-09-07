@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Produces a non-secret runtime manifest. Image inputs must be reviewed,
+# same-account immutable ECR digests; key material remains solely in Vault.
+usage() { printf '%s\n' "Usage: ${0##*/} --validator-set <hoodi-id> --web3signer-image <private-ecr@sha256> --postgres-image <private-ecr@sha256> --output <absolute-yaml>" >&2; exit 64; }
+validator_set=''; web3signer_image=''; postgres_image=''; output=''
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --validator-set) validator_set="${2:-}"; shift 2 ;;
+    --web3signer-image) web3signer_image="${2:-}"; shift 2 ;;
+    --postgres-image) postgres_image="${2:-}"; shift 2 ;;
+    --output) output="${2:-}"; shift 2 ;;
+    *) usage ;;
+  esac
+done
+case "$validator_set" in hoodi-[a-z0-9][a-z0-9-]*) ;; *) usage ;; esac
+case "$output" in /*) ;; *) usage ;; esac
+for image in "$web3signer_image" "$postgres_image"; do
+  printf '%s\n' "$image" | grep -Eq '^106760547719\.dkr\.ecr\.ap-northeast-2\.amazonaws\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$' || { printf '%s\n' 'image must be an approved same-account private ECR digest' >&2; exit 65; }
+done
+for command in sed mkdir mktemp mv grep dirname unlink; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+template="$root/deploy/validator/runtime-template.yaml"
+[ -r "$template" ] || { printf '%s\n' 'runtime template missing' >&2; exit 66; }
+mkdir -p "$(dirname "$output")"
+temporary="$(mktemp "${output}.tmp.XXXXXX")"
+cleanup() { set +e; [ -z "${temporary:-}" ] || [ ! -e "$temporary" ] || unlink "$temporary" 2>/dev/null || true; }
+trap cleanup EXIT INT TERM
+sed -e "s|REPLACE_WITH_VALIDATOR_SET|${validator_set}|g" -e "s|REPLACE_WITH_WEB3SIGNER_IMAGE|${web3signer_image}|g" -e "s|REPLACE_WITH_POSTGRES_IMAGE|${postgres_image}|g" "$template" > "$temporary"
+if grep -q 'REPLACE_WITH_' "$temporary"; then printf '%s\n' 'unresolved runtime placeholder' >&2; exit 65; fi
+mv "$temporary" "$output"; temporary=''
+printf 'PASS: non-secret Hoodi signer runtime manifest rendered to %s. Apply only after all runtime-contract gates pass.\n' "$output"

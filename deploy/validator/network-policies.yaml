@@ -1,0 +1,65 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress-egress
+  namespace: validator-operations
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# The signer has no Internet or CI path. Vault is reachable only while the
+# scoped injector identity is valid; PostgreSQL is reachable only locally.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-signer-private-dependencies
+  namespace: validator-operations
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: validator-remote-signer
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: validator-slashing-db
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: vault
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vault
+      ports:
+        - protocol: TCP
+          port: 8200
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-client-to-signer
+  namespace: validator-operations
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: validator-remote-signer
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: validator-client
+      ports:
+        - protocol: TCP
+          port: 9000

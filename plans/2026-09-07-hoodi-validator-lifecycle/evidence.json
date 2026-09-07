@@ -6,6 +6,7 @@
     {"source": "local test", "fact": "The UC-1 validator accepted one Hoodi deposit-data entry at exactly 32000000000 Gwei with matching type-1 withdrawal credentials and rejected a changed amount."},
     {"source": "official Etherscan and Beaconcha.in documentation checked 2026-09-07", "fact": "Etherscan supports Hoodi chain ID 560048. Beaconcha.in V2 uses authenticated POST requests with explicit chain hoodi; its validator endpoint returns public status, while attestation and proposal history are distinct endpoints. Explorer data is corroboration only."},
     {"source": "local test", "fact": "The external observer records a V2 Beaconcha.in not-configured result without an API token and retains only the response hash; shellcheck and harness graph validation passed."},
+    {"source": "local render", "fact": "The operational signer renderer accepts only same-account ECR digests and emits Vault file injection, TLS PKCS#12 files, POSTGRES_PASSWORD_FILE, PostgreSQL password authentication, and a retained PVC. It rejects test-only identifiers and inline signer database passwords."},
     {"source": "shellcheck", "fact": "The two new operational scripts passed ShellCheck."},
     {"source": "harness", "fact": "harness:check passed. harness:verify reaches known repository fixture failures and an unavailable OSV fixture before completion; these failures are outside this task's changed files."},
     {"source": "local test", "fact": "The evidence-envelope validator accepted a public lifecycle record and rejected a forbidden token field."},

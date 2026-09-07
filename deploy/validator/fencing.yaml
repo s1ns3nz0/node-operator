@@ -1,0 +1,34 @@
+apiVersion: coordination.k8s.io/v1
+kind: Lease
+metadata:
+  name: hoodi-validator-set-primary
+  namespace: validator-operations
+  labels:
+    app.kubernetes.io/part-of: hoodi-validator
+spec:
+  leaseDurationSeconds: 60
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: validator-fence-controller
+  namespace: validator-operations
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    resourceNames: ["hoodi-validator-set-primary"]
+    verbs: ["get", "watch", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: validator-fence-controller
+  namespace: validator-operations
+subjects:
+  - kind: ServiceAccount
+    name: validator-fence-controller
+    namespace: validator-operations
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: validator-fence-controller

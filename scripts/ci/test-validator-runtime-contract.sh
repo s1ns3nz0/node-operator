@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+renderer="$root/scripts/ops/render-hoodi-validator-runtime.sh"
+tmp="$(mktemp -d /private/tmp/node-operator-runtime-render.XXXXXX)"
+web3signer='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-web3signer@sha256:4a76635561a7877bf694b81ff1707c118dff6ea48f47c5d1c514e91e637db51a'
+postgres='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-postgres@sha256:030da09481c3876b71a7e49738a932e1c18c398201a1e4ccfdbff1e5a541215b'
+"$renderer" --validator-set hoodi-test-001 --web3signer-image "$web3signer" --postgres-image "$postgres" --output "$tmp/runtime.yaml" >/dev/null
+grep -Fq 'POSTGRES_PASSWORD_FILE' "$tmp/runtime.yaml"
+grep -Fq 'persistentVolumeClaimRetentionPolicy:' "$tmp/runtime.yaml"
+grep -Fq -- '--tls-keystore-file=/vault/secrets/tls.p12' "$tmp/runtime.yaml"
+grep -Fq 'vault.hashicorp.com/agent-inject-secret-keystore.json' "$tmp/runtime.yaml"
+if grep -Eiq 'test-hoodi|trust|name: POSTGRES_PASSWORD$|--slashing-protection-db-password=' "$tmp/runtime.yaml"; then printf '%s\n' 'test runtime or inline password found' >&2; exit 1; fi
+printf '%s\n' 'PASS: runtime rendering requires private digests, Vault files, TLS, and retained password-auth storage.'

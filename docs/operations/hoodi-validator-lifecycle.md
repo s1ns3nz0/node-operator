@@ -29,6 +29,13 @@ authentication, a current Web3Signer image review, and a dedicated transport
 authentication design compatible with the exact Prysm release. The required
 transport gate is intentionally not bypassed by this document.
 
+`deploy/validator/` contains the non-signing namespace, fencing, network, and
+storage boundaries. Render `runtime-template.yaml` with
+`render-hoodi-validator-runtime.sh` only after supplying reviewed private ECR
+digests. The generated signer uses Vault Agent files, `POSTGRES_PASSWORD_FILE`,
+a retained PVC, and Web3Signer TLS PKCS#12 files. It never takes a password or
+keystore through a manifest, command line, environment value, or Git.
+
 ## UC-3 — deposit and activation observation
 
 Record UC-3 evidence after the transaction is visible through the locally
