@@ -1,0 +1,1 @@
+{"task_id":"2026-09-08-argocd-client-bootstrap","nodes":[{"id":"T1","title":"Encode credential and immutable application bootstrap","tier":"sol","owner":"/root","status":"in_progress"},{"id":"T2","title":"Validate and execute bootstrap","tier":"sol","owner":"/root","status":"pending"}],"edges":[{"from":"T1","to":"T2","kind":"blocks"}]}
