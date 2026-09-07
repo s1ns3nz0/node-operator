@@ -49,7 +49,7 @@ verify_bundle() {
   jq -e '
     .schema_version == "v1" and
     .network == "hoodi" and
-    .client_chart.revision == "0.1.13" and
+    .client_chart.revision == "0.1.27" and
     (.bootstrap.forbidden_inputs | length > 0)
   ' "$bundle_root/source/release/hoodi-release-contract.json" >/dev/null || fail "release contract is invalid"
   printf 'PASS release bundle and Hoodi contract verified.\n'

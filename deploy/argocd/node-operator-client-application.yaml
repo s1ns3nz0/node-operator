@@ -8,7 +8,9 @@ spec:
   source:
     repoURL: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-client
     chart: node-operator-client
-    targetRevision: 0.1.13
+    # 0.1.27 resolves in the immutable private ECR chart repository to
+    # sha256:c4374a0ca6d99f3ccb123ec93a35262fa63464ae6454ab621994d6c6bfa749c3.
+    targetRevision: 0.1.27
   destination:
     server: https://kubernetes.default.svc
     namespace: node-operator

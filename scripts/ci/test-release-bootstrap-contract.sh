@@ -15,7 +15,7 @@ done
 
 jq -e '
   .schema_version == "v1" and .network == "hoodi" and .region == "ap-northeast-2" and
-  .client_chart == {name:"node-operator-client",revision:"0.1.13"} and
+  .client_chart == {name:"node-operator-client",revision:"0.1.27"} and
   (.bootstrap.forbidden_inputs | index("validator key"))
 ' "$contract" >/dev/null
 
