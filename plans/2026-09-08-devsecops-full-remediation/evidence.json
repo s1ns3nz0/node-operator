@@ -1,0 +1,16 @@
+{
+  "observations": [
+    {"name":"temporary_argocd_bootstrap_admin","value":"revoked","evidence":"EKS list-associated-access-policies returned []"},
+    {"name":"node_main","value":"b52bdfa","evidence":"origin/main git log"},
+    {"name":"gitops_main","value":"a1b2e20","evidence":"origin/main git log"},
+    {"name":"node_branch_protection","value":"status checks only; no required reviews or signatures","evidence":"GitHub branch-protection API"},
+    {"name":"gitops_branch_protection","value":"unavailable on current private-repository plan","evidence":"GitHub branch-protection API returned plan-gating HTTP 403; repository visibility was not changed"},
+    {"name":"private_cd_dast","value":"passed","evidence":"GitOps run 34150388354: immutable chart binding, Argo Synced/Healthy, loopback passive DAST alert_count 0, hash-only evidence"},
+    {"name":"private_cd_node24_artifact_runtime","value":"passed","evidence":"GitOps run 34150644465 passed after immutable upload-artifact v6.0.0 upgrade"},
+    {"name":"uc1_live_readiness","value":"passed","evidence":"private EKS verify-use-case-readiness.sh"},
+    {"name":"uc3_activation_observation","value":"not yet active","evidence":"private beacon evidence 2026-09-07T18:17:56Z: synced node, validator HTTP 404"},
+    {"name":"uc4_duty_observation","value":"not applicable until activation","evidence":"private beacon evidence 2026-09-07T18:18:57Z: validator HTTP 404 and no duty query"},
+    {"name":"uc2_uc4_uc5_contracts","value":"passed fail-closed","evidence":"nine local runtime/signer/fence/recovery/audit contract checks"}
+  ],
+  "validations": []
+}

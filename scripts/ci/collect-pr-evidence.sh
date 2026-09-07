@@ -181,6 +181,28 @@ collect_format() {
 
 collect_terraform() {
   local directories_path="$temporary_directory/terraform-directories" result_path="$temporary_directory/terraform-result.json"
+  local root_module="$source_directory/infra/terraform"
+
+  # The evidence gate must use the same root-module plan contract as
+  # CI Terraform. Walking every nested .tf directory treats implementation
+  # fragments as standalone modules and permanently blocks unrelated PRs.
+  # This branch is used by the dedicated, network-isolated Terraform image;
+  # its collector script is checked out from the trusted default branch.
+  if [ -d "$root_module" ] && [ -x "$script_dir/validate-terraform-offline.sh" ]; then
+    local validation_directory="$temporary_directory/terraform-root-validation"
+    set +e
+    "$script_dir/validate-terraform-offline.sh" "$root_module" "$validation_directory" > "$temporary_directory/terraform-root.stdout" 2> "$temporary_directory/terraform-root.stderr"
+    local validation_exit=$?
+    set -e
+    if [ "$validation_exit" -eq 0 ]; then
+      printf '%s\n' '{"status":"passed","modules":[{"module":"infra/terraform","status":"passed"}]}' > "$result_path"
+    else
+      printf '%s\n' '{"status":"failed","modules":[{"module":"infra/terraform","status":"failed"}]}' > "$result_path"
+    fi
+    write_envelope "$output_directory/terraform.json" terraform "$result_path"
+    return
+  fi
+
   find "$source_directory" -type f -name '*.tf' -exec dirname {} \; | LC_ALL=C sort -u > "$directories_path"
   if [ ! -s "$directories_path" ]; then
     printf '%s\n' '{"status":"not_applicable","modules":[]}' > "$result_path"

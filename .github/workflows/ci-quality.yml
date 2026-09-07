@@ -27,6 +27,10 @@ jobs:
         run: scripts/ci/test-script-quality.sh
       - name: Test scanner image release deduplication
         run: scripts/ci/test-scanner-image-release.sh
+      - name: Test scanner evidence upload boundary
+        run: scripts/ci/test-ci-security-evidence-contract.sh
+      - name: Test evidence-gate Terraform contract
+        run: scripts/ci/test-evidence-gate-terraform-contract.sh
       - name: Test toolchain image release deduplication
         run: scripts/ci/test-toolchain-image-release.sh
       - name: Test image publisher isolation

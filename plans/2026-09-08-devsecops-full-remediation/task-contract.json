@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-09-08-devsecops-full-remediation",
+  "owner": "sol",
+  "objective": "Harden the Node Operator and GitOps CI/CD boundaries, execute a disposable private DAST run, and leave independently verifiable evidence before resuming validator UC-1 through UC-5 validation.",
+  "scope": [
+    "GitHub workflow, repository-rule, and environment protections",
+    "GitOps private-CD and private-DAST execution boundaries",
+    "non-secret CI/CD evidence and contract tests",
+    "read-only validator readiness and activity evidence"
+  ],
+  "out_of_scope": [
+    "reading, creating, or exporting Vault tokens, recovery keys, or validator keystores",
+    "changing validator signing material",
+    "persistent external DAST targets or public EKS access"
+  ],
+  "authorizations": {
+    "source_changes": "user authorized",
+    "pull_requests_and_merges": "user authorized by the active goal",
+    "GitHub_repository_and_environment_hardening": "user authorized by the active goal",
+    "AWS_changes": "only least-privilege, task-scoped resources; inspect before apply"
+  },
+  "success_criteria": [
+    "No temporary EKS bootstrap administrator access remains",
+    "GitOps repository has protected main-branch controls and security features enabled",
+    "GitOps CD verifies the pinned chart deployment and runs a disposable, private, digest-pinned passive DAST job without raw-report disclosure",
+    "Every changed workflow is syntactically and supply-chain validated",
+    "UC evidence distinguishes observed validator facts from unperformed secret-dependent actions"
+  ],
+  "model_fallbacks": [],
+  "escalation_trigger": "Any operation needing a Vault/recovery/keystore value, a non-scoped IAM permission, or a destructive production action stops for explicit user direction."
+}

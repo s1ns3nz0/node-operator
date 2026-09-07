@@ -18,7 +18,11 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:010ca69dc9d08d2d255c2e9d80b54544245fad8d85c670f723cce788e3bb16af
-      EVIDENCE_ROOT: ${{ github.workspace }}/.security-evidence
+      # Keep the only uploadable scanner output in a non-hidden directory.
+      # upload-artifact v6 excludes hidden paths by default; enabling them
+      # would risk collecting unrelated hidden workspace state. The scanner
+      # sees the workspace read-only and /evidence as a distinct output mount.
+      EVIDENCE_ROOT: ${{ github.workspace }}/security-evidence
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,7 +46,7 @@ jobs:
           "${{ github.event.pull_request.base.sha || github.sha }}"
       - name: Upload non-sensitive security evidence
         if: success()
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: security-evidence-${{ github.event.pull_request.head.sha || github.sha }}
           path: ${{ env.EVIDENCE_ROOT }}

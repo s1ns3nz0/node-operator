@@ -33,7 +33,7 @@ jobs:
           docker build --build-arg "TOOLCHAIN_INPUT_SHA=$input_sha" --file "${{ matrix.dockerfile }}" --tag "$IMAGE:build-${GITHUB_SHA}" .
           docker save --output toolchain-image.tar "$IMAGE:build-${GITHUB_SHA}"
           printf '%s\n' "$input_sha" > toolchain-input.sha256
-      - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.6.2
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: toolchain-${{ matrix.image }}-${{ github.sha }}
           path: |

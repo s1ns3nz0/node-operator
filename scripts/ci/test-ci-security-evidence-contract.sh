@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2016
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+workflow="$script_dir/../../.github/workflows/ci-security.yml"
+
+# The scanner produces the sole uploadable evidence in a non-hidden directory,
+# rather than a hidden checkout path. This preserves upload-artifact's safe
+# default (hidden files excluded) and prevents an accidental workspace-wide
+# upload. The scanner mounts the workspace read-only and /evidence separately.
+grep -Fq 'EVIDENCE_ROOT: ${{ github.workspace }}/security-evidence' "$workflow"
+grep -Fq 'path: ${{ env.EVIDENCE_ROOT }}' "$workflow"
+grep -Fq -- '--volume "$GITHUB_WORKSPACE:/workspace:ro"' "$workflow"
+grep -Fq -- '--volume "$EVIDENCE_ROOT:/evidence"' "$workflow"
+if grep -Fq 'include-hidden-files: true' "$workflow"; then
+  printf 'security evidence upload must not include hidden files\n' >&2
+  exit 1
+fi
+
+printf 'PASS: scanner evidence is confined to a non-hidden dedicated directory.\n'
