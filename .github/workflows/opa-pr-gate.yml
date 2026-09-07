@@ -23,6 +23,8 @@ jobs:
     env:
       EVIDENCE_ROOT: ${{ github.workspace }}/.opa-evidence
       SUBJECT_SHA: ${{ github.event.workflow_run.head_sha }}
+      BASE_SHA: ${{ github.event.workflow_run.pull_requests[0].base.sha }}
+      SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:010ca69dc9d08d2d255c2e9d80b54544245fad8d85c670f723cce788e3bb16af
       TERRAFORM_IMAGE: ghcr.io/s1ns3nz0/node-operator/terraform-validation@sha256:1f2ac75ec09b43b4a79eaaae94eca8f8f1655315a5aa81e7c80d3a8a14ac189a
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -46,6 +48,13 @@ jobs:
           path: .pr-source
           fetch-depth: 1
           persist-credentials: false
+      - name: Checkout pull-request base as untrusted scanner input
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.BASE_SHA }}
+          path: .base-source
+          fetch-depth: 1
+          persist-credentials: false
       - uses: open-policy-agent/setup-opa@b2b258e089860efaadaaf71bf6e3aecb4a3eeff1 # v2.4.0
         with:
           version: v1.17.0
@@ -66,6 +75,22 @@ jobs:
             "$TERRAFORM_IMAGE" bash /trusted/scripts/ci/collect-pr-evidence.sh \
             /evidence "$SUBJECT_SHA" /source
           mv "$RUNNER_TEMP/terraform-evidence/terraform.json" "$EVIDENCE_ROOT/raw/terraform.json"
+      - name: Isolate newly introduced policy findings
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USERNAME: ${{ github.actor }}
+        run: |
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
+          docker pull "$SCANNER_IMAGE"
+          mkdir -p "$RUNNER_TEMP/base-security-evidence"
+          docker run --rm \
+            --env SKIP_TERRAFORM=true \
+            --volume "$GITHUB_WORKSPACE/.base-source:/workspace:ro" \
+            --volume "$RUNNER_TEMP/base-security-evidence:/evidence" \
+            "$SCANNER_IMAGE" /evidence "$BASE_SHA" "$BASE_SHA"
+          scripts/ci/filter-pr-baseline-findings.sh \
+            "$EVIDENCE_ROOT/raw" "$RUNNER_TEMP/base-security-evidence" \
+            "$EVIDENCE_ROOT/policy-input" "$SUBJECT_SHA"
       - name: Collect pull-request posture
         env:
           GH_TOKEN: ${{ github.token }}
@@ -73,7 +98,7 @@ jobs:
           pr_number="$(jq -er '.workflow_run.pull_requests[0].number' "$GITHUB_EVENT_PATH")"
           scripts/ci/collect-scm-posture.sh "$SUBJECT_SHA" "$EVIDENCE_ROOT/scm.json" "$pr_number"
       - name: Normalize evidence
-        run: scripts/ci/normalize-evidence.sh "$EVIDENCE_ROOT/raw" "$SUBJECT_SHA" "$EVIDENCE_ROOT/scm.json" "$EVIDENCE_ROOT/normalized/evidence.json"
+        run: scripts/ci/normalize-evidence.sh "$EVIDENCE_ROOT/policy-input" "$SUBJECT_SHA" "$EVIDENCE_ROOT/scm.json" "$EVIDENCE_ROOT/normalized/evidence.json"
       - name: Evaluate OPA policy
         id: policy
         continue-on-error: true
@@ -90,6 +115,7 @@ jobs:
             ${{ env.EVIDENCE_ROOT }}/published/evidence.json
             ${{ env.EVIDENCE_ROOT }}/published/decision.json
             ${{ env.EVIDENCE_ROOT }}/published/policy.sarif
+            ${{ env.EVIDENCE_ROOT }}/policy-input/baseline-summary.json
           if-no-files-found: error
           retention-days: 90
       - name: Enforce OPA decision

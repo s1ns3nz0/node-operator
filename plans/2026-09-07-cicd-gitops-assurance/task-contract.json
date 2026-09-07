@@ -1,0 +1,23 @@
+{
+  "id": "2026-09-07-cicd-gitops-assurance",
+  "title": "Private DAST and GitOps CD assurance",
+  "classification": "non-trivial",
+  "classification_reason": ["CI/CD supply-chain boundary", "private EKS access", "multiple validation layers"],
+  "expected_outcome": "Establish evidence-backed private DAST and GitOps CD verification without exposing a private EKS endpoint or granting a CI identity deployment authority.",
+  "constraints": [
+    "DAST must run only from an approved private runner after an Argo Application is Synced and Healthy.",
+    "No workflow may use static cloud credentials, kubeconfig, Vault token, or private endpoint in logs or artifacts.",
+    "A DAST failure must block promotion evidence but must not mutate workloads or send signing traffic.",
+    "Deployment authority remains in the approved GitOps repository; this repository cannot impersonate that authority."
+  ],
+  "authorization": {
+    "repository_mutation": true,
+    "external_actions": ["read-only GitHub Actions, GitOps repository, AWS, and private EKS inspection"],
+    "requires_separate_approval": ["workflow publication", "GitOps repository mutation", "private-runner DAST execution", "Argo sync or workload mutation"]
+  },
+  "primary_owner": {"tier": "sol", "responsibility": "security architecture, workflow integration, final evidence"},
+  "delegations": [],
+  "model_fallbacks": [],
+  "validation": ["workflow structural contract", "shellcheck", "harness check", "CI evidence review", "private runner dry-run only after explicit approval"],
+  "status": "in_progress"
+}
