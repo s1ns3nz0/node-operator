@@ -107,7 +107,7 @@ metadata:
   name: validator-REPLACE_WITH_VALIDATOR_SET-remote-signer
   namespace: validator-operations
 spec:
-  replicas: 1
+  replicas: 0
   strategy: {type: Recreate}
   selector:
     matchLabels:
@@ -185,7 +185,7 @@ metadata:
   name: validator-REPLACE_WITH_VALIDATOR_SET-primary
   namespace: validator-operations
   labels: {node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}
-spec: {leaseDurationSeconds: 60}
+spec: {holderIdentity: "", leaseDurationSeconds: 60}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

@@ -39,10 +39,16 @@ jq -e --arg key "$public_key" '
 ' "$private_evidence" >/dev/null || { printf '%s\n' 'private Beacon evidence does not prove an active, synced validator' >&2; exit 65; }
 
 deployment="validator-${validator_set}-client"
+signer="validator-${validator_set}-remote-signer"
+lease="validator-${validator_set}-primary"
 current_set="$(kubectl -n validator-operations get deployment "$deployment" -o jsonpath='{.spec.template.metadata.labels.node-operator\.io/validator-set}')"
 [ "$current_set" = "$validator_set" ] || { printf '%s\n' 'rendered client validator-set does not match requested activation' >&2; exit 65; }
 replicas="$(kubectl -n validator-operations get deployment "$deployment" -o jsonpath='{.spec.replicas}')"
 [ "$replicas" = 0 ] || { printf '%s\n' 'client deployment is not at zero replicas; refuse to take ownership of an existing signer' >&2; exit 65; }
+signer_replicas="$(kubectl -n validator-operations get deployment "$signer" -o jsonpath='{.spec.replicas}')"
+[ "$signer_replicas" = 1 ] || { printf '%s\n' 'signer is not fenced and running at exactly one replica' >&2; exit 65; }
+lease_holder="$(kubectl -n validator-operations get lease "$lease" -o jsonpath='{.spec.holderIdentity}')"
+[ -n "$lease_holder" ] || { printf '%s\n' 'signer fence lease has no holder' >&2; exit 65; }
 if [ "$dry_run" = true ]; then printf '%s\n' 'PASS: activation gate passed; no workload was scaled because --dry-run was set.'; exit 0; fi
 kubectl -n validator-operations scale deployment "$deployment" --replicas=1
 printf '%s\n' 'PASS: client scale request submitted. Immediately collect private duty, signer audit, and Kubernetes evidence; do not scale a second client.'
