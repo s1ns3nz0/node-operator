@@ -10,6 +10,9 @@ locals {
     "ecr.dkr",
     "eks-auth",
     "kms",
+    # The validator observability collector is private-only and writes its
+    # short-retention operational stream to CloudWatch Logs.
+    "logs",
   ])
 
   required_interface_endpoint_services = setunion(

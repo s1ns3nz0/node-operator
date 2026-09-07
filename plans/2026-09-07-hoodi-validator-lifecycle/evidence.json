@@ -5,7 +5,9 @@
     {"source": "repository", "fact": "The existing Prysm overlay is beacon-only and the existing custody helpers are explicitly test-only."},
     {"source": "local test", "fact": "The UC-1 validator accepted one Hoodi deposit-data entry at exactly 32000000000 Gwei with matching type-1 withdrawal credentials and rejected a changed amount."},
     {"source": "shellcheck", "fact": "The two new operational scripts passed ShellCheck."},
-    {"source": "harness", "fact": "harness:check passed. harness:verify reaches known repository fixture failures and an unavailable OSV fixture before completion; these failures are outside this task's changed files."}
+    {"source": "harness", "fact": "harness:check passed. harness:verify reaches known repository fixture failures and an unavailable OSV fixture before completion; these failures are outside this task's changed files."},
+    {"source": "local test", "fact": "The evidence-envelope validator accepted a public lifecycle record and rejected a forbidden token field."},
+    {"source": "terraform", "fact": "The new observability Terraform file was formatted. Full validate is pending because the pinned AWS provider is absent from the local plugin cache."}
   ],
   "pending_gates": ["fresh validator key", "public deposit data review", "human wallet signature", "deposit inclusion", "activation queue", "first duty"]
 }

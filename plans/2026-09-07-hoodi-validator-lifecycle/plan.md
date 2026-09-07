@@ -27,17 +27,59 @@ evidence from custody through its first observed duties. The earlier
    restore the scoped access and records the recovery without exposing any
    secret.
 
-## Sequence
+## Implementation tasks
 
-1. Implement release-contained runtime manifests, policy contracts, custody
-   helpers, log collector, and UC orchestration scripts.
-2. Validate all artifacts locally and render manifests without secrets.
-3. Inspect the private EKS environment read-only; record whether node clients
-   are synced and whether runtime prerequisites are available.
-4. Run UC-1 through UC-2 with a newly created key. Pause before the wallet
-   deposit until the human confirms the public deposit fields.
-5. After human wallet submission, observe UC-3 until activation. Run UC-4 and
-   UC-5 only after the validator is active.
+1. **T1 — log and evidence schema.** Define a versioned envelope with a
+   correlation ID, public validator key, deposit-data hash, transaction hash,
+   Vault request ID, Kubernetes object UID, and release SHA. Reject secrets.
+2. **T2 — immutable audit archive.** Create a new `validator-audit` S3 bucket
+   with SSE-KMS, versioning, TLS-only access, EventBridge, and two-year
+   governance Object Lock. The existing bucket cannot be retrofitted with
+   Object Lock.
+3. **T3 — private delivery identity.** Add only the VPC endpoints and Pod
+   Identity permissions required by log collectors to reach CloudWatch Logs,
+   S3, and STS.
+4. **T4 — Kubernetes log collection.** Deploy Fluent Bit with structured
+   Kubernetes metadata for validator-related workloads, node logs, and
+   Kubernetes events.
+5. **T5 — Vault audit durability.** Add two non-raw audit devices, a dedicated
+   encrypted audit volume per Vault pod, forwarding, health alerts, and request
+   ID deduplication.
+6. **T6 — hot and archive delivery.** Retain normal workload logs in
+   CloudWatch for 90 days and security/Vault logs for 365 days; archive all
+   accepted records in S3 and emit daily integrity manifests.
+7. **T7 — derived search index.** Index only allowlisted metadata in
+   OpenSearch; prove it can be rebuilt solely from S3.
+8. **T8 — internal chain observer.** Collect private Prysm beacon sync, deposit
+   observation, activation state, validator index, and duty status.
+9. **T9 — external execution observer.** Confirm the human-submitted Hoodi
+   deposit transaction and event via Etherscan without using explorer output as
+   an operational source of truth.
+10. **T10 — external consensus observer.** Confirm validator status and duty
+    activity by public key through Beaconcha.in, recording URL, timestamp and
+    response hash only.
+11. **T11 — disagreement handling.** Alert on disagreement between internal
+    and external sources and distinguish explorer delay/failure from node
+    failure.
+12. **T12 — UC-1.** Fresh-key ceremony, deposit attestation, human signing
+    gate, and Etherscan transaction evidence.
+13. **T13 — UC-2.** Scoped Vault onboarding, persistent authenticated slashing
+    database, signer transport boundary, and audit evidence.
+14. **T14 — UC-3.** Deposit-to-activation timeline and independently observed
+    validator index.
+15. **T15 — UC-4.** Validator client duties, signer correlation, fence lease,
+    and external duty confirmation.
+16. **T16 — UC-5.** Revoke/fence/recovery procedure with slashing continuity
+    and first post-recovery duty evidence.
+17. **T17 — restoration and failure tests.** Reindex, archive recovery,
+    delivery failure, Vault audit failure, and explorer delay tests.
 
-The deposit confirmation and activation-queue wait are intentionally separate
-human/network gates, not automatic deployment steps.
+## Evidence authority
+
+Private Prysm and signed custody records are operational sources of truth.
+Hoodi Etherscan verifies the deposit transaction; Beaconcha.in verifies public
+validator status and duties. Both explorers are independent corroboration only:
+their failure can raise an alert but cannot start, stop, or authorize signing.
+
+The human wallet signature, the activation queue, and the first real duty are
+external gates, never automated deployment steps.

@@ -1,18 +1,25 @@
 {
   "task_id": "2026-09-07-hoodi-validator-lifecycle",
   "nodes": [
-    {"id": "T1", "title": "Define fresh-key custody and public deposit contract", "tier": "sol", "owner": "/root", "status": "completed"},
-    {"id": "T2", "title": "Implement hardened signer and validator-client release artifacts", "tier": "sol", "owner": "/root", "status": "pending"},
-    {"id": "T3", "title": "Implement auditable UC evidence collection", "tier": "sol", "owner": "/root", "status": "completed"},
-    {"id": "T4", "title": "Validate locally and preflight private EKS read-only", "tier": "sol", "owner": "/root", "status": "pending"},
-    {"id": "T5", "title": "Human confirms public deposit fields and signs Hoodi transaction", "tier": "human", "owner": "user", "status": "pending"},
-    {"id": "T6", "title": "Observe activation, duties, fencing, and recovery", "tier": "sol", "owner": "/root", "status": "pending"}
+    {"id":"T1","title":"Define evidence schema and deny-list","tier":"sol","owner":"/root","status":"completed"},
+    {"id":"T2","title":"Provision immutable validator audit archive","tier":"sol","owner":"/root","status":"in_progress"},
+    {"id":"T3","title":"Provision private delivery identity and endpoints","tier":"sol","owner":"/root","status":"in_progress"},
+    {"id":"T4","title":"Collect Kubernetes and validator workload logs","tier":"sol","owner":"/root","status":"pending"},
+    {"id":"T5","title":"Implement Vault audit durability and health","tier":"sol","owner":"/root","status":"pending"},
+    {"id":"T6","title":"Deliver hot logs and immutable archive manifests","tier":"sol","owner":"/root","status":"pending"},
+    {"id":"T7","title":"Build derived search index and reindex path","tier":"sol","owner":"/root","status":"pending"},
+    {"id":"T8","title":"Implement internal Hoodi chain observer","tier":"sol","owner":"/root","status":"in_progress"},
+    {"id":"T9","title":"Implement external Etherscan deposit observer","tier":"sol","owner":"/root","status":"pending"},
+    {"id":"T10","title":"Implement external Beaconcha.in duty observer","tier":"sol","owner":"/root","status":"pending"},
+    {"id":"T11","title":"Implement source disagreement handling","tier":"sol","owner":"/root","status":"pending"},
+    {"id":"T12","title":"Exercise UC-1 with human wallet signing gate","tier":"human","owner":"user","status":"pending"},
+    {"id":"T13","title":"Exercise UC-2 operational signer onboarding","tier":"sol","owner":"/root","status":"pending"},
+    {"id":"T14","title":"Exercise UC-3 deposit to activation timeline","tier":"sol","owner":"/root","status":"pending"},
+    {"id":"T15","title":"Exercise UC-4 duties and fencing","tier":"sol","owner":"/root","status":"pending"},
+    {"id":"T16","title":"Exercise UC-5 revoke and recovery","tier":"sol","owner":"/root","status":"pending"},
+    {"id":"T17","title":"Test archive restoration and failure paths","tier":"sol","owner":"/root","status":"pending"}
   ],
   "edges": [
-    {"from": "T1", "to": "T2", "kind": "blocks"},
-    {"from": "T2", "to": "T3", "kind": "blocks"},
-    {"from": "T3", "to": "T4", "kind": "blocks"},
-    {"from": "T4", "to": "T5", "kind": "blocks"},
-    {"from": "T5", "to": "T6", "kind": "blocks"}
+    {"from":"T1","to":"T2","kind":"blocks"},{"from":"T1","to":"T4","kind":"blocks"},{"from":"T2","to":"T3","kind":"blocks"},{"from":"T3","to":"T4","kind":"blocks"},{"from":"T4","to":"T5","kind":"blocks"},{"from":"T5","to":"T6","kind":"blocks"},{"from":"T6","to":"T7","kind":"blocks"},{"from":"T6","to":"T8","kind":"blocks"},{"from":"T8","to":"T9","kind":"blocks"},{"from":"T8","to":"T10","kind":"blocks"},{"from":"T9","to":"T11","kind":"blocks"},{"from":"T10","to":"T11","kind":"blocks"},{"from":"T11","to":"T12","kind":"blocks"},{"from":"T12","to":"T13","kind":"blocks"},{"from":"T13","to":"T14","kind":"blocks"},{"from":"T14","to":"T15","kind":"blocks"},{"from":"T15","to":"T16","kind":"blocks"},{"from":"T16","to":"T17","kind":"blocks"}
   ]
 }
