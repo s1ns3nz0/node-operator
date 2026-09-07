@@ -40,7 +40,8 @@ jq -e '
   .["validator-file/"].options.elide_list_responses == "true" and
   .["validator-socket/"].options.elide_list_responses == "true" and
   .["validator-file/"].options.file_path == "/vault/audit/validator-audit.json" and
-  .["validator-socket/"].options.address == "unix:///vault/audit/validator-audit.sock"
+  .["validator-socket/"].options.address == "/vault/audit/validator-audit.sock" and
+  .["validator-socket/"].options.socket_type == "unix"
 ' <<<"$audit_devices" >/dev/null || {
   printf 'FAIL: required Vault validator audit devices/options are missing or unsafe; do not enable validator duties.\n' >&2
   exit 65

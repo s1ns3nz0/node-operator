@@ -52,7 +52,7 @@ if ! jq -e 'has("validator-file/")' <<<"$devices" >/dev/null; then
   VAULT_TOKEN="$root_token" vault audit enable -path=validator-file file file_path=/vault/audit/validator-audit.json log_raw=false hmac_accessor=false elide_list_responses=true
 fi
 if ! jq -e 'has("validator-socket/")' <<<"$devices" >/dev/null; then
-  VAULT_TOKEN="$root_token" vault audit enable -path=validator-socket socket address=unix:///vault/audit/validator-audit.sock log_raw=false hmac_accessor=false elide_list_responses=true
+  VAULT_TOKEN="$root_token" vault audit enable -path=validator-socket socket address=/vault/audit/validator-audit.sock socket_type=unix log_raw=false hmac_accessor=false elide_list_responses=true
 fi
 VAULT_TOKEN="$root_token" "$dir/verify-vault-validator-audit.sh"
 printf '%s\n' 'PASS: Vault validator file/socket audit devices were configured and the generated root token will now be revoked.'

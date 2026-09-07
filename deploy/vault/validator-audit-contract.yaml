@@ -17,5 +17,6 @@ data:
     elide_list_responses=true
     hmac_accessor=false
   file-path: /vault/audit/validator-audit.json
-  socket-path: unix:///vault/audit/validator-audit.sock
+  socket-path: /vault/audit/validator-audit.sock
+  socket-type: unix
   correlation-field: request.id
