@@ -34,7 +34,7 @@ jobs:
           registry="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
           aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$registry"
           mirror() {
-            local component="$1" source="$2" repo="node-operator-baseline-validator-$1" tag digest source_digest
+            local component="$1" source="$2" repo="node-operator-baseline-validator-runtime-$1" tag digest source_digest
             tag="${source#*@sha256:}"
             source_digest="sha256:$tag"
             docker buildx imagetools create --tag "$registry/$repo:$tag" "$source"

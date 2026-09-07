@@ -38,7 +38,10 @@ resource "aws_kms_key" "validator_runtime_ecr" {
 }
 
 resource "aws_ecr_repository" "validator_runtime" {
-  for_each             = var.enable_validator_runtime_ecr_mirror ? toset(["validator-web3signer", "validator-postgres"]) : toset([])
+  # The older validator-web3signer/postgres repository names already contain
+  # untracked AES256 images. Keep them untouched; this KMS boundary owns new,
+  # unambiguous destinations only.
+  for_each             = var.enable_validator_runtime_ecr_mirror ? toset(["validator-runtime-web3signer", "validator-runtime-postgres"]) : toset([])
   name                 = "${local.name_prefix}-${each.value}"
   image_tag_mutability = "IMMUTABLE"
   encryption_configuration {
