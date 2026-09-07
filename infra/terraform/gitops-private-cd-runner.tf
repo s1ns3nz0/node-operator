@@ -53,6 +53,16 @@ resource "aws_vpc_security_group_ingress_rule" "cluster_api_from_gitops_private_
   ip_protocol                  = "tcp"
 }
 
+resource "aws_vpc_security_group_ingress_rule" "endpoints_from_gitops_private_cd_runner" {
+  count                        = var.enable_gitops_private_cd_runner ? 1 : 0
+  description                  = "HTTPS from GitOps private CD runner to interface endpoints"
+  security_group_id            = aws_security_group.endpoints.id
+  referenced_security_group_id = aws_security_group.gitops_private_cd_runner[0].id
+  from_port                    = 443
+  to_port                      = 443
+  ip_protocol                  = "tcp"
+}
+
 resource "aws_iam_role" "gitops_private_cd_runner" {
   count = var.enable_gitops_private_cd_runner ? 1 : 0
   name  = "${local.name_prefix}-gitops-private-cd-runner"
