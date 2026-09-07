@@ -27,3 +27,9 @@ jobs:
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             --volume "$RUNNER_TEMP:/output" \
             "$TERRAFORM_IMAGE" bash /workspace/scripts/ci/validate-terraform-offline.sh /workspace/infra/terraform /output
+      - name: Validate enabled validator runtime mirror boundary
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" --network none \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --volume "$RUNNER_TEMP:/output" \
+            "$TERRAFORM_IMAGE" bash /workspace/scripts/ci/test-validator-runtime-mirror-enabled-plan.sh
