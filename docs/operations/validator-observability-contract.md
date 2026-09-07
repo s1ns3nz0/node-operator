@@ -19,6 +19,12 @@ DepositContract event. Beaconcha.in V2 requires a Bearer API token and an
 explicit `chain: "hoodi"`; it corroborates public status and duty history only
 after an index exists.
 
+`reconcile-hoodi-validator-evidence.sh` turns an identity mismatch, missing
+credential, explorer error, or indexing delay into a durable observability
+record. It is deliberately not coupled to deployment, fencing, or signing;
+only a mismatched identity requires the operator to stop and investigate the
+evidence chain.
+
 All timestamps are UTC. `correlation_id` is generated once per lifecycle
 change and propagated as a Vault correlation header where supported, Kubernetes
 annotation, observer field, and archive object metadata.
