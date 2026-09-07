@@ -18,10 +18,11 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:010ca69dc9d08d2d255c2e9d80b54544245fad8d85c670f723cce788e3bb16af
-      # Keep the only uploadable scanner output outside the checkout and out
-      # of hidden paths. upload-artifact v6 excludes hidden paths by default;
-      # enabling them would risk collecting unrelated hidden workspace state.
-      EVIDENCE_ROOT: ${{ runner.temp }}/security-evidence
+      # Keep the only uploadable scanner output in a non-hidden directory.
+      # upload-artifact v6 excludes hidden paths by default; enabling them
+      # would risk collecting unrelated hidden workspace state. The scanner
+      # sees the workspace read-only and /evidence as a distinct output mount.
+      EVIDENCE_ROOT: ${{ github.workspace }}/security-evidence
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
