@@ -80,6 +80,12 @@ server:
 # in-cluster workloads, and the private release-runner/CodeBuild paths.
 injector:
   enabled: true
+  # This is the image injected into application Pods, distinct from the
+  # injector webhook Deployment below. Pin it to the private mirror as well:
+  # private EKS workers intentionally have no Docker Hub egress.
+  agentImage:
+    repository: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault
+    tag: 8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f
   image:
     repository: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault
     tag: 8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f
