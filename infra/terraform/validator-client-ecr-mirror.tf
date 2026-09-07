@@ -8,20 +8,6 @@ data "aws_iam_policy_document" "validator_client_ecr_key" {
   count                   = var.enable_validator_client_ecr_mirror ? 1 : 0
   source_policy_documents = [data.aws_iam_policy_document.kms_key_administrator.json]
 
-  # KMS rejects a newly-created key unless the owning account can retain
-  # control of its policy. This is the standard account-root delegation
-  # statement; concrete administration remains limited by IAM.
-  statement {
-    sid    = "EnableAccountIAMPolicyDelegation"
-    effect = "Allow"
-    principals {
-      type        = "AWS"
-      identifiers = ["arn:aws:iam::${var.aws_account_id}:root"]
-    }
-    actions   = ["kms:*"]
-    resources = ["*"]
-  }
-
   statement {
     principals {
       type        = "Service"

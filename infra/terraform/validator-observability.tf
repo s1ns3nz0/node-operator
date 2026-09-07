@@ -2,7 +2,9 @@
 # bucket is created. This is the canonical archive for non-secret validator
 # lifecycle records; CloudWatch and OpenSearch are derived stores.
 resource "aws_s3_bucket" "validator_audit" {
-  bucket_prefix       = "${local.name_prefix}-validator-audit-"
+  # bucket_prefix leaves room for Terraform's random suffix (S3 permits at
+  # most 37 prefix characters).
+  bucket_prefix       = "${local.name_prefix}-va-"
   force_destroy       = false
   object_lock_enabled = true
 

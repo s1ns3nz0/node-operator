@@ -17,6 +17,22 @@ resource "aws_iam_role" "kms_administrator" {
 }
 
 data "aws_iam_policy_document" "kms_key_administrator" {
+  # Retain the standard account-root delegation that KMS requires when a key
+  # is created. It delegates only to IAM policies in this account; it does not
+  # grant a workload direct cryptographic access to the key.
+  statement {
+    sid    = "EnableAccountIAMPolicyDelegation"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${var.aws_account_id}:root"]
+    }
+
+    actions   = ["kms:*"]
+    resources = ["*"]
+  }
+
   statement {
     sid    = "AllowDedicatedKMSAdministrator"
     effect = "Allow"
