@@ -1,0 +1,1 @@
+{"task_id":"2026-09-07-redteam-remediation","status":"in_progress","observations":["release is independent from CI policy evidence","scanner and toolchain workflows use floating artifact actions","GitOps OCI publishing lacks SBOM, signature, provenance, scan, CD verification, and DAST"],"checks":[]}

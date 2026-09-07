@@ -26,5 +26,9 @@ jobs:
         run: scripts/ci/test-pr-gate.sh
       - name: Test rendered manifests
         run: scripts/ci/test-conftest.sh
+      - name: Test actionable PR baseline filtering
+        run: scripts/ci/test-pr-baseline-findings.sh
+      - name: Test private DAST target contract
+        run: scripts/ci/test-dast-target-contract.sh
       - name: Test shell scripts
         run: scripts/ci/test-script-quality.sh

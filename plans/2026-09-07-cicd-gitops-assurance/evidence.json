@@ -1,0 +1,16 @@
+{
+  "task_id": "2026-09-07-cicd-gitops-assurance",
+  "status": "in_progress",
+  "observations": [
+    {"source":"repository workflow inspection 2026-09-07","fact":"CI Security uses a pinned scanner image containing Semgrep, Checkov, Gitleaks, OSV Scanner, and Zizmor; no DAST engine or private EKS target is configured."},
+    {"source":"GitHub Actions read-back 2026-09-07","fact":"Recent main CI Evidence Gate runs failed with an OPA policy block, while standard policy, quality, security, and Terraform checks passed."},
+    {"source":"private EKS read-back 2026-09-07","fact":"Argo CD currently consumes an immutable private OCI chart revision for node-operator-client; validator-operations resources are not an Argo Application source."}
+  ],
+  "implemented": [
+    "trusted PR gate compares the head's redacted Checkov/Zizmor envelopes to a pinned-image scan of the PR base",
+    "the full baseline counts remain in a separately uploaded non-sensitive baseline-summary artifact",
+    "source-only DAST contract rejects public, credential-bearing, mutating, blockchain-control, unbounded, unpinned, and live-authorized targets"
+  ],
+  "validation": ["bash scripts/ci/test-pr-baseline-findings.sh", "bash scripts/ci/test-dast-target-contract.sh", "npm run harness:verify"],
+  "pending_gates": ["GitOps repository promotion authority", "private CodeBuild runner and least-privilege EKS role", "Argo sync/health and bounded DAST execution approval"]
+}

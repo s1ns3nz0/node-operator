@@ -33,7 +33,7 @@ jobs:
           docker build --build-arg "TOOLCHAIN_INPUT_SHA=$input_sha" --file "${{ matrix.dockerfile }}" --tag "$IMAGE:build-${GITHUB_SHA}" .
           docker save --output toolchain-image.tar "$IMAGE:build-${GITHUB_SHA}"
           printf '%s\n' "$input_sha" > toolchain-input.sha256
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.6.2
         with:
           name: toolchain-${{ matrix.image }}-${{ github.sha }}
           path: |
@@ -60,7 +60,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5.0.0
         with:
           name: toolchain-${{ matrix.image }}-${{ github.sha }}
           path: /tmp/toolchain-image
