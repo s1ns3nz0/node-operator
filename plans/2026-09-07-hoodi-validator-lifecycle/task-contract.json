@@ -1,0 +1,24 @@
+{
+  "id": "2026-09-07-hoodi-validator-lifecycle",
+  "title": "Hoodi validator lifecycle with auditable UC-1 through UC-5",
+  "classification": "non-trivial",
+  "classification_reason": ["validator key custody", "on-chain deposit boundary", "security boundary", "multiple validation layers"],
+  "expected_outcome": "A release-contained, fail-closed Hoodi validator lifecycle is implemented: an operator can create a fresh key outside the repository, prepare a verifiable deposit package, deploy a hardened remote signer and Prysm validator client, and collect non-secret evidence for deposit observation, activation, duties, fencing, and recovery.",
+  "constraints": [
+    "Never reuse the earlier test-only validator key or test-only signer database for a deposit or validator duty.",
+    "Never put a mnemonic, wallet private key, recovery key, Vault token, keystore password, or encrypted keystore in Git, CI output, Kubernetes manifests, task evidence, or command arguments.",
+    "The human alone signs the exact 32 HoodiETH deposit transaction after independently verifying the deposit data.",
+    "No validator client may start signing until execution and consensus sync, signer authentication, persistent slashing protection, and the intended deposit public key are verified.",
+    "All persistent operational logs are non-secret and redact bearer credentials and key material."
+  ],
+  "authorization": {
+    "repository_mutation": true,
+    "external_actions": ["read-only private EKS and Vault health inspection", "deployment only after preflight gates and explicit user confirmation of the public validator key and withdrawal address"],
+    "prohibited_actions": ["wallet access", "wallet signing", "deposit submission", "secret disclosure", "mainnet configuration", "test-key reuse"]
+  },
+  "primary_owner": {"tier": "sol", "responsibility": "validator security architecture, UC integration, activation gate"},
+  "delegations": [],
+  "model_fallbacks": [],
+  "validation": ["shellcheck", "manifest render and structural tests", "harness check", "harness verify", "private-EKS read-only preflight", "UC-1 through UC-5 evidence collection", "clean-room debrief"],
+  "status": "in_progress"
+}

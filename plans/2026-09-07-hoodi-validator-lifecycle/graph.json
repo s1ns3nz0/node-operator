@@ -1,0 +1,18 @@
+{
+  "task_id": "2026-09-07-hoodi-validator-lifecycle",
+  "nodes": [
+    {"id": "T1", "title": "Define fresh-key custody and public deposit contract", "tier": "sol", "owner": "/root", "status": "completed"},
+    {"id": "T2", "title": "Implement hardened signer and validator-client release artifacts", "tier": "sol", "owner": "/root", "status": "pending"},
+    {"id": "T3", "title": "Implement auditable UC evidence collection", "tier": "sol", "owner": "/root", "status": "completed"},
+    {"id": "T4", "title": "Validate locally and preflight private EKS read-only", "tier": "sol", "owner": "/root", "status": "pending"},
+    {"id": "T5", "title": "Human confirms public deposit fields and signs Hoodi transaction", "tier": "human", "owner": "user", "status": "pending"},
+    {"id": "T6", "title": "Observe activation, duties, fencing, and recovery", "tier": "sol", "owner": "/root", "status": "pending"}
+  ],
+  "edges": [
+    {"from": "T1", "to": "T2", "kind": "blocks"},
+    {"from": "T2", "to": "T3", "kind": "blocks"},
+    {"from": "T3", "to": "T4", "kind": "blocks"},
+    {"from": "T4", "to": "T5", "kind": "blocks"},
+    {"from": "T5", "to": "T6", "kind": "blocks"}
+  ]
+}
