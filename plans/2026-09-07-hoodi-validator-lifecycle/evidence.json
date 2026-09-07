@@ -8,7 +8,9 @@
     {"source": "harness", "fact": "harness:check passed. harness:verify reaches known repository fixture failures and an unavailable OSV fixture before completion; these failures are outside this task's changed files."},
     {"source": "local test", "fact": "The evidence-envelope validator accepted a public lifecycle record and rejected a forbidden token field."},
     {"source": "terraform", "fact": "The pinned AWS provider was installed in backend-free mode and terraform validate passed for the complete configuration. An offline plan remains blocked by the repository's S3 backend initialization contract."},
-    {"source": "local", "fact": "The private Beacon and external-explorer observer scripts passed ShellCheck; runtime observation remains pending a real fresh validator public key and private EKS access."}
+    {"source": "local", "fact": "The private Beacon and external-explorer observer scripts passed ShellCheck; runtime observation remains pending a real fresh validator public key and private EKS access."},
+    {"source": "local", "fact": "The isolated Fluent Bit overlay rendered successfully, rejects a non-private/non-digest image, and passes its structural contract test."},
+    {"source": "terraform", "fact": "The CloudWatch Logs to Kinesis Firehose to Object Lock S3 delivery resources were added and terraform validate passed."}
   ],
   "pending_gates": ["fresh validator key", "public deposit data review", "human wallet signature", "deposit inclusion", "activation queue", "first duty"]
 }

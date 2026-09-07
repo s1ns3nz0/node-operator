@@ -97,6 +97,22 @@ data "aws_iam_policy_document" "validator_audit_key" {
       values   = ["s3.${var.aws_region}.amazonaws.com"]
     }
   }
+
+  statement {
+    sid    = "AllowFirehoseArchiveWriteViaS3"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = [aws_iam_role.validator_audit_firehose.arn]
+    }
+    actions   = ["kms:Encrypt", "kms:GenerateDataKey", "kms:DescribeKey"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["s3.${var.aws_region}.amazonaws.com"]
+    }
+  }
 }
 
 resource "aws_kms_key" "validator_audit" {
@@ -265,6 +281,109 @@ resource "aws_iam_role_policy" "validator_audit_reader" {
   name   = "${local.name_prefix}-validator-audit-reader"
   role   = aws_iam_role.validator_audit_reader.id
   policy = data.aws_iam_policy_document.validator_audit_reader.json
+}
+
+data "aws_iam_policy_document" "validator_firehose_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["firehose.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "validator_audit_firehose" {
+  name               = "${local.name_prefix}-validator-audit-firehose"
+  assume_role_policy = data.aws_iam_policy_document.validator_firehose_assume_role.json
+  tags               = local.common_tags
+}
+
+data "aws_iam_policy_document" "validator_audit_firehose" {
+  statement {
+    sid = "WriteOnlyCanonicalValidatorAudit"
+    actions = [
+      "s3:AbortMultipartUpload", "s3:GetBucketLocation", "s3:ListBucket",
+      "s3:ListBucketMultipartUploads", "s3:PutObject", "s3:PutObjectRetention"
+    ]
+    resources = [aws_s3_bucket.validator_audit.arn, "${aws_s3_bucket.validator_audit.arn}/validator/*"]
+  }
+  statement {
+    sid       = "EncryptOnlyCanonicalValidatorAudit"
+    actions   = ["kms:Encrypt", "kms:GenerateDataKey", "kms:DescribeKey"]
+    resources = [aws_kms_key.validator_audit.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "validator_audit_firehose" {
+  name   = "${local.name_prefix}-validator-audit-firehose"
+  role   = aws_iam_role.validator_audit_firehose.id
+  policy = data.aws_iam_policy_document.validator_audit_firehose.json
+}
+
+resource "aws_kinesis_firehose_delivery_stream" "validator_audit" {
+  name        = "${local.name_prefix}-validator-audit"
+  destination = "extended_s3"
+
+  extended_s3_configuration {
+    role_arn            = aws_iam_role.validator_audit_firehose.arn
+    bucket_arn          = aws_s3_bucket.validator_audit.arn
+    prefix              = "validator/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/"
+    error_output_prefix = "validator-errors/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/"
+    buffering_size      = 5
+    buffering_interval  = 300
+    compression_format  = "GZIP"
+    kms_key_arn         = aws_kms_key.validator_audit.arn
+  }
+
+  depends_on = [aws_iam_role_policy.validator_audit_firehose]
+}
+
+data "aws_iam_policy_document" "validator_cloudwatch_subscription_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["logs.${var.aws_region}.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "validator_cloudwatch_subscription" {
+  name               = "${local.name_prefix}-validator-cloudwatch-subscription"
+  assume_role_policy = data.aws_iam_policy_document.validator_cloudwatch_subscription_assume_role.json
+  tags               = local.common_tags
+}
+
+data "aws_iam_policy_document" "validator_cloudwatch_subscription" {
+  statement {
+    actions   = ["firehose:PutRecord", "firehose:PutRecordBatch"]
+    resources = [aws_kinesis_firehose_delivery_stream.validator_audit.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "validator_cloudwatch_subscription" {
+  name   = "${local.name_prefix}-validator-cloudwatch-subscription"
+  role   = aws_iam_role.validator_cloudwatch_subscription.id
+  policy = data.aws_iam_policy_document.validator_cloudwatch_subscription.json
+}
+
+resource "aws_cloudwatch_log_subscription_filter" "validator_workloads_archive" {
+  name            = "validator-workloads-immutable-archive"
+  log_group_name  = aws_cloudwatch_log_group.validator_workloads.name
+  filter_pattern  = ""
+  destination_arn = aws_kinesis_firehose_delivery_stream.validator_audit.arn
+  role_arn        = aws_iam_role.validator_cloudwatch_subscription.arn
+  distribution    = "ByLogStream"
+}
+
+resource "aws_cloudwatch_log_subscription_filter" "validator_security_archive" {
+  name            = "validator-security-immutable-archive"
+  log_group_name  = aws_cloudwatch_log_group.validator_security.name
+  filter_pattern  = ""
+  destination_arn = aws_kinesis_firehose_delivery_stream.validator_audit.arn
+  role_arn        = aws_iam_role.validator_cloudwatch_subscription.arn
+  distribution    = "ByLogStream"
 }
 
 resource "aws_eks_pod_identity_association" "validator_log_collector" {
