@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "images": {
+    "web3signer": {
+      "source": "consensys/web3signer@sha256:ada8799ac8a76109fc67bf2cc0f7d9ff09542fbf538cae5ba0ff7a9cd81efdda",
+      "reference": "22.11.0-jdk17"
+    },
+    "postgres": {
+      "source": "postgres@sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825",
+      "reference": "16-bookworm"
+    }
+  }
+}

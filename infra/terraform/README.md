@@ -88,6 +88,23 @@ repository actions upload image layers and manifests to this repository.
 This Terraform contract deliberately creates no mirroring workflow, image
 publication, AWS credential, or ECR image.
 
+## Validator runtime image mirrors
+
+`enable_validator_runtime_ecr_mirror=false` is the default and creates no
+runtime mirror resources. When explicitly enabled, Terraform creates separate
+KMS-encrypted, scan-on-push, immutable repositories for Web3Signer and
+PostgreSQL. The `validator-runtime-ecr-mirror` GitHub Environment must be
+given the non-secret account ID and the emitted
+`github_validator_runtime_ecr_mirror_role_arn`. Its OIDC role can upload only
+to those two repositories; it cannot delete images, alter repository policy,
+or access Vault.
+
+The corresponding manual workflow has no arbitrary image input. It mirrors
+only digest references committed in `.ci/validator/approved-runtime-images.json`.
+Changing that allowlist is a reviewed source change; after a successful mirror,
+the ECR digest, rather than a tag, is the only value accepted by the signer
+runtime renderer.
+
 ## Private GitOps OCI mirror
 
 `enable_private_gitops_foundation=true` is the promoted default for this live

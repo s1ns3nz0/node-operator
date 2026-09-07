@@ -6,7 +6,8 @@
     {"id":"workflow-contracts","title":"Verify workflow and artifact contracts","tier":"terra","owner":"/root","status":"completed"},
     {"id":"private-dast","title":"Validate private DAST execution","tier":"terra","owner":"/root","status":"completed"},
     {"id":"runtime-validation","title":"Collect runtime CD evidence","tier":"sol","owner":"/root","status":"completed"},
-    {"id":"uc-validation","title":"Validate validator use-case readiness","tier":"sol","owner":"/root","status":"in_progress"},
+    {"id":"runtime-image-mirror","title":"Establish private runtime image mirror boundary","tier":"sol","owner":"/root","status":"in_progress"},
+    {"id":"uc-validation","title":"Validate validator use-case readiness","tier":"sol","owner":"/root","status":"pending"},
     {"id":"debrief","title":"Produce independent remediation debrief","tier":"sol","owner":"/root","status":"pending"}
   ],
   "edges": [
@@ -15,7 +16,8 @@
     {"from":"github-hardening","to":"private-dast","kind":"blocks"},
     {"from":"workflow-contracts","to":"private-dast","kind":"blocks"},
     {"from":"private-dast","to":"runtime-validation","kind":"blocks"},
-    {"from":"runtime-validation","to":"uc-validation","kind":"blocks"},
+    {"from":"runtime-validation","to":"runtime-image-mirror","kind":"blocks"},
+    {"from":"runtime-image-mirror","to":"uc-validation","kind":"blocks"},
     {"from":"uc-validation","to":"debrief","kind":"blocks"}
   ]
 }
