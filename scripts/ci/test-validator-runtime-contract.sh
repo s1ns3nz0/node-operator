@@ -9,6 +9,7 @@ postgres='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseli
 "$renderer" --validator-set hoodi-test-001 --web3signer-image "$web3signer" --postgres-image "$postgres" --output "$tmp/runtime.yaml" >/dev/null
 grep -Fq 'POSTGRES_PASSWORD_FILE' "$tmp/runtime.yaml"
 grep -Fq 'persistentVolumeClaimRetentionPolicy:' "$tmp/runtime.yaml"
+grep -Fq 'name: PGDATA, value: /var/lib/postgresql/data/pgdata' "$tmp/runtime.yaml"
 grep -Fq 'validator-hoodi-test-001-db-dependencies' "$tmp/runtime.yaml"
 grep -Fq 'readOnlyRootFilesystem: true' "$tmp/runtime.yaml"
 grep -Fq 'limits: {cpu: "2", memory: 4Gi}' "$tmp/runtime.yaml"
