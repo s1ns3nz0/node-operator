@@ -43,14 +43,14 @@ spec:
         vault.hashicorp.com/tls-secret: vault-agent-ca
         vault.hashicorp.com/ca-cert: /vault/tls/ca.crt
         vault.hashicorp.com/tls-server-name: vault.vault.svc
-        vault.hashicorp.com/role: hoodi-REPLACE_WITH_VALIDATOR_SET-runtime
+        vault.hashicorp.com/role: hoodi-REPLACE_WITH_VALIDATOR_SET-slashing-db
         vault.hashicorp.com/agent-inject-secret-postgres-password: kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/slashing-db-password
         vault.hashicorp.com/agent-inject-template-postgres-password: |
           {{- with secret "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/slashing-db-password" -}}
           {{ .Data.data.password }}
           {{- end }}
     spec:
-      serviceAccountName: validator-remote-signer
+      serviceAccountName: validator-slashing-db
       automountServiceAccountToken: false
       securityContext:
         fsGroup: 999
