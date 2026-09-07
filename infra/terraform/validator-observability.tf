@@ -389,17 +389,19 @@ resource "aws_cloudwatch_log_subscription_filter" "validator_security_archive" {
 }
 
 resource "aws_eks_pod_identity_association" "validator_log_collector" {
-  cluster_name    = aws_eks_cluster.private.name
+  # An association is accepted by EKS independently of the agent add-on.  Use
+  # the validated cluster name rather than a baseline-resource reference so a
+  # collector association can be reconciled without pulling legacy network
+  # resources into a targeted maintenance plan.
+  cluster_name    = var.name
   namespace       = "validator-observability"
   service_account = "validator-log-collector"
   role_arn        = aws_iam_role.validator_log_collector.arn
-  depends_on      = [aws_eks_addon.pod_identity_agent]
 }
 
 resource "aws_eks_pod_identity_association" "validator_audit_reader" {
-  cluster_name    = aws_eks_cluster.private.name
+  cluster_name    = var.name
   namespace       = "validator-observability"
   service_account = "validator-audit-reader"
   role_arn        = aws_iam_role.validator_audit_reader.arn
-  depends_on      = [aws_eks_addon.pod_identity_agent]
 }
