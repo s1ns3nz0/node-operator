@@ -21,7 +21,7 @@ vault audit enable -path=validator-file file \
   log_raw=false hmac_accessor=false elide_list_responses=true
 
 vault audit enable -path=validator-socket socket \
-  address=unix:///vault/audit/validator-audit.sock \
+  address=/vault/audit/validator-audit.sock socket_type=unix \
   log_raw=false hmac_accessor=false elide_list_responses=true
 ```
 
