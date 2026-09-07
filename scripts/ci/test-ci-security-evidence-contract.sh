@@ -18,4 +18,4 @@ if grep -Fq 'include-hidden-files: true' "$workflow"; then
   exit 1
 fi
 
-printf 'PASS: scanner evidence is confined to a non-hidden runner-temp directory.\n'
+printf 'PASS: scanner evidence is confined to a non-hidden dedicated directory.\n'
