@@ -164,6 +164,8 @@ data "aws_iam_policy_document" "github_gitops_client_ecr_publisher" {
 
   # ECR requires the authorization-token action to use Resource "*". All
   # remaining actions are scoped to this one immutable client-image repository.
+  # GetDownloadUrlForLayer is read-only and required to independently verify
+  # the Cosign attestation layer after publishing it.
   statement {
     sid       = "GetEcrAuthorizationToken"
     actions   = ["ecr:GetAuthorizationToken"]
@@ -177,6 +179,7 @@ data "aws_iam_policy_document" "github_gitops_client_ecr_publisher" {
       "ecr:BatchGetImage",
       "ecr:CompleteLayerUpload",
       "ecr:DescribeImages",
+      "ecr:GetDownloadUrlForLayer",
       "ecr:InitiateLayerUpload",
       "ecr:PutImage",
       "ecr:UploadLayerPart",

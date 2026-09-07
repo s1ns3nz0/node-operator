@@ -1,0 +1,1 @@
+{"task_id":"2026-09-07-gitops-publisher-attestation-read","status":"in_progress","observations":["Cosign signature succeeded","attestation creation succeeded","read-back verification was denied only ecr:GetDownloadUrlForLayer"],"checks":[]}
