@@ -26,7 +26,16 @@ nc -z 127.0.0.1 "$port" >/dev/null 2>&1 && { printf 'local beacon port %s is alr
 port_log="$(mktemp /private/tmp/node-operator-beacon-port.XXXXXX)"; port_pid=''
 cleanup() { set +e; [ -z "$port_pid" ] || kill -TERM "$port_pid" 2>/dev/null || true; [ -z "$port_pid" ] || wait "$port_pid" 2>/dev/null || true; unlink "$port_log" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
-kubectl -n node-operator port-forward service/prysm-beacon "${port}:3500" >"$port_log" 2>&1 & port_pid=$!
+# A release may expose the Beacon API through its Service or directly from the
+# singleton StatefulSet Pod. Both are private. Refuse ambiguity rather than
+# selecting an arbitrary Pod when the Service is intentionally absent.
+beacon_target='service/prysm-beacon'
+if ! kubectl -n node-operator get service prysm-beacon >/dev/null 2>&1; then
+  beacon_pod="$(kubectl -n node-operator get pods -l app.kubernetes.io/name=prysm-beacon -o json | jq -r '[.items[] | select(any(.status.conditions[]?; .type == "Ready" and .status == "True")) | .metadata.name] | if length == 1 then .[0] else empty end')"
+  [ -n "$beacon_pod" ] || { printf 'expected exactly one Ready private Prysm Beacon Pod when its Service is absent\n' >&2; exit 75; }
+  beacon_target="pod/${beacon_pod}"
+fi
+kubectl -n node-operator port-forward "$beacon_target" "${port}:3500" >"$port_log" 2>&1 & port_pid=$!
 for ((attempt = 1; attempt <= 20; attempt++)); do
   nc -z 127.0.0.1 "$port" >/dev/null 2>&1 && break
   sleep 1

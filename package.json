@@ -38,6 +38,7 @@
     "test:validator-runtime-contract": "bash scripts/ci/test-validator-runtime-contract.sh",
     "test:validator-signer-boundary-contract": "bash scripts/ci/test-validator-signer-boundary-contract.sh",
     "test:hoodi-deposit-data-contract": "bash scripts/ci/test-hoodi-deposit-data-contract.sh",
+    "test:private-beacon-observer-contract": "bash scripts/ci/test-private-beacon-observer-contract.sh",
     "test:vault-bootstrap-enabled-plan": "bash scripts/ci/test-vault-bootstrap-enabled-plan.sh",
     "test:release-bootstrap-contract": "bash scripts/ci/test-release-bootstrap-contract.sh"
   }
