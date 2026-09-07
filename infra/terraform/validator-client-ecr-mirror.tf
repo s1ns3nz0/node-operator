@@ -67,7 +67,7 @@ data "aws_iam_policy_document" "github_validator_client_mirror_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:environment:validator-client-ecr-mirror"]
+      values   = ["${var.github_oidc_subject_prefix}:environment:validator-client-ecr-mirror"]
     }
   }
 }
