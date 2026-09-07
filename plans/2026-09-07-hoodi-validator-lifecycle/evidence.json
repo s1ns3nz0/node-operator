@@ -10,6 +10,7 @@
     {"source": "local render", "fact": "The Prysm validator client renderer produces a zero-replica deployment with a pinned private image, private Beacon-only egress, HTTPS external signer URL, pinned signer CA, and no Vault access or service-account token mount."},
     {"source": "local static test", "fact": "The UC-5 recovery gate refuses a nonzero client or signer, a live fence holder, a missing/mismatched retained slashing DB PVC, and never activates the validator client during signer-only recovery."},
     {"source": "AWS read-only preflight 2026-09-07", "fact": "Account 106760547719 EKS cluster node-operator is ACTIVE at Kubernetes 1.35 with private endpoint access enabled and public endpoint access disabled."},
+    {"source": "private SSM/EKS/Vault read-only health 2026-09-07", "fact": "Vault is initialized, unsealed, HA-enabled with Raft storage, and all three Vault Pods report Running/Ready. The validator-operations namespace exists and is Active."},
     {"source": "shellcheck", "fact": "The two new operational scripts passed ShellCheck."},
     {"source": "harness", "fact": "harness:check passed. harness:verify reaches known repository fixture failures and an unavailable OSV fixture before completion; these failures are outside this task's changed files."},
     {"source": "local test", "fact": "The evidence-envelope validator accepted a public lifecycle record and rejected a forbidden token field."},
