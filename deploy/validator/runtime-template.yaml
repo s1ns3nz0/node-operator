@@ -63,12 +63,19 @@ spec:
               - serviceAccountToken: {audience: vault, expirationSeconds: 600, path: token}
         - name: migrations
           emptyDir: {}
+        - name: postgres-run
+          emptyDir: {}
+        - name: postgres-tmp
+          emptyDir: {}
       initContainers:
         - name: stage-web3signer-postgres-migrations
           image: REPLACE_WITH_WEB3SIGNER_IMAGE
           command: ["/bin/sh", "-ec"]
           args: ["cp -r /opt/web3signer/migrations/postgresql/. /migrations/"]
           volumeMounts: [{name: migrations, mountPath: /migrations}]
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 512Mi}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}, runAsNonRoot: true, runAsUser: 999, runAsGroup: 999}
       containers:
         - name: postgres
@@ -81,7 +88,12 @@ spec:
           volumeMounts:
             - {name: data, mountPath: /var/lib/postgresql/data}
             - {name: migrations, mountPath: /docker-entrypoint-initdb.d, readOnly: true}
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}, runAsNonRoot: true, runAsUser: 999, runAsGroup: 999}
+            - {name: postgres-run, mountPath: /var/run/postgresql}
+            - {name: postgres-tmp, mountPath: /tmp}
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {cpu: "2", memory: 4Gi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}, runAsNonRoot: true, runAsUser: 999, runAsGroup: 999}
   volumeClaimTemplates:
     - metadata: {name: data, labels: {node-operator.io/encryption-policy: baseline-ebs-kms}}
       spec:
@@ -176,6 +188,9 @@ spec:
             - {name: vault-auth, mountPath: /var/run/secrets/vault.hashicorp.com/serviceaccount, readOnly: true}
             - {name: signer-data, mountPath: /data}
             - {name: signer-tmp, mountPath: /tmp}
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {cpu: "2", memory: 2Gi}
           securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}, readOnlyRootFilesystem: true, runAsNonRoot: true, runAsUser: 999, runAsGroup: 999}
           readinessProbe: {tcpSocket: {port: signer-api}, periodSeconds: 10}
 ---
@@ -202,6 +217,20 @@ spec:
       ports: [{protocol: TCP, port: 8200}]
     - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}}]
       ports: [{protocol: UDP, port: 53}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: validator-REPLACE_WITH_VALIDATOR_SET-db-dependencies
+  namespace: validator-operations
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/component: validator-slashing-db, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}}
+  policyTypes: [Egress]
+  egress:
+    - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: vault}}, podSelector: {matchLabels: {app.kubernetes.io/name: vault}}}]
+      ports: [{protocol: TCP, port: 8200}]
+    - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}}]
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
