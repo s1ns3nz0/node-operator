@@ -1,0 +1,7 @@
+{
+  "task_id": "2026-09-05-live-signer-finalization",
+  "objective": "Finalize and exercise the private digest-pinned ECR signer mirror under explicit user authority.",
+  "authority": "User explicitly authorized AWS changes, GitHub environment approval/bypass, workflow dispatch, image publication, and merge for this task on 2026-09-05.",
+  "owner": "Sol",
+  "model_fallbacks": []
+}

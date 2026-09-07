@@ -3,9 +3,15 @@ variable "vault_signer_endpoint" {
   type        = string
   default     = ""
   validation {
-    condition     = var.vault_signer_endpoint == "" || can(regex("^https://", var.vault_signer_endpoint))
-    error_message = "vault_signer_endpoint must be HTTPS when configured."
+    condition     = var.vault_signer_endpoint == "" || can(regex("^https://[^/]+:8200$", var.vault_signer_endpoint))
+    error_message = "vault_signer_endpoint must be an HTTPS endpoint explicitly using TCP port 8200 when configured."
   }
+}
+
+variable "vault_signer_auth_role" {
+  description = "Vault AWS auth role used only by the private release signer."
+  type        = string
+  default     = "release-signer"
 }
 
 variable "enable_release_signer" {
@@ -31,6 +37,11 @@ variable "release_signer_image" {
   }
 }
 
+data "aws_secretsmanager_secret" "vault_client_ca" {
+  count = var.enable_release_signer ? 1 : 0
+  name  = "${local.name_prefix}-vault-client-ca"
+}
+
 resource "aws_security_group" "release_signer" {
   count       = var.enable_release_signer ? 1 : 0
   name_prefix = "${local.name_prefix}-signer-"
@@ -41,7 +52,17 @@ resource "aws_security_group" "release_signer" {
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = [var.vpc_cidr]
-    description = "HTTPS to private Vault and service endpoints"
+    description = "HTTPS to private AWS and service endpoints"
+  }
+
+  # Vault Transit uses HTTPS over TCP 8200. The listener is an internal NLB
+  # addressed only through the private node-operator.internal hosted zone.
+  egress {
+    from_port   = 8200
+    to_port     = 8200
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+    description = "Vault Transit HTTPS to the private internal NLB"
   }
   tags = local.common_tags
 }
@@ -50,6 +71,22 @@ variable "github_repository" {
   description = "GitHub repository allowed to start the release signer, owner/name."
   type        = string
   default     = "s1ns3nz0/node-operator"
+}
+
+variable "github_oidc_subject_prefix" {
+  description = "Immutable GitHub OIDC subject prefix for this repository, including owner and repository IDs."
+  type        = string
+  default     = "repo:s1ns3nz0@258690008/node-operator@1353388960"
+}
+
+resource "aws_vpc_security_group_egress_rule" "release_signer_s3_gateway_https" {
+  count             = var.enable_release_signer ? 1 : 0
+  description       = "HTTPS to the S3 gateway endpoint for immutable signer input and output"
+  security_group_id = aws_security_group.release_signer[0].id
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+  prefix_list_id    = data.aws_prefix_list.s3[0].id
 }
 
 variable "release_artifact_bucket_arn" {
@@ -80,8 +117,11 @@ data "aws_iam_policy_document" "release_artifacts_key" {
     effect = "Allow"
 
     principals {
-      type        = "AWS"
-      identifiers = [aws_iam_role.release_codebuild_signer[0].arn]
+      type = "AWS"
+      identifiers = [
+        aws_iam_role.release_codebuild_signer[0].arn,
+        aws_iam_role.github_release_runner[0].arn,
+      ]
     }
 
     actions = [
@@ -772,8 +812,10 @@ resource "aws_iam_role" "github_release_runner" {
       Principal = { Federated = "arn:aws:iam::${var.aws_account_id}:oidc-provider/token.actions.githubusercontent.com" }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
-        StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
-        StringLike   = { "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:ref:refs/tags/v*" }
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:sub" = "${var.github_oidc_subject_prefix}:environment:release"
+        }
       }
     }]
   })
@@ -781,9 +823,41 @@ resource "aws_iam_role" "github_release_runner" {
 }
 
 resource "aws_iam_role_policy" "github_release_runner" {
-  count  = var.enable_release_signer ? 1 : 0
-  role   = aws_iam_role.github_release_runner[0].id
-  policy = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Action = ["codebuild:StartBuild", "codebuild:BatchGetBuilds"], Resource = aws_codebuild_project.release_signer[0].arn }] })
+  count = var.enable_release_signer ? 1 : 0
+  role  = aws_iam_role.github_release_runner[0].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["codebuild:StartBuild", "codebuild:BatchGetBuilds"]
+        Resource = aws_codebuild_project.release_signer[0].arn
+      },
+      {
+        Sid      = "WriteImmutableSignerInputs"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = ["${aws_s3_bucket.release_artifacts[0].arn}/release-input/sha256/*"]
+      },
+      {
+        Sid      = "ReadImmutableSignerInputs"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["${aws_s3_bucket.release_artifacts[0].arn}/release-input/sha256/*"]
+      },
+      {
+        Sid      = "ReadSignerOutputs"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["${aws_s3_bucket.release_artifacts[0].arn}/release-signer-output/*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt", "kms:DescribeKey", "kms:Encrypt", "kms:GenerateDataKey*"]
+        Resource = [aws_kms_key.release_artifacts[0].arn]
+      },
+    ]
+  })
 }
 
 resource "aws_iam_role" "release_codebuild_signer" {
@@ -796,10 +870,34 @@ resource "aws_iam_role" "release_codebuild_signer" {
 data "aws_iam_policy_document" "release_codebuild_signer" {
   count = var.enable_release_signer ? 1 : 0
 
+  # CodeBuild validates the VPC attachment using its service role before it
+  # creates a build. These permissions are limited to VPC interface lifecycle
+  # and discovery; they grant neither instance control nor route management.
+  statement {
+    sid = "PrivateCodeBuildVpcAttachment"
+    actions = [
+      "ec2:CreateNetworkInterface",
+      "ec2:CreateNetworkInterfacePermission",
+      "ec2:DeleteNetworkInterface",
+      "ec2:DescribeDhcpOptions",
+      "ec2:DescribeNetworkInterfaces",
+      "ec2:DescribeSecurityGroups",
+      "ec2:DescribeSubnets",
+      "ec2:DescribeVpcs",
+    ]
+    resources = ["*"]
+  }
+
   statement {
     sid       = "Logs"
     actions   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
     resources = ["${aws_cloudwatch_log_group.release_signer[0].arn}:*"]
+  }
+
+  statement {
+    sid       = "ReadOnlyVaultClientTrustAnchor"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [data.aws_secretsmanager_secret.vault_client_ca[0].arn]
   }
   dynamic "statement" {
     for_each = var.release_artifact_bucket_arn == "" ? [] : [var.release_artifact_bucket_arn]
@@ -815,6 +913,22 @@ data "aws_iam_policy_document" "release_codebuild_signer" {
       sid       = "ReleaseBucketPrefixes"
       actions   = ["s3:GetObject", "s3:PutObject"]
       resources = ["${aws_s3_bucket.release_artifacts[0].arn}/release-input/*", "${aws_s3_bucket.release_artifacts[0].arn}/release-signer-output/*"]
+    }
+  }
+  dynamic "statement" {
+    for_each = var.enable_release_signer ? [1] : []
+    content {
+      sid       = "ReadImmutableSignerInputVersions"
+      actions   = ["s3:GetObjectVersion"]
+      resources = ["${aws_s3_bucket.release_artifacts[0].arn}/release-input/*"]
+    }
+  }
+  dynamic "statement" {
+    for_each = var.enable_release_signer ? [1] : []
+    content {
+      sid       = "ListReleaseArtifactVersionsForSignerSource"
+      actions   = ["s3:ListBucketVersions"]
+      resources = [aws_s3_bucket.release_artifacts[0].arn]
     }
   }
   statement {
@@ -985,6 +1099,22 @@ resource "aws_codebuild_project" "release_signer" {
     type                        = "LINUX_CONTAINER"
     privileged_mode             = false
     image_pull_credentials_type = "SERVICE_ROLE"
+
+    environment_variable {
+      name  = "VAULT_ADDR"
+      value = var.vault_signer_endpoint
+    }
+
+    environment_variable {
+      name  = "VAULT_AUTH_ROLE"
+      value = var.vault_signer_auth_role
+    }
+
+    environment_variable {
+      name  = "VAULT_CA_CERT"
+      value = data.aws_secretsmanager_secret.vault_client_ca[0].arn
+      type  = "SECRETS_MANAGER"
+    }
   }
   vpc_config {
     vpc_id             = aws_vpc.private.id
@@ -1000,6 +1130,7 @@ resource "aws_codebuild_project" "release_signer" {
     precondition {
       condition = (
         var.enable_release_signer_ecr_mirror &&
+        var.vault_signer_endpoint != "" &&
         can(regex("^${var.aws_account_id}\\.dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/${local.name_prefix}-vault-release-signer@sha256:[a-f0-9]{64}$", var.release_signer_image)) &&
         length(var.release_signer_subnet_ids) > 0 &&
         alltrue([for subnet_id in var.release_signer_subnet_ids : can(regex("^subnet-[a-z0-9]+$", subnet_id))])

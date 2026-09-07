@@ -1,0 +1,1 @@
+{"observations":[{"kind":"github-actions","result":"retry was rejected by immutable S3 precondition after an earlier input upload"}],"inferences":["A retry can safely reuse the object only after verifying all signer-relevant input files."]}

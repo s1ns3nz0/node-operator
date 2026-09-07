@@ -1,0 +1,9 @@
+{
+  "task_id": "2026-09-05-release-retry-read",
+  "owner": "Sol",
+  "objective": "Restore safe retry of an immutable release signer input after a release-runner 403.",
+  "scope": ["GitHub release workflow", "Terraform IAM policies", "live IAM parity", "release validation"],
+  "constraints": ["Do not replace GITHUB_TOKEN", "Do not move existing release tags", "Grant only release-input/sha256 read access", "No deployment or secret mutation"],
+  "acceptance": ["Retry can read and compare an existing immutable input", "CodeBuild receives the S3 VersionId of that immutable input", "Terraform expresses the same least-privilege access", "Policy and harness checks pass", "A new immutable tag is used for the next release attempt"],
+  "status": "active"
+}

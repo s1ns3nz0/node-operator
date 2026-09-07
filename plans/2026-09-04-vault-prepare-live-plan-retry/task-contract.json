@@ -1,0 +1,15 @@
+{
+  "id": "2026-09-04-vault-prepare-live-plan-retry",
+  "title": "Retry the Vault prepare live plan with the approved Terraform role",
+  "classification": "non-trivial",
+  "classification_reason": ["reads current Terraform state and cloud metadata", "uses a scoped cross-role planning identity", "reviews a security-sensitive EKS bootstrap boundary"],
+  "expected_outcome": "A refresh-backed prepare plan from the state-aligned remediation branch uses the approved Terraform role, includes no Argo CD deletes or cluster-admin association, and is safe to submit for separate apply review.",
+  "dependencies": ["2026-09-04-vault-private-artifact-mirroring", "2026-09-04-vault-prepare-live-plan"],
+  "constraints": ["Use AWS_PROFILE=node-operator-t2 and its existing ExternalId-controlled role only.", "The only IAM mutations are adding eks:DescribeAccessEntry to the existing EKS statement and codebuild:BatchGetProjects to the existing NodeOperatorTerraformApply policy; do not add write actions or broaden resources.", "Set Vault runner=true and Vault cluster-admin=false; preserve the deployed Argo CD bootstrap configuration.", "No Terraform apply, CodeBuild execution, Helm, kubectl, Vault, secret access, EKS access-policy mutation, merge, or publication.", "Retain no credentials, raw Terraform state, kubeconfig, secret data, or raw service logs."],
+  "authorization": {"repository_mutation": true, "external_actions": ["assume the existing NodeOperatorTerraformApply role through the configured local profile", "update the existing NodeOperatorT2ScopedApply role policy solely to add eks:DescribeAccessEntry and codebuild:BatchGetProjects", "read-only Terraform backend initialization and refresh-backed plan", "read-only ECR digest verification"], "prohibited_actions": ["terraform apply", "any IAM action other than the two exact approved policy additions", "CodeBuild execution", "Helm", "kubectl", "Vault", "secret access", "cluster-admin association", "merge"]},
+  "primary_owner": {"tier": "sol", "responsibility": "planning-identity boundary, plan review, integration, and sign-off"},
+  "delegations": [{"id":"recon","tier":"luna","owner":"pending","files":[],"worktree":"read-only","branch":"none","acceptance_checks":["role and state-aligned baseline verification"],"escalation_trigger":"role can mutate or state data is sensitive"},{"id":"debrief","tier":"terra","owner":"pending","files":["reports/2026-09-04-vault-prepare-live-plan-retry-debrief.md"],"worktree":"required","branch":"separate review worktree","acceptance_checks":["clean-room debrief"],"escalation_trigger":"plan scope contains unapproved mutations"}],
+  "model_fallbacks": [],
+  "validation": ["caller-role identity", "private ECR digest parity", "refresh-backed Terraform plan", "JSON action allowlist", "harness check", "clean-room Terra debrief"],
+  "status": "in_progress"
+}

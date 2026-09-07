@@ -1,0 +1,19 @@
+# The service has no public exposure. A production remote signer must enforce
+# mTLS or an equivalent audience-bound workload authentication at this API.
+apiVersion: v1
+kind: Service
+metadata:
+  name: hoodi-validator-remote-signer
+  namespace: validator-operations
+  labels:
+    app.kubernetes.io/component: validator-remote-signer
+    app.kubernetes.io/part-of: hoodi-validator
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: validator-remote-signer
+  ports:
+    - name: signer-api
+      port: 9000
+      protocol: TCP
+      targetPort: signer-api

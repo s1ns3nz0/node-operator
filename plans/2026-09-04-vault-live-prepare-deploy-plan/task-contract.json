@@ -1,0 +1,14 @@
+{
+  "id": "2026-09-04-vault-live-prepare-deploy-plan",
+  "title": "Plan the separately approved live Vault/EKS prepare and deploy sequence",
+  "classification": "non-trivial",
+  "classification_reason": ["EKS temporary cluster-admin access", "Vault initialization boundary", "multiple approval and evidence gates"],
+  "expected_outcome": "A reviewable, fail-closed operational sequence for a future live Vault prepare/deploy, including exact approval boundaries, validation evidence, and post-bootstrap privilege revocation.",
+  "constraints": ["This task creates a plan only: no Terraform apply, AWS/EKS/Vault/Kubernetes access, CodeBuild invocation, Vault initialization, secret operation, deployment, publication, or merge.", "Do not put credentials, TLS material, private endpoint data, or runtime logs in the plan evidence."],
+  "authorization": {"repository_mutation": true, "external_actions": [], "prohibited_actions": ["Terraform apply", "cloud/EKS/Vault/Kubernetes access", "CodeBuild start", "secret change", "deployment", "merge"]},
+  "primary_owner": {"tier":"sol","owner":"/root","responsibility":"security boundary and final integration"},
+  "delegations": [{"id":"recon","tier":"luna","owner":"/root/vault_live_plan_recon","files":["infra/terraform/vault-bootstrap.tf","docs/gitops/vault-operations-contract.md","scripts/ci/test-vault-bootstrap-*.sh","reports/2026-09-04-vault-delivery-remediation-debrief.md"],"worktree":"read-only","branch":"none","acceptance_checks":["preconditions and approval checkpoints","revoke/rollback evidence map"],"escalation_trigger":"the planned sequence would execute Vault, broaden network access, or weaken the temporary-admin boundary"}],
+  "model_fallbacks": [],
+  "validation": ["harness structural check", "offline contract checks cited but not rerun as live authorization", "independent clean-room debrief"],
+  "status": "planned"
+}

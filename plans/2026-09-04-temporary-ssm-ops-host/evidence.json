@@ -1,0 +1,20 @@
+{
+  "task_id": "2026-09-04-temporary-ssm-ops-host",
+  "status": "completed",
+  "checks": [
+    {"name":"local Terraform validation","status":"passed","result":"terraform fmt -check and terraform validate passed after the temporary host implementation; the existing Vault Prepare boundary test also passed."},
+    {"name":"live saved-plan gate","status":"passed","result":"Refresh-backed termination plan JSON SHA-256 b26c745a057bb64917c62413584af86d0915986568f93043a0e35c72c2a2c8c4 contains 15 creates and one local IAM-policy-document read. The creates are one private EC2 host, its two IAM roles/profile/policy attachment/policy, one no-ingress SG, two host egress rules, two SG ingress rules, three SSM interface endpoints, and one one-time termination scheduler."},
+    {"name":"saved-plan boundary assertions","status":"passed","result":"The instance has no public IP, SSH key, or user data; the host SG has zero inbound rules; the scheduler calls ec2:TerminateInstances at 22:00 Asia/Seoul on 2026-09-04. No NAT, internet gateway, key pair, EKS access-policy association, or CodeBuild action appears among changed resources."},
+    {"name":"independent Terra review","status":"passed","result":"Terra required replacement of the initial stop schedule with a one-time termination schedule and SourceAccount/exact SourceArn restrictions in the scheduler trust policy. The refreshed plan and boundary assertions satisfy that correction."}
+    ,{"name":"corrective saved-plan gate","status":"passed","result":"The first apply created the private host and dependencies but Scheduler rejected the execution-role trust condition because Scheduler supplies a schedule-group SourceArn. The corrected refresh-backed plan JSON SHA-256 6bf77d9d699ac6b28fc0bf243557a9606640dcee5605d5bcff7443fe543f4a9c changes only that trust condition and creates the one-time termination schedule; it does not alter the host, network, or permission scope."}
+    ,{"name":"corrective exact-plan apply","status":"passed","result":"Terraform applied the corrected saved plan successfully: 1 resource added, 1 changed, 0 destroyed."}
+    ,{"name":"post-apply private-path verification","status":"passed","result":"The host has no public IP and is pending or running with its dedicated instance profile; its security group has zero inbound rules; the Scheduler target is enabled with at(2026-09-04T22:00:00), Asia/Seoul, and ec2:TerminateInstances; SSM PingStatus is Online. No Kubernetes, Vault, Helm, CodeBuild, workload, or Secret request was made."}
+    ,{"name":"clean-room Terra debrief","status":"passed","result":"A fresh Terra reviewer inspected only the completed task bundle, scoped Terraform diff, and stated checks. It concluded the path remains private, no-inbound, and time-bounded; its documentation wording note was corrected in plan.md."}
+  ],
+  "notes": [
+    "No credentials, endpoint addresses, Kubernetes resources, or Secret material are admissible evidence.",
+    "The host is an SSM TCP tunnel target only; the operator's local AWS identity remains responsible for EKS authentication.",
+    "Independent Terra review required changing the scheduler from stop to termination so the temporary administrative path cannot remain restartable after 22:00 KST."
+    ,"The initial Scheduler create failure was corrected by pinning aws:SourceArn to the default schedule-group ARN, the ARN Scheduler actually supplies during execution-role validation."
+  ]
+}

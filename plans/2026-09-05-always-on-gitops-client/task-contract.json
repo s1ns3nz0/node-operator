@@ -1,0 +1,24 @@
+{
+  "id": "2026-09-05-always-on-gitops-client",
+  "objective": "Operate Argo CD continuously and prove the approved private delivery path from infrastructure to Hoodi client and validator-oriented workloads.",
+  "authorization": "User explicitly authorized creation and live execution of the GitOps repository, always-on Argo CD, Vault-integrated release path, and client workload.",
+  "constraints": [
+    "Do not overwrite GITHUB_TOKEN.",
+    "Keep Vault recovery material, tokens, keys, kubeconfigs, and secret values out of Git, state, logs, and evidence.",
+    "Use the private EKS endpoint and private runners only.",
+    "Keep consensus and execution pools scalable to zero after the end-to-end proof; keep the system pool at one node for Argo CD."
+  ],
+  "successCriteria": [
+    "A private GitOps repository exists with immutable reviewed workload input.",
+    "Argo CD is installed on the private EKS cluster and remains Healthy on the always-on system pool.",
+    "Vault is initialized, sealed-state healthy, and its Transit signer policy passes sign and verify without key export.",
+    "Argo CD syncs a pinned workload revision and both client StatefulSets become Ready.",
+    "Validator use cases have distinct key-management boundaries, deny paths, recovery steps, and no key overlap with CI or Transit signing.",
+    "Evidence records non-sensitive live checks and rollback/scale-down actions."
+  ],
+  "owners": {
+    "sol": "architecture, security, integration, live decision",
+    "luna": "reconnaissance and evidence",
+    "terra": "bounded implementation and independent review"
+  }
+}

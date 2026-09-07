@@ -1,0 +1,12 @@
+{
+  "observed": [
+    {"source":"GitHub Actions run 33936137823 attempt 2","fact":"PutObject returned PreconditionFailed, then retrieval of the immutable input returned HeadObject 403."}
+  ],
+  "checks": [
+    {"command": "terraform fmt -check infra/terraform/vault-signer.tf", "result": "pass"},
+    {"command": "scripts/ci/test-codebuild-release-activation.sh", "result": "pass"},
+    {"command": "scripts/ci/test-vault-release-contract.sh", "result": "pass"},
+    {"command": "npm run harness:check", "result": "pass"},
+    {"command": "aws iam simulate-principal-policy", "result": "GetObject allowed; DeleteObject implicitDeny"}
+  ]
+}

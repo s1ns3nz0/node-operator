@@ -17,14 +17,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: open-policy-agent/setup-opa@b2b258e089860efaadaaf71bf6e3aecb4a3eeff1 # v2.4.0
-        with:
-          version: v1.17.0
+      - name: Install pinned policy adapter tools
+        run: scripts/ci/install-policy-tools.sh "$RUNNER_TEMP/node-operator-policy-tools"
       - name: Test Rego policy
         run: scripts/ci/test-policy.sh
       - name: Test Terraform security policy
         run: scripts/ci/test-terraform-policy.sh
-      - name: Install Conftest
-        run: scripts/ci/install-conftest.sh
       - name: Test rendered manifests
         run: scripts/ci/test-conftest.sh

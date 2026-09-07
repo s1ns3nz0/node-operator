@@ -36,7 +36,7 @@ mkdir -p "$stage_directory/source" "$stage_directory/rendered"
 
 path_is_in_release_boundary() {
   case "$1" in
-    deploy/base/*.yaml|deploy/prysm/*.yaml|deploy/nethermind/*.yaml|infra/terraform/*.tf|infra/terraform/terraform.tfvars.example|policy/data/*.rego|policy/data/*.json|policy/runtime/*.rego|policy/terraform/*.rego|policy/prysm/*.rego|policy/nethermind/hardening.rego|policy/schemas/*.json|policy/*.rego)
+    deploy/base/*.yaml|deploy/prysm/*.yaml|deploy/nethermind/*.yaml|deploy/argocd/node-operator-client-application.yaml|deploy/validator/*.yaml|infra/terraform/*.tf|infra/terraform/terraform.tfvars.example|infra/bootstrap-state/*.tf|infra/bootstrap-state/*.example|infra/foundation-network/*.tf|infra/ops-access/*.tf|infra/baseline/*.tf|policy/data/*.rego|policy/data/*.json|policy/runtime/*.rego|policy/terraform/*.rego|policy/prysm/*.rego|policy/nethermind/hardening.rego|policy/schemas/*.json|policy/*.rego|release/*.json|release/*.example|scripts/release/*.sh)
       return 0
       ;;
     *)
@@ -49,6 +49,9 @@ materialize_source_file() {
   local relative_path="$1"
   mkdir -p "$stage_directory/source/$(dirname "$relative_path")"
   git -C "$root" show "$source_revision:$relative_path" > "$stage_directory/source/$relative_path"
+  case "$relative_path" in
+    scripts/release/*.sh) chmod 0755 "$stage_directory/source/$relative_path" ;;
+  esac
 }
 
 while IFS= read -r relative_path; do
@@ -117,11 +120,11 @@ function octal(value, length) {
 function writeString(buffer, offset, length, value) {
   Buffer.from(value, 'utf8').copy(buffer, offset, 0, Math.min(Buffer.byteLength(value), length));
 }
-function header(name, size) {
+function header(name, size, mode) {
   if (Buffer.byteLength(name) > 100) throw new Error(`tar entry name is too long: ${name}`);
   const block = Buffer.alloc(512, 0);
   writeString(block, 0, 100, name);
-  writeString(block, 100, 8, octal(0o644, 8));
+  writeString(block, 100, 8, octal(mode, 8));
   writeString(block, 108, 8, octal(0, 8));
   writeString(block, 116, 8, octal(0, 8));
   writeString(block, 124, 12, octal(size, 12));
@@ -140,7 +143,8 @@ try {
   for (const absolute of files(stage).sort()) {
     const bytes = fs.readFileSync(absolute);
     const name = path.relative(stage, absolute).split(path.sep).join('/');
-    fs.writeSync(output, header(name, bytes.length));
+    const mode = name.startsWith('source/scripts/release/') ? 0o755 : 0o644;
+    fs.writeSync(output, header(name, bytes.length, mode));
     fs.writeSync(output, bytes);
     const padding = (512 - (bytes.length % 512)) % 512;
     if (padding) fs.writeSync(output, Buffer.alloc(padding));

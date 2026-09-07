@@ -1,0 +1,14 @@
+{
+  "id": "2026-09-04-vault-delivery-remediation",
+  "title": "Remediate private Vault delivery design blockers",
+  "classification": "non-trivial",
+  "classification_reason": ["private supply-chain boundary", "EKS access lifecycle contract", "multiple validation layers and independent review"],
+  "expected_outcome": "Vault chart, runtime images, and bootstrap toolchain have deterministic private-delivery contracts; approved artifacts are mirrored to private ECR with integrity checks; toolchain inputs are pinned; and a tested revoke-stage plan proves temporary EKS cluster-admin removal.",
+  "constraints": ["Do not initialize or unseal Vault, read or write secrets, enable public access, deploy workloads, merge, or alter workflow permissions.", "Keep CI evidence non-sensitive."],
+  "authorization": {"repository_mutation": true, "external_actions": ["publish the reviewed vault-bootstrap toolchain image to GHCR and record its immutable digest", "mirror the approved Vault runtime images, bootstrap toolchain, and Helm chart to private ECR", "apply the narrowly targeted ECR/IAM Terraform plans necessary to repair the approved mirror path"], "prohibited_actions": ["EKS/Vault/Kubernetes deployment", "secret change", "merge"]},
+  "primary_owner": {"tier": "sol", "owner": "/root", "responsibility": "private-delivery security semantics and integration"},
+  "delegations": [{"id":"recon","tier":"luna","owner":"/root/vault_blocker_recon","files":[".ci/gitops/**",".ci/toolchains/vault-bootstrap.Dockerfile","docs/gitops/vault-values.example.yaml","infra/terraform/vault-bootstrap.tf","scripts/ci/test-*.sh"],"worktree":"read-only","branch":"none","acceptance_checks":["file-level remediation map","test convention map"],"escalation_trigger":"a remedy requires unpinned or public artifact access, weakens revocation, or changes runtime secret boundaries"}],
+  "model_fallbacks": [],
+  "validation": ["targeted private-delivery contract tests", "offline prepare/deploy/revoke plan tests", "toolchain release contract", "harness structural and applicable policy checks", "independent clean-room debrief"],
+  "status": "delivery-mirror-complete"
+}

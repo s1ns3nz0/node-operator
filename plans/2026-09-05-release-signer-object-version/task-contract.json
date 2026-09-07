@@ -1,0 +1,9 @@
+{
+  "task_id": "2026-09-05-release-signer-object-version",
+  "owner": "Sol",
+  "objective": "Allow the private release signer to retrieve only the immutable S3 object version selected by the release workflow.",
+  "scope": ["Terraform signer IAM policy", "live signer IAM parity", "regression validation"],
+  "constraints": ["Do not change existing tags", "Grant GetObjectVersion only on release-input", "No delete, list-all, or secret access"],
+  "acceptance": ["CodeBuild can download the selected input VersionId", "Terraform records the least-privilege grant", "Regression and policy checks pass", "New release tag proves the signer path"],
+  "status": "active"
+}

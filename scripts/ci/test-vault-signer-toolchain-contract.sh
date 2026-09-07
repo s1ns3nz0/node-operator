@@ -13,6 +13,7 @@ for file in "$dockerfile" "$buildspec" "$documentation"; do
   test -f "$file" || fail "missing contract file: $file"
 done
 
+grep -Fqx '  shell: bash' "$buildspec" || fail 'signer buildspec must select Bash for pipefail-dependent commands'
 grep -Fqx 'FROM ubuntu@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517' "$dockerfile" || fail 'Dockerfile base image must be pinned by digest'
 grep -Fqx 'ARG VAULT_VERSION=1.20.4' "$dockerfile" || fail 'Dockerfile must pin Vault 1.20.4'
 grep -Fqx 'ARG VAULT_SHA256=fc5fb5d01d192f1216b139fb5c6af17e3af742aaeffc289fd861920ec55f2c9c' "$dockerfile" || fail 'Dockerfile must pin the approved Vault SHA-256'
@@ -25,10 +26,13 @@ if grep -Eqi '(curl|wget|download|unzip)' "$buildspec"; then
 fi
 grep -Fq 'expected_vault_version="1.20.4"' "$buildspec" || fail 'buildspec must declare the expected preinstalled Vault version'
 grep -Fq "installed_vault_version=\"\$(vault version | awk" "$buildspec" || fail 'buildspec must parse the plaintext Vault version safely'
-grep -Fq "\$1 == \\\"Vault\\\" && \$2 ~ /^v[0-9]+/" "$buildspec" || fail 'buildspec must parse the plaintext Vault version safely'
+grep -Fq "\$1 == \"Vault\" && \$2 ~ /^v[0-9]+/" "$buildspec" || fail 'buildspec must parse the plaintext Vault version safely'
 grep -Fq "test \"\$installed_vault_version\" = \"\$expected_vault_version\"" "$buildspec" || fail 'buildspec must fail closed on the installed Vault version'
 grep -Fq 'vault write -format=json transit/sign/node-operator-release' "$buildspec" || fail 'buildspec must sign through the preinstalled Vault CLI'
 grep -Fq 'vault write -format=json transit/verify/node-operator-release' "$buildspec" || fail 'buildspec must verify through the preinstalled Vault CLI'
+if grep -Fq '\\"' "$buildspec"; then
+  fail 'literal-shell buildspec commands must not retain YAML-irrelevant quote escapes'
+fi
 
 grep -Fqi 'image digest' "$documentation" || fail 'documentation must require digest selection'
 grep -Fqi 'separately authorized' "$documentation" || fail 'documentation must retain the separate activation boundary'

@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
-      - uses: azure/setup-helm@b9e51907a09c1d0c6b66e8881f33c03ca6e3cc0f
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with: {version: v3.17.3}
       - name: Verify and push approved Vault chart
         env:
@@ -23,12 +23,30 @@ jobs:
           AWS_ROLE_ARN: ${{ vars.GITOPS_OCI_MIRROR_ROLE_ARN }}
         run: |
           set -euo pipefail
+          chart="$(jq -er '.helm_archives[] | select(.name == "vault")' .ci/gitops/approved-oci-artifacts.json)"
+          chart_version="$(jq -er '.version' <<<"$chart")"
+          chart_source="$(jq -er '.source' <<<"$chart")"
+          chart_sha256="$(jq -er '.sha256' <<<"$chart")"
+          chart_manifest_digest="$(jq -er '.ecrManifestDigest' <<<"$chart")"
+          chart_destination="$(jq -er '.destination' <<<"$chart")"
+          chart_tag="$(jq -er '.ecrTag' <<<"$chart")"
+          test "$chart_destination" = vault
+          test "$chart_tag" = "$chart_version"
+          test "$chart_source" = "https://helm.releases.hashicorp.com/vault-$chart_version.tgz"
+          [[ "$chart_sha256" =~ ^[a-f0-9]{64}$ ]]
+          [[ "$chart_manifest_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
           test -n "$ACCOUNT_ID"
           test -n "$AWS_ROLE_ARN"
           token="$(curl --fail --silent -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -er .value)"
           aws sts assume-role-with-web-identity --role-arn "$AWS_ROLE_ARN" --role-session-name "vault-chart-${GITHUB_RUN_ID}" --web-identity-token "$token" --duration-seconds 900 > "$RUNNER_TEMP/creds.json"
           jq -r '.Credentials | "AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nAWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nAWS_SESSION_TOKEN=\(.SessionToken)"' "$RUNNER_TEMP/creds.json" >> "$GITHUB_ENV"
-          helm pull vault --repo https://helm.releases.hashicorp.com --version 0.31.0 --destination "$RUNNER_TEMP"
-          printf '%s  %s\n' 'fe80fae6a8838c75da9fbde1398f2c10bb4b5c31c425e559507ba99373297de2' "$RUNNER_TEMP/vault-0.31.0.tgz" | sha256sum --check --status
+          export AWS_ACCESS_KEY_ID="$(jq -er '.Credentials.AccessKeyId' "$RUNNER_TEMP/creds.json")"
+          export AWS_SECRET_ACCESS_KEY="$(jq -er '.Credentials.SecretAccessKey' "$RUNNER_TEMP/creds.json")"
+          export AWS_SESSION_TOKEN="$(jq -er '.Credentials.SessionToken' "$RUNNER_TEMP/creds.json")"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/vault-$chart_version.tgz" "$chart_source"
+          printf '%s  %s\n' "$chart_sha256" "$RUNNER_TEMP/vault-$chart_version.tgz" | sha256sum --check --status
           aws ecr get-login-password --region "$AWS_REGION" | helm registry login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-          helm push "$RUNNER_TEMP/vault-0.31.0.tgz" "oci://$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/node-operator-baseline-gitops-vault"
+          helm push "$RUNNER_TEMP/vault-$chart_version.tgz" "oci://$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/node-operator-baseline-gitops-vault"
+          ecr_manifest_digest="$(aws ecr describe-images --region "$AWS_REGION" --repository-name node-operator-baseline-gitops-vault/vault --image-ids "imageTag=$chart_tag" --query 'imageDetails[0].imageDigest' --output text)"
+          test "$ecr_manifest_digest" = "$chart_manifest_digest"
+          printf 'Verified Vault chart OCI manifest digest: %s\n' "$ecr_manifest_digest" >> "$GITHUB_STEP_SUMMARY"

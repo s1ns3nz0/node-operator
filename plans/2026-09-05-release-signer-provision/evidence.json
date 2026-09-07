@@ -1,0 +1,1 @@
+{"status":"in_progress","terraform_plan":{"adds":51,"changes":1,"deletes":0},"failure":"CodeBuild service role lacked ec2:DescribeSecurityGroups for private VPC validation","remediation":"add restricted VPC interface lifecycle and discovery permissions"}

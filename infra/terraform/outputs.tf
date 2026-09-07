@@ -8,6 +8,11 @@ output "private_subnet_ids" {
   value       = aws_subnet.private[*].id
 }
 
+output "temporary_ssm_ops_host_instance_id" {
+  description = "Temporary private SSM tunnel target instance ID, or null while disabled."
+  value       = try(aws_instance.temporary_ssm_ops_host[0].id, null)
+}
+
 output "audit_bucket_name" {
   description = "Private audit bucket name."
   value       = aws_s3_bucket.audit.id
@@ -46,14 +51,4 @@ output "release_signer_ecr_repository_arn" {
 output "release_signer_ecr_repository_url" {
   description = "Private signer-image ECR repository URL when the ECR mirror foundation is enabled; image digests are non-secret."
   value       = var.enable_release_signer_ecr_mirror ? aws_ecr_repository.release_signer[0].repository_url : null
-}
-
-output "ssm_ops_host_instance_id" {
-  description = "Temporary private SSM tunnel host instance ID, or null while disabled. No SSH endpoint or Kubernetes credentials are exposed."
-  value       = try(aws_instance.ssm_ops_host[0].id, null)
-}
-
-output "ssm_ops_host_termination_schedule_arn" {
-  description = "One-time Scheduler termination ARN for the temporary SSM tunnel host, or null when no explicit termination time is configured."
-  value       = try(aws_scheduler_schedule.ssm_ops_host_termination[0].arn, null)
 }

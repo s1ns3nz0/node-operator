@@ -8,10 +8,10 @@ on:
         required: true
         type: string
       destination:
-        description: Approved destination (argocd or charts)
+        description: Approved destination (argocd, charts, nodes, vault, or cert-manager)
         required: true
         type: choice
-        options: [argocd, charts, vault]
+        options: [argocd, charts, nodes, vault, cert-manager]
 
 permissions:
   contents: read
@@ -33,7 +33,7 @@ jobs:
           DESTINATION: ${{ inputs.destination }}
         run: |
           [[ "$SOURCE" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]] || { echo 'source must be an OCI reference pinned to a 64-character sha256 digest' >&2; exit 1; }
-          case "$DESTINATION" in argocd|charts|vault) ;; *) exit 1;; esac
+          case "$DESTINATION" in argocd|charts|nodes|vault|cert-manager) ;; *) exit 1;; esac
           ecr_tag="$(jq -er --arg source "$SOURCE" --arg destination "$DESTINATION" '
             select(.version == 1) | .artifacts[] | select(.source == $source and .destination == $destination) | .ecrTag
           ' .ci/gitops/approved-oci-artifacts.json)" || {
@@ -52,7 +52,15 @@ jobs:
           claims="$(python3 -c 'import base64, sys; payload = sys.argv[1].split(".")[1]; print(base64.urlsafe_b64decode(payload + "===").decode())' "$token")"
           printf '%s\n' "$claims" | jq -e '{sub, aud, repository, environment}'
           aws sts assume-role-with-web-identity --role-arn "$AWS_ROLE_ARN" --role-session-name "gitops-oci-${GITHUB_RUN_ID}" --web-identity-token "$token" --duration-seconds 900 > "$RUNNER_TEMP/creds.json"
-          jq -r '.Credentials | "AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nAWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nAWS_SESSION_TOKEN=\(.SessionToken)"' "$RUNNER_TEMP/creds.json" >> "$GITHUB_ENV"
+          access_key="$(jq -er '.Credentials.AccessKeyId' "$RUNNER_TEMP/creds.json")"
+          secret_key="$(jq -er '.Credentials.SecretAccessKey' "$RUNNER_TEMP/creds.json")"
+          session_token="$(jq -er '.Credentials.SessionToken' "$RUNNER_TEMP/creds.json")"
+          printf '::add-mask::%s\n' "$access_key" "$secret_key" "$session_token"
+          {
+            printf 'AWS_ACCESS_KEY_ID=%s\n' "$access_key"
+            printf 'AWS_SECRET_ACCESS_KEY=%s\n' "$secret_key"
+            printf 'AWS_SESSION_TOKEN=%s\n' "$session_token"
+          } >> "$GITHUB_ENV"
       - name: Copy approved OCI digest to private ECR
         env:
           SOURCE: ${{ inputs.source }}

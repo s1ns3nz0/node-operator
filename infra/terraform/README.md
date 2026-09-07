@@ -2,9 +2,9 @@
 
 This directory is a contract-free Terraform baseline for the node-operator
 infrastructure. State uses the approved encrypted S3 backend with DynamoDB
-locking, and the configuration invokes no remote Terraform modules. It deliberately defines no Internet
-gateway, NAT gateway, public subnet, public IP assignment, or public EKS API
-endpoint.
+locking, and the configuration invokes no remote Terraform modules. It creates
+no Internet gateway, NAT gateway, public subnet, public IP assignment, or
+public EKS API endpoint.
 
 ## Encryption and Vault boundary
 
@@ -24,7 +24,7 @@ so their service principals and grants can be constrained independently.
 
 ## Private AWS service access
 
-The baseline has no NAT gateway or public route. It therefore creates an S3
+Platform nodes have no NAT gateway or public route requirement. They use an S3
 gateway endpoint on the private route table and interface endpoints, with
 private DNS enabled in both private subnets, for `eks-auth`, `ec2`, `ecr.api`,
 `ecr.dkr`, and `kms`. When the private release signer is explicitly enabled,
@@ -45,6 +45,12 @@ approved and its endpoint security and policy requirements are specified.
 managed-node bootstrap from racing their creation. The EKS Kubernetes API is
 already private-only through EKS control-plane ENIs; it is not modelled as an
 `aws_vpc_endpoint`.
+
+Hoodi client nodes are separate from the platform pool. An approved, existing
+NAT gateway may be supplied at apply time only for those private nodes because
+their peers use dynamic public addresses. Their dedicated security group limits
+that egress to HTTPS and Hoodi P2P ports, while VPC Flow Logs retain the audit
+trail. The module reads rather than creates that NAT gateway or its route.
 
 ## Offline validation
 
@@ -111,7 +117,8 @@ developer workstation using ambient credentials.
 1. Confirm the approved account, `ap-northeast-2` region, change ticket,
    controlled state backend, provider mirror, and a reviewed plan showing only
    this baseline's resources. Confirm no NAT gateway, internet gateway, public
-   subnet, or public EKS endpoint is proposed.
+   subnet, or public EKS endpoint is proposed. For Hoodi enablement, also
+   confirm the supplied NAT ID is the approved existing private-subnet route.
 2. In the controlled runner, initialize only from the approved provider mirror,
    create the plan with the approved non-secret tfvars, and have the designated
    reviewer approve the exact plan artifact before apply. Record the plan
@@ -120,7 +127,9 @@ developer workstation using ambient credentials.
 3. After apply, verify the EKS API is private-only, every interface endpoint is
    available with private DNS in both private subnets, the S3 gateway endpoint
    is associated with the private route table, and endpoint ingress is limited
-   to node-security-group TCP/443. Verify no NAT or internet gateway exists.
+   to node-security-group TCP/443. Verify the module created no NAT or internet
+   gateway; inspect the separately approved NAT route and its Flow Logs when
+   Hoodi pools are enabled.
 4. To destroy, first stop dependent workloads and remove any resources that
    retain or reference the cluster. In the same controlled state workspace,
    review and approve a destroy plan, execute it, then verify the endpoint

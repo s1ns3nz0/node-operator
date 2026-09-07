@@ -1,0 +1,6 @@
+flowchart LR
+  P[Gate 0: supply-chain and policy evidence] --> R[Gate 1: prepare plan approval]
+  R --> D[Gate 2: temporary-admin deploy plan approval]
+  D --> H[Gate 3: bounded Helm deployment and health evidence]
+  H --> V[Gate 4: revoke admin and verify]
+  V --> S[Separate signing decision]

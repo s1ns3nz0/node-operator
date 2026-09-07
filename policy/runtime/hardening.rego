@@ -117,11 +117,18 @@ unbounded_egress_rule(rule) if {
 }
 
 unbounded_egress_rule(rule) if {
-	is_object(rule)
-	destinations := object.get(rule, "to", [])
-	is_array(destinations)
-	peer := destinations[_]
-	unbounded_egress_peer(peer)
+  is_object(rule)
+  destinations := object.get(rule, "to", [])
+  is_array(destinations)
+  peer := destinations[_]
+  unbounded_egress_peer(peer)
+}
+
+unbounded_egress_rule(rule) if {
+  is_object(rule)
+  peer := object.get(rule, "to", [])[_]
+  object.get(peer, "ipBlock", {}).cidr in {"0.0.0.0/0", "::/0"}
+  not approved_hoodi_nat_egress(rule)
 }
 
 unbounded_egress_peer(peer) if {
@@ -140,11 +147,54 @@ unbounded_egress_peer(peer) if {
 	unrestricted_selector(selector)
 }
 
-unbounded_egress_peer(peer) if {
-	is_object(peer)
-	ip_block := object.get(peer, "ipBlock", {})
-	is_object(ip_block)
-	object.get(ip_block, "cidr", "") in {"0.0.0.0/0", "::/0"}
+# Hoodi peers are dynamic, so a peer-IP allow-list would prevent sync. This is
+# the one intentionally bounded exception: only the named workload policies
+# may use the existing private NAT, only to their P2P port or HTTPS, and only
+# when the dedicated Hoodi node security group independently enforces the same
+# port set. Any other world CIDR remains an admission failure.
+approved_hoodi_nat_egress(rule) if {
+  metadata := object.get(input, "metadata", {})
+  object.get(metadata, "labels", {})["node-operator.io/egress-class"] == "hoodi-nat-port-restricted"
+  metadata.name == "allow-nethermind-nat-port-egress"
+  allowed_world_port(rule, 30303, "TCP")
+}
+
+approved_hoodi_nat_egress(rule) if {
+  metadata := object.get(input, "metadata", {})
+  object.get(metadata, "labels", {})["node-operator.io/egress-class"] == "hoodi-nat-port-restricted"
+  metadata.name == "allow-nethermind-nat-port-egress"
+  allowed_world_port(rule, 30303, "UDP")
+}
+
+approved_hoodi_nat_egress(rule) if {
+  metadata := object.get(input, "metadata", {})
+  object.get(metadata, "labels", {})["node-operator.io/egress-class"] == "hoodi-nat-port-restricted"
+  metadata.name in {"allow-nethermind-nat-port-egress", "allow-prysm-nat-port-egress"}
+  allowed_world_port(rule, 443, "TCP")
+}
+
+approved_hoodi_nat_egress(rule) if {
+  metadata := object.get(input, "metadata", {})
+  object.get(metadata, "labels", {})["node-operator.io/egress-class"] == "hoodi-nat-port-restricted"
+  metadata.name == "allow-prysm-nat-port-egress"
+  allowed_world_port(rule, 13000, "TCP")
+}
+
+approved_hoodi_nat_egress(rule) if {
+  metadata := object.get(input, "metadata", {})
+  object.get(metadata, "labels", {})["node-operator.io/egress-class"] == "hoodi-nat-port-restricted"
+  metadata.name == "allow-prysm-nat-port-egress"
+  allowed_world_port(rule, 13000, "UDP")
+}
+
+allowed_world_port(rule, port, protocol) if {
+  peers := object.get(rule, "to", [])
+  count(peers) == 1
+  object.get(peers[0], "ipBlock", {}).cidr == "0.0.0.0/0"
+  ports := object.get(rule, "ports", [])
+  count(ports) == 1
+  ports[0].port == port
+  upper(ports[0].protocol) == protocol
 }
 
 unrestricted_selector(selector) if {

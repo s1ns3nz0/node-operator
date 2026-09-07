@@ -184,13 +184,25 @@ data "aws_iam_policy_document" "ebs_key" {
     }
 
     actions = [
-      "kms:CreateGrant",
       "kms:Decrypt",
       "kms:DescribeKey",
       "kms:Encrypt",
       "kms:GenerateDataKeyWithoutPlaintext",
       "kms:ReEncrypt*",
     ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowEBSCSIPodIdentityAWSResourceGrants"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = [aws_iam_role.ebs_csi.arn]
+    }
+
+    actions   = ["kms:CreateGrant"]
     resources = ["*"]
 
     condition {

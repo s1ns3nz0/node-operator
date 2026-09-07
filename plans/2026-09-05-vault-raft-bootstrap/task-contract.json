@@ -1,0 +1,1 @@
+{"task_id":"2026-09-05-vault-raft-bootstrap","objective":"Prevent blank Vault Raft followers from remaining uninitialized by adding a private mTLS retry_join bootstrap contract.","authority":"Explicit user authorization for implementation, merge, and protected infrastructure remediation on 2026-09-05.","owner":"Sol","model_fallbacks":[]}

@@ -1,0 +1,5 @@
+flowchart LR
+  A[Approved source inputs] --> B[SHA/digest verification]
+  B --> C[Private ECR mirrors]
+  C --> D[Offline prepare/revoke contracts]
+  D --> E[Separate approved deployment]

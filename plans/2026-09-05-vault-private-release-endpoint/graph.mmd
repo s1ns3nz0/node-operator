@@ -1,0 +1,4 @@
+flowchart LR
+  A[Vault certificate SAN] --> B[Internal NLB Service]
+  B --> C[Private Route53 alias]
+  C --> D[CodeBuild signer TLS and Transit]

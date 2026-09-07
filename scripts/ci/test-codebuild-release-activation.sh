@@ -18,6 +18,7 @@ terraform_project="$(awk '
   in_project { print }
   in_project && /^}$/ { exit }
 ' "$terraform_file")"
+expected_input_version_resource="resources = [\"\${aws_s3_bucket.release_artifacts[0].arn}/release-input/*\"]"
 test -n "$terraform_project" || fail 'release signer CodeBuild project is missing'
 
 for required in \
@@ -40,9 +41,24 @@ done
 
 printf '%s\n' "$terraform_project" | grep -Fq 'type      = "S3"' || fail 'CodeBuild source must remain S3'
 printf '%s\n' "$terraform_project" | grep -Fq 'encryption_disabled = false' || fail 'CodeBuild output must remain encrypted'
+grep -Fq 'sid       = "ListReleaseArtifactVersionsForSignerSource"' "$terraform_file" || fail 'signer role lacks version-list access for immutable S3 source selection'
+grep -Fq 'actions   = ["s3:ListBucketVersions"]' "$terraform_file" || fail 'signer role lacks ListBucketVersions for immutable S3 source selection'
+grep -Fq 'sid       = "ReadImmutableSignerInputVersions"' "$terraform_file" || fail 'signer role lacks a distinct immutable-input version-read statement'
+grep -Fq 'actions   = ["s3:GetObjectVersion"]' "$terraform_file" || fail 'signer role lacks immutable object-version read access'
+grep -Fq "$expected_input_version_resource" "$terraform_file" || fail 'signer object-version read scope is missing or broadened'
 if printf '%s\n' "$terraform_project" | grep -Eq 'aws/codebuild/standard|bootstrap\.zip|aws_subnet\.private'; then
   fail 'CodeBuild project retains a public standard-image fallback, bootstrap input, or implicit subnet selection'
 fi
+
+github_release_runner_policy="$(awk '
+  /^resource "aws_iam_role_policy" "github_release_runner" \{/ { in_policy=1 }
+  in_policy { print }
+  in_policy && /^}$/ { exit }
+' "$terraform_file")"
+expected_input_resource="Resource = [\"\${aws_s3_bucket.release_artifacts[0].arn}/release-input/sha256/*\"]"
+printf '%s\n' "$github_release_runner_policy" | grep -Fq 'Sid      = "ReadImmutableSignerInputs"' || fail 'release runner lacks a distinct immutable-input read statement'
+printf '%s\n' "$github_release_runner_policy" | grep -Fq 'Action   = ["s3:GetObject"]' || fail 'release runner cannot read immutable signer inputs for safe retry'
+printf '%s\n' "$github_release_runner_policy" | grep -Fq "$expected_input_resource" || fail 'release runner immutable-input read scope is missing or broadened'
 
 for required in \
   "input_archive=\"\$RUNNER_TEMP/\${GITHUB_SHA}.zip\"" \
@@ -53,7 +69,11 @@ for required in \
   'provenance-input.json' \
   'aws s3api put-object' \
   "--if-none-match '*'" \
-  "--source-version \"\$source_revision\"" \
+  "aws s3 cp \"s3://\${INPUT_BUCKET}/\${input_key}\"" \
+  "cmp \"\$RUNNER_TEMP/release/node-operator-release-bundle.sha256\"" \
+  "input_version=\"\$(aws s3api head-object" \
+  '--query VersionId --output text' \
+  "--source-version \"\$input_version\"" \
   "--source-location-override \"\${INPUT_BUCKET}/\${input_key}\"" \
   'release-verification.json' \
   "scripts/ci/verify-release-signature.sh \"\$signer_output\"" \
@@ -67,7 +87,7 @@ fi
 
 # The workflow uses only a short-lived STS response. Literal access keys,
 # secret values, Vault tokens, and public Vault URLs are prohibited here.
-if grep -Eq 'AKIA[0-9A-Z]{16}|(?i:aws_secret_access_key)[[:space:]]*:|(?i:vault_token)[[:space:]]*:|https?://[^"[:space:]]*(vault|8200)' "$workflow" "$terraform_file"; then
+if grep -Eq 'AKIA[0-9A-Z]{16}|(?i:aws_secret_access_key)[[:space:]]*:|(?i:vault_token)[[:space:]]*:|https?://[^"[:space:]]*(vault|8200)' "$workflow"; then
   fail 'activation code introduces static credentials or a public Vault endpoint'
 fi
 
@@ -76,6 +96,8 @@ for required in \
   'enable_release_signer=false' \
   'release_signer_image=""' \
   'If-None-Match: *' \
+  'source-version is the S3 VersionId' \
+  'cannot replace the input.' \
   'release-signer-output.zip' \
   "same-account ECR \`...@sha256:<digest>\`" \
   'No static credentials, raw Transit response artifacts, or public Vault'; do

@@ -31,7 +31,15 @@ for required_path in \
   source/deploy/base/namespace.yaml \
   source/deploy/prysm/kustomization.yaml \
   source/deploy/nethermind/kustomization.yaml \
+  source/deploy/argocd/node-operator-client-application.yaml \
+  source/deploy/validator/onboarding-contract.yaml \
   source/infra/terraform/eks.tf \
+  source/infra/bootstrap-state/main.tf \
+  source/infra/foundation-network/main.tf \
+  source/infra/ops-access/main.tf \
+  source/infra/baseline/variables.tf \
+  source/release/hoodi-release-contract.json \
+  source/scripts/release/node-operator-release.sh \
   source/policy/decision.rego; do
   rg -Fx "$required_path" "$temporary_directory/archive-paths.txt" >/dev/null
 done
@@ -43,6 +51,7 @@ rg -F 'name: prysm-hoodi-gp3-kms' "$extract_directory/rendered/prysm.yaml" >/dev
 rg -F 'name: nethermind-hoodi-gp3-kms' "$extract_directory/rendered/nethermind.yaml" >/dev/null
 cmp <(git show HEAD:deploy/prysm/kustomization.yaml) "$extract_directory/source/deploy/prysm/kustomization.yaml"
 cmp <(git show HEAD:policy/decision.rego) "$extract_directory/source/policy/decision.rego"
+"$extract_directory/source/scripts/release/node-operator-release.sh" verify --bundle-root "$extract_directory" >/dev/null
 jq -e --arg digest "$digest" '
   .schema_version == "v1" and
   .artifact.digest == $digest and

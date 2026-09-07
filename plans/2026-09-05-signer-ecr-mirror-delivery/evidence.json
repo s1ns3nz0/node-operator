@@ -1,0 +1,16 @@
+{
+  "validation": [
+    {"command": "npm run harness:check", "result": "passed after graph schema repair"},
+    {"command": "npm run test:ecr-signer-mirror-contract", "result": "passed"},
+    {"command": "scripts/ci/test-script-quality.sh", "result": "passed"},
+    {"command": "git diff --check", "result": "passed"}
+  ],
+  "oidc_boundary": {
+    "source": "infra/terraform/ecr-signer-mirror.tf",
+    "audience": "sts.amazonaws.com",
+    "subject": "repo:${var.github_repository}:environment:ecr-signer-mirror",
+    "repository_scope": "single conditional release-signer ECR repository",
+    "live_status": "not applied or dispatched"
+  },
+  "execution_boundary": "No AWS apply, environment creation, workflow dispatch, image pull, or image publication was performed for this task."
+}

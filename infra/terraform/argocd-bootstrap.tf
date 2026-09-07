@@ -132,7 +132,10 @@ data "aws_iam_policy_document" "argocd_bootstrap" {
       "ecr:BatchGetImage",
       "ecr:GetDownloadUrlForLayer",
     ]
-    resources = [aws_ecr_repository.private_gitops["argocd"].arn]
+    # Keep this existing pull scope independent from unrelated additions to the
+    # private GitOps repository map. The repository name is deterministic and
+    # already enforced by the private GitOps foundation.
+    resources = ["arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.private_gitops_repositories.argocd}"]
   }
 }
 

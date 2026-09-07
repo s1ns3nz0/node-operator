@@ -1,0 +1,28 @@
+{
+  "task_id": "2026-09-04-vault-prepare-apply",
+  "status": "completed",
+  "checks": [
+    {"name": "pre-apply refresh gate", "status": "passed", "result": "The regenerated saved plan exactly matched the reviewed allowlist: one local policy-document read and ten creates."},
+    {"name": "saved-plan apply", "status": "partial", "result": "Eight private prerequisite resources were created. Creation stopped at the Vault EKS access entry because eks:CreateAccessEntry is absent, and at the Vault CodeBuild project because codebuild:CreateProject is absent."},
+    {"name": "post-apply EKS boundary", "status": "passed", "result": "The Vault bootstrap EKS access entry is absent; therefore no cluster-admin policy association exists."},
+    {"name": "resume permission remediation", "status": "passed", "result": "The approved role policy gained only scoped eks:CreateAccessEntry, codebuild:CreateProject, and iam:PassRole-to-CodeBuild permissions for the remaining prepare resources."},
+    {"name": "resume saved-plan gate", "status": "passed", "result": "The regenerated plan contained exactly two creates, aws_eks_access_entry.vault_bootstrap[0] and aws_codebuild_project.vault_bootstrap[0], with zero changes and deletes."},
+    {"name": "resume apply", "status": "passed", "result": "The two-resource saved plan applied successfully."},
+    {"name": "post-apply EKS boundary", "status": "passed", "result": "The Vault bootstrap STANDARD EKS access entry exists and its associated-access-policy count is zero; no cluster-admin association exists."},
+    {"name": "post-apply CodeBuild boundary", "status": "passed", "result": "The Vault bootstrap CodeBuild project exists and its build count is zero; no build was started."},
+    {"name": "clean-room Terra debrief", "status": "passed_with_recorded_evidence_limit", "result": "Independent review found no blocking inconsistency. The task bundle retains non-sensitive summaries rather than primary AWS/Terraform outputs, so the final-state assertions are supported but not independently re-proven from source diagnostics."}
+  ],
+  "partial_resources": [
+    "aws_cloudwatch_log_group.vault_bootstrap[0]",
+    "aws_ecr_lifecycle_policy.private_gitops[\"vault\"]",
+    "aws_ecr_lifecycle_policy.private_gitops[\"vault_chart\"]",
+    "aws_iam_role.vault_bootstrap[0]",
+    "aws_iam_role_policy.vault_bootstrap[0]",
+    "aws_security_group.vault_bootstrap[0]",
+    "aws_vpc_security_group_ingress_rule.cluster_api_from_vault_bootstrap[0]",
+    "aws_vpc_security_group_ingress_rule.endpoints_https_from_vault_bootstrap[0]"
+  ],
+  "notes": [
+    "No Terraform delete, CodeBuild execution, Helm, kubectl, Vault, secret access, EKS access-policy association, cluster-admin association, public-network change, merge, or publication occurred."
+  ]
+}

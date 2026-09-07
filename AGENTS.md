@@ -12,3 +12,7 @@ that receives only the completed task bundle, relevant diffs, and checks.
 
 No agent may deploy, publish, merge, alter secrets, or access production
 without explicit task-level authorization. CI evidence must remain non-sensitive.
+
+Do not stop an active task or withhold job details except when user approval is
+required. For externally running jobs, keep checking until completion and show
+their current or final status without exposing sensitive logs or credentials.

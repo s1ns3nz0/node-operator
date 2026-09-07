@@ -11,7 +11,11 @@ permissions:
 
 jobs:
   build-and-publish:
-    runs-on: ubuntu-24.04
+    # A CodeBuild-hosted runner is ephemeral per workflow job and is bound to
+    # the dedicated private project by its name plus run identity. A
+    # GitHub-hosted or broadly shared runner must never acquire this path.
+    runs-on: codebuild-node-operator-baseline-private-release-${{ github.run_id }}-${{ github.run_attempt }}
+    environment: release
     env:
       RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:68a353d39970bb296e957f33a95fd7368ee5a42584e5b04e92c0b5b300bc5314
     steps:
@@ -49,8 +53,19 @@ jobs:
             "$RUNNER_TEMP/release/node-operator-release-bundle.sha256" \
             "$RUNNER_TEMP/release/provenance-input.json" \
             "$RUNNER_TEMP/release/buildspec-release-sign.yml"
-          aws s3api put-object --bucket "$INPUT_BUCKET" --key "$input_key" --body "$input_archive" --if-none-match '*' --region "$AWS_REGION" >/dev/null
-          aws codebuild start-build --project-name "node-operator-baseline-release-signer" --source-version "$source_revision" --source-location-override "${INPUT_BUCKET}/${input_key}" --region "$AWS_REGION" > "$RUNNER_TEMP/codebuild.json"
+          if ! aws s3api put-object --bucket "$INPUT_BUCKET" --key "$input_key" --body "$input_archive" --if-none-match '*' --region "$AWS_REGION" >/dev/null; then
+            existing_input_dir="$(mktemp -d)"
+            trap 'rm -rf "$existing_input_dir"' EXIT
+            aws s3 cp "s3://${INPUT_BUCKET}/${input_key}" "$existing_input_dir/input.zip" --region "$AWS_REGION"
+            test "$(unzip -Z1 "$existing_input_dir/input.zip" | sort)" = "$(printf '%s\n' buildspec-release-sign.yml node-operator-release-bundle.sha256 node-operator-release-bundle.tar provenance-input.json | sort)"
+            unzip -q "$existing_input_dir/input.zip" -d "$existing_input_dir"
+            cmp "$RUNNER_TEMP/release/node-operator-release-bundle.sha256" "$existing_input_dir/node-operator-release-bundle.sha256"
+            cmp "$RUNNER_TEMP/release/provenance-input.json" "$existing_input_dir/provenance-input.json"
+            cmp "$RUNNER_TEMP/release/buildspec-release-sign.yml" "$existing_input_dir/buildspec-release-sign.yml"
+          fi
+          input_version="$(aws s3api head-object --bucket "$INPUT_BUCKET" --key "$input_key" --query VersionId --output text --region "$AWS_REGION")"
+          test -n "$input_version"; test "$input_version" != "None"
+          aws codebuild start-build --project-name "node-operator-baseline-release-signer" --source-version "$input_version" --source-location-override "${INPUT_BUCKET}/${input_key}" --region "$AWS_REGION" > "$RUNNER_TEMP/codebuild.json"
           build_id="$(jq -r .build.id "$RUNNER_TEMP/codebuild.json")"
           for _ in $(seq 1 60); do
             status="$(aws codebuild batch-get-builds --ids "$build_id" --region "$AWS_REGION" | jq -r '.builds[0].buildStatus')"

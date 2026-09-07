@@ -1,0 +1,1 @@
+{"status":"in_progress","live_prerequisites":{"vault_service":"ClusterIP only","gateway_api":false,"private_subnet_internal_elb_tags":true,"certificate_san_missing":true},"implementation":"declarative SAN, internal NLB Service, and private-only ingress policy prepared"}

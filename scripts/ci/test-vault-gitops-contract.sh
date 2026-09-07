@@ -26,9 +26,20 @@ for required in \
   '    type: ClusterIP' \
   '    enabled: false' \
   '        secretName: vault-tls' \
+  '          retry_join {' \
+  '            leader_api_addr         = "https://vault-0.vault-internal:8200"' \
+  '            leader_ca_cert_file     = "/vault/userconfig/vault-tls/ca.crt"' \
+  '            leader_client_cert_file = "/vault/userconfig/vault-tls/tls.crt"' \
+  '            leader_client_key_file  = "/vault/userconfig/vault-tls/tls.key"' \
   '        seal "awskms" {' \
   '          kms_key_id = "REPLACE_WITH_VAULT_UNSEAL_KEY_ARN"'; do
   grep -Fqx "$required" "$values" || fail "Vault values missing required boundary: $required"
+done
+
+private_vault_repository='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault'
+for image_tag in '268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10' '8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f'; do
+  grep -Fqx "    repository: $private_vault_repository" "$values" || fail "Vault runtime image repository is not private ECR"
+  grep -Fqx "    tag: $image_tag" "$values" || fail "Vault runtime image tag is not an approved immutable digest"
 done
 
 if grep -Eq '(type:[[:space:]]*(LoadBalancer|NodePort)|tls_disable[[:space:]]*=[[:space:]]*1|AWS_(ACCESS|SECRET)_ACCESS_KEY|aws_access_key|aws_secret_key)' "$values"; then

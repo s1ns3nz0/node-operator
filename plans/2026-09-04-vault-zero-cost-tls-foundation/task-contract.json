@@ -1,0 +1,60 @@
+{
+  "id": "2026-09-04-vault-zero-cost-tls-foundation",
+  "title": "Prepare a zero-additional-AWS-cost internal CA for private Vault TLS",
+  "classification": "non-trivial",
+  "classification_reason": [
+    "introduces a cluster-local certificate authority",
+    "creates a Vault TLS issuance boundary",
+    "extends the private artifact supply chain"
+  ],
+  "expected_outcome": "The repository contains reviewed, private-ECR-pinned cert-manager delivery inputs and Vault-scoped declarative issuers, certificates, and ingress policy that can create vault/vault-tls without committing, reading, or manually creating key material.",
+  "dependencies": ["2026-09-04-vault-helm-deploy", "2026-09-04-vault-delivery-remediation"],
+  "constraints": [
+    "Use only a cluster-local, Vault-namespace CA; do not create or use AWS Private CA.",
+    "Keep the EKS API private and require private ECR artifact delivery; no public listener, NAT, or public egress fallback.",
+    "All cert-manager runtime images and the Helm chart must be digest/checksum pinned and mirrored before live installation.",
+    "Do not commit, create manually, read, modify, log, or record any Kubernetes Secret data, CA private key, Vault token, kubeconfig, recovery material, or unseal material.",
+    "Do not deploy/apply resources, mirror/publish artifacts, initialize Vault, or alter live cloud/Kubernetes state in this task."
+  ],
+  "authorization": {
+    "repository_mutation": true,
+    "external_actions": ["read official public cert-manager release and signature metadata"],
+    "prohibited_actions": ["Kubernetes apply", "Terraform apply", "artifact publication or mirror execution", "Secret access or mutation", "Vault initialization or unseal", "public endpoint or egress change", "production access"]
+  },
+  "primary_owner": {"tier": "sol", "responsibility": "security boundary and final integration"},
+  "delegations": [
+    {
+      "id": "release-metadata-recon",
+      "tier": "luna",
+      "owner": "pending",
+      "files": [],
+      "worktree": "read-only",
+      "branch": "none",
+      "acceptance_checks": ["official version, signature, image and chart pins are identified"],
+      "escalation_trigger": "metadata would require credentials or secret inspection"
+    },
+    {
+      "id": "private-delivery-and-manifest-implementation",
+      "tier": "terra",
+      "owner": "/root/zero_cost_pki_impl",
+      "files": [".ci/gitops/approved-oci-artifacts.json", ".github/workflows/cert-manager-chart-mirror.yml", ".github/workflows/gitops-oci-mirror.yml", "infra/terraform/private-gitops.tf", "docs/gitops/cert-manager-*", "docs/gitops/vault-*-internal-ca*", "scripts/ci/test-vault-internal-tls-contract.sh"],
+      "worktree": "required",
+      "branch": "task/2026-09-04-vault-zero-cost-tls-impl",
+      "acceptance_checks": ["local contract checks", "Helm render uses only private digest-pinned images"],
+      "escalation_trigger": "a change would apply a resource, mirror an artifact, or expose Secret data"
+    },
+    {
+      "id": "final-integration-and-debrief",
+      "tier": "sol",
+      "owner": "/root",
+      "files": ["plans/2026-09-04-vault-zero-cost-tls-foundation/*", "reports/2026-09-04-vault-zero-cost-tls-foundation-debrief.md"],
+      "worktree": "required",
+      "branch": "codex/2026-09-04-vault-delivery-remediation",
+      "acceptance_checks": ["independent clean-room debrief", "task-level live plan approved before any execution"],
+      "escalation_trigger": "live authority or a security exception is required"
+    }
+  ],
+  "model_fallbacks": [],
+  "validation": ["cert-manager chart signature verification", "Helm render", "manifest schema and invariant checks", "harness check", "policy adapter", "independent clean-room debrief"],
+  "status": "completed"
+}

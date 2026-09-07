@@ -7,20 +7,21 @@ network paths, or deploy Vault.
 
 ## Runner selection and identity
 
-The approved runner group is `node-operator-private-release`. It is restricted
-to this repository and contains only ephemeral runners. A future release job
-must select the following exact labels:
+The approved runner is the dedicated CodeBuild project
+`node-operator-baseline-private-release`, restricted to this repository and
+configured for GitHub `WORKFLOW_JOB_QUEUED` events only. It contains only
+ephemeral runners. A release job must select the exact project and workflow-run
+identity label:
 
 ```yaml
-runs-on: [self-hosted, linux, x64, node-operator-release, vault-private]
+runs-on: codebuild-node-operator-baseline-private-release-${{ github.run_id }}-${{ github.run_attempt }}
 ```
 
-The runner registration token is operator-managed and is never placed in this
-repository, Vault KV, job logs, or evidence. The runner service uses a
-non-privileged `gha-runner` operating-system account, has no access to a
-shared Docker socket, and is destroyed after one job. It must not be placed in
-an organization-wide runner group, accept untrusted pull-request jobs, or be
-reused as a general CI runner.
+The CodeBuild GitHub connection is operator-managed and is never placed in this
+repository, Vault KV, job logs, or evidence. The runner has no access to a
+shared Docker socket and is destroyed after one job. It must not be made
+organization-wide, accept untrusted pull-request jobs, or be reused as a
+general CI runner.
 
 ## Vault network and TLS boundary
 
