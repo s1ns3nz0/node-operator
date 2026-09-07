@@ -328,10 +328,13 @@ resource "aws_kinesis_firehose_delivery_stream" "validator_audit" {
   destination = "extended_s3"
 
   extended_s3_configuration {
-    role_arn            = aws_iam_role.validator_audit_firehose.arn
-    bucket_arn          = aws_s3_bucket.validator_audit.arn
-    prefix              = "validator/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/"
-    error_output_prefix = "validator-errors/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/"
+    role_arn   = aws_iam_role.validator_audit_firehose.arn
+    bucket_arn = aws_s3_bucket.validator_audit.arn
+    prefix     = "validator/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/"
+    # Firehose requires its error-output type token in every error prefix. It
+    # keeps delivery failures separately attributable without weakening the
+    # canonical validator record prefix.
+    error_output_prefix = "validator-errors/type=!{firehose:error-output-type}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/"
     buffering_size      = 5
     buffering_interval  = 300
     compression_format  = "GZIP"
