@@ -11,7 +11,7 @@
     {"id":"T8","title":"Implement internal Hoodi chain observer","tier":"sol","owner":"/root","status":"in_progress"},
     {"id":"T9","title":"Implement external Etherscan deposit observer","tier":"sol","owner":"/root","status":"in_progress"},
     {"id":"T10","title":"Implement external Beaconcha.in duty observer","tier":"sol","owner":"/root","status":"in_progress"},
-    {"id":"T11","title":"Implement internal Beacon duty observer","tier":"sol","owner":"/root","status":"pending"},
+    {"id":"T11","title":"Implement internal Beacon duty observer","tier":"sol","owner":"/root","status":"in_progress"},
     {"id":"T12","title":"Implement source disagreement handling","tier":"sol","owner":"/root","status":"pending"},
     {"id":"T13","title":"Exercise UC-1 with human wallet signing gate","tier":"human","owner":"user","status":"pending"},
     {"id":"T14","title":"Exercise UC-2 operational signer onboarding","tier":"sol","owner":"/root","status":"pending"},

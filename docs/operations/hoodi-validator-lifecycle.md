@@ -43,6 +43,14 @@ the keystore nor Vault access; it reaches only the in-cluster beacon API and
 the reviewed signer endpoint. Its first attestation/proposal evidence and the
 active signer lease are recorded with the collector.
 
+After UC-3 returns a validator index, run
+`observe-private-hoodi-validator-duties.sh`. It records current-epoch
+attester, proposer, and sync-committee assignments from the private Beacon
+API. An assignment alone is not proof of a signature: UC-4 closes only when
+the assignment, Prysm validator log, Web3Signer audit request ID, and public
+history agree. A missing external record is an alert, never a reason to repeat
+a signing request.
+
 ## UC-5 — interruption and recovery
 
 Revoke signer workload access and fence it first. A signing attempt must fail
