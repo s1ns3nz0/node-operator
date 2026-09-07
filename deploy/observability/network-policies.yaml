@@ -36,6 +36,15 @@ spec:
       ports:
         - protocol: TCP
           port: 443
+    # EKS Pod Identity injects short-lived AWS credentials through this
+    # node-local endpoint. It is not a VPC endpoint and must be explicitly
+    # admitted under the namespace default-deny policy.
+    - to:
+        - ipBlock:
+            cidr: 169.254.170.23/32
+      ports:
+        - protocol: TCP
+          port: 80
     # Private interface endpoints resolve inside the approved VPC. The IAM role
     # independently restricts this pod to CloudWatch write operations only.
     - to:
