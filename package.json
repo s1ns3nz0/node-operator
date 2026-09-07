@@ -36,6 +36,8 @@
     "test:eks-network-policy-enforcement": "bash scripts/ci/test-eks-network-policy-enforcement.sh",
     "test:hoodi-session-contract": "bash scripts/ci/test-hoodi-session-contract.sh",
     "test:validator-runtime-contract": "bash scripts/ci/test-validator-runtime-contract.sh",
+    "test:validator-runtime-mirror-contract": "bash scripts/ci/test-validator-runtime-mirror-contract.sh",
+    "test:validator-runtime-mirror-enabled-plan": "bash scripts/ci/test-validator-runtime-mirror-enabled-plan.sh",
     "test:validator-signer-boundary-contract": "bash scripts/ci/test-validator-signer-boundary-contract.sh",
     "test:hoodi-deposit-data-contract": "bash scripts/ci/test-hoodi-deposit-data-contract.sh",
     "test:private-beacon-observer-contract": "bash scripts/ci/test-private-beacon-observer-contract.sh",

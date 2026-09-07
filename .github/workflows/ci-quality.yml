@@ -37,6 +37,10 @@ jobs:
         run: scripts/ci/test-image-publisher-isolation.sh
       - name: Test private DAST mirror boundary
         run: scripts/ci/test-private-dast-mirror-contract.sh
+      - name: Test validator runtime mirror boundary
+        run: scripts/ci/test-validator-runtime-mirror-contract.sh
+      - name: Test validator runtime mirror enabled plan
+        run: scripts/ci/test-validator-runtime-mirror-enabled-plan.sh
       - name: Test evidence normalizer
         run: scripts/ci/test-normalizer.sh
       - name: Test PR gate scripts

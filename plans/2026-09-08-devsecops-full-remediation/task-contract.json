@@ -6,7 +6,8 @@
     "GitHub workflow, repository-rule, and environment protections",
     "GitOps private-CD and private-DAST execution boundaries",
     "non-secret CI/CD evidence and contract tests",
-    "read-only validator readiness and activity evidence"
+    "read-only validator readiness and activity evidence",
+    "disabled-by-default private runtime image mirror foundation required for signer readiness"
   ],
   "out_of_scope": [
     "reading, creating, or exporting Vault tokens, recovery keys, or validator keystores",
@@ -24,7 +25,8 @@
     "GitOps repository has protected main-branch controls and security features enabled",
     "GitOps CD verifies the pinned chart deployment and runs a disposable, private, digest-pinned passive DAST job without raw-report disclosure",
     "Every changed workflow is syntactically and supply-chain validated",
-    "UC evidence distinguishes observed validator facts from unperformed secret-dependent actions"
+    "UC evidence distinguishes observed validator facts from unperformed secret-dependent actions",
+    "signer runtime accepts only reviewed, private, immutable image digests"
   ],
   "model_fallbacks": [],
   "escalation_trigger": "Any operation needing a Vault/recovery/keystore value, a non-scoped IAM permission, or a destructive production action stops for explicit user direction."
