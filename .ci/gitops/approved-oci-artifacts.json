@@ -132,6 +132,18 @@
       "purpose": "Private Vault bootstrap toolchain containing the mTLS Raft retry_join contract"
     },
     {
+      "source": "ghcr.io/s1ns3nz0/node-operator/vault-bootstrap@sha256:3b1a51db37d105de0ed8229b707d12d4188a7c06ebe389c8d151e47c686f4dd9",
+      "destination": "vault",
+      "ecrTag": "3b1a51db37d105de0ed8229b707d12d4188a7c06ebe389c8d151e47c686f4dd9",
+      "purpose": "Private Vault bootstrap toolchain pinning Vault Agent injection to the private ECR mirror"
+    },
+    {
+      "source": "ghcr.io/s1ns3nz0/node-operator/vault-bootstrap@sha256:2fb3d5c45851a592254a912b5d630b0d3507559d767779ddfdcc280a686602ff",
+      "destination": "vault",
+      "ecrTag": "2fb3d5c45851a592254a912b5d630b0d3507559d767779ddfdcc280a686602ff",
+      "purpose": "Private Vault bootstrap toolchain using the Vault binary for injected agents"
+    },
+    {
       "source": "quay.io/jetstack/cert-manager-controller@sha256:416a2d76870d996460e62bd7f521bf14fa017be9e3e904aab92163a331fcb61a",
       "destination": "cert-manager",
       "ecrTag": "416a2d76870d996460e62bd7f521bf14fa017be9e3e904aab92163a331fcb61a",
