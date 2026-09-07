@@ -1,0 +1,55 @@
+# Rendered client starts at zero replicas. It cannot sign until the activation
+# gate has verified the exact signed image, private Beacon health, signer TLS,
+# active validator state, and fence ownership.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hoodi-validator-signer-ca
+  namespace: validator-operations
+immutable: true
+binaryData:
+  ca.crt: REPLACE_WITH_SIGNER_CA_BASE64
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hoodi-validator-client
+  namespace: validator-operations
+spec:
+  replicas: 0
+  strategy: {type: Recreate}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: validator-client
+      node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: validator-client
+        node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET
+    spec:
+      serviceAccountName: validator-client
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: validator
+          image: REPLACE_WITH_PRYSM_VALIDATOR_IMAGE
+          args:
+            - validator
+            - --accept-terms-of-use
+            - --hoodi
+            - --beacon-rest-api-provider=http://prysm-beacon.node-operator.svc:3500
+            - --validators-external-signer-url=https://hoodi-validator-remote-signer.validator-operations.svc:9000
+            - --validators-external-signer-public-keys=REPLACE_WITH_VALIDATOR_PUBLIC_KEY
+            - --remote-signer-ca-crt-path=/etc/remote-signer/ca.crt
+          env: [{name: TMPDIR, value: /tmp}]
+          volumeMounts:
+            - {name: signer-ca, mountPath: /etc/remote-signer, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+            - {name: data, mountPath: /data}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}, readOnlyRootFilesystem: true, runAsNonRoot: true, runAsUser: 1000}
+      volumes:
+        - name: signer-ca
+          configMap: {name: hoodi-validator-signer-ca}
+        - {name: tmp, emptyDir: {medium: Memory, sizeLimit: 256Mi}}
+        - {name: data, emptyDir: {}}
