@@ -1,0 +1,14 @@
+{
+  "id": "2026-09-07-redteam-remediation",
+  "title": "Remediate CI/CD and GitOps red-team findings",
+  "classification": "non-trivial",
+  "classification_reason": ["software supply chain", "two repositories", "private deployment boundary"],
+  "expected_outcome": "A fail-closed source implementation for release admission, artifact integrity evidence, GitOps promotion verification, and bounded private DAST, with no deployment or credential mutation.",
+  "constraints": ["Do not publish, merge, deploy, alter cloud resources, or access secrets.", "Use immutable artifact digests and SHA-pinned Actions.", "Live CD and DAST remain separately authorized private-runner operations."],
+  "authorization": {"repository_mutation": true, "external_actions": ["read-only GitHub and local GitOps source inspection"], "requires_separate_approval": ["push", "merge", "workflow dispatch", "cloud apply", "private-runner execution", "Argo sync"]},
+  "primary_owner": {"tier": "sol", "responsibility": "security design and integration"},
+  "delegations": [],
+  "model_fallbacks": [],
+  "validation": ["workflow and shell contracts", "harness verify", "GitOps render/lint", "clean-room debrief"],
+  "status": "in_progress"
+}
