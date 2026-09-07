@@ -38,7 +38,7 @@ jq -e --arg key "$public_key" '
   (.payload.validator.index | tostring | test("^[0-9]+$"))
 ' "$private_evidence" >/dev/null || { printf '%s\n' 'private Beacon evidence does not prove an active, synced validator' >&2; exit 65; }
 
-deployment="hoodi-validator-client"
+deployment="validator-${validator_set}-client"
 current_set="$(kubectl -n validator-operations get deployment "$deployment" -o jsonpath='{.spec.template.metadata.labels.node-operator\.io/validator-set}')"
 [ "$current_set" = "$validator_set" ] || { printf '%s\n' 'rendered client validator-set does not match requested activation' >&2; exit 65; }
 replicas="$(kubectl -n validator-operations get deployment "$deployment" -o jsonpath='{.spec.replicas}')"

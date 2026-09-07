@@ -4,7 +4,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: hoodi-validator-slashing-db
+  name: validator-REPLACE_WITH_VALIDATOR_SET-slashing-db
   namespace: validator-operations
 spec:
   selector:
@@ -18,10 +18,10 @@ spec:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: hoodi-validator-slashing-db
+  name: validator-REPLACE_WITH_VALIDATOR_SET-slashing-db
   namespace: validator-operations
 spec:
-  serviceName: hoodi-validator-slashing-db
+  serviceName: validator-REPLACE_WITH_VALIDATOR_SET-slashing-db
   replicas: 1
   persistentVolumeClaimRetentionPolicy:
     whenDeleted: Retain
@@ -92,7 +92,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: hoodi-validator-remote-signer
+  name: validator-REPLACE_WITH_VALIDATOR_SET-remote-signer
   namespace: validator-operations
 spec:
   type: ClusterIP
@@ -104,7 +104,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hoodi-validator-remote-signer
+  name: validator-REPLACE_WITH_VALIDATOR_SET-remote-signer
   namespace: validator-operations
 spec:
   replicas: 1
@@ -159,7 +159,7 @@ spec:
           args:
             - --http-listen-host=0.0.0.0
             - --http-listen-port=9000
-            - --http-host-allowlist=hoodi-validator-remote-signer.validator-operations.svc,localhost,127.0.0.1
+            - --http-host-allowlist=validator-REPLACE_WITH_VALIDATOR_SET-remote-signer.validator-operations.svc,localhost,127.0.0.1
             - --tls-keystore-file=/vault/secrets/tls.p12
             - --tls-keystore-password-file=/vault/secrets/tls-password.txt
             - --data-path=/data
@@ -168,7 +168,7 @@ spec:
             - --keystores-path=/vault/secrets
             - --keystores-passwords-path=/vault/secrets
             - --slashing-protection-enabled=true
-            - --slashing-protection-db-url=jdbc:postgresql://hoodi-validator-slashing-db.validator-operations.svc:5432/web3signer
+            - --slashing-protection-db-url=jdbc:postgresql://validator-REPLACE_WITH_VALIDATOR_SET-slashing-db.validator-operations.svc:5432/web3signer
             - --slashing-protection-db-username=web3signer
             - --slashing-protection-db-pool-configuration-file=/vault/secrets/slashing-db.properties
           ports: [{name: signer-api, containerPort: 9000}]
@@ -178,3 +178,51 @@ spec:
             - {name: signer-tmp, mountPath: /tmp}
           securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}, readOnlyRootFilesystem: true, runAsNonRoot: true, runAsUser: 999, runAsGroup: 999}
           readinessProbe: {tcpSocket: {port: signer-api}, periodSeconds: 10}
+---
+apiVersion: coordination.k8s.io/v1
+kind: Lease
+metadata:
+  name: validator-REPLACE_WITH_VALIDATOR_SET-primary
+  namespace: validator-operations
+  labels: {node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}
+spec: {leaseDurationSeconds: 60}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: validator-REPLACE_WITH_VALIDATOR_SET-signer-dependencies
+  namespace: validator-operations
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/component: validator-remote-signer, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}}
+  policyTypes: [Egress]
+  egress:
+    - to: [{podSelector: {matchLabels: {app.kubernetes.io/component: validator-slashing-db, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}}}]
+      ports: [{protocol: TCP, port: 5432}]
+    - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: vault}}, podSelector: {matchLabels: {app.kubernetes.io/name: vault}}}]
+      ports: [{protocol: TCP, port: 8200}]
+    - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}}]
+      ports: [{protocol: UDP, port: 53}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: validator-REPLACE_WITH_VALIDATOR_SET-signer-ingress
+  namespace: validator-operations
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/component: validator-remote-signer, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}}
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{podSelector: {matchLabels: {app.kubernetes.io/component: validator-client, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}}}]
+      ports: [{protocol: TCP, port: 9000}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: validator-REPLACE_WITH_VALIDATOR_SET-db-ingress
+  namespace: validator-operations
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/component: validator-slashing-db, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}}
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{podSelector: {matchLabels: {app.kubernetes.io/component: validator-remote-signer, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}}}]
+      ports: [{protocol: TCP, port: 5432}]

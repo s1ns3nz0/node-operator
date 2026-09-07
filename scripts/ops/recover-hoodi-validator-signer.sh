@@ -25,13 +25,13 @@ case "$output_dir" in /*) ;; *) usage ;; esac
 for command in kubectl jq mkdir chmod date; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 
 namespace=validator-operations
-client_replicas="$(kubectl -n "$namespace" get deployment hoodi-validator-client -o jsonpath='{.spec.replicas}')"
-signer_replicas="$(kubectl -n "$namespace" get deployment hoodi-validator-remote-signer -o jsonpath='{.spec.replicas}')"
+client_replicas="$(kubectl -n "$namespace" get deployment "validator-${validator_set}-client" -o jsonpath='{.spec.replicas}')"
+signer_replicas="$(kubectl -n "$namespace" get deployment "validator-${validator_set}-remote-signer" -o jsonpath='{.spec.replicas}')"
 [ "$client_replicas" = 0 ] || { printf '%s\n' 'validator client is not fenced at zero replicas' >&2; exit 65; }
 [ "$signer_replicas" = 0 ] || { printf '%s\n' 'remote signer is not fenced at zero replicas' >&2; exit 65; }
-lease_holder="$(kubectl -n "$namespace" get lease hoodi-validator-set-primary -o jsonpath='{.spec.holderIdentity}')"
+lease_holder="$(kubectl -n "$namespace" get lease "validator-${validator_set}-primary" -o jsonpath='{.spec.holderIdentity}')"
 [ -z "$lease_holder" ] || { printf '%s\n' 'active fence lease holder remains; recovery refused' >&2; exit 65; }
-pvc="data-hoodi-validator-slashing-db-0"
+pvc="data-validator-${validator_set}-slashing-db-0"
 pvc_phase="$(kubectl -n "$namespace" get pvc "$pvc" -o jsonpath='{.status.phase}')"
 [ "$pvc_phase" = Bound ] || { printf '%s\n' 'retained slashing DB PVC is not Bound; recovery refused' >&2; exit 65; }
 pvc_set="$(kubectl -n "$namespace" get pvc "$pvc" -o jsonpath='{.metadata.labels.node-operator\.io/validator-set}')"
@@ -42,5 +42,5 @@ record="$output_dir/uc-5-recovery-$(date -u +%Y%m%dT%H%M%SZ).json"
 jq -n --arg collected "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg correlation "$correlation_id" --arg set "$validator_set" --arg key "$public_key" --arg approval "$approval_id" --arg pvc "$pvc" --arg mode "$dry_run" \
   '{schema_version:1,event_type:"uc-5",collected_at_utc:$collected,correlation_id:$correlation,network:"hoodi",validator_set:$set,validator_public_key:$key,source:"kubernetes",payload:{recovery_approval_id:$approval,fence_holder_absent:true,slashing_db_pvc:$pvc,slashing_db_pvc_bound:true,client_remains_fenced:true,mode:(if $mode == "true" then "dry-run" else "restore-signer-only" end)}}' > "$record"
 if [ "$dry_run" = true ]; then printf 'PASS: recovery gate passed; no workload was scaled. Evidence: %s\n' "$record"; exit 0; fi
-kubectl -n "$namespace" scale deployment hoodi-validator-remote-signer --replicas=1
+kubectl -n "$namespace" scale deployment "validator-${validator_set}-remote-signer" --replicas=1
 printf 'PASS: signer recovery submitted; validator client remains fenced at zero. Evidence: %s\n' "$record"

@@ -4,7 +4,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: hoodi-validator-signer-ca
+  name: validator-REPLACE_WITH_VALIDATOR_SET-signer-ca
   namespace: validator-operations
 immutable: true
 binaryData:
@@ -13,7 +13,7 @@ binaryData:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hoodi-validator-client
+  name: validator-REPLACE_WITH_VALIDATOR_SET-client
   namespace: validator-operations
 spec:
   replicas: 0
@@ -39,7 +39,7 @@ spec:
             - --accept-terms-of-use
             - --hoodi
             - --beacon-rest-api-provider=http://prysm-beacon.node-operator.svc:3500
-            - --validators-external-signer-url=https://hoodi-validator-remote-signer.validator-operations.svc:9000
+            - --validators-external-signer-url=https://validator-REPLACE_WITH_VALIDATOR_SET-remote-signer.validator-operations.svc:9000
             - --validators-external-signer-public-keys=REPLACE_WITH_VALIDATOR_PUBLIC_KEY
             - --remote-signer-ca-crt-path=/etc/remote-signer/ca.crt
           env: [{name: TMPDIR, value: /tmp}]
@@ -50,6 +50,20 @@ spec:
           securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}, readOnlyRootFilesystem: true, runAsNonRoot: true, runAsUser: 1000}
       volumes:
         - name: signer-ca
-          configMap: {name: hoodi-validator-signer-ca}
+          configMap: {name: validator-REPLACE_WITH_VALIDATOR_SET-signer-ca}
         - {name: tmp, emptyDir: {medium: Memory, sizeLimit: 256Mi}}
         - {name: data, emptyDir: {}}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: validator-REPLACE_WITH_VALIDATOR_SET-client-egress
+  namespace: validator-operations
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/component: validator-client, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}}
+  policyTypes: [Egress]
+  egress:
+    - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: node-operator}}, podSelector: {matchLabels: {app.kubernetes.io/name: prysm-beacon}}}]
+      ports: [{protocol: TCP, port: 3500}]
+    - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}}]
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]

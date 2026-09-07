@@ -11,5 +11,8 @@ grep -Fq 'POSTGRES_PASSWORD_FILE' "$tmp/runtime.yaml"
 grep -Fq 'persistentVolumeClaimRetentionPolicy:' "$tmp/runtime.yaml"
 grep -Fq -- '--tls-keystore-file=/vault/secrets/tls.p12' "$tmp/runtime.yaml"
 grep -Fq 'vault.hashicorp.com/agent-inject-secret-keystore.json' "$tmp/runtime.yaml"
+grep -Fq 'validator-hoodi-test-001-remote-signer' "$tmp/runtime.yaml"
+grep -Fq 'validator-hoodi-test-001-primary' "$tmp/runtime.yaml"
+grep -Fq 'node-operator.io/validator-set: hoodi-test-001' "$tmp/runtime.yaml"
 if grep -Eiq 'test-hoodi|trust|name: POSTGRES_PASSWORD$|--slashing-protection-db-password=' "$tmp/runtime.yaml"; then printf '%s\n' 'test runtime or inline password found' >&2; exit 1; fi
 printf '%s\n' 'PASS: runtime rendering requires private digests, Vault files, TLS, and retained password-auth storage.'

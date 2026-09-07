@@ -7,5 +7,4 @@ resources:
   - storage-class.yaml
   - service-accounts.yaml
   - network-policies.yaml
-  - fencing.yaml
   - runtime-contract.yaml
