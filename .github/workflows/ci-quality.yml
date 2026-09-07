@@ -31,6 +31,8 @@ jobs:
         run: scripts/ci/test-toolchain-image-release.sh
       - name: Test image publisher isolation
         run: scripts/ci/test-image-publisher-isolation.sh
+      - name: Test private DAST mirror boundary
+        run: scripts/ci/test-private-dast-mirror-contract.sh
       - name: Test evidence normalizer
         run: scripts/ci/test-normalizer.sh
       - name: Test PR gate scripts
