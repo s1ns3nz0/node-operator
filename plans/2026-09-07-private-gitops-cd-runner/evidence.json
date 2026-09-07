@@ -1,0 +1,1 @@
+{"task_id":"2026-09-07-private-gitops-cd-runner","status":"in_progress","observations":["GitOps publish signed and provenance-verified","No dedicated private CD CodeBuild project existed","Enabled runner plan creates a dedicated role, security group, EKS View access, project, and webhook"],"checks":["terraform validate","enabled plan with existing CodeConnections ARN"]}
