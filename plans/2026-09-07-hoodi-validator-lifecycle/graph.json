@@ -2,7 +2,7 @@
   "task_id": "2026-09-07-hoodi-validator-lifecycle",
   "nodes": [
     {"id":"T1","title":"Define evidence schema and deny-list","tier":"sol","owner":"/root","status":"completed"},
-    {"id":"T2","title":"Provision immutable validator audit archive","tier":"sol","owner":"/root","status":"in_progress"},
+    {"id":"T2","title":"Provision immutable validator audit archive","tier":"sol","owner":"/root","status":"completed"},
     {"id":"T3","title":"Provision private delivery identity and endpoints","tier":"sol","owner":"/root","status":"in_progress"},
     {"id":"T4","title":"Collect Kubernetes and validator workload logs","tier":"sol","owner":"/root","status":"in_progress"},
     {"id":"T5","title":"Implement Vault audit durability and health","tier":"sol","owner":"/root","status":"in_progress"},
