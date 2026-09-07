@@ -8,7 +8,5 @@ resources:
   - service-accounts.yaml
   - network-policies.yaml
   - runtime-contract.yaml
-  - fencing.yaml
-  - remote-signer-service.yaml
   - onboarding-contract.yaml
   - evidence-contract.yaml

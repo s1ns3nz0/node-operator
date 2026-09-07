@@ -42,9 +42,11 @@ performed only under the separately controlled custody procedure.
    the `validator-remote-signer` service account and labels required by
    `deploy/validator/network-policies.yaml`.
 2. Configure its private service endpoint as
-   `hoodi-validator-remote-signer.validator-operations.svc:9000`. The service
-   is `ClusterIP`; any TLS private key or workload credential is provisioned
-   outside Git.
+   `validator-<validator-set>-remote-signer.validator-operations.svc:9000`.
+   The service selector must include the same `node-operator.io/validator-set`
+   label as the signer Pod; a namespace-wide signer Service is prohibited. The
+   service is `ClusterIP`; any TLS private key or workload credential is
+   provisioned outside Git.
 3. Configure the consensus validator client with no keystore file, no
    withdrawal credential, and no direct Vault connection. Permit only the
    remote signer endpoint and require mutually authenticated, audience-bound
@@ -63,10 +65,10 @@ this non-secret GitOps contract.
 
 ## UC-4: slashing protection and failover
 
-The Kubernetes Lease `hoodi-validator-set-primary` is a fence signal, not a
-substitute for a signer-supported slashing database. The active signer is
-enabled only when the designated fence controller owns that lease. Signers and
-the client receive no Kubernetes RBAC to mutate it.
+The Kubernetes Lease `validator-<validator-set>-primary` is a fence signal,
+not a substitute for a signer-supported slashing database. The active signer
+is enabled only when the designated fence controller owns that set-specific
+lease. Signers and the client receive no Kubernetes RBAC to mutate it.
 
 1. Stop and fence the current signer. Record its holder identity, lease state,
    revocation/fencing evidence ID, and incident or change approval ID.
