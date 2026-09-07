@@ -1,0 +1,6 @@
+graph TD
+  inventory --> github-hardening
+  inventory --> workflow-contracts
+  github-hardening --> private-dast
+  workflow-contracts --> private-dast
+  private-dast --> runtime-validation --> uc-validation --> debrief

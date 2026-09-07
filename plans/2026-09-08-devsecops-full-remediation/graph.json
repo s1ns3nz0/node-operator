@@ -1,0 +1,12 @@
+{
+  "task_id": "2026-09-08-devsecops-full-remediation",
+  "nodes": [
+    {"id":"inventory","status":"complete","depends_on":[]},
+    {"id":"github-hardening","status":"complete","depends_on":["inventory"]},
+    {"id":"workflow-contracts","status":"complete","depends_on":["inventory"]},
+    {"id":"private-dast","status":"complete","depends_on":["github-hardening","workflow-contracts"]},
+    {"id":"runtime-validation","status":"complete","depends_on":["private-dast"]},
+    {"id":"uc-validation","status":"in_progress","depends_on":["runtime-validation"]},
+    {"id":"debrief","status":"pending","depends_on":["uc-validation"]}
+  ]
+}
