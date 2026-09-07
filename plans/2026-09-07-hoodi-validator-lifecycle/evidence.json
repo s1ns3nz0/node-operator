@@ -8,6 +8,7 @@
     {"source": "local test", "fact": "The external observer records a V2 Beaconcha.in not-configured result without an API token and retains only the response hash; shellcheck and harness graph validation passed."},
     {"source": "local render", "fact": "The operational signer renderer accepts only same-account ECR digests and emits Vault file injection, TLS PKCS#12 files, POSTGRES_PASSWORD_FILE, PostgreSQL password authentication, and a retained PVC. It rejects test-only identifiers and inline signer database passwords."},
     {"source": "local render", "fact": "The Prysm validator client renderer produces a zero-replica deployment with a pinned private image, private Beacon-only egress, HTTPS external signer URL, pinned signer CA, and no Vault access or service-account token mount."},
+    {"source": "local static test", "fact": "The UC-5 recovery gate refuses a nonzero client or signer, a live fence holder, a missing/mismatched retained slashing DB PVC, and never activates the validator client during signer-only recovery."},
     {"source": "shellcheck", "fact": "The two new operational scripts passed ShellCheck."},
     {"source": "harness", "fact": "harness:check passed. harness:verify reaches known repository fixture failures and an unavailable OSV fixture before completion; these failures are outside this task's changed files."},
     {"source": "local test", "fact": "The evidence-envelope validator accepted a public lifecycle record and rejected a forbidden token field."},
