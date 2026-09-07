@@ -27,6 +27,15 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    # EKS reserves the first address of its default service CIDR for
+    # kubernetes.default.svc. Allow only its HTTPS API path for metadata
+    # enrichment; the VPC CIDR rule below does not cover this service IP.
+    - to:
+        - ipBlock:
+            cidr: 172.20.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
     # Private interface endpoints resolve inside the approved VPC. The IAM role
     # independently restricts this pod to CloudWatch write operations only.
     - to:

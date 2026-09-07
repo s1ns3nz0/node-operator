@@ -11,4 +11,5 @@ grep -Fq 'pod-security.kubernetes.io/enforce: privileged' "$dir/namespace.yaml"
 grep -Fq 'REPLACE_WITH_APPROVED_PRIVATE_ECR_DIGEST' "$dir/fluent-bit-daemonset.template.yaml"
 grep -Fq 'log_group_name /aws/eks/node-operator/validator-security' "$dir/fluent-bit-config.yaml"
 grep -Fq 'Exclude_Path /var/log/containers/*validator-log-collector*.log' "$dir/fluent-bit-config.yaml"
+grep -Fq 'cidr: 172.20.0.1/32' "$dir/network-policies.yaml"
 printf 'PASS validator log collector is isolated, private-image-gated, and prevents self-log recursion.\n'
