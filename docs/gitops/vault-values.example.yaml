@@ -61,6 +61,18 @@ server:
     enabled: true
     size: 20Gi
     storageClass: gp3-encrypted
+  # Separate per-Pod encrypted PVC for append-only audit device files. This is
+  # intentionally distinct from the Raft data claim. Enabling it alone does
+  # not configure an audit device; the post-initialization verification gate
+  # remains mandatory.
+  auditStorage:
+    enabled: true
+    size: 20Gi
+    storageClass: gp3-encrypted
+    accessMode: ReadWriteOnce
+    labels:
+      node-operator.io/encryption-policy: baseline-ebs-kms
+      node-operator.io/purpose: vault-validator-audit
   service:
     type: ClusterIP
   ingress:

@@ -1,11 +1,19 @@
 terraform {
   required_version = ">= 1.5.0, < 2.0.0"
+  # Every operations-access deployment uses an explicit, isolated S3 backend
+  # supplied at init time.  Do not let a release invocation create local state.
+  backend "s3" {}
   required_providers { aws = { source = "hashicorp/aws", version = ">= 5.31.0, < 6.0.0" } }
 }
 
 provider "aws" { region = var.aws_region }
 
 data "aws_ssm_parameter" "al2023" { name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64" }
+
+locals {
+  create_ssm_endpoints       = var.existing_ssm_endpoint_security_group_id == null
+  endpoint_security_group_id = local.create_ssm_endpoints ? aws_security_group.endpoints[0].id : var.existing_ssm_endpoint_security_group_id
+}
 
 resource "aws_security_group" "host" {
   name_prefix = "${var.name}-ops-access-"
@@ -16,6 +24,7 @@ resource "aws_security_group" "host" {
 }
 
 resource "aws_security_group" "endpoints" {
+  count       = local.create_ssm_endpoints ? 1 : 0
   name_prefix = "${var.name}-ops-access-endpoints-"
   description = "Private Session Manager endpoints for the temporary operations host."
   vpc_id      = var.vpc_id
@@ -24,7 +33,8 @@ resource "aws_security_group" "endpoints" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "endpoints" {
-  security_group_id            = aws_security_group.endpoints.id
+  count                        = local.create_ssm_endpoints ? 1 : 0
+  security_group_id            = local.endpoint_security_group_id
   referenced_security_group_id = aws_security_group.host.id
   from_port                    = 443
   to_port                      = 443
@@ -33,7 +43,7 @@ resource "aws_vpc_security_group_ingress_rule" "endpoints" {
 
 resource "aws_vpc_security_group_egress_rule" "to_endpoints" {
   security_group_id            = aws_security_group.host.id
-  referenced_security_group_id = aws_security_group.endpoints.id
+  referenced_security_group_id = local.endpoint_security_group_id
   from_port                    = 443
   to_port                      = 443
   ip_protocol                  = "tcp"
@@ -48,6 +58,7 @@ resource "aws_vpc_security_group_egress_rule" "to_cluster" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "cluster" {
+  count                        = var.manage_cluster_ingress_rule ? 1 : 0
   security_group_id            = var.cluster_security_group_id
   referenced_security_group_id = aws_security_group.host.id
   from_port                    = 443
@@ -56,13 +67,13 @@ resource "aws_vpc_security_group_ingress_rule" "cluster" {
 }
 
 resource "aws_vpc_endpoint" "ssm" {
-  for_each            = toset(["ssm", "ssmmessages", "ec2messages"])
+  for_each            = local.create_ssm_endpoints ? toset(["ssm", "ssmmessages", "ec2messages"]) : toset([])
   vpc_id              = var.vpc_id
   service_name        = "com.amazonaws.${var.aws_region}.${each.value}"
   vpc_endpoint_type   = "Interface"
   private_dns_enabled = true
   subnet_ids          = [var.subnet_id]
-  security_group_ids  = [aws_security_group.endpoints.id]
+  security_group_ids  = [local.endpoint_security_group_id]
 }
 
 resource "aws_iam_role" "host" {

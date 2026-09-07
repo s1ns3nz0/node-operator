@@ -234,3 +234,20 @@ variable "offline_validation" {
   type        = bool
   default     = false
 }
+
+variable "enable_ssm_ops_host" {
+  description = "Create one temporary, private SSM tunnel host. Disabled by default and not a general-purpose bastion."
+  type        = bool
+  default     = false
+}
+
+variable "ssm_ops_host_termination_at" {
+  description = "Optional one-time termination time for the SSM ops host, in Asia/Seoul local time as YYYY-MM-DDTHH:MM:SS. An explicit future time is required because Terraform cannot safely infer today's date or recover a missed one-time schedule."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.ssm_ops_host_termination_at == "" || can(regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$", var.ssm_ops_host_termination_at))
+    error_message = "ssm_ops_host_termination_at must be empty or Asia/Seoul local time formatted as YYYY-MM-DDTHH:MM:SS."
+  }
+}

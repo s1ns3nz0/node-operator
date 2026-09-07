@@ -1,16 +1,16 @@
-# One-time custody role only. It can create the exact runtime records but never
-# read them back, list metadata, use Transit, or administer Vault.
+# A signer can read only its own rendered inputs. No list permission prevents
+# discovery of other validator sets; no delete prevents custody destruction.
 path "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/keystore" {
-  capabilities = ["create", "update"]
+  capabilities = ["read"]
 }
 path "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/password" {
-  capabilities = ["create", "update"]
+  capabilities = ["read"]
 }
 path "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/slashing-db-password" {
-  capabilities = ["create", "update"]
+  capabilities = ["read"]
 }
 path "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/signer-tls" {
-  capabilities = ["create", "update"]
+  capabilities = ["read"]
 }
 path "kv/metadata/validators/*" { capabilities = ["deny"] }
 path "transit/*" { capabilities = ["deny"] }
