@@ -178,6 +178,10 @@ spec:
             - --http-host-allowlist=validator-REPLACE_WITH_VALIDATOR_SET-remote-signer.validator-operations.svc,localhost,127.0.0.1
             - --tls-keystore-file=/vault/secrets/tls.p12
             - --tls-keystore-password-file=/vault/secrets/tls-password.txt
+            # Prysm verifies the signer CA but does not supply a client
+            # certificate. Inbound access remains constrained to the
+            # set-scoped validator-client NetworkPolicy below.
+            - --tls-allow-any-client=true
             - --data-path=/data
             - eth2
             - --network=hoodi
