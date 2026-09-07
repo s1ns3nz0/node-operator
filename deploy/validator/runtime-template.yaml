@@ -84,6 +84,10 @@ spec:
             - {name: POSTGRES_USER, value: web3signer}
             - {name: POSTGRES_DB, value: web3signer}
             - {name: POSTGRES_PASSWORD_FILE, value: /vault/secrets/postgres-password}
+            # EBS volumes contain lost+found at their root. Keep PostgreSQL
+            # state in a dedicated child directory so first initialization is
+            # deterministic and does not depend on volume filesystem details.
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
           ports: [{name: postgres, containerPort: 5432}]
           volumeMounts:
             - {name: data, mountPath: /var/lib/postgresql/data}
