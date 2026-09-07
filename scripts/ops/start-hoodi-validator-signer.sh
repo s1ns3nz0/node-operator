@@ -14,7 +14,10 @@ replicas="$(kubectl -n "$namespace" get deployment "$signer" -o jsonpath='{.spec
 holder="$(kubectl -n "$namespace" get lease "$lease" -o jsonpath='{.spec.holderIdentity}')"
 [ -z "$holder" ] || { printf '%s\n' 'fence lease already has a holder; refuse signer start' >&2; exit 65; }
 if [ "$dry_run" = true ]; then printf '%s\n' 'PASS: signer start gate passed; no lease or workload changed.'; exit 0; fi
-now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+# coordination.k8s.io Lease uses MicroTime for acquire/renew timestamps.
+# Kubernetes rejects a whole-second RFC3339 value even in a JSON Patch, so
+# emit the required six fractional digits deterministically on BSD and GNU date.
+now="$(date -u +%Y-%m-%dT%H:%M:%S.000000Z)"
 holder="${signer}-$(date -u +%Y%m%d%H%M%S)"
 # JSON Patch test makes the empty-lease claim atomic; a concurrent claimant
 # fails rather than replacing an existing holder.
