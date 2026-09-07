@@ -32,8 +32,10 @@ jq -e '.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDe
 snapshot_file="$(mktemp /private/tmp/node-operator-vault-raft.XXXXXX)"
 chmod 600 "$snapshot_file"
 trap 'unset VAULT_TOKEN; rm -f "$snapshot_file"' EXIT
-read -r -s -p 'Vault administrator token: ' VAULT_TOKEN
-printf '\n' >&2
+if [ -z "${VAULT_TOKEN:-}" ]; then
+  read -r -s -p 'Vault administrator token: ' VAULT_TOKEN
+  printf '\n' >&2
+fi
 export VAULT_TOKEN
 "$root/scripts/ops/with-private-vault.sh" -- vault operator raft snapshot save "$snapshot_file"
 "$root/scripts/ops/with-private-vault.sh" -- vault operator raft snapshot inspect -format=json "$snapshot_file" >/dev/null
