@@ -30,6 +30,22 @@ the second command. TCP/UDP audit sockets are prohibited because interruption
 can lose records. Vault audit records are request/response pairs; downstream
 deduplication joins them by `request.id`.
 
+The collector is `vault-validator-audit-relay`: a non-root, read-only-root
+sidecar which mounts only the `audit` PVC, binds the local Unix socket, and
+forwards newline-delimited JSON from the socket and from newly appended file
+records to stdout. The existing private Fluent Bit DaemonSet then delivers the
+Pod stdout to the `validator-security` CloudWatch group and immutable archive.
+Its image is built from this repository and published only by the protected
+`vault-audit-relay-ecr-publish` GitHub environment to the dedicated private
+ECR repository. Do not use a public image, a mutable tag, or an `emptyDir`.
+
+Deploy the relay on all Vault members and verify every Pod has a ready relay
+container before enabling `validator-socket`. Since the Vault StatefulSet is
+`OnDelete`, restart standby Pods first and use the recovery-key leader
+step-down ceremony before replacing the active Pod. A socket listener that is
+not ready is a hard stop: enable the durable file device only after the relay
+rollout, then enable the socket device and run the verifier.
+
 Run `verify-vault-validator-audit.sh` through the private Vault connection
 afterward. A missing per-Pod audit PVC or mount, missing device, raw logging
 enabled, missing list-response elision, or altered path is fail-closed for

@@ -86,6 +86,23 @@ server:
     - name: userconfig-vault-tls
       mountPath: /vault/userconfig/vault-tls
       readOnly: true
+  # The image must be the immutable digest emitted by the protected
+  # vault-audit-relay-ecr-publish workflow. This sidecar is the sole listener
+  # for the local Unix audit socket and tails only the separate audit PVC.
+  extraContainers:
+    - name: vault-validator-audit-relay
+      image: REPLACE_WITH_PRIVATE_VAULT_AUDIT_RELAY_DIGEST
+      args:
+        - --file-path=/vault/audit/validator-audit.json
+        - --socket-path=/vault/audit/validator-audit.sock
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: audit
+          mountPath: /vault/audit
 
 # A private service alone is not a network boundary. The approved GitOps
 # source must also apply namespace NetworkPolicies that allow only Vault pods,
