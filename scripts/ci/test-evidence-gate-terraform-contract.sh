@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2016
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+collector="$script_dir/collect-pr-evidence.sh"
+
+# The workflow gate must validate exactly the same deployable Terraform root
+# as CI Terraform, never individual implementation fragments.
+grep -Fq 'local root_module="$source_directory/infra/terraform"' "$collector"
+grep -Fq '"$script_dir/validate-terraform-offline.sh" "$root_module" "$validation_directory"' "$collector"
+grep -Fq '{"status":"passed","modules":[{"module":"infra/terraform","status":"passed"}]}' "$collector"
+grep -Fq '{"status":"failed","modules":[{"module":"infra/terraform","status":"failed"}]}' "$collector"
+
+printf 'PASS: evidence-gate Terraform validation uses the CI root-module contract.\n'
