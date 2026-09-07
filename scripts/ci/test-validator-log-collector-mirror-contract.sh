@@ -5,7 +5,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 terraform_file="$root/infra/terraform/validator-log-collector-ecr-mirror.tf"
 workflow="$root/.github/workflows/validator-log-collector-image-mirror.yml"
 
-for required in 'enable_validator_log_collector_ecr_mirror' 'default     = false' 'aws_ecr_repository" "validator_log_collector' 'image_tag_mutability = "IMMUTABLE"' 'encryption_type = "KMS"' 'scan_on_push = true' 'environment:validator-log-collector-ecr-mirror' 'ecr:PutImage'; do
+for required in 'enable_validator_log_collector_ecr_mirror' 'default     = false' 'aws_ecr_repository" "validator_log_collector' 'image_tag_mutability = "IMMUTABLE"' 'encryption_type = "KMS"' 'scan_on_push = true' 'github_oidc_subject_prefix}:environment:validator-log-collector-ecr-mirror' 'ecr:PutImage'; do
   grep -Fq "$required" "$terraform_file" || { printf 'missing collector mirror contract: %s\n' "$required" >&2; exit 1; }
 done
 grep -Fq 'cr.fluentbit.io/fluent/fluent-bit@sha256:' "$workflow"
