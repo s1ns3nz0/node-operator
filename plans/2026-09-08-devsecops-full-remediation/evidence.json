@@ -11,7 +11,8 @@
     {"name":"uc3_activation_observation","value":"not yet active","evidence":"private beacon evidence 2026-09-07T18:17:56Z: synced node, validator HTTP 404"},
     {"name":"uc4_duty_observation","value":"not applicable until activation","evidence":"private beacon evidence 2026-09-07T18:18:57Z: validator HTTP 404 and no duty query"},
     {"name":"uc2_uc4_uc5_contracts","value":"passed fail-closed","evidence":"nine local runtime/signer/fence/recovery/audit contract checks"},
-    {"name":"validator_runtime_mirror_source","value":"reviewed","evidence":"Docker Registry manifest index digests: consensys/web3signer:22.11.0-jdk17 sha256:ada8799ac8a76109fc67bf2cc0f7d9ff09542fbf538cae5ba0ff7a9cd81efdda; postgres:16-bookworm sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825"}
+    {"name":"validator_runtime_mirror_source","value":"reviewed","evidence":"Docker Registry manifest index digests: consensys/web3signer:22.11.0-jdk17 sha256:ada8799ac8a76109fc67bf2cc0f7d9ff09542fbf538cae5ba0ff7a9cd81efdda; postgres:16-bookworm sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825"},
+    {"name":"runtime_mirror_name_collision","value":"preserved-existing","evidence":"Existing untracked AES256 repositories node-operator-baseline-validator-web3signer and node-operator-baseline-validator-postgres contained pre-existing images; no force deletion was performed. New KMS destinations use the validator-runtime-* names."}
   ],
   "validations": [
     {"name":"validator_runtime_mirror_contract","value":"passed","evidence":"scripts/ci/test-validator-runtime-mirror-contract.sh"},
