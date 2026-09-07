@@ -216,6 +216,33 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
             - aws ecr get-login-password --region ${var.aws_region} | helm registry login --username AWS --password-stdin ${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com
             - helm upgrade --install argocd oci://${aws_ecr_repository.private_gitops["argocd"].repository_url} --version ${local.argocd_chart_version} --namespace argocd --create-namespace --values /opt/node-operator/argocd-private-values.yaml --atomic --timeout 10m
             - kubectl wait --namespace argocd --for=condition=Available deployment/argocd-server --timeout=10m
+            - |
+              cat <<'EOF' | kubectl apply -f -
+              apiVersion: rbac.authorization.k8s.io/v1
+              kind: Role
+              metadata:
+                name: node-operator-private-cd-application-reader
+                namespace: argocd
+              rules:
+                - apiGroups: ["argoproj.io"]
+                  resources: ["applications"]
+                  resourceNames: ["node-operator-client"]
+                  verbs: ["get"]
+              ---
+              apiVersion: rbac.authorization.k8s.io/v1
+              kind: RoleBinding
+              metadata:
+                name: node-operator-private-cd-application-reader
+                namespace: argocd
+              roleRef:
+                apiGroup: rbac.authorization.k8s.io
+                kind: Role
+                name: node-operator-private-cd-application-reader
+              subjects:
+                - kind: Group
+                  name: node-operator:gitops-private-cd-readers
+                  apiGroup: rbac.authorization.k8s.io
+              EOF
     YAML
   }
 

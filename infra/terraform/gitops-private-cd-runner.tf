@@ -92,6 +92,15 @@ data "aws_iam_policy_document" "gitops_private_cd_runner" {
     resources = [aws_eks_cluster.private.arn]
   }
 
+  # Helm OCI Applications track the immutable chart version as targetRevision.
+  # Resolve it only at the private immutable ECR repository before comparing
+  # the resulting manifest digest to the reviewed workflow input.
+  statement {
+    sid       = "ResolveOnlyPublishedGitOpsChartDigest"
+    actions   = ["ecr:DescribeImages"]
+    resources = [aws_ecr_repository.gitops_client_chart[0].arn]
+  }
+
   statement {
     sid = "UseOnlyApprovedGitHubConnection"
     actions = [
@@ -138,7 +147,11 @@ resource "aws_eks_access_entry" "gitops_private_cd_runner" {
   count         = var.enable_gitops_private_cd_runner ? 1 : 0
   cluster_name  = aws_eks_cluster.private.name
   principal_arn = aws_iam_role.gitops_private_cd_runner[0].arn
-  type          = "STANDARD"
+  # AWS managed EKS access policies intentionally do not cover custom-resource
+  # APIs.  A stable group lets the GitOps bundle bind the one required CRD
+  # permission without granting the runner any Kubernetes write authority.
+  kubernetes_groups = ["node-operator:gitops-private-cd-readers"]
+  type              = "STANDARD"
 }
 
 resource "aws_eks_access_policy_association" "gitops_private_cd_runner" {
