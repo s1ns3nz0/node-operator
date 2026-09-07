@@ -1,8 +1,16 @@
 # Vault validator audit ceremony
 
 Enable `server.auditStorage` in the private GitOps Vault values before the
-Vault upgrade. It creates a separate encrypted ReadWriteOnce audit PVC for
-each Vault StatefulSet Pod at `/vault/audit`; it is not a Raft data volume.
+**first Vault StatefulSet installation**. It creates a separate encrypted
+ReadWriteOnce audit PVC for each Vault StatefulSet Pod at `/vault/audit`; it
+is not a Raft data volume. Kubernetes does not permit adding a
+`volumeClaimTemplate` to an existing StatefulSet, so this setting cannot be
+retrofitted with `helm upgrade`.
+
+For an already-running Vault without the `audit` claim template, stop at the
+storage gate. Plan and review a separate Raft snapshot/restore migration to a
+new release that includes `auditStorage`; do not enable the file audit device
+on the Raft data volume or an `emptyDir` as a shortcut.
 
 After the Vault cluster is initialized, an approved administrator configures
 two devices, never with `log_raw=true`:
@@ -23,5 +31,6 @@ can lose records. Vault audit records are request/response pairs; downstream
 deduplication joins them by `request.id`.
 
 Run `verify-vault-validator-audit.sh` through the private Vault connection
-afterward. A missing device, raw logging enabled, missing list-response elision,
-or altered path is fail-closed for signer onboarding and validator duties.
+afterward. A missing per-Pod audit PVC or mount, missing device, raw logging
+enabled, missing list-response elision, or altered path is fail-closed for
+signer onboarding and validator duties.
