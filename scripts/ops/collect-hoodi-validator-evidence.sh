@@ -23,7 +23,7 @@ case "$phase" in uc-1|uc-2|uc-3|uc-4|uc-5) ;; *) usage ;; esac
 case "$validator_set" in hoodi-[a-z0-9][a-z0-9-]*) ;; *) usage ;; esac
 case "$public_key" in 0x????????????????????????????????????????????????????????????????????????????????????????????????) ;; *) usage ;; esac
 case "$output_dir" in /*) ;; *) usage ;; esac
-for command in kubectl jq date mkdir sed; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
+for command in kubectl jq date mkdir sed tr; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 
 mkdir -p "$output_dir"
 chmod 700 "$output_dir"
@@ -46,4 +46,5 @@ jq -n --arg timestamp "$timestamp" --arg phase "$phase" --arg validator_set "$va
    recent_kubernetes_events:[$events.items[] | {reason:.reason,type:.type,object:(.involvedObject.kind + "/" + .involvedObject.name),last_timestamp:(.eventTime // .lastTimestamp // .metadata.creationTimestamp)}] | sort_by(.last_timestamp) | reverse | .[:50],
    redaction:"No Vault response, credential, raw pod log, keystore, mnemonic, password, recovery material, or wallet material is collected."}' > "$record"
 chmod 600 "$record"
-printf 'PASS %s: non-secret lifecycle evidence written to %s\n' "${phase^^}" "$record"
+phase_label="$(printf '%s' "$phase" | tr '[:lower:]' '[:upper:]')"
+printf 'PASS %s: non-secret lifecycle evidence written to %s\n' "$phase_label" "$record"
