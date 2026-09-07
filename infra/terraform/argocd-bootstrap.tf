@@ -243,6 +243,39 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
                   name: node-operator:gitops-private-cd-readers
                   apiGroup: rbac.authorization.k8s.io
               EOF
+            - |
+              password="$(aws ecr get-login-password --region ${var.aws_region})"
+              kubectl -n argocd create secret generic argocd-ecr-oci \
+                --from-literal=type=helm \
+                --from-literal=url=${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/node-operator-baseline-gitops-client \
+                --from-literal=username=AWS \
+                --from-literal=password="$password" \
+                --from-literal=enableOCI=true \
+                --dry-run=client -o yaml | kubectl -n argocd apply -f -
+              kubectl -n argocd label secret argocd-ecr-oci argocd.argoproj.io/secret-type=repo-creds --overwrite
+            - |
+              cat <<'EOF' | kubectl apply -f -
+              apiVersion: argoproj.io/v1alpha1
+              kind: Application
+              metadata:
+                name: node-operator-client
+                namespace: argocd
+              spec:
+                project: default
+                source:
+                  repoURL: ${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/node-operator-baseline-gitops-client
+                  chart: node-operator-client
+                  targetRevision: 0.1.27
+                destination:
+                  server: https://kubernetes.default.svc
+                  namespace: node-operator
+                syncPolicy:
+                  automated:
+                    prune: false
+                    selfHeal: false
+                  syncOptions:
+                    - CreateNamespace=false
+              EOF
     YAML
   }
 
