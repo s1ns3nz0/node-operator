@@ -36,6 +36,15 @@ for required in \
   grep -Fqx "$required" "$values" || fail "Vault values missing required boundary: $required"
 done
 
+for required in \
+  '  auditStorage:' \
+  '    enabled: true' \
+  '    size: 20Gi' \
+  '    storageClass: gp3-encrypted' \
+  '    accessMode: ReadWriteOnce'; do
+  grep -Fqx "$required" "$values" || fail "Vault values omit required audit-storage boundary: $required"
+done
+
 private_vault_repository='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault'
 for image_tag in '268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10' '8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f'; do
   grep -Fqx "    repository: $private_vault_repository" "$values" || fail "Vault runtime image repository is not private ECR"
@@ -56,5 +65,9 @@ for required in \
   'public-endpoint fallback'; do
   grep -Fq "$required" "$operations" || fail "Vault operations contract omits: $required"
 done
+
+grep -Fq 'first Vault StatefulSet installation' "$root/docs/operations/vault-validator-audit.md" || fail "Vault audit operation contract permits unsafe retrofit"
+grep -Fq 'retrofitted with' "$root/docs/operations/vault-validator-audit.md" || fail "Vault audit operation contract omits StatefulSet immutability gate"
+grep -Fq 'helm upgrade' "$root/docs/operations/vault-validator-audit.md" || fail "Vault audit operation contract omits Helm migration guidance"
 
 printf 'PASS Vault GitOps chart and private-runner contract is structurally constrained.\n'
