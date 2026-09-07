@@ -35,10 +35,19 @@ expected_credentials="0x010000000000000000000000${withdrawal_address#0x}"
 entry_count="$(jq 'if type == "array" then length else 0 end' "$deposit_data")"
 [ "$entry_count" = 1 ] || { printf 'expected exactly one deposit-data entry; found %s\n' "$entry_count" >&2; exit 65; }
 network="$(jq -r '.[0].network_name // empty' "$deposit_data")"
-pubkey="$(jq -r '.[0].pubkey // empty' "$deposit_data" | tr '[:upper:]' '[:lower:]')"
+# The deposit-cli serializes SSZ byte fields without a 0x prefix, whereas our
+# public evidence envelope deliberately stores hexadecimal identifiers with
+# one. Accept exactly either representation and normalize only after strict
+# length and alphabet validation.
+normalize_hex() {
+  value="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$value" in 0x*) value="${value#0x}" ;; esac
+  printf '0x%s' "$value"
+}
+pubkey="$(normalize_hex "$(jq -r '.[0].pubkey // empty' "$deposit_data")")"
 amount="$(jq -r '.[0].amount // empty' "$deposit_data")"
-credentials="$(jq -r '.[0].withdrawal_credentials // empty' "$deposit_data" | tr '[:upper:]' '[:lower:]')"
-case "$pubkey" in 0x????????????????????????????????????????????????????????????????????????????????????????????????) ;; *) printf 'invalid validator public key\n' >&2; exit 65 ;; esac
+credentials="$(normalize_hex "$(jq -r '.[0].withdrawal_credentials // empty' "$deposit_data")")"
+printf '%s' "$pubkey" | grep -Eq '^0x[0-9a-f]{96}$' || { printf 'invalid validator public key\n' >&2; exit 65; }
 [ "$network" = hoodi ] || { printf 'deposit data network must be hoodi; got %s\n' "$network" >&2; exit 65; }
 [ "$amount" = 32000000000 ] || { printf 'deposit amount must be exactly 32000000000 Gwei (32 ETH); got %s\n' "$amount" >&2; exit 65; }
 [ "$credentials" = "$expected_credentials" ] || { printf 'withdrawal credentials do not match the supplied address; do not deposit\n' >&2; exit 65; }
