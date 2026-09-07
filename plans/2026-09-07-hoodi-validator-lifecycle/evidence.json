@@ -7,7 +7,8 @@
     {"source": "shellcheck", "fact": "The two new operational scripts passed ShellCheck."},
     {"source": "harness", "fact": "harness:check passed. harness:verify reaches known repository fixture failures and an unavailable OSV fixture before completion; these failures are outside this task's changed files."},
     {"source": "local test", "fact": "The evidence-envelope validator accepted a public lifecycle record and rejected a forbidden token field."},
-    {"source": "terraform", "fact": "The new observability Terraform file was formatted. Full validate is pending because the pinned AWS provider is absent from the local plugin cache."}
+    {"source": "terraform", "fact": "The pinned AWS provider was installed in backend-free mode and terraform validate passed for the complete configuration. An offline plan remains blocked by the repository's S3 backend initialization contract."},
+    {"source": "local", "fact": "The private Beacon and external-explorer observer scripts passed ShellCheck; runtime observation remains pending a real fresh validator public key and private EKS access."}
   ],
   "pending_gates": ["fresh validator key", "public deposit data review", "human wallet signature", "deposit inclusion", "activation queue", "first duty"]
 }
