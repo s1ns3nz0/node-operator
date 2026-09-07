@@ -25,6 +25,12 @@ rg -Fx 'enable_vault_bootstrap_cluster_admin  = false' "$template" >/dev/null
 rg -F 'SSM operations access belongs to the isolated ops-access command' "$entrypoint" >/dev/null
 rg -F 'temporary cluster-admin bootstrap requires its separately approved phase' "$entrypoint" >/dev/null
 rg -F 'plan|apply|destroy' "$ops_entrypoint" >/dev/null
+rg -F -- '--backend-config BACKEND_HCL' "$ops_entrypoint" >/dev/null
+rg -F -- '--allow-create' "$ops_entrypoint" >/dev/null
+rg -F 'backend "s3" {}' "$root/infra/ops-access/main.tf" >/dev/null
+[ -f "$root/infra/ops-access/backend.hcl.example" ] || { printf 'ops-access backend example is missing\n' >&2; exit 1; }
+[ -f "$root/infra/ops-access/terraform.tfvars.example" ] || { printf 'ops-access tfvars example is missing\n' >&2; exit 1; }
+rg -F 'existing_ssm_endpoint_security_group_id' "$root/infra/ops-access/main.tf" "$root/infra/ops-access/variables.tf" >/dev/null
 if rg -n 'scheduler|vault' "$ops_entrypoint"; then
   printf 'ops-access command crosses its intended boundary\n' >&2
   exit 1
