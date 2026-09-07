@@ -86,7 +86,7 @@ data "aws_iam_policy_document" "github_validator_client_mirror" {
     resources = ["*"]
   }
   statement {
-    actions   = ["ecr:BatchCheckLayerAvailability", "ecr:CompleteLayerUpload", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart"]
+    actions   = ["ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:CompleteLayerUpload", "ecr:DescribeImages", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart"]
     resources = [aws_ecr_repository.validator_client[0].arn]
   }
 }
