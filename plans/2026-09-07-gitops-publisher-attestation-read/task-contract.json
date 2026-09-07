@@ -1,0 +1,10 @@
+{
+  "id": "2026-09-07-gitops-publisher-attestation-read",
+  "title": "Permit publisher attestation read-back verification",
+  "classification": "security",
+  "expected_outcome": "The dedicated GitOps publisher can read only the attestation layer needed to verify its own immutable ECR publication.",
+  "constraints": ["No wildcard repository access", "No long-lived credentials", "Use Terraform as the source of truth"],
+  "primary_owner": {"tier": "sol", "responsibility": "security integration"},
+  "validation": ["terraform fmt", "terraform validate", "targeted Terraform plan", "published workflow verification"],
+  "status": "in_progress"
+}
