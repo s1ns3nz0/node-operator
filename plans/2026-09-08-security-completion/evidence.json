@@ -18,7 +18,7 @@
     },
     "5": {
       "status": "incomplete",
-      "evidence": "Reviewed bootstrap stage2 applied10create2update0destroy. Actual state bucket and Dynamo use CMK23528ef1-681c-41c3-a565-d19d3ec98c37, SSE-C block preserved. Assumed backend role post-cache read/lock/no-drift PASS. Bootstrap17-resource state migrated to encrypted remote key with identical content, fullplan0. Terraform1.5.7 changed lineage/serial via empty-remote refresh, independently explained; preserved backup/version. Foundation and ops ownership reconciliation remain incomplete; ops preview proposes unapproved EBS-flag host replacement."
+      "evidence": "Bootstrap17-resource state and foundation6-resource state now have isolated encrypted S3 owners, identical migrated resource content and independently verified full scoped no-drift plans under approved backend role. Both migrations retain backups and honestly record Terraform1.5.7 empty-remote lineage/serial reset. Reviewed four cross-pool rules also applied with targeted no-drift. Foundation source integration remains pending; ops local-state migration and unapproved EBS-flag host replacement decision remain incomplete."
     }
   },
   "initial_protection": {
@@ -162,7 +162,7 @@
     "post_apply_private_plan": "/private/tmp/node-operator-foundation-import.7Df1E7/post-apply-plan.json"
   },
   "runtime_followup_integration": {
-    "head": "1c6a564",
+    "head": "7656b97113e2f8cfd1d76f1302836e6d5271a687",
     "base": "6487ffbeb1f693df8007d1ccf6822bc722050b18",
     "diff_sha256": "7fe1e72f9d684cc93efa416b94be9defb073f7b7d473bcdf46c5057f5df4ffef",
     "files": 6,
@@ -170,7 +170,7 @@
     "focused_contracts": "pass",
     "shellcheck_syntax_fmt_diff_harness": "pass",
     "optional_kyverno_engine": "explicitly skipped, CLI unavailable",
-    "status": "PR131 pushed, retargeted main after parent merge; portability regression fixed6391187; header fix pending review",
+    "status": "PR131 final head frozen; five ordinary CI checks pass; actual gate34203739928 block0/require_approval1 onlyreview.sensitive-path; approval and positive refresh pending. Reviewed header fix deployed and DAST passed.",
     "pr": 131,
     "portability_ci_quality": "34203163133 success"
   },
@@ -194,6 +194,26 @@
     "cleanup": "owned Job absent",
     "rule_source": "https://www.zaproxy.org/docs/alerts/10036/",
     "private_evidence": "/private/tmp/node-operator-dast-run.1788855155.tpjQbX/evidence.json"
+  },
+  "foundation_remote_migration": {
+    "status": "complete for six public-edge resources; source PR integration pending",
+    "key": "node-operator/foundation-network/terraform.tfstate",
+    "source_commit": "41bf8f9d25bf5a040e5d1aa5208365e87c8c89dc",
+    "private_directory": "/private/tmp/node-operator-foundation-migrate.l8NDSm",
+    "resource_content_unchanged": true,
+    "managed_resources": 6,
+    "old_lineage": "e6f5fcda-80ea-670a-171f-3de947e70b8f",
+    "old_serial": 12,
+    "new_lineage": "e39a4d57-c2fb-d8d3-2b4c-8862528d5ea4",
+    "new_serial": 1,
+    "terraform_version_preserved": "1.5.7",
+    "version_id": "NDiRxyYdUCKe4wjUsMbYOplR97CYfzAr",
+    "encryption": "aws:kms, exact reviewed CMK23528",
+    "force_copy": false,
+    "infrastructure_apply_during_migration": false,
+    "remote_plan_sha256": "724701cf07bd1b1d03bf800594dc1953fd827e839ddceb5ecf347e5a990b1e4d",
+    "root_independent_canonical_and_no_drift_checks": "pass",
+    "retired_original_candidate": "mode0400, hash unchanged, private owner README added"
   },
   "latest_dast": {
     "run": "1788855510",

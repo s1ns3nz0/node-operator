@@ -26,3 +26,28 @@ Before any migration, independently review source changes and exact private
 backend config, verify destination absence, protect the local state backup and
 prove the configured role can perform encrypted backend read/write/locking.
 Implementation approval alone authorizes no remote migration or apply.
+
+## Subsequent exact migration approval
+
+Root independently reviewed source `41bf8f9`, initialized local-backend staging
+at `/private/tmp/node-operator-foundation-migrate.l8NDSm/module`, equal canonical
+content, six exact resource IDs, and the candidate/config hashes reported by
+the primary Sol-role owner. Existing role assumption succeeded using the same
+trust condition as the earlier canary; the condition value stayed private.
+Destination HeadObject returned 404 under that role.
+
+Root authorized only normal `init -migrate-state` from this verified local
+state to the isolated foundation key, with fresh hash/absence/ownership guards,
+interactive prompt review, no force-copy, no resource apply, and mandatory
+encrypted readback, content/identity comparison and refreshed no-drift plan.
+No other state root is included. Migration success remains unproven until
+those actual postconditions are checked.
+
+## Source integration
+
+The backend/existing-mode work began before source PR127 landed. Integrate it
+in a separate worktree with a normal merge of current main; never replace main
+with the old branch tree or interpret its missing newer files as deletions.
+Review the resulting diff against main, preserve all newer CI/security work,
+run focused backend/existing-mode/release tests, then create a separate PR.
+PR131 remains frozen for its current-head approval proof.
