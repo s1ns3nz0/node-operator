@@ -64,6 +64,12 @@ the versioned `release-runner` JWT role: repository, owner, `refs/tags/v*`,
 `workflow_run`, and a job whose labels differ from the exact set above are not
 release credential paths.
 
+`private-runner-smoke.yml` uses the separate `private-runner-smoke`
+Environment, restricted to `main` and containing no release variables or
+secrets. It may verify the ephemeral runner, private AWS read paths, and the
+reviewed build-image pull, but it cannot obtain the release Environment or
+Vault release-authentication path.
+
 ## Audit correlation and fail-closed operation
 
 For every approved release, retain this non-secret correlation tuple in the

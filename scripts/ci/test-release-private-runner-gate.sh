@@ -35,6 +35,7 @@ done
 # runner can obtain the reviewed build image and reach only required AWS APIs.
 for required in \
   'packages: read' \
+  'environment: private-runner-smoke' \
   "docker pull \"\$RELEASE_BUILD_IMAGE\"" \
   'aws eks describe-cluster --name node-operator' \
   'aws ecr get-authorization-token' \
