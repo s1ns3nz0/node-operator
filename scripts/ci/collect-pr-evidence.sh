@@ -158,8 +158,8 @@ collect_zizmor() {
   local changed_yaml has_changed_suppression=false
   changed_yaml="$temporary_directory/zizmor-changed-yaml"
   if [ -n "$base_sha" ] && git -C "$source_directory" cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
-    git -C "$source_directory" diff --name-only "$base_sha" "$commit_sha" -- '*.yml' '*.yaml' > "$changed_yaml"
-    while IFS= read -r path; do
+    git -C "$source_directory" diff --name-only -z "$base_sha" "$commit_sha" -- '*.yml' '*.yaml' > "$changed_yaml"
+    while IFS= read -r -d '' path; do
       if git -C "$source_directory" show "$commit_sha:$path" 2>/dev/null | grep -E 'zizmor:[[:space:]]*ignore' >/dev/null; then
         has_changed_suppression=true
         break

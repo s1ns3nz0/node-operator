@@ -52,7 +52,7 @@ write_mock git '
 if [ "$1" = "-C" ]; then shift 2; fi
 case "$1" in
   cat-file) exit 0 ;;
-  diff) if [ "${GIT_CHANGED_ZIZMOR_SUPPRESSED:-false}" = true ]; then printf "%s\\n" "nested/action/action.yml"; fi; exit 0 ;;
+  diff) if [ "${GIT_CHANGED_ZIZMOR_SUPPRESSED:-false}" = true ]; then printf "nested/유니코드\\taction.yml\\0"; fi; exit 0 ;;
   show) if [ "${GIT_CHANGED_ZIZMOR_SUPPRESSED:-false}" = true ]; then printf "%s\\n" "# zizmor: ignore[dangerous-triggers]" "runs: {using: composite, steps: []}"; fi; exit 0 ;;
   rev-parse) printf "%s\\n" "'"$root"'" ;;
 esac
