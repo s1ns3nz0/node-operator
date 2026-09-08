@@ -1,0 +1,18 @@
+{
+  "source_main": "290880f1a281ff6d07ac4cbb8eaa1fea8591af0b",
+  "validations": [
+    {"command":"scripts/ci/test-ci-security-evidence-contract.sh","result":"pass"},
+    {"command":"scripts/ci/test-script-quality.sh","result":"pass"},
+    {"command":"npm run harness:check","result":"pass","graphs":83},
+    {"command":"npm run harness:verify","result":"pass","rego":"67/67","conftest":"expected insecure fixtures rejected"},
+    {"command":"git diff --check","result":"pass"},
+    {"observation":"exact pinned scanner image reproduction","result":"old ordering fails by treating scan as the source path; corrected OSV v2.4 ordering exits zero with zero results","source":"observed during security-activation diagnosis"}
+  ],
+  "external_mutations": [
+    {"action":"feature branch push","commit":"04d15cc0a7ac9c63b22903e193d89ba9de7e617f","authorized":true},
+    {"action":"draft pull request creation","pull_request":128,"authorized":true}
+  ],
+  "not_performed": ["merge", "manual image publication", "branch-rule change", "cloud mutation", "secret access"],
+  "activation_sequence": ["reviewed prerequisite merge", "automatic main scanner image build", "new digest verification", "separate workflow pin promotion"],
+  "independent_review": {"result":"no blocking defect","artifact":"reports/2026-09-08-osv-order-bootstrap-debrief.md"}
+}
