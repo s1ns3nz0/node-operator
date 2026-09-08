@@ -1,10 +1,10 @@
 {
   "task_id": "2026-09-08-scanner-bootstrap-activation",
   "nodes": [
-    {"id":"admission","title":"Check protected merge admission","tier":"sol","owner":"/root/scanner_bootstrap_activation","status":"blocked_required_independent_review"},
-    {"id":"publication","title":"Publish and verify exact main image","tier":"sol","owner":"/root/scanner_bootstrap_activation","status":"pending"},
-    {"id":"promotion","title":"Prepare separate digest promotion","tier":"terra","owner":"pending","status":"pending"},
-    {"id":"debrief","title":"Fresh clean-room evidence review","tier":"terra","owner":"/root/scanner_activation_boundary_debrief","status":"complete_authority_boundary_handoff"}
+    {"id":"admission","title":"Check protected merge admission","tier":"sol","owner":"/root/scanner_bootstrap_activation","status":"complete_human_approved_and_merged"},
+    {"id":"publication","title":"Publish and verify exact main image","tier":"sol","owner":"/root/scanner_bootstrap_activation","status":"complete_verified_source_and_registry_bytes"},
+    {"id":"promotion","title":"Prepare separate digest promotion","tier":"terra","owner":"/root/scanner_digest_pin","status":"complete_prepared_for_separate_review_not_merged"},
+    {"id":"debrief","title":"Fresh clean-room evidence review","tier":"terra","owner":"/root/scanner_publication_debrief","status":"complete_current_worktree_verified"}
   ],
   "edges": [
     {"from":"admission","to":"publication","kind":"blocks"},

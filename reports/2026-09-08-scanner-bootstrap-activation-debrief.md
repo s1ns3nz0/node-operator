@@ -1,21 +1,22 @@
 # Clean-room debrief: scanner bootstrap activation
 
-## Scope
+## Current stage
 
-Reviewed only the completed five-file task bundle. This is a handoff, not a repository, CI, registry, or compliance audit.
+The earlier merge-admission block is resolved historically: bundle evidence records PR 128 as normally human-approved and merged at `90c7b2a3743abd3df25a7438b3eeeda07434fe0f`. The main publisher run `34191107978` is recorded as successful for both build and publish. Activation is **not** complete: the separate digest-promotion change remains prepared and unmerged.
 
-## Observed bundle claims
+## Independent observations
 
-- PR 128's reviewed head is `59065ec36039d271b475d53131f02aee23936b62`.
-- The PR was marked ready for review; its head was unchanged. It remains blocked with `REVIEW_REQUIRED`.
-- The five normal checks are reported successful, including `npm run harness:check` (83 graphs) and `git diff --check`.
-- The bundle reports that the legacy `CI Evidence` decision failed, but that it is not an observed required branch-protection check.
-- No merge, image publication, digest promotion, protection change, deployment, or secret access occurred.
+- I reviewed the current task bundle and only the relevant `origin/main` diff and three promotion files.
+- The supplied publication JSON identifies the verified immutable image digest as `sha256:df5078a48b7536b5f64e99b97cf6bfceab7c1638fcd534f499600d4d27fd836d`.
+- Correction: my prior mismatch finding is withdrawn. It was based on the unrelated repository worktree rather than this supplied task worktree. Here, both proposed workflow pins are exactly `sha256:df5078a48b7536b5f64e99b97cf6bfceab7c1638fcd534f499600d4d27fd836d`, matching the supplied verified digest (`both_match=true`). No source correction is indicated by this review.
+- Locally observed in the supplied task worktree: `scripts/ci/test-ci-security-evidence-contract.sh` passed; `scripts/ci/test-ci-security-evidence-contract.sh --self-test-scanner-images` passed. The self-test covers valid binding acceptance and mismatch, floating, and duplicate binding rejection. These are bounded contract/self-test results only.
 
-## Inference and authority boundary
+## Supplied external proof and limits
 
-The authorized activation did not reach merge admission, so no main-built scanner image can yet be verified and no digest promotion should proceed. This is not a technical failure that can be worked around: the author is `s1ns3nz0`, while `fjybjinsu` is the code owner for `.github`/scripts/CI scope, and the bundle records zero approvals.
+The bundle reports direct registry API verification of the manifest, config and 4,717-byte collector layer, including a collector-byte comparison with the exact merged source and matching input label/hash. It also reports that no full runtime image pull or execution was performed. Those are supplied external proof claims, not locally reproduced checks in this debrief.
 
-## Required human handoff
+This review does not claim cryptographic signature or provenance verification, a scanner runtime pass, or an overall CI/security-gate pass. The inherited security/compliance findings remain outside this bounded activation review.
 
-Obtain one eligible, independent GitHub Code Owner approval from `fjybjinsu` (or another GitHub-eligible independent code owner) on the exact unchanged head `59065ec36039d271b475d53131f02aee23936b62`. Do not impersonate the reviewer or bypass branch protection. Once admission is satisfied, the Sol integration owner may perform the normally authorized merge and then verify the publisher run's source SHA, embedded image label, and immutable digest before any separately reviewed promotion.
+## Required handoff
+
+The separately prepared promotion still requires its independent review and normal merge admission; it is not merged or activated. Root Sol (`/root/scanner_bootstrap_activation`) remains the integration owner; no external action was taken here.
