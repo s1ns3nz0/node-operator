@@ -1,0 +1,12 @@
+{
+  "source_main": "290880f1a281ff6d07ac4cbb8eaa1fea8591af0b",
+  "pr": 128,
+  "reviewed_head": "59065ec36039d271b475d53131f02aee23936b62",
+  "observed": {"state":"OPEN","draft":true,"merge_state":"BLOCKED","review_decision":"REVIEW_REQUIRED","normal_checks":"five SUCCESS","ci_evidence_decision":"FAILURE","required_checks":["quality","scanners"],"required_reviews":1,"code_owner_review":true,"last_push_approval":true,"enforce_admins":true},
+  "publisher_contract": "Publish is restricted to refs/heads/main, depends on build, verifies same-run input SHA and embedded image label before pushing commit and main tags.",
+  "checks": [{"command":"npm run harness:check","result":"PASS, 83 graphs"},{"command":"git diff --check","result":"PASS"}],
+  "external_mutations": [{"action":"mark PR128 ready for review","result":"success; exact head unchanged; draft false; REVIEW_REQUIRED and BLOCKED remain"}],
+  "review_boundary": {"author":"s1ns3nz0","code_owner_for_scripts_ci":"fjybjinsu","approvals":0,"required_checks_passed":true,"ci_evidence_decision_required_by_observed_branch_protection":false,"next_action":"eligible independent GitHub approval on exact PR128 head; do not impersonate that reviewer or bypass protection"},
+  "model_fallbacks": [],
+  "not_performed": ["merge","image publication","digest promotion","protection change"]
+}
