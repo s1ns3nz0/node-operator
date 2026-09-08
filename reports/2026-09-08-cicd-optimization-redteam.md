@@ -8,7 +8,7 @@
 
 ### H1: Security findings are not a required PR-head gate
 - **Document:** NIST SP 800-218 PW.7.2, PW.8.2 / SP 800-204D §5.1.3
-- **Current:** `CI Security / scanners` succeeds after evidence collection. The blocking OPA decision runs later under `workflow_run` and is absent from observed PR-head checks and required branch checks. A PR can satisfy the required `quality` and `scanners` checks without an enforced policy decision.
+- **Current:** `CI Security / scanners` succeeds after evidence collection. The blocking OPA decision runs later under `workflow_run` and is absent from observed PR-head checks and required branch checks. A PR can satisfy the required `quality` and `scanners` checks without an enforced policy decision. The private GitOps repository also cannot enable branch protection on its current GitHub plan; the API returned HTTP 403.
 - **Fix:** Emit a trusted check run bound to `workflow_run.head_sha`, require that exact check in branch protection, and reject merge queues when the decision is absent or blocking. Add a negative integration test that introduces a scanner finding and proves the PR-head check fails.
 
 ### H2: Secret scanning does not inspect Git history
@@ -77,9 +77,11 @@ No additional low-severity finding was retained; optimization-only issues were f
 | DAST and post-deploy scan | PW.8.2 | §5.1.1 | Partial |
 | Vulnerability disposition | RV.1.3, RV.2.1 | §5.1.3 | Open |
 
+SSDF practice-group review: PO.1.1 process design is documented; PO.2.1 roles are documented by the harness; PO.3.1 isolated build controls are verified; PO.3.2 tool/action pins pass; PO.4.1 has a policy design but H1 leaves enforcement open; PO.5.1 IaC is present. PS.1.1 is partial due H2; PS.2.1 and PS.3.1 pass at publication but H3 remains at deployment; PS.3.2 is fixed at release and open at deployment. PW.4.1, PW.4.4, PW.7.2, PW.8.1, and PW.9.1 have observed controls; PW.7.1 remains partial under H1; PW.8.2 remains partial under H4. RV.1.1 and RV.1.2 have scanners; RV.1.3 and RV.2.1 remain open under M2; RV.3.1 was not verified in this review.
+
 ---
 
 ## Summary
 Total findings: HIGH=4 MEDIUM=2 LOW=0
 
-Coverage counts use only fully verified required activities from the skill checklist: DEVELOP=1/2 (50%), BUILD=3/4 (75%), TEST=4/5 (80%), RELEASE=3/3 (100% after this change), DELIVER=3/4 (75%), DEPLOY=2/4 (50%). Partial DAST and deploy-time signature/SBOM checks are not counted as complete.
+Coverage counts use only fully verified required activities from the skill checklist: DEVELOP=1/2 (50%), BUILD=3/4 (75%), TEST=4/5 (80%), RELEASE=3/3 (100% after this change), DELIVER=3/4 (75%), DEPLOY=2/4 (50%). Partial DAST and deploy-time signature/SBOM checks are not counted as complete. RELEASE counts go/no-go dependency, exact-subject SBOM SCA, and signed packaging; the final feature-head hosted run is recorded in the task evidence rather than inferred here.
