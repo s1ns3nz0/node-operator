@@ -30,7 +30,9 @@ ruby -ryaml -e '
 ' "$manifest"
 grep -Fq 'cat /vault/userconfig/vault-tls/ca.crt' "$installer"
 grep -Fq 'PRIVATE KEY' "$installer"
+# shellcheck disable=SC2016 # Assert literal commands in the installer contract.
 grep -Fq 'openssl x509 -in "$vault_ca" -out "$vault_certificate"' "$installer"
+# shellcheck disable=SC2016 # Assert literal commands in the installer contract.
 grep -Fq 'openssl x509 -in "$signer_ca" -out "$signer_certificate"' "$installer"
 if grep -Ev '^[[:space:]]*#' "$installer" | grep -Eq 'get[[:space:]]+secret|VAULT_TOKEN|JWT'; then
   printf 'public CA installer must not access secret material\n' >&2

@@ -6,6 +6,7 @@
     {"command": "opa test --ignore fixtures policy", "passed": 67, "failed": 0, "note": "Includes malformed-expiry rejection and exact-scope exception matching regression tests."},
     {"command": "terraform fmt -check infra/bootstrap-state infra/ops-access infra/foundation-network infra/terraform", "exit_code": 0},
     {"command": "terraform validate -no-color", "modules": ["infra/bootstrap-state", "infra/ops-access", "infra/foundation-network", "infra/terraform"], "result": "all valid", "provider": "hashicorp/aws 5.100.0", "initialization": "backend=false; no remote state or apply"},
+    {"command": "terraform -chdir=infra/bootstrap-state providers lock -platform=linux_amd64", "exit_code": 0, "result": "Retrieved hashicorp/aws 5.100.0 signed by HashiCorp; generated Linux h1 checksum propagated to the other two byte-identical module lockfiles, preserving the existing Darwin checksum."},
     {"command": "npm run harness:check", "exit_code": 0, "task_graphs_checked": 81},
     {"command": "npm run harness:verify", "exit_code": 0, "note": "Insecure fixture failures and malformed-report rejection are expected negative tests; adapter completed successfully."},
     {"command": "bash scripts/ci/test-pr-baseline-findings.sh", "exit_code": 0},
@@ -14,6 +15,7 @@
   "limitations": [
     "No Terraform plan or apply was performed; live infrastructure remediation is not claimed.",
     "26 Checkov findings are subject to exact scoped expiring exceptions; new deviations are Hoodi-test-only and expire 2026-10-03.",
-    "Fresh CI evidence must be collected after all integration commits."
+    "Fresh CI evidence must be collected after all integration commits.",
+    "Hosted run 34181685978 rejected the initial macOS-only provider h1 locks against the unpacked Linux mirror. This expected integrity boundary requires signed linux_amd64 provider-lock generation before offline CI can pass; checksum verification must not be bypassed."
   ]
 }
