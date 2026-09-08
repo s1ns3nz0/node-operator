@@ -45,6 +45,20 @@ spec:
 ---
 apiVersion: v1
 kind: Service
+metadata:
+  name: nethermind-execution
+  namespace: node-operator
+spec:
+  selector:
+    app.kubernetes.io/name: nethermind
+  ports:
+    - name: p2p-tcp
+      port: 30303
+      targetPort: p2p-tcp
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
 metadata: {name: nethermind-upcheck-proxy, namespace: node-operator}
 spec:
   selector: {app.kubernetes.io/component: nethermind-upcheck-proxy}

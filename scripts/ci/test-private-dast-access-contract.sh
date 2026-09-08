@@ -35,6 +35,12 @@ ruby -ryaml -e '
   abort("missing signer proxy ingress policy") unless signer
   sources = signer.dig("spec", "ingress").flat_map { |rule| rule.fetch("from", []) }
   abort("DAST namespace reaches signer") if sources.any? { |source| source.dig("namespaceSelector", "matchLabels", "node-operator.io/dast-client") == "true" }
+
+  nethermind = documents.find { |document| document.dig("kind") == "Service" && document.dig("metadata", "namespace") == "node-operator" && document.dig("metadata", "name") == "nethermind-execution" }
+  abort("missing fixed Nethermind P2P Service") unless nethermind
+  abort("wrong Nethermind P2P selector") unless nethermind.dig("spec", "selector") == {"app.kubernetes.io/name" => "nethermind"}
+  ports = nethermind.dig("spec", "ports")
+  abort("Nethermind Service must expose only TCP P2P 30303") unless ports == [{"name" => "p2p-tcp", "port" => 30303, "targetPort" => "p2p-tcp", "protocol" => "TCP"}]
 ' "$manifest"
 grep -Fq 'cat /vault/userconfig/vault-tls/ca.crt' "$installer"
 grep -Fq 'PRIVATE KEY' "$installer"
