@@ -96,9 +96,21 @@ data "aws_iam_policy_document" "gitops_private_cd_runner" {
   # Resolve it only at the private immutable ECR repository before comparing
   # the resulting manifest digest to the reviewed workflow input.
   statement {
-    sid       = "ResolveOnlyPublishedGitOpsChartDigest"
-    actions   = ["ecr:DescribeImages"]
+    sid = "ReadOnlyVerifiedGitOpsChartForCdAdmission"
+    actions = [
+      "ecr:DescribeImages",
+      "ecr:BatchGetImage",
+      "ecr:GetDownloadUrlForLayer",
+    ]
     resources = [aws_ecr_repository.gitops_client_chart[0].arn]
+  }
+
+  # ECR authorization tokens cannot be resource-scoped. The runner uses this
+  # only to pull the repository constrained by the statement above.
+  statement {
+    sid       = "AuthorizeReadOnlyEcrChartPull"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
   }
 
   statement {

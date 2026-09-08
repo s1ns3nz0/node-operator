@@ -1,0 +1,113 @@
+# Deliberately narrow connectivity for the disposable, no-token DAST Job.
+# The selector requires both the dedicated namespace label and scanner label.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: node-operator-dast
+  labels:
+    node-operator.io/dast-client: "true"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prysm-beacon
+  namespace: node-operator
+spec:
+  selector:
+    app.kubernetes.io/name: prysm-beacon
+  ports:
+    - name: beacon-api
+      port: 3500
+      targetPort: 3500
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-private-dast-node-readonly-ingress
+  namespace: node-operator
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [nethermind, prysm-beacon]
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {node-operator.io/dast-client: "true"}
+          podSelector:
+            matchLabels: {app.kubernetes.io/component: private-dast-scanner}
+      ports:
+        - {protocol: TCP, port: 8551}
+        - {protocol: TCP, port: 3500}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-private-dast-vault-health-ingress
+  namespace: vault
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: vault, component: server}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {node-operator.io/dast-client: "true"}
+          podSelector:
+            matchLabels: {app.kubernetes.io/component: private-dast-scanner}
+      ports: [{protocol: TCP, port: 8200}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-private-dast-signer-upcheck-ingress
+  namespace: validator-operations
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/component: validator-remote-signer, node-operator.io/validator-set: hoodi-001}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {node-operator.io/dast-client: "true"}
+          podSelector:
+            matchLabels: {app.kubernetes.io/component: private-dast-scanner}
+      ports: [{protocol: TCP, port: 9000}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-private-dast-egress
+  namespace: node-operator-dast
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/component: private-dast-scanner}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: node-operator}
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [nethermind, prysm-beacon]
+      ports: [{protocol: TCP, port: 8551}, {protocol: TCP, port: 3500}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: vault}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: vault, component: server}
+      ports: [{protocol: TCP, port: 8200}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: validator-operations}
+          podSelector:
+            matchLabels: {app.kubernetes.io/component: validator-remote-signer, node-operator.io/validator-set: hoodi-001}
+      ports: [{protocol: TCP, port: 9000}]
