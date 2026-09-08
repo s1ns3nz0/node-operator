@@ -33,6 +33,7 @@ resource "aws_security_group" "endpoints" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "endpoints" {
+  description                  = "HTTPS from the temporary operations host to SSM endpoints"
   count                        = local.create_ssm_endpoints ? 1 : 0
   security_group_id            = local.endpoint_security_group_id
   referenced_security_group_id = aws_security_group.host.id
@@ -42,6 +43,7 @@ resource "aws_vpc_security_group_ingress_rule" "endpoints" {
 }
 
 resource "aws_vpc_security_group_egress_rule" "to_endpoints" {
+  description                  = "HTTPS to private Session Manager endpoints"
   security_group_id            = aws_security_group.host.id
   referenced_security_group_id = local.endpoint_security_group_id
   from_port                    = 443
@@ -50,6 +52,7 @@ resource "aws_vpc_security_group_egress_rule" "to_endpoints" {
 }
 
 resource "aws_vpc_security_group_egress_rule" "to_cluster" {
+  description                  = "HTTPS to the private EKS API"
   security_group_id            = aws_security_group.host.id
   referenced_security_group_id = var.cluster_security_group_id
   from_port                    = 443
@@ -58,6 +61,7 @@ resource "aws_vpc_security_group_egress_rule" "to_cluster" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "cluster" {
+  description                  = "Private EKS API access from the temporary operations host"
   count                        = var.manage_cluster_ingress_rule ? 1 : 0
   security_group_id            = var.cluster_security_group_id
   referenced_security_group_id = aws_security_group.host.id
@@ -73,7 +77,9 @@ resource "aws_vpc_endpoint" "ssm" {
   vpc_endpoint_type   = "Interface"
   private_dns_enabled = true
   subnet_ids          = [var.subnet_id]
-  security_group_ids  = [local.endpoint_security_group_id]
+  # This resource exists only when we create the endpoints. Keep its direct
+  # attachment visible to IaC graph analyzers as well as Terraform.
+  security_group_ids = [aws_security_group.endpoints[0].id]
 }
 
 resource "aws_iam_role" "host" {
@@ -94,6 +100,8 @@ resource "aws_iam_instance_profile" "host" {
 resource "aws_instance" "host" {
   ami                                  = data.aws_ssm_parameter.al2023.value
   instance_type                        = "t3.micro"
+  monitoring                           = true
+  ebs_optimized                        = true
   subnet_id                            = var.subnet_id
   associate_public_ip_address          = false
   iam_instance_profile                 = aws_iam_instance_profile.host.name

@@ -173,8 +173,12 @@ data "aws_iam_policy_document" "audit_access_logs" {
       identifiers = ["logging.s3.amazonaws.com"]
     }
 
-    actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.audit_access_logs.arn}/audit/*"]
+    actions = ["s3:PutObject"]
+    resources = [
+      "${aws_s3_bucket.audit_access_logs.arn}/audit/*",
+      "${aws_s3_bucket.audit_access_logs.arn}/validator-audit/*",
+      "${aws_s3_bucket.audit_access_logs.arn}/vault-snapshot/*",
+    ]
 
     condition {
       test     = "StringEquals"
@@ -185,7 +189,7 @@ data "aws_iam_policy_document" "audit_access_logs" {
     condition {
       test     = "ArnLike"
       variable = "aws:SourceArn"
-      values   = [aws_s3_bucket.audit.arn]
+      values   = [aws_s3_bucket.audit.arn, aws_s3_bucket.validator_audit.arn, aws_s3_bucket.vault_snapshot.arn]
     }
   }
 }

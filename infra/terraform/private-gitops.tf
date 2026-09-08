@@ -83,15 +83,13 @@ data "aws_iam_policy_document" "github_gitops_oci_mirror_assume_role" {
       variable = "token.actions.githubusercontent.com:repository"
       values   = [var.github_repository]
     }
-    # This GitHub organization uses the ID-bearing subject template. Retain
-    # the legacy form for a controlled template migration, but only for the
-    # exact repository and the protected mirror environment.
+    # Match the observed immutable repository/owner IDs. A renamed/recreated
+    # repository or an unreviewed legacy subject must not inherit this role.
     condition {
-      test     = "StringLike"
+      test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:${var.github_repository}:environment:gitops-oci-mirror",
-        "repo:${split("/", var.github_repository)[0]}@*/${split("/", var.github_repository)[1]}@*:environment:gitops-oci-mirror",
+        "${var.github_oidc_subject_prefix}:environment:gitops-oci-mirror",
       ]
     }
   }

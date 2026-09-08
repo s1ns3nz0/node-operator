@@ -235,7 +235,7 @@ resource "aws_iam_role" "validator_audit_reader" {
 
 resource "aws_cloudwatch_log_group" "validator_workloads" {
   name              = "/aws/eks/${var.name}/validator-workloads"
-  retention_in_days = 90
+  retention_in_days = 365
   kms_key_id        = aws_kms_key.validator_audit.arn
   tags              = local.common_tags
 }
@@ -327,6 +327,13 @@ resource "aws_kinesis_firehose_delivery_stream" "validator_audit" {
   name        = "${local.name_prefix}-validator-audit"
   destination = "extended_s3"
 
+  # Firehose buffering encryption is separate from destination S3 encryption.
+  server_side_encryption {
+    enabled  = true
+    key_type = "CUSTOMER_MANAGED_CMK"
+    key_arn  = aws_kms_key.validator_firehose_buffer.arn
+  }
+
   extended_s3_configuration {
     role_arn   = aws_iam_role.validator_audit_firehose.arn
     bucket_arn = aws_s3_bucket.validator_audit.arn
@@ -361,6 +368,11 @@ resource "aws_iam_role" "validator_cloudwatch_subscription" {
 }
 
 data "aws_iam_policy_document" "validator_cloudwatch_subscription" {
+  statement {
+    sid       = "EncryptOnlyFirehoseBuffer"
+    actions   = ["kms:GenerateDataKey", "kms:Decrypt"]
+    resources = [aws_kms_key.validator_firehose_buffer.arn]
+  }
   statement {
     actions   = ["firehose:PutRecord", "firehose:PutRecordBatch"]
     resources = [aws_kinesis_firehose_delivery_stream.validator_audit.arn]

@@ -77,6 +77,10 @@ variable "github_oidc_subject_prefix" {
   description = "Immutable GitHub OIDC subject prefix for this repository, including owner and repository IDs."
   type        = string
   default     = "repo:s1ns3nz0@258690008/node-operator@1353388960"
+  validation {
+    condition     = can(regex("^repo:[A-Za-z0-9_.-]+@[0-9]+/[A-Za-z0-9_.-]+@[0-9]+$", var.github_oidc_subject_prefix))
+    error_message = "github_oidc_subject_prefix must contain exact repository and owner IDs, without wildcard claims."
+  }
 }
 
 resource "aws_vpc_security_group_egress_rule" "release_signer_s3_gateway_https" {

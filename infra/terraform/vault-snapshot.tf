@@ -11,6 +11,23 @@ resource "aws_s3_bucket" "vault_snapshot" {
   })
 }
 
+# Preserve every completed snapshot and its Object Lock retention. Only
+# abandoned multipart uploads are cleaned up.
+resource "aws_s3_bucket_lifecycle_configuration" "vault_snapshot" {
+  bucket = aws_s3_bucket.vault_snapshot.id
+  rule {
+    id     = "abort-incomplete-uploads"
+    status = "Enabled"
+    filter {}
+    abort_incomplete_multipart_upload { days_after_initiation = 7 }
+  }
+}
+
+resource "aws_s3_bucket_notification" "vault_snapshot" {
+  bucket      = aws_s3_bucket.vault_snapshot.id
+  eventbridge = true
+}
+
 resource "aws_s3_bucket_public_access_block" "vault_snapshot" {
   bucket                  = aws_s3_bucket.vault_snapshot.id
   block_public_acls       = true

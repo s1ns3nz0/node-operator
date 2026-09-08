@@ -2,8 +2,9 @@
 set -euo pipefail
 
 # Preserve full scanner results as baseline evidence, but make the trusted PR
-# decision actionable: only Checkov and Zizmor findings newly introduced by
-# the PR are passed to OPA. This script handles already-redacted envelopes.
+# decision actionable. All Checkov findings reach OPA, including findings on
+# the base revision: only reviewed, expiring policy exceptions may exempt them.
+# Zizmor delta handling is retained separately. Inputs are redacted envelopes.
 
 if [ "$#" -ne 4 ]; then
   printf 'usage: %s HEAD_EVIDENCE_DIR BASE_EVIDENCE_DIR OUTPUT_EVIDENCE_DIR HEAD_SHA\n' "$0" >&2
@@ -29,13 +30,8 @@ rm -rf "$output_directory"
 mkdir -p "$output_directory"
 cp "$head_directory"/{gitleaks,osv,semgrep,format,terraform}.json "$output_directory/"
 
-# Identities include every policy-relevant field. Changed messages/names are
-# new findings, rather than being masked by an old result at the same address.
-jq --slurpfile base "$base_directory/checkov.json" '
-  .result.failed_checks as $head |
-  ($base[0].result.failed_checks // [] | map([(.resource // "unknown"), (.check_id // "unknown"), (.check_name // "IaC policy failure")] | @json) | unique) as $known |
-  .result.failed_checks = [$head[]? | select(([(.resource // "unknown"), (.check_id // "unknown"), (.check_name // "IaC policy failure")] | @json) as $identity | ($known | index($identity) | not))]
-' "$head_directory/checkov.json" > "$output_directory/checkov.json"
+# A pre-existing IaC vulnerability must not become an implicit exception.
+cp "$head_directory/checkov.json" "$output_directory/checkov.json"
 
 jq --slurpfile base "$base_directory/zizmor.json" '
   .result.findings as $head |
@@ -47,4 +43,4 @@ jq -n --arg head_sha "$head_sha" --slurpfile head_checkov "$head_directory/check
   {schema_version:"v1", subject:{head_sha:$head_sha}, tools:{checkov:{base_count:($base_checkov[0].result.failed_checks | length), head_count:($head_checkov[0].result.failed_checks | length)}, zizmor:{base_count:($base_zizmor[0].result.findings | length), head_count:($head_zizmor[0].result.findings | length)}}}
 ' > "$output_directory/baseline-summary.json"
 
-printf 'PASS: preserved baseline scanner counts and isolated new Checkov/Zizmor findings for PR policy evaluation.\n'
+printf 'PASS: all Checkov findings reach policy; baseline counts and Zizmor deltas are retained.\n'

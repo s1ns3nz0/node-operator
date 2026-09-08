@@ -576,6 +576,17 @@ invalid_exception(exception) if {
 }
 
 invalid_exception(exception) if {
+  not valid_exception_expiry(exception)
+}
+
+valid_exception_expiry(exception) if {
+  expiry := object.get(exception, "expires_at", null)
+  is_string(expiry)
+  parsed := time.parse_rfc3339_ns(expiry)
+  is_number(parsed)
+}
+
+invalid_exception(exception) if {
   expires_at := time.parse_rfc3339_ns(object.get(exception, "expires_at", ""))
   expires_at <= time.now_ns()
 }
