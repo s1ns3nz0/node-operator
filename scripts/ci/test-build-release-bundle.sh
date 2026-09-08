@@ -41,6 +41,7 @@ for required_path in \
   source/infra/terraform/eks.tf \
   source/infra/bootstrap-state/main.tf \
   source/infra/foundation-network/main.tf \
+  source/infra/foundation-network/backend.hcl.example \
   source/infra/ops-access/main.tf \
   source/infra/baseline/variables.tf \
   source/release/hoodi-release-contract.json \

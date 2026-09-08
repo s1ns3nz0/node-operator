@@ -10,6 +10,16 @@ public NAT egress edge, private worker subnets, and the NAT EIP required by
 Hoodi peers. The baseline must consume those outputs and must not create a
 second VPC or accept an externally supplied NAT ID.
 
+Foundation uses its own encrypted remote key. Copy
+`infra/foundation-network/backend.hcl.example` outside the bundle, replace its
+placeholders from reviewed bootstrap outputs for bucket, region, lock table,
+encryption and CMK, and keep the exact key
+`node-operator/foundation-network/terraform.tfstate`. Before a
+migration, verify the destination is empty, retain a private backup, compare
+canonical content and managed resource IDs, separately review metadata, and
+require final no-drift. Never use force-copy. This source support authorizes
+no remote initialization, migration, or apply.
+
 ## Baseline migration map
 
 The current baseline cannot be switched by replacing only a NAT variable:

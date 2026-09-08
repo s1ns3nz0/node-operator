@@ -36,7 +36,7 @@ mkdir -p "$stage_directory/source" "$stage_directory/rendered"
 
 path_is_in_release_boundary() {
   case "$1" in
-    deploy/base/*.yaml|deploy/prysm/*.yaml|deploy/nethermind/*.yaml|deploy/argocd/node-operator-client-application.yaml|deploy/validator/*.yaml|infra/terraform/*.tf|infra/terraform/terraform.tfvars.example|infra/bootstrap-state/*.tf|infra/bootstrap-state/*.example|infra/foundation-network/*.tf|infra/ops-access/*.tf|infra/baseline/*.tf|policy/data/*.rego|policy/data/*.json|policy/runtime/*.rego|policy/terraform/*.rego|policy/prysm/*.rego|policy/nethermind/hardening.rego|policy/schemas/*.json|policy/*.rego|release/*.json|release/*.example|scripts/release/*.sh)
+    deploy/base/*.yaml|deploy/prysm/*.yaml|deploy/nethermind/*.yaml|deploy/argocd/node-operator-client-application.yaml|deploy/validator/*.yaml|infra/terraform/*.tf|infra/terraform/terraform.tfvars.example|infra/bootstrap-state/*.tf|infra/bootstrap-state/*.example|infra/foundation-network/*.tf|infra/foundation-network/*.example|infra/ops-access/*.tf|infra/baseline/*.tf|policy/data/*.rego|policy/data/*.json|policy/runtime/*.rego|policy/terraform/*.rego|policy/prysm/*.rego|policy/nethermind/hardening.rego|policy/schemas/*.json|policy/*.rego|release/*.json|release/*.example|scripts/release/*.sh)
       return 0
       ;;
     *)
