@@ -14,10 +14,8 @@ grep -Fq 'name: nethermind-upcheck-proxy' "$manifest"
 grep -Fq "upstream = 'nethermind-execution'" "$manifest"
 grep -Fq "socket.create_connection((upstream, 30303), timeout=5)" "$manifest"
 grep -Fq "upstream = 'validator-hoodi-001-remote-signer'" "$manifest"
-if grep -Fq 'validator-hoodi-001-remote-signer.validator-operations.svc' "$manifest"; then
-  printf 'proxy hostname must match the certificate CN while the certificate has no SAN\n' >&2
-  exit 1
-fi
+# TLS uses the certificate CN; HTTP Host independently matches the existing
+# signer allowlist. The behavioral test below enforces both identities.
 grep -Fq "if self.path != '/upcheck': self.send_error(404); return" "$manifest"
 grep -Fq 'def do_POST(self): self.send_error(405)' "$manifest"
 grep -Fq 'def do_PATCH(self): self.send_error(405)' "$manifest"
@@ -119,12 +117,18 @@ class Connection:
     def __init__(self, host, port, context, timeout):
         assert host == 'validator-hoodi-001-remote-signer'
         assert port == 9000 and timeout == 5
-    def request(self, method, path): calls.append((method, path))
+        assert context.check_hostname and context.verify_mode == ssl.CERT_REQUIRED
+    def request(self, method, path, headers=None):
+        assert headers == {'Host': 'validator-hoodi-001-remote-signer.validator-operations.svc'}
+        calls.append((method, path))
     def getresponse(self): return Response()
     def close(self): closed.append(True)
 
 http.client.HTTPSConnection = Connection
-ssl.create_default_context = lambda cafile: object()
+def default_context(cafile):
+    assert cafile == '/etc/signer-ca/ca.crt'
+    return ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+ssl.create_default_context = default_context
 scope = {}
 exec(os.environ['PROXY_CODE'], scope)
 Handler = scope['Handler']
