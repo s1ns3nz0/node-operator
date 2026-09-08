@@ -10,7 +10,9 @@ permissions:
 jobs:
   smoke:
     runs-on: codebuild-node-operator-baseline-private-release-${{ github.run_id }}-${{ github.run_attempt }}
-    environment: release
+    # Smoke runs are main-only through a distinct environment. They never
+    # receive release environment variables or perform signing/publishing.
+    environment: private-runner-smoke
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
