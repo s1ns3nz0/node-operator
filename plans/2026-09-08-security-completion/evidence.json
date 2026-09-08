@@ -195,6 +195,20 @@
     "rule_source": "https://www.zaproxy.org/docs/alerts/10036/",
     "private_evidence": "/private/tmp/node-operator-dast-run.1788855155.tpjQbX/evidence.json"
   },
+  "hosted_negative_fixture": {
+    "pr": 132,
+    "head": "a976cafd682186197cff01cb3f9a2ab1449d2b9d",
+    "scanner_run": 34204779870,
+    "gate_run": 34204838362,
+    "artifact_id": 10047351347,
+    "decision": {"block": 1, "require_approval": 0, "warn": 0},
+    "violation_id": "sast.semgrep",
+    "exact_head_custom_check": "failure",
+    "private_evidence": "/private/tmp/pr132-evidence.SpsCDK/published/published",
+    "root_independent_decision_validation": "pass",
+    "final_pr_state": "closed without merge; branch retained",
+    "runtime_execution": false
+  },
   "foundation_remote_migration": {
     "status": "complete for six public-edge resources; source PR integration pending",
     "key": "node-operator/foundation-network/terraform.tfstate",
