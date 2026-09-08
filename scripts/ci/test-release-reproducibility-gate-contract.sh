@@ -20,6 +20,6 @@ grep -Fq 'Enforce release SBOM SCA decision' "$integrity"
 grep -Fq '.findings.critical == 0 and .findings.high == 0 and .findings.unknown == 0' "$integrity"
 grep -Fq 'value: ${{ jobs.reproducibility.outputs.artifact_digest }}' "$integrity"
 grep -Fq 'APPROVED_ARTIFACT_DIGEST: ${{ needs.reproducibility.outputs.artifact_digest }}' "$release"
-grep -Fq 'node-operator-release-bundle.sha256' "$release"
+grep -Fq 'sha256sum "$RUNNER_TEMP/release/node-operator-release-bundle.tar"' "$release"
 grep -Fq "jq -er '.metadata.component.version'" "$release"
 printf '%s\n' 'PASS: release publication is blocked on one reusable reproducibility and exact-SBOM SCA gate.'
