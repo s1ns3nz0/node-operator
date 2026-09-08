@@ -11,7 +11,7 @@ ARG TOOLCHAIN_INPUT_SHA
 LABEL io.node-operator.toolchain-input-sha="${TOOLCHAIN_INPUT_SHA}"
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git jq perl tar xz-utils zip && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git jq perl ripgrep tar xz-utils zip && rm -rf /var/lib/apt/lists/*
 RUN curl --fail --location --silent --show-error --output /tmp/node.tar.xz "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
  && echo "${NODE_SHA256}  /tmp/node.tar.xz" | sha256sum --check --status \
  && tar -xJf /tmp/node.tar.xz -C /opt \
