@@ -96,10 +96,31 @@ the promotion; never infer cross-region durability from S3 versioning.
 
 ## S3-LOG-ENCRYPTION
 
-`CKV_AWS_145`, resource `aws_s3_bucket.state_access_logs`: the dedicated S3
-server-access-log destination uses SSE-S3 because server log delivery does not
+`CKV_AWS_145`, exact resources `aws_s3_bucket.state_access_logs`,
+`aws_s3_bucket.audit_access_logs`, `aws_s3_bucket.audit_replica_access_logs`,
+`aws_s3_bucket.release_artifacts_access_logs`, and
+`aws_s3_bucket.release_artifacts_replica_access_logs`: these dedicated S3
+server-access-log destinations use SSE-S3 because server log delivery does not
 support SSE-KMS as an interchangeable destination setting. Its bucket policy
 restricts delivery to `logging.s3.amazonaws.com`, the exact source bucket and
 account, denies insecure transport, and blocks public access. State content
 itself uses a CMK. A destination-purpose, principal, or encryption change
 requires review. [AWS server access log encryption guidance](https://repost.aws/knowledge-center/s3-server-access-log-not-delivered)
+
+## TERMINAL-REPLICA
+
+`CKV_AWS_144`, exact resources `aws_s3_bucket.audit_replica_access_logs` and
+`aws_s3_bucket.release_artifacts_replica_access_logs`: these Tokyo buckets are
+the terminal destinations for the corresponding Seoul access-log replication
+rules. The two primary access-log buckets now have live, prefix-scoped CRR;
+both zero-byte canaries reached `COMPLETED` and arrived as `REPLICA` objects.
+S3 does not replicate replica objects again by default. Adding another CRR hop
+only to satisfy the same bucket-level rule would create a third-region data
+placement contract and repeat the terminal-destination obligation.
+
+This exception does not cover either primary access-log bucket, deletion
+replication, reciprocal replication, or production DR. Revisit it before
+expiry, or immediately if the recovery topology, region, bucket purpose, or
+environment classification changes. The distinct validator-audit and Vault
+snapshot regional-DR findings remain governed by `REGIONAL-DR`; this exception
+does not claim they were remediated.

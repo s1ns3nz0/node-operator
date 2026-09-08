@@ -1,0 +1,33 @@
+{
+  "source_main": "290880f1a281ff6d07ac4cbb8eaa1fea8591af0b",
+  "pr": 128,
+  "reviewed_head": "59065ec36039d271b475d53131f02aee23936b62",
+  "observed": {"state":"OPEN","draft":true,"merge_state":"BLOCKED","review_decision":"REVIEW_REQUIRED","normal_checks":"five SUCCESS","ci_evidence_decision":"FAILURE","required_checks":["quality","scanners"],"required_reviews":1,"code_owner_review":true,"last_push_approval":true,"enforce_admins":true},
+  "publisher_contract": "Publish is restricted to refs/heads/main, depends on build, verifies same-run input SHA and embedded image label before pushing commit and main tags.",
+  "checks": [{"command":"npm run harness:check","result":"PASS, 83 graphs"},{"command":"git diff --check","result":"PASS"}],
+  "external_mutations": [{"action":"mark PR128 ready for review","result":"success; exact head unchanged; draft false; REVIEW_REQUIRED and BLOCKED remain"}],
+  "review_boundary": {"author":"s1ns3nz0","code_owner_for_scripts_ci":"fjybjinsu","approvals":0,"required_checks_passed":true,"ci_evidence_decision_required_by_observed_branch_protection":false,"next_action":"eligible independent GitHub approval on exact PR128 head; do not impersonate that reviewer or bypass protection"},
+  "model_fallbacks": [],
+  "resumed_observation": {"state":"MERGED","merge_commit":"90c7b2a3743abd3df25a7438b3eeeda07434fe0f","merged_at":"2026-09-08T05:33:58Z","approved_by":"fjybjinsu","approved_head":"59065ec36039d271b475d53131f02aee23936b62","publisher_run":34191107978,"publisher_status":"in_progress","agent_dispatched_publisher":false},
+  "publication_verification": {
+    "run_id":34191107978,
+    "run_conclusion":"success",
+    "build":"success",
+    "publish":"success",
+    "digest":"sha256:df5078a48b7536b5f64e99b97cf6bfceab7c1638fcd534f499600d4d27fd836d",
+    "input_sha256":"f8b93e02f4e0eb808292063e0d4a913ba18ebb93113be224a2aa17e22d1f2ee9",
+    "config_digest":"sha256:789020d264cf2baba8b54eb8d70a956c1a7c7fd5cf9f411b4c3be7ba6eeeb636",
+    "collector_layer_digest":"sha256:f169335531c8e87a4fc690b9b5966175a5dbf94066951e91aad8bda64ab9d78c",
+    "collector_layer_compressed_bytes":4717,
+    "collector_sha256":"cdf98bb252aa7d624be7da89d800ba8a66de0b05f80ae9bcf251264438bb1bc9",
+    "method":"Direct registry API: recompute manifest/config/layer hashes, compare config input label to source algorithm, and compare extracted collector bytes to git show of exact merge commit. Anonymous registry token remained in memory and was not printed.",
+    "collector_matches_merged_source":true,
+    "corrected_osv_command_present":true,
+    "full_image_pulled_or_executed":false,
+    "limitations":"Publication/source-content verification is not a full scanner runtime pass or independent signature/provenance verification. Stalled buildx metadata inspection was interrupted after successful direct registry verification."
+  },
+  "resumed_local_checks": ["collector contract PASS","publisher isolation contract PASS","harness:check PASS 84 graphs","harness:verify PASS 67/67 policy tests and expected negative fixture rejections","script quality PASS","actual pin guard self-test PASS: valid accepted, mismatch/floating/duplicate rejected","git diff --check PASS"],
+  "promotion_scope": {"files":[".github/workflows/ci-security.yml",".github/workflows/opa-pr-gate.yml","scripts/ci/test-ci-security-evidence-contract.sh"],"sol_review":"approved preparation from publisher and direct registry source-content proof; no promotion merge authorized"},
+  "independent_review": {"result":"PASS in exact task worktree; both pins machine-compared to publication digest; focused contract and negative fixtures passed","artifact":"reports/2026-09-08-scanner-bootstrap-activation-debrief.md","correction":"An initial mismatch finding came from a different working directory and was withdrawn after exact-path reinspection; no source correction was needed."},
+  "not_performed": ["digest promotion merge","protection change"]
+}

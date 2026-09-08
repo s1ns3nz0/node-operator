@@ -1,0 +1,48 @@
+{
+  "base_sha": "3276b3b4f31eb548e1cb76a7c8feb27b03559414",
+  "checks": [
+    {"scope":"OSV bootstrap","result":"draft PR 128 opened at 04d15cc; normal hosted checks passed; trusted decision failed closed because the active immutable scanner still embeds the old malformed command"},
+    {"scope":"CI scanner dispositions","result":"local policy 69/69; exact workflow/rule exception and four CKV_AWS_145 service-constraint exceptions prepared but not promoted"},
+    {"scope":"bootstrap reconciliation","result":"exact KMS actions, private copied-module import runbook, and five-resource observed inventory reviewed; contract and script quality passed; no import/apply"},
+    {"scope":"access-log replication","result":"saved plan sha256 000e2847a971f743756628ecddfd311da5fb95ad47d7dfef5dc6515ea8b4dad4 contained exactly six creates and no update/delete/replace; both zero-byte canaries reached COMPLETED and destination objects read back REPLICA/AES256; post-apply targeted plan had no managed changes"},
+    {"scope":"Checkov 3.2.522 after primary access-log CRR","result":"954 passed, 23 failed, 6 skipped, zero parse errors across 292 resources; CKV_AWS_144 now passes for both primary access-log buckets, two terminal replica CKV_AWS_144 and four service-constrained CKV_AWS_145 skips remain explicit proposed exceptions; other regional-DR findings remain accepted limitations"},
+    {"scope":"private DAST source boundary","result":"three HTTP targets plus separate Nethermind P2P reachability design; source GET-only proxies, public-CA installer, behavioral contract, YAML parse, script quality and diff check passed locally; not deployed or run"}
+    ,{"scope":"private DAST GitOps runner","result":"final nine-case fixture executes the production-rendered Job program with a curl mock; exact 200, 503/206/429, TLS verify, transport, import API and malformed-alert failures covered; independent Terra and Sol reviews passed; pinned image and live cluster remain unverified"}
+    ,{"scope":"integrated source validation","result":"DAST access, CRR, bootstrap, policy 69/69, baseline, script quality, harness check 84 graphs, harness verify and diff check passed; expected insecure Conftest fixtures rejected"}
+    ,{"scope":"GitOps regression validation","result":"private CD supply-chain and publish OCI contracts passed, including rejection of unapproved digest/source, fixable-high SCA, and source/subject/build/builder/nested-attestation substitutions"}
+  ],
+  "external_mutations": [
+    {"action":"create two S3 replication IAM roles, two inline policies, and two replication configurations","result":"applied exact reviewed plan; four rules read back Enabled with delete-marker replication Disabled","authorized":true},
+    {"action":"write two uniquely named zero-byte non-secret replication canaries","result":"both source statuses COMPLETED; both Tokyo objects REPLICA, zero bytes, AES256, matching version IDs and empty-object ETags; retained with no deletes","authorized":true}
+    ,{"action":"draft PR 128 feature branch and review record push","result":"head 59065ec; five normal checks passed and trusted decision failed closed on the predecessor image as expected","authorized":true}
+  ],
+  "model_fallbacks": [],
+  "initial_observation": "PR127 five normal checks passed; exact-head CI Evidence Decision failed because OSV v2.4 parsed the old embedded command ordering incorrectly.",
+  "remaining_blockers": [
+    "PR 128 requires independent review and human-reviewed merge before automatic main scanner image publication; a separately verified digest pin is required afterward",
+    "bootstrap state import, CMK migration, backend migration, and apply remain separately unauthorized",
+    "private DAST source and GitOps changes require independent review, promotion, public-CA installation, and a live passive run",
+    "GitOps private-repository branch protection remains unavailable under the current GitHub plan"
+  ],
+  "canary_evidence": {
+    "uuid": "419929b6-41f7-4100-b712-d5f8053550da",
+    "audit": {
+      "key": "audit/security-crr-canary/419929b6-41f7-4100-b712-d5f8053550da",
+      "version_id": "iAp0wWTEOOkfqx0336csVJxOGDJVmhYP"
+    },
+    "release": {
+      "key": "release-artifacts/security-crr-canary/419929b6-41f7-4100-b712-d5f8053550da",
+      "version_id": "lSYoLOcl8hNYJCD6qdcB1l3qbQZuqPFV"
+    },
+    "source_replication_status": "COMPLETED",
+    "destination_replication_status": "REPLICA",
+    "content_length": 0,
+    "server_side_encryption": "AES256",
+    "etag": "d41d8cd98f00b204e9800998ecf8427e",
+    "retained": true
+  },
+  "integration_commits": {
+    "source": ["27d834c", "0de3473", "c541877"],
+    "gitops": "944a020"
+  }
+}

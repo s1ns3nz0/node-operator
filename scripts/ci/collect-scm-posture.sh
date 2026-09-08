@@ -25,4 +25,6 @@ gh api --paginate "repos/$repository/pulls/$number/files?per_page=100" > "$tempo
 gh api --paginate "repos/$repository/pulls/$number/reviews?per_page=100" > "$temporary_directory/reviews.json"
 mkdir -p "$(dirname "$output_path")"
 jq -n --arg author "$author" --arg head "$commit_sha" --slurpfile files "$temporary_directory/files.json" --slurpfile reviews "$temporary_directory/reviews.json" '
-  {changed_files:([$files[][]? | .filename] | unique), pull_request:{author:$author, head_sha:$head}, approvers:([$reviews[][]? | select(.state == "APPROVED" and .commit_id == $head) | .user.login] | unique)}' > "$output_path"
+  {changed_files:([$files[][]? | .filename] | unique), pull_request:{author:$author, head_sha:$head}, approvers:([
+    $reviews[][]? | select(.commit_id == $head)
+  ] | sort_by(.id) | group_by(.user.login) | map(last) | map(select(.state == "APPROVED") | .user.login) | unique)}' > "$output_path"

@@ -1,0 +1,62 @@
+{
+  "task_id": "2026-09-08-security-activation",
+  "nodes": [
+    {
+      "id": "ci",
+      "title": "Approval refresh and authenticated release evidence binding",
+      "tier": "sol",
+      "owner": "/root/ci_optimization",
+      "status": "implemented_and_independently_reviewed; hosted_activation_pending"
+    },
+    {
+      "id": "iac-recon",
+      "title": "Identify canonical IaC state and live drift",
+      "tier": "luna",
+      "owner": "/root/iac_recon",
+      "status": "complete_with_missing_bootstrap_foundation_state"
+    },
+    {
+      "id": "iac-apply",
+      "title": "Review exact plan and apply safe hardening",
+      "tier": "sol",
+      "owner": "/root/ci_optimization",
+      "status": "scoped_hardening_applied_and_verified; remaining_roots_pending_state_reconstruction"
+    },
+    {
+      "id": "validation",
+      "title": "Independent checks and live gate proof",
+      "tier": "terra",
+      "owner": "/root/remediation_debrief",
+      "status": "local_checks_and_scoped_aws_proof_pass; hosted_gates_pending"
+    },
+    {
+      "id": "debrief",
+      "title": "Fresh clean-room debrief",
+      "tier": "terra",
+      "owner": "/root/security_activation_debrief",
+      "status": "complete; scoped_partial_completion_confirmed"
+    }
+  ],
+  "edges": [
+    {
+      "from": "iac-recon",
+      "to": "iac-apply",
+      "kind": "blocks"
+    },
+    {
+      "from": "ci",
+      "to": "validation",
+      "kind": "blocks"
+    },
+    {
+      "from": "iac-apply",
+      "to": "validation",
+      "kind": "blocks"
+    },
+    {
+      "from": "validation",
+      "to": "debrief",
+      "kind": "blocks"
+    }
+  ]
+}

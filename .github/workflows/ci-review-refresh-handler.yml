@@ -1,0 +1,29 @@
+name: CI Evidence Review Refresh
+
+on:
+  workflow_run:
+    workflows: [CI Evidence Review Signal]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  refresh:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    steps:
+      - name: Load trusted refresh handler from the default branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          trusted_script="$RUNNER_TEMP/request-pr-evidence-refresh.sh"
+          gh api "repos/$GITHUB_REPOSITORY/contents/scripts/ci/request-pr-evidence-refresh.sh?ref=$GITHUB_SHA" --jq .content \
+            | base64 --decode > "$trusted_script"
+          chmod 0700 "$trusted_script"
+          "$trusted_script" "$GITHUB_EVENT_PATH"

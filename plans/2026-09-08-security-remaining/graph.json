@@ -1,0 +1,62 @@
+{
+  "task_id": "2026-09-08-security-remaining",
+  "nodes": [
+    {
+      "id": "ci",
+      "title": "Resolve promotion and explicit scanner dispositions",
+      "tier": "sol",
+      "owner": "/root/ci_optimization",
+      "status": "blocked_on_reviewed_osv_bootstrap_and_new_image_digest"
+    },
+    {
+      "id": "state",
+      "title": "Reconstruct ownership and safe reconciliation plan",
+      "tier": "luna",
+      "owner": "/root/state_ownership_remaining",
+      "status": "partial_bootstrap_import_plan_prepared_no_import"
+    },
+    {
+      "id": "implementation",
+      "title": "Implement supported remaining hardening",
+      "tier": "terra",
+      "owner": "/root/access_log_replication and /root/bootstrap_reconciliation_impl",
+      "status": "complete_crr_activated_dast_and_bootstrap_prepared"
+    },
+    {
+      "id": "review",
+      "title": "Independent checks and live proof",
+      "tier": "terra",
+      "owner": "/root/bootstrap_reconciliation_impl",
+      "status": "complete_with_activation_caveats"
+    },
+    {
+      "id": "debrief",
+      "title": "Fresh clean-room summary",
+      "tier": "terra",
+      "owner": "/root/ci_optimization/security_remaining_debrief",
+      "status": "complete"
+    }
+  ],
+  "edges": [
+    {
+      "from": "state",
+      "to": "implementation",
+      "kind": "blocks"
+    },
+    {
+      "from": "implementation",
+      "to": "review",
+      "kind": "blocks"
+    },
+    {
+      "from": "ci",
+      "to": "review",
+      "kind": "blocks"
+    },
+    {
+      "from": "review",
+      "to": "debrief",
+      "kind": "blocks"
+    }
+  ]
+}

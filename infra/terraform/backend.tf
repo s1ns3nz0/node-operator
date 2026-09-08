@@ -5,5 +5,6 @@ terraform {
     region         = "ap-northeast-2"
     dynamodb_table = "node-operator-terraform-lock"
     encrypt        = true
+    kms_key_id     = "arn:aws:kms:ap-northeast-2:106760547719:key/23528ef1-681c-41c3-a565-d19d3ec98c37"
   }
 }
