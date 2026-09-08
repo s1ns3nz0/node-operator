@@ -103,7 +103,7 @@ spec:
                   def log_message(self, *_): pass
               HTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
           ports: [{name: http, containerPort: 8080}]
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, readOnlyRootFilesystem: true, runAsNonRoot: true}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, privileged: false, readOnlyRootFilesystem: true, runAsNonRoot: true}
           resources: {requests: {cpu: 25m, memory: 64Mi}, limits: {cpu: 100m, memory: 128Mi}}
 ---
 apiVersion: networking.k8s.io/v1
@@ -214,7 +214,7 @@ spec:
               HTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
           ports: [{name: http, containerPort: 8080}]
           volumeMounts: [{name: signer-ca, mountPath: /etc/signer-ca, readOnly: true}]
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, readOnlyRootFilesystem: true, runAsNonRoot: true}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, privileged: false, readOnlyRootFilesystem: true, runAsNonRoot: true}
           resources: {requests: {cpu: 25m, memory: 64Mi}, limits: {cpu: 100m, memory: 128Mi}}
       volumes:
         - name: signer-ca

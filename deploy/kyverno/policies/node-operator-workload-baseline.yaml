@@ -45,7 +45,7 @@ spec:
               - key: "{{ request.object.spec.hostIPC || `false` }}"
                 operator: Equals
                 value: true
-              - key: "{{ request.object.spec.volumes[?hostPath] | length(@) }}"
+              - key: "{{ (request.object.spec.volumes || `[]`)[?hostPath] | length(@) }}"
                 operator: GreaterThan
                 value: 0
     - name: require-restricted-pod-security-context

@@ -36,6 +36,13 @@ ruby -ryaml -e '
   sources = signer.dig("spec", "ingress").flat_map { |rule| rule.fetch("from", []) }
   abort("DAST namespace reaches signer") if sources.any? { |source| source.dig("namespaceSelector", "matchLabels", "node-operator.io/dast-client") == "true" }
 
+  proxies = documents.select { |document| document.dig("kind") == "Deployment" && ["nethermind-upcheck-proxy", "validator-signer-upcheck-proxy"].include?(document.dig("metadata", "name")) }
+  abort("missing DAST upcheck proxies") unless proxies.length == 2
+  proxies.each do |proxy|
+    container = proxy.dig("spec", "template", "spec", "containers")&.fetch(0)
+    abort("#{proxy.dig("metadata", "name")} must explicitly disable privilege") unless container&.dig("securityContext", "privileged") == false
+  end
+
   nethermind = documents.find { |document| document.dig("kind") == "Service" && document.dig("metadata", "namespace") == "node-operator" && document.dig("metadata", "name") == "nethermind-execution" }
   abort("missing fixed Nethermind P2P Service") unless nethermind
   abort("wrong Nethermind P2P selector") unless nethermind.dig("spec", "selector") == {"app.kubernetes.io/name" => "nethermind"}
@@ -181,4 +188,9 @@ for method in ('do_POST', 'do_PUT', 'do_DELETE', 'do_PATCH'):
 assert invoke('do_GET', '/jsonrpc') == [('error', 404)]
 assert connections == ['connected', 'closed']
 PY
+if [ -n "${KYVERNO_BIN:-}" ] || command -v kyverno >/dev/null 2>&1; then
+  bash "$root/scripts/ci/test-kyverno-workload-baseline.sh"
+else
+  printf 'SKIP: Kyverno CLI is unavailable; standalone real-engine fixture suite remains required.\n'
+fi
 printf 'PASS private DAST access is limited to a fixed signer upcheck proxy and public CA trust anchors.\n'
