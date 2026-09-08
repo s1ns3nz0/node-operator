@@ -1,0 +1,8 @@
+{
+  "local_checks":{"opa":"74/74 passed","collector":"passed after root corrected double-slash rejection and expanded fixture module list","normalizer":"passed","shellcheck":"repository scripts passed","harness":"87 graphs passed before this new task graph","diff":"passed"},
+  "independent_policy_review":"Terra approved exact file/resource/check binding and no legacy fallback",
+  "scanner_findings":"CKV_AWS_126 remains visible; no claim scanner passes on basic monitoring; CKV_AWS_135 unchanged",
+  "hosted":"pending",
+  "aws_mutations":false,
+  "prior_report_correction":"Initial collector test-pass claim rejected by root actual rerun; only post-correction exit0 is accepted."
+}

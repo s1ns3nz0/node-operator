@@ -48,7 +48,7 @@ violations contains violation if {
 
 violations contains violation if {
   item := object.get(object.get(object.get(input, "evidence", {}), "checkov", {}), "failed_checks", [])[_]
-  not exception_applies("iac.checkov", object.get(item, "resource", "unknown"), object.get(item, "check_id", "unknown"))
+  not checkov_exception_applies(item)
   violation := finding("iac.checkov", "block", object.get(item, "check_name", "IaC policy failure"), object.get(item, "resource", "unknown"), "evidence.checkov")
 }
 
@@ -599,10 +599,42 @@ invalid_exception(exception) if {
 
 exception_applies(rule, subject, check_id) if {
   exception := object.get(object.get(input, "policy", {}), "exceptions", [])[_]
+  not "file_path" in object.keys(exception)
   exception.rule == rule
   exception.subject == subject
   exception.check_id == check_id
   not invalid_exception(exception)
+}
+
+checkov_exception_applies(item) if {
+  exception_applies("iac.checkov", object.get(item, "resource", "unknown"), object.get(item, "check_id", "unknown"))
+}
+
+checkov_exception_applies(item) if {
+  exception := object.get(object.get(input, "policy", {}), "exceptions", [])[_]
+  exception.rule == "iac.checkov"
+  exception.subject == item.resource
+  exception.check_id == item.check_id
+  canonical_exception_path(exception.file_path)
+  exception.file_path == item.file_path
+  not invalid_exception(exception)
+}
+
+canonical_exception_path(path) if {
+  is_string(path)
+  path != ""
+  not startswith(path, "/")
+  not contains(path, "\\")
+  every component in split(path, "/") {
+    component != ""
+    component != "."
+    component != ".."
+  }
+}
+
+invalid_exception(exception) if {
+  "file_path" in object.keys(exception)
+  not canonical_exception_path(exception.file_path)
 }
 
 finding(id, class, reason, subject, evidence_ref) := {"id": id, "class": class, "reason": reason, "subject": subject, "evidence_ref": evidence_ref}

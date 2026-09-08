@@ -1,0 +1,8 @@
+{
+  "task_id":"2026-09-08-ssm-policy-control",
+  "objective":"Stage trusted file-bound Checkov dispositions before the user-selected basic-monitoring SSM configuration change.",
+  "authorized":["preserve validated Checkov file identity","exact file/resource/check expiring monitoring disposition","tests and normal reviewed PR"],
+  "forbidden":["generic host waiver","suppress EBS findings","self-approve from PR policy","AWS mutation","raw state or credentials","admin merge bypass"],
+  "integration_owner":{"tier":"sol","owner":"/root/security_goal_ci_fallback"},
+  "routing":{"requested":"sol security and terra implementation/review","fallback":"existing Astra Sol-role fallback; followup thread limit required root integration with independent Terra policy review"}
+}

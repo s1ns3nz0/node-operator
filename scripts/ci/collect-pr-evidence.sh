@@ -40,6 +40,7 @@ case "$collector_mode" in
     ;;
 esac
 git -C "$source_directory" rev-parse --is-inside-work-tree >/dev/null
+source_directory="$(cd "$source_directory" && pwd -P)"
 
 umask 077
 temporary_directory="$(mktemp -d)"
@@ -174,7 +175,7 @@ collect_zizmor() {
 }
 
 collect_checkov() {
-  local report_path="$temporary_directory/checkov.json" result_path="$temporary_directory/checkov-result.json"
+  local report_path="$temporary_directory/checkov.json" result_path="$temporary_directory/checkov-result.json" checks_path="$temporary_directory/checkov-checks.ndjson"
   local -a trusted_options=()
   if [ -n "${CHECKOV_CONFIG_FILE:-}" ]; then trusted_options+=(--config-file "$CHECKOV_CONFIG_FILE"); fi
   if [ "${#trusted_options[@]}" -gt 0 ]; then
@@ -185,12 +186,46 @@ collect_checkov() {
   [ "$collector_exit_code" -eq 0 ] || [ "$collector_exit_code" -eq 1 ] || { printf 'checkov failed before producing evidence\n' >&2; exit 1; }
   require_json_report checkov "$report_path"
   require_json_shape checkov "$report_path" '.results.failed_checks | type == "array"'
-  jq '[((.results.failed_checks // []) + (.results.skipped_checks // []))[]? | {
-        resource:(.resource // .resource_address // "unknown"),
-        check_id:(.check_id // "unknown"),
-        check_name:(if (.check_result.suppress_comment? // "") != "" then "IaC check was suppressed in pull-request source" else (.check_name // "IaC policy failure") end)
-      }]' "$report_path" | jq -c '{failed_checks:.}' > "$result_path"
+  : > "$checks_path"
+  while IFS= read -r check; do
+    local resource check_id check_name file_path
+    resource="$(jq -r '(.resource // .resource_address // "unknown") | if type == "string" then . else "unknown" end' <<<"$check")"
+    check_id="$(jq -r '(.check_id // "unknown") | if type == "string" then . else "unknown" end' <<<"$check")"
+    check_name="$(jq -r 'if (.check_result.suppress_comment? // "") != "" then "IaC check was suppressed in pull-request source" else ((.check_name // "IaC policy failure") | if type == "string" then . else "IaC policy failure" end) end' <<<"$check")"
+    file_path="$(canonical_checkov_file_path "$(jq -r '.file_abs_path // empty | if type == "string" then . else empty end' <<<"$check")")"
+    if [ -n "$file_path" ]; then
+      jq -n --arg resource "$resource" --arg check_id "$check_id" --arg check_name "$check_name" --arg file_path "$file_path" '{resource:$resource,check_id:$check_id,check_name:$check_name,file_path:$file_path}' >> "$checks_path"
+    else
+      jq -n --arg resource "$resource" --arg check_id "$check_id" --arg check_name "$check_name" '{resource:$resource,check_id:$check_id,check_name:$check_name}' >> "$checks_path"
+    fi
+  done < <(jq -c '((.results.failed_checks // []) + (.results.skipped_checks // []))[]?' "$report_path")
+  jq -s -c '{failed_checks:.}' "$checks_path" > "$result_path"
   write_envelope "$output_directory/checkov.json" checkov "$result_path"
+}
+
+canonical_checkov_file_path() {
+  local candidate="$1" candidate_directory candidate_name canonical_file
+
+  # Checkov's file_abs_path is accepted only as a canonical path to a regular
+  # Terraform file in this checkout's /infra subtree. Reject lexical ambiguity,
+  # symlink escapes, and every scanner-relative or foreign path. A missing path
+  # must remain missing: resource addresses are not a safe location substitute.
+  [ -n "$candidate" ] || return 0
+  case "$candidate" in
+    /*) ;;
+    *) return 0 ;;
+  esac
+  case "$candidate/" in
+    *'//'*|*'/./'*|*'/../'*) return 0 ;;
+  esac
+  [[ "$candidate" == *\\* ]] && return 0
+  [[ "$candidate" == "$source_directory"/* ]] || return 0
+  [ -f "$candidate" ] && [ ! -L "$candidate" ] || return 0
+  candidate_directory="$(dirname "$candidate")"
+  candidate_name="$(basename "$candidate")"
+  canonical_file="$(cd "$candidate_directory" 2>/dev/null && pwd -P)/$candidate_name"
+  [[ "$canonical_file" == "$source_directory"/infra/*.tf ]] || return 0
+  printf '%s\n' "${canonical_file#"$source_directory"/}"
 }
 
 collect_format() {
