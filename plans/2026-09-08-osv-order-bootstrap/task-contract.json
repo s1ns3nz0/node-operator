@@ -1,0 +1,8 @@
+{
+  "task_id": "2026-09-08-osv-order-bootstrap",
+  "objective": "Correct the OSV Scanner v2.4 command ordering embedded in the immutable scanner image so a reviewed main build can produce a usable replacement digest.",
+  "authorized": ["edit the collector and focused contract", "run non-sensitive checks", "push a feature branch", "open a draft pull request"],
+  "forbidden": ["merge", "publish an image manually", "change branch rules", "mutate cloud resources", "access secrets"],
+  "integration_owner": {"tier": "sol", "owner": "/root/ci_optimization"},
+  "routing": {"requested": "sol", "fallback": "none"}
+}

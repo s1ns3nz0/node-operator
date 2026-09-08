@@ -1,0 +1,16 @@
+{
+  "task_id": "2026-09-08-osv-order-bootstrap",
+  "nodes": [
+    {"id":"fix","title":"Correct OSV v2.4 command ordering","tier":"sol","owner":"/root/ci_optimization","status":"complete"},
+    {"id":"validate","title":"Focused and harness validation","tier":"sol","owner":"/root/ci_optimization","status":"complete"},
+    {"id":"draft-pr","title":"Push branch and open draft PR","tier":"sol","owner":"/root/ci_optimization","status":"complete"},
+    {"id":"review","title":"Independent review","tier":"terra","owner":"/root/osv_bootstrap_debrief","status":"complete"},
+    {"id":"debrief","title":"Clean-room debrief","tier":"terra","owner":"/root/osv_bootstrap_debrief","status":"complete"}
+  ],
+  "edges": [
+    {"from":"fix","to":"validate","kind":"blocks"},
+    {"from":"validate","to":"draft-pr","kind":"blocks"},
+    {"from":"draft-pr","to":"review","kind":"blocks"},
+    {"from":"review","to":"debrief","kind":"blocks"}
+  ]
+}
