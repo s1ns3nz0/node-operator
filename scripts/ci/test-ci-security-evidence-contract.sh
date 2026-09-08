@@ -22,6 +22,13 @@ fi
 test "$(grep -Fc 'checks: write' "$gate_workflow")" -eq 2
 grep -Fq 'resolve-pr-evidence-context.sh' "$gate_workflow"
 grep -Fq 'ref: ${{ steps.context.outputs.trusted_sha }}' "$gate_workflow"
+grep -Fq 'Collect trusted security evidence from untrusted source' "$gate_workflow"
+grep -Fq -- '--volume "$GITHUB_WORKSPACE/.pr-source:/workspace:ro"' "$gate_workflow"
+grep -Fq -- '--volume "$RUNNER_TEMP/head-security-evidence:/evidence"' "$gate_workflow"
+if grep -Fq 'Download scanner evidence from the completed PR run' "$gate_workflow"; then
+  printf 'trusted decision must not consume a pull-request-controlled scanner artifact\n' >&2
+  exit 1
+fi
 grep -Fq 'Publish exact-SHA evidence check' "$gate_workflow"
 grep -Fq 'Publish failed exact-SHA evidence check' "$gate_workflow"
 grep -Fq 'publish-pr-evidence-check.sh "$SUBJECT_SHA"' "$gate_workflow"

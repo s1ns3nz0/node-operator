@@ -56,7 +56,6 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-      actions: read
       packages: read
       checks: write
     env:
@@ -83,27 +82,35 @@ jobs:
           ref: ${{ steps.context.outputs.trusted_sha }}
           fetch-depth: 1
           persist-credentials: false
-      - name: Download scanner evidence from the completed PR run
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5.0.0
-        with:
-          name: security-evidence-${{ env.SUBJECT_SHA }}
-          path: ${{ env.EVIDENCE_ROOT }}/raw
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ github.token }}
       - name: Checkout pull-request source as untrusted Terraform input
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.SUBJECT_SHA }}
           path: .pr-source
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
       - name: Checkout pull-request base as untrusted scanner input
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.BASE_SHA }}
           path: .base-source
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
+      - name: Collect trusted security evidence from untrusted source
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USERNAME: ${{ github.actor }}
+        run: |
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
+          docker pull "$SCANNER_IMAGE"
+          mkdir -p "$RUNNER_TEMP/head-security-evidence"
+          docker run --rm \
+            --env SKIP_TERRAFORM=true \
+            --volume "$GITHUB_WORKSPACE/.pr-source:/workspace:ro" \
+            --volume "$RUNNER_TEMP/head-security-evidence:/evidence" \
+            "$SCANNER_IMAGE" /evidence "$SUBJECT_SHA" "$BASE_SHA"
+          mkdir -p "$EVIDENCE_ROOT/raw"
+          cp "$RUNNER_TEMP/head-security-evidence"/*.json "$EVIDENCE_ROOT/raw/"
       - uses: open-policy-agent/setup-opa@b2b258e089860efaadaaf71bf6e3aecb4a3eeff1 # v2.4.0
         with:
           version: v1.17.0

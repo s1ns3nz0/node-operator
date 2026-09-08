@@ -21,31 +21,42 @@ fetch_checks() {
     --jq '.check_runs[]' | jq -s . > "$destination"
 }
 trusted_check_present() {
-  local input="$1" name="$2" sha="$3"
-  jq -e --arg name "$name" --arg repo "$GITHUB_REPOSITORY" --arg sha "$sha" '
+  local input="$1" name="$2" sha="$3" expected_path="$4" expected_event="$5" require_run_head="$6"
+  local details_url run_id run_json
+  details_url="$(jq -er --arg name "$name" --arg repo "$GITHUB_REPOSITORY" --arg sha "$sha" '
     [.[] | select(
       .name == $name and .status == "completed" and .conclusion == "success" and .head_sha == $sha and
       .app.slug == "github-actions" and
       (.details_url | type == "string" and startswith("https://github.com/" + $repo + "/actions/runs/"))
-    )] | length == 1
-  ' "$input" >/dev/null
+    )] | select(length == 1) | .[0].details_url
+  ' "$input")" || return 1
+  run_id="$(printf '%s' "$details_url" | sed -E 's#^https://github.com/[^/]+/[^/]+/actions/runs/([0-9]+)(/.*)?$#\1#')"
+  [[ "$run_id" =~ ^[0-9]+$ ]] || return 1
+  run_json="$temporary_directory/run-$run_id.json"
+  gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "$run_json"
+  jq -e --arg repo "$GITHUB_REPOSITORY" --arg path "$expected_path" --arg event "$expected_event" --arg sha "$sha" --arg require_head "$require_run_head" '
+    .repository.full_name == $repo and .path == $path and .event == $event and
+    (if $require_head == "true" then .head_sha == $sha else true end)
+  ' "$run_json" >/dev/null
 }
 fetch_checks "$source_sha" "$checks"
 
-for required in quality scanners policy terraform policy-foundation; do
-  trusted_check_present "$checks" "$required" "$source_sha" || { printf 'required trusted source check is absent or ambiguous: %s\n' "$required" >&2; exit 1; }
-done
+trusted_check_present "$checks" quality "$source_sha" '.github/workflows/ci-quality.yml' push true || { printf 'required trusted source check is absent or invalid: quality\n' >&2; exit 1; }
+trusted_check_present "$checks" scanners "$source_sha" '.github/workflows/ci-security.yml' push true || { printf 'required trusted source check is absent or invalid: scanners\n' >&2; exit 1; }
+trusted_check_present "$checks" policy "$source_sha" '.github/workflows/ci-policy.yml' push true || { printf 'required trusted source check is absent or invalid: policy\n' >&2; exit 1; }
+trusted_check_present "$checks" terraform "$source_sha" '.github/workflows/ci-terraform.yml' push true || { printf 'required trusted source check is absent or invalid: terraform\n' >&2; exit 1; }
+trusted_check_present "$checks" policy-foundation "$source_sha" '.github/workflows/policy-foundation.yml' push true || { printf 'required trusted source check is absent or invalid: policy-foundation\n' >&2; exit 1; }
 
 pulls="$temporary_directory/pulls.json"
 gh api -H 'Accept: application/vnd.github+json' "repos/$GITHUB_REPOSITORY/commits/$source_sha/pulls" > "$pulls"
-jq -e 'type == "array" and ([.[] | select(.merged_at != null and .base.ref == "main")] | length == 1)' "$pulls" >/dev/null || {
+jq -e --arg repo "$GITHUB_REPOSITORY" --arg sha "$source_sha" 'type == "array" and ([.[] | select(.merged_at != null and .merge_commit_sha == $sha and .base.ref == "main" and .base.repo.full_name == $repo)] | length == 1)' "$pulls" >/dev/null || {
   printf 'release source must map to exactly one merged main pull request\n' >&2
   exit 1
 }
-pr_head_sha="$(jq -er '[.[] | select(.merged_at != null and .base.ref == "main")][0].head.sha | select(test("^[0-9a-f]{40}$"))' "$pulls")"
+pr_head_sha="$(jq -er --arg repo "$GITHUB_REPOSITORY" --arg sha "$source_sha" '[.[] | select(.merged_at != null and .merge_commit_sha == $sha and .base.ref == "main" and .base.repo.full_name == $repo)][0].head.sha | select(test("^[0-9a-f]{40}$"))' "$pulls")"
 pr_checks="$temporary_directory/pr-checks.json"
 fetch_checks "$pr_head_sha" "$pr_checks"
-trusted_check_present "$pr_checks" 'CI Evidence Decision' "$pr_head_sha" || {
+trusted_check_present "$pr_checks" 'CI Evidence Decision' "$pr_head_sha" '.github/workflows/opa-pr-gate.yml' workflow_run false || {
   printf 'merged pull-request head lacks the trusted CI Evidence Decision\n' >&2
   exit 1
 }
