@@ -55,6 +55,31 @@ an isolated lock; repeat its read after DynamoDB's five-minute key cache window.
 Never use a real Terraform lock ID as the canary. A successful administrator
 request is not proof of backend-role access.
 
+## Explicit backend encryption
+
+Use **all** fields of the verified `backend` output, including `kms_key_id`.
+In Terraform 1.5.7, `encrypt = true` without `kms_key_id` explicitly requests
+SSE-S3, overriding a bucket's SSE-KMS default. The baseline's checked-in backend
+configuration names this deployment's reviewed state CMK; new deployments must
+use their own bootstrap output, never that account-specific backend file.
+
+For example, render a non-secret backend configuration in the private operator
+directory after the approved bootstrap apply. Select the state key for the root
+being migrated; do not reuse the baseline key for operations access:
+
+```sh
+terraform -chdir="$operator_root/module" output -json backend |
+  jq -r '.key = "node-operator/ops-access/terraform.tfstate" |
+    to_entries[] | "\(.key) = \(.value | tojson)"' > "$operator_root/ops.backend.hcl"
+```
+
+Changing backend configuration requires a separately reviewed `init` operation.
+Use `-reconfigure` only when the bucket/key/state identity is unchanged, or the
+reviewed `-migrate-state` procedure when moving the existing local ops state.
+Do not use `-force-copy`. Verify the resulting object metadata reports `aws:kms`
+and the exact CMK after a scoped backend write. Existing historical SSE-S3
+versions do not become CMK-encrypted merely by changing bucket defaults.
+
 ## Import workflow
 
 1. In the private operator directory, place the reviewed tfvars file and

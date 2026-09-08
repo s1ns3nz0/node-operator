@@ -32,6 +32,8 @@ for required in \
 done
 
 rg -F 'key            = var.baseline_state_key' "$outputs" >/dev/null || fail 'backend output does not expose the configured state key'
+rg -F 'kms_key_id     = aws_kms_key.state.arn' "$outputs" >/dev/null || fail 'backend output must select the state CMK explicitly'
+rg -F 'bucket_key_enabled = false' "$main" >/dev/null || fail 'S3 object-context KMS permission requires bucket keys disabled'
 rg -F 'allowed_account_ids = [var.aws_account_id]' "$versions" >/dev/null || fail 'provider account guard is missing'
 rg -F '^arn:aws:iam::[0-9]{12}:role/' "$variables" >/dev/null || fail 'backend role syntax validation is missing'
 rg -F '^arn:aws:iam::${var.aws_account_id}:role/' "$main" >/dev/null || fail 'backend roles are not constrained to the configured account'
@@ -58,6 +60,10 @@ terraform -chdir="$workspace/module" plan -refresh=false -input=false \
   -out="$workspace/default.plan" >/dev/null
 terraform -chdir="$workspace/module" show -json "$workspace/default.plan" > "$workspace/default.json"
 jq -e 'any(.resource_changes[]?; .address == "aws_s3_bucket.state" and .change.after.bucket == "node-operator-tfstate-106760547719-apnortheast2")' "$workspace/default.json" >/dev/null || fail 'default bucket plan changed or nullable default did not validate'
+jq -e '
+  (.configuration.root_module.outputs.backend.expression.references | index("aws_kms_key.state.arn")) != null and
+  any(.resource_changes[]; .address == "aws_s3_bucket_server_side_encryption_configuration.state" and .change.after.rule[0].bucket_key_enabled == false)
+' "$workspace/default.json" >/dev/null || fail 'Rendered backend output and bucket encryption must preserve CMK/object-context selection'
 
 terraform -chdir="$workspace/module" plan -refresh=false -input=false \
   -var='aws_account_id=106760547719' \

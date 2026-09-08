@@ -6,5 +6,6 @@ output "backend" {
     region         = var.aws_region
     dynamodb_table = aws_dynamodb_table.lock.name
     encrypt        = true
+    kms_key_id     = aws_kms_key.state.arn
   }
 }
