@@ -11,7 +11,7 @@ if grep -Fq "tags: ['v*.*.*']" "$integrity"; then
   exit 1
 fi
 grep -Fq 'uses: ./.github/workflows/ci-release-integrity.yml' "$release"
-grep -Fq 'needs: reproducibility' "$release"
+grep -Fq 'needs: eligibility' "$release"
 grep -Fq 'Verify exact source release eligibility' "$release"
 grep -Fq 'verify-release-source-eligibility.sh "$GITHUB_SHA"' "$release"
 grep -Fq 'needs: [eligibility, reproducibility]' "$release"
