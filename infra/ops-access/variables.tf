@@ -22,3 +22,9 @@ variable "manage_cluster_ingress_rule" {
   type        = bool
   default     = true
 }
+
+variable "manage_existing_endpoint_ingress_rule" {
+  description = "Explicit migration opt-in when this ops state already owns its host-to-shared-endpoint ingress rule. False leaves an existing shared endpoint rule with its current external owner."
+  type        = bool
+  default     = false
+}

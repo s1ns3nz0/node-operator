@@ -31,6 +31,12 @@ rg -F 'backend "s3" {}' "$root/infra/ops-access/main.tf" >/dev/null
 [ -f "$root/infra/ops-access/backend.hcl.example" ] || { printf 'ops-access backend example is missing\n' >&2; exit 1; }
 [ -f "$root/infra/ops-access/terraform.tfvars.example" ] || { printf 'ops-access tfvars example is missing\n' >&2; exit 1; }
 rg -F 'existing_ssm_endpoint_security_group_id' "$root/infra/ops-access/main.tf" "$root/infra/ops-access/variables.tf" >/dev/null
+rg -F 'local.create_ssm_endpoints || var.manage_existing_endpoint_ingress_rule ? 1 : 0' "$root/infra/ops-access/main.tf" >/dev/null
+rg -F 'variable "manage_existing_endpoint_ingress_rule"' "$root/infra/ops-access/variables.tf" >/dev/null
+for rule in cluster endpoints; do
+  rg -F "from = aws_vpc_security_group_ingress_rule.$rule" "$root/infra/ops-access/main.tf" >/dev/null
+  rg -F "to   = aws_vpc_security_group_ingress_rule.$rule[0]" "$root/infra/ops-access/main.tf" >/dev/null
+done
 if rg -n 'scheduler|vault' "$ops_entrypoint"; then
   printf 'ops-access command crosses its intended boundary\n' >&2
   exit 1

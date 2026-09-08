@@ -34,7 +34,7 @@ resource "aws_security_group" "endpoints" {
 
 resource "aws_vpc_security_group_ingress_rule" "endpoints" {
   description                  = "HTTPS from the temporary operations host to SSM endpoints"
-  count                        = local.create_ssm_endpoints ? 1 : 0
+  count                        = local.create_ssm_endpoints || var.manage_existing_endpoint_ingress_rule ? 1 : 0
   security_group_id            = local.endpoint_security_group_id
   referenced_security_group_id = aws_security_group.host.id
   from_port                    = 443
@@ -80,6 +80,18 @@ resource "aws_vpc_endpoint" "ssm" {
   # This resource exists only when we create the endpoints. Keep its direct
   # attachment visible to IaC graph analyzers as well as Terraform.
   security_group_ids = [aws_security_group.endpoints[0].id]
+}
+
+# The initial separately deployed host used uncounted ingress addresses.
+# Retain those exact rules when adopting the root's conditional ownership.
+moved {
+  from = aws_vpc_security_group_ingress_rule.endpoints
+  to   = aws_vpc_security_group_ingress_rule.endpoints[0]
+}
+
+moved {
+  from = aws_vpc_security_group_ingress_rule.cluster
+  to   = aws_vpc_security_group_ingress_rule.cluster[0]
 }
 
 resource "aws_iam_role" "host" {
