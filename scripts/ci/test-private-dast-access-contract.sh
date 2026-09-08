@@ -15,10 +15,17 @@ fi
 grep -Fq "if self.path != '/upcheck': self.send_error(404); return" "$manifest"
 grep -Fq 'def do_POST(self): self.send_error(405)' "$manifest"
 grep -Fq 'port: 8080' "$manifest"
-if grep -Fq 'allow-private-dast-signer-upcheck-ingress' "$manifest" || grep -Fq 'port: 9000}]\n    - to:' "$manifest"; then
-  printf 'DAST must not receive a direct remote-signer ingress path\n' >&2
-  exit 1
-fi
+ruby -ryaml -e '
+  documents = YAML.load_stream(File.read(ARGV.fetch(0))).compact
+  dast_egress = documents.find { |document| document.dig("kind") == "NetworkPolicy" && document.dig("metadata", "name") == "allow-private-dast-egress" }
+  abort("missing DAST egress policy") unless dast_egress
+  ports = dast_egress.dig("spec", "egress").flat_map { |rule| rule.fetch("ports", []).map { |port| port["port"] } }
+  abort("DAST egress reaches signer 9000") if ports.include?(9000)
+  signer = documents.find { |document| document.dig("kind") == "NetworkPolicy" && document.dig("metadata", "name") == "signer-upcheck-proxy-to-signer" }
+  abort("missing signer proxy ingress policy") unless signer
+  sources = signer.dig("spec", "ingress").flat_map { |rule| rule.fetch("from", []) }
+  abort("DAST namespace reaches signer") if sources.any? { |source| source.dig("namespaceSelector", "matchLabels", "node-operator.io/dast-client") == "true" }
+' "$manifest"
 grep -Fq 'cat /vault/userconfig/vault-tls/ca.crt' "$installer"
 grep -Fq 'PRIVATE KEY' "$installer"
 grep -Fq 'openssl x509 -in "$vault_ca" -out "$vault_certificate"' "$installer"
