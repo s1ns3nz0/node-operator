@@ -59,6 +59,7 @@ if grep -Ev '^[[:space:]]*#' "$installer" | grep -Eq 'get[[:space:]]+secret|VAUL
 fi
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
+export TMPDIR="$scratch"
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$scratch/key.pem" -out "$scratch/cert.pem" -subj /CN=test-dast-ca -days 1 >/dev/null 2>&1
 cat "$scratch/cert.pem" "$scratch/key.pem" > "$scratch/mixed.pem"
 mkdir -p "$scratch/bin"
@@ -72,6 +73,7 @@ elif [[ " $* " == *' create configmap '* ]]; then
   for argument in "$@"; do
     if [[ "$argument" == --from-file=ca.crt=* ]]; then
       file="${argument#--from-file=ca.crt=}"
+      [[ "$file" == "$TMPDIR"/node-operator-dast-* ]]
       openssl x509 -in "$file" -noout >/dev/null
       ! grep -q 'PRIVATE KEY' "$file"
     fi
