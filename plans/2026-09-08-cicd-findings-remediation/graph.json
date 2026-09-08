@@ -1,0 +1,17 @@
+{
+  "task_id":"2026-09-08-cicd-findings-remediation",
+  "nodes":[
+    {"id":"h1-pr-check","title":"Exact-SHA trusted OPA required check","tier":"sol","owner":"/root/ci_optimization","status":"in_progress"},
+    {"id":"h2-history","title":"Full-history Gitleaks rollout","tier":"sol","owner":"/root/ci_optimization","status":"pending"},
+    {"id":"h3-deploy-admission","title":"Deploy signature and SBOM admission","tier":"terra","owner":"/root/gitops_fix","status":"in_progress"},
+    {"id":"h4-service-dast","title":"Private service endpoint DAST","tier":"terra","owner":"/root/gitops_fix","status":"in_progress"},
+    {"id":"m1-release-eligibility","title":"Release eligibility enforcement","tier":"sol","owner":"/root/ci_optimization","status":"pending"},
+    {"id":"m2-checkov","title":"Checkov reconciliation","tier":"sol","owner":"/root","status":"in_progress"},
+    {"id":"live-validation","title":"Live positive and negative validation","tier":"sol","owner":"/root","status":"pending"},
+    {"id":"review","title":"Independent review","tier":"terra","owner":"unassigned","status":"pending"},
+    {"id":"debrief","title":"Clean-room debrief","tier":"terra","owner":"unassigned","status":"pending"}
+  ],
+  "edges":[
+    {"from":"h1-pr-check","to":"live-validation","kind":"blocks"},{"from":"h2-history","to":"live-validation","kind":"blocks"},{"from":"h3-deploy-admission","to":"live-validation","kind":"blocks"},{"from":"h4-service-dast","to":"live-validation","kind":"blocks"},{"from":"m1-release-eligibility","to":"live-validation","kind":"blocks"},{"from":"m2-checkov","to":"live-validation","kind":"blocks"},{"from":"live-validation","to":"review","kind":"blocks"},{"from":"review","to":"debrief","kind":"blocks"}
+  ]
+}

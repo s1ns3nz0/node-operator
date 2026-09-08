@@ -12,8 +12,38 @@ permissions:
   contents: read
   pull-requests: read
   actions: read
+  checks: write
 
 jobs:
+  upstream-failure:
+    if: >-
+      github.event.workflow_run.conclusion != 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.pull_requests[0].number != null
+    runs-on: ubuntu-24.04
+    env:
+      SUBJECT_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Resolve trusted control-plane and current PR head
+        id: context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRUSTED_WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          event_script="$RUNNER_TEMP/resolve-pr-evidence-context.sh"
+          gh api "repos/$GITHUB_REPOSITORY/contents/scripts/ci/resolve-pr-evidence-context.sh?ref=$GITHUB_SHA" --jq .content | base64 --decode > "$event_script"
+          chmod 0700 "$event_script"
+          "$event_script" "$GITHUB_EVENT_PATH" "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.context.outputs.trusted_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Publish failed exact-SHA evidence check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DETAILS_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: scripts/ci/publish-pr-evidence-check.sh "$SUBJECT_SHA" - "$DETAILS_URL"
   evidence-gate:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
@@ -27,11 +57,21 @@ jobs:
       SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:010ca69dc9d08d2d255c2e9d80b54544245fad8d85c670f723cce788e3bb16af
       TERRAFORM_IMAGE: ghcr.io/s1ns3nz0/node-operator/terraform-validation@sha256:1f2ac75ec09b43b4a79eaaae94eca8f8f1655315a5aa81e7c80d3a8a14ac189a
     steps:
+      - name: Resolve trusted control-plane and current PR head
+        id: context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRUSTED_WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          event_script="$RUNNER_TEMP/resolve-pr-evidence-context.sh"
+          gh api "repos/$GITHUB_REPOSITORY/contents/scripts/ci/resolve-pr-evidence-context.sh?ref=$GITHUB_SHA" --jq .content | base64 --decode > "$event_script"
+          chmod 0700 "$event_script"
+          "$event_script" "$GITHUB_EVENT_PATH" "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The policy engine and collector are a trusted control-plane input:
           # never execute them from the untrusted pull-request checkout.
-          ref: ${{ github.event.repository.default_branch }}
+          ref: ${{ steps.context.outputs.trusted_sha }}
           fetch-depth: 1
           persist-credentials: false
       - name: Download scanner evidence from the completed PR run
@@ -118,6 +158,12 @@ jobs:
             ${{ env.EVIDENCE_ROOT }}/policy-input/baseline-summary.json
           if-no-files-found: error
           retention-days: 90
+      - name: Publish exact-SHA evidence check
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DETAILS_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: scripts/ci/publish-pr-evidence-check.sh "$SUBJECT_SHA" "$EVIDENCE_ROOT/published/decision.json" "$DETAILS_URL"
       - name: Enforce OPA decision
         if: always()
         run: scripts/ci/verify-policy-decision.sh "$EVIDENCE_ROOT/published/decision.json"

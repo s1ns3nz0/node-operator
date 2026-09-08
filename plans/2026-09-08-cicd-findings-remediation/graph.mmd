@@ -1,0 +1,8 @@
+graph TD
+  h1_pr_check --> live_validation
+  h2_history --> live_validation
+  h3_deploy_admission --> live_validation
+  h4_service_dast --> live_validation
+  m1_release_eligibility --> live_validation
+  m2_checkov --> live_validation
+  live_validation --> review --> debrief

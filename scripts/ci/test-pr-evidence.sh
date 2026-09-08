@@ -24,6 +24,8 @@ write_mock() {
 }
 
 write_mock gitleaks '
+[ "$1" = "git" ]
+[ "$2" = "'"$fixture_directory"'" ]
 report=""
 while [ "$#" -gt 0 ]; do
   if [ "$1" = "--report-path" ]; then report="$2"; shift 2; continue; fi

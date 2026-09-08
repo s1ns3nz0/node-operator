@@ -10,12 +10,28 @@ permissions:
   id-token: write
 
 jobs:
+  eligibility:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source release eligibility
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/ci/verify-release-source-eligibility.sh "$GITHUB_SHA"
   reproducibility:
+    needs: eligibility
     uses: ./.github/workflows/ci-release-integrity.yml
     permissions:
       contents: read
+      checks: read
   build-and-publish:
-    needs: reproducibility
+    needs: [eligibility, reproducibility]
     # A CodeBuild-hosted runner is ephemeral per workflow job and is bound to
     # the dedicated private project by its name plus run identity. A
     # GitHub-hosted or broadly shared runner must never acquire this path.

@@ -74,7 +74,9 @@ require_json_shape() {
 collect_gitleaks() {
   local report_path="$temporary_directory/gitleaks.json" result_path="$temporary_directory/gitleaks-result.json"
   set +e
-  gitleaks detect --no-git --source "$source_directory" --redact=100 --report-format json --report-path "$report_path" --no-banner --no-color > "$temporary_directory/gitleaks.stdout" 2> "$temporary_directory/gitleaks.stderr"
+  # The checkout is intentionally full-depth in CI. Scan commit history so a
+  # secret cannot be hidden by deleting it in the pull request's final tree.
+  gitleaks git "$source_directory" --redact=100 --report-format json --report-path "$report_path" --no-banner --no-color > "$temporary_directory/gitleaks.stdout" 2> "$temporary_directory/gitleaks.stderr"
   collector_exit_code=$?
   set -e
   [ "$collector_exit_code" -eq 0 ] || [ "$collector_exit_code" -eq 1 ] || { printf 'gitleaks failed before producing evidence\n' >&2; exit 1; }
