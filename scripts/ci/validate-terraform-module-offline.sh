@@ -17,3 +17,7 @@ rm -f "$work_directory/backend.tf"
 terraform -chdir="$work_directory" fmt -check -recursive
 terraform -chdir="$work_directory" init -backend=false -get=false -lockfile=readonly -input=false
 terraform -chdir="$work_directory" validate
+
+if [ "$(basename "$module_directory")" = "foundation-network" ]; then
+  "$(dirname "$0")/test-foundation-network-existing-mode.sh" "$work_directory"
+fi

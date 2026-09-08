@@ -51,3 +51,5 @@ jobs:
         run: scripts/ci/test-pr-gate.sh
       - name: Test exact-SHA PR evidence check
         run: scripts/ci/test-pr-evidence-check.sh
+      - name: Test zero-resource foundation contract
+        run: scripts/ci/test-zero-resource-contract.sh
