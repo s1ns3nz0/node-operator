@@ -14,6 +14,8 @@ if grep -Fq 'validator-hoodi-001-remote-signer.validator-operations.svc' "$manif
 fi
 grep -Fq "if self.path != '/upcheck': self.send_error(404); return" "$manifest"
 grep -Fq 'def do_POST(self): self.send_error(405)' "$manifest"
+grep -Fq 'def do_PATCH(self): self.send_error(405)' "$manifest"
+grep -Fq 'if conn is not None: conn.close()' "$manifest"
 grep -Fq 'port: 8080' "$manifest"
 ruby -ryaml -e '
   documents = YAML.load_stream(File.read(ARGV.fetch(0))).compact
@@ -49,4 +51,54 @@ if TEST_VAULT_CA="$scratch/cert.pem" PRIVATE_EKS_SESSION=1 PATH="$scratch/bin:$P
   printf 'installer accepted a PEM containing a private key\n' >&2
   exit 1
 fi
+
+# Execute the actual embedded proxy implementation with a fake TLS upstream.
+# The server start line is excluded; every handler method is exercised below.
+proxy_code="$(awk '
+  /              import http\.client, ssl/ { capture=1 }
+  capture && /              HTTPServer\(\('\''0\.0\.0\.0'\'', 8080\), Handler\)\.serve_forever\(\)/ { exit }
+  capture { sub(/^              /, ""); print }
+' "$manifest")"
+PROXY_CODE="$proxy_code" python3 - <<'PY'
+import http.client
+import os
+import ssl
+
+calls = []
+closed = []
+class Response:
+    status = 200
+    def read(self, size):
+        assert size == 0
+class Connection:
+    def __init__(self, host, port, context, timeout):
+        assert host == 'validator-hoodi-001-remote-signer'
+        assert port == 9000 and timeout == 5
+    def request(self, method, path): calls.append((method, path))
+    def getresponse(self): return Response()
+    def close(self): closed.append(True)
+
+http.client.HTTPSConnection = Connection
+ssl.create_default_context = lambda cafile: object()
+scope = {}
+exec(os.environ['PROXY_CODE'], scope)
+Handler = scope['Handler']
+
+def invoke(method, path):
+    handler = object.__new__(Handler)
+    handler.path = path
+    events = []
+    handler.send_response = lambda status: events.append(('response', status))
+    handler.end_headers = lambda: events.append(('end',))
+    handler.send_error = lambda status: events.append(('error', status))
+    getattr(handler, method)()
+    return events
+
+assert invoke('do_GET', '/upcheck') == [('response', 200), ('end',)]
+assert calls == [('GET', '/upcheck')] and closed == [True]
+for method in ('do_POST', 'do_PUT', 'do_DELETE', 'do_PATCH'):
+    assert invoke(method, '/upcheck') == [('error', 405)]
+assert invoke('do_GET', '/api/v1/eth2/sign/0x00') == [('error', 404)]
+assert calls == [('GET', '/upcheck')]
+PY
 printf 'PASS private DAST access is limited to a fixed signer upcheck proxy and public CA trust anchors.\n'

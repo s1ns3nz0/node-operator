@@ -95,6 +95,7 @@ spec:
               class Handler(BaseHTTPRequestHandler):
                   def do_GET(self):
                       if self.path != '/upcheck': self.send_error(404); return
+                      conn = None
                       try:
                           conn = http.client.HTTPSConnection(upstream, 9000, context=context, timeout=5)
                           conn.request('GET', '/upcheck')
@@ -102,9 +103,12 @@ spec:
                           response.read(0)
                           self.send_response(response.status); self.end_headers()
                       except Exception: self.send_error(503)
+                      finally:
+                          if conn is not None: conn.close()
                   def do_POST(self): self.send_error(405)
                   def do_PUT(self): self.send_error(405)
                   def do_DELETE(self): self.send_error(405)
+                  def do_PATCH(self): self.send_error(405)
                   def log_message(self, *_): pass
               HTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
           ports: [{name: http, containerPort: 8080}]
