@@ -96,8 +96,11 @@ the promotion; never infer cross-region durability from S3 versioning.
 
 ## S3-LOG-ENCRYPTION
 
-`CKV_AWS_145`, resource `aws_s3_bucket.state_access_logs`: the dedicated S3
-server-access-log destination uses SSE-S3 because server log delivery does not
+`CKV_AWS_145`, exact resources `aws_s3_bucket.state_access_logs`,
+`aws_s3_bucket.audit_access_logs`, `aws_s3_bucket.audit_replica_access_logs`,
+`aws_s3_bucket.release_artifacts_access_logs`, and
+`aws_s3_bucket.release_artifacts_replica_access_logs`: these dedicated S3
+server-access-log destinations use SSE-S3 because server log delivery does not
 support SSE-KMS as an interchangeable destination setting. Its bucket policy
 restricts delivery to `logging.s3.amazonaws.com`, the exact source bucket and
 account, denies insecure transport, and blocks public access. State content
