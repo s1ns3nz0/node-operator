@@ -11,7 +11,8 @@
     {"command":"scripts/ci/validate-terraform-module-offline.sh for bootstrap-state, foundation-network, ops-access","result":"pass","coverage":"AWS provider 5.100.0; readonly lockfiles; backend disabled"},
     {"command":"npm run harness:check","result":"pass","task_graphs_checked":81},
     {"artifact":"m2-validation.json","result":"pass","note":"Detailed non-sensitive M2 scanner, OPA and Terraform validation evidence"}
-    ,{"commit":"b601906","result":"pass","hosted_runs":{"quality":34182735198,"scanners":34182735179,"policy":34182735205,"policy_foundation":34182735180,"terraform":34182735215},"note":"Exact final implementation head; scanner image PR build remained pending when recorded."}
+    ,{"commit":"b601906","result":"pass","hosted_runs":{"quality":34182735198,"scanners":34182735179,"policy":34182735205,"policy_foundation":34182735180,"terraform":34182735215,"scanner_image_pr_build":34182731627},"note":"Exact final implementation head; scanner-image publish was correctly skipped for a pull request."}
     ,{"review":"Terra independent M2 review","result":"approve","scope":"2b7a9b2","limitations":"No live Terraform plan/apply or issued OIDC-claim validation."}
+    ,{"review":"Terra independent H1 boundary review","result":"approve","scope":"b601906","note":"Reused inline suppression and non-ASCII path bypasses are covered; no new high-confidence false-pass regression found."}
   ]
 }
