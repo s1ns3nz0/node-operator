@@ -13,7 +13,7 @@
       "title": "Integrate source and GitOps hardening",
       "tier": "sol",
       "owner": "/root/security_goal_ci_fallback",
-      "status": "in_progress"
+      "status": "completed"
     },
     {
       "id": "r3",
@@ -27,7 +27,7 @@
       "title": "Execute real private DAST",
       "tier": "terra",
       "owner": "/root/security_goal_dast",
-      "status": "in_progress"
+      "status": "completed"
     },
     {
       "id": "r5",
