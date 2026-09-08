@@ -5,6 +5,8 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 workflow="$script_dir/../../.github/workflows/ci-security.yml"
 gate_workflow="$script_dir/../../.github/workflows/opa-pr-gate.yml"
+review_workflow="$script_dir/../../.github/workflows/ci-review-refresh.yml"
+review_handler="$script_dir/../../.github/workflows/ci-review-refresh-handler.yml"
 
 check_scanner_images() {
   local scanner_workflow="$1"
@@ -118,3 +120,18 @@ grep -Fq 'Publish failed exact-SHA evidence check' "$gate_workflow"
 grep -Fq 'publish-pr-evidence-check.sh "$SUBJECT_SHA"' "$gate_workflow"
 
 printf 'PASS: scanner evidence is confined to a non-hidden dedicated directory.\n'
+
+grep -Fq 'pull_request_review:' "$review_workflow"
+grep -Fq 'permissions: {}' "$review_workflow"
+if grep -Fq 'actions/checkout' "$review_workflow"; then
+  printf 'review signal must not checkout pull-request context\n' >&2
+  exit 1
+fi
+if grep -Eq '(actions|checks|contents|pull-requests): write|request-pr-evidence-refresh' "$review_workflow"; then
+  printf 'review signal must not have write permissions or invoke repository code\n' >&2
+  exit 1
+fi
+grep -Fq 'workflows: [CI Evidence Review Signal]' "$review_handler"
+grep -Fq 'actions: write' "$review_handler"
+grep -Fq 'request-pr-evidence-refresh.sh?ref=$GITHUB_SHA' "$review_handler"
+grep -Fq '"$trusted_script" "$GITHUB_EVENT_PATH"' "$review_handler"

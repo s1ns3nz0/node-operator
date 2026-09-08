@@ -41,4 +41,7 @@ for spec in "private-dast-vault-ca=$vault_certificate" "private-dast-signer-ca=$
   file="${spec#*=}"
   kubectl -n node-operator-dast create configmap "$name" --from-file=ca.crt="$file" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 done
+# The GET-only signer proxy runs beside the signer, not in the scanner
+# namespace. Supply the same parsed public certificate to its declared mount.
+kubectl -n validator-operations create configmap validator-hoodi-001-signer-ca --from-file=ca.crt="$signer_certificate" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 printf 'PASS: installed only public Vault and signer CA trust anchors for private DAST.\n'

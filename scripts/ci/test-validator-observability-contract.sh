@@ -11,4 +11,29 @@ jq -e '.properties.network.const == "hoodi" and .properties.validator_public_key
 grep -Fq 'Etherscan and Beaconcha.in are asynchronous' "$contract"
 grep -Fq 'forbidden field name' "$validator"
 grep -Fq '!{firehose:error-output-type}' "$terraform_config"
+# Prevent an activation race: the producer KMS policy must not depend on the
+# stream whose encryption it permits. Inspect complete Terraform blocks.
+node - "$terraform_config" "$root/infra/terraform/validator-firehose-buffer.tf" <<'NODE'
+const fs = require('fs');
+const assert = require('assert/strict');
+const streamSource = fs.readFileSync(process.argv[2], 'utf8');
+const keySource = fs.readFileSync(process.argv[3], 'utf8');
+function block(source, declaration) {
+  const start = source.indexOf(declaration);
+  assert(start >= 0, `missing ${declaration}`);
+  const rest = source.slice(start + declaration.length);
+  return rest.slice(0, rest.search(/^}/m));
+}
+const stream = block(streamSource, 'resource "aws_kinesis_firehose_delivery_stream" "validator_audit" {');
+assert.match(stream, /depends_on\s*=\s*\[[^\]]*aws_iam_role_policy\.validator_firehose_buffer/s);
+const producer = block(keySource, 'data "aws_iam_policy_document" "validator_firehose_buffer_producer" {');
+assert.match(producer, /actions\s*=\s*\["kms:GenerateDataKey", "kms:Decrypt"\]/);
+assert.match(producer, /resources\s*=\s*\[aws_kms_key\.validator_firehose_buffer\.arn\]/);
+assert.doesNotMatch(producer, /aws_kinesis_firehose_delivery_stream/);
+const policy = block(keySource, 'resource "aws_iam_role_policy" "validator_firehose_buffer" {');
+assert.match(policy, /role\s*=\s*aws_iam_role\.validator_cloudwatch_subscription\.id/);
+assert.match(policy, /policy\s*=\s*data\.aws_iam_policy_document\.validator_firehose_buffer_producer\.json/);
+const subscription = block(streamSource, 'data "aws_iam_policy_document" "validator_cloudwatch_subscription" {');
+assert.doesNotMatch(subscription, /kms:/);
+NODE
 printf 'PASS validator observability contract preserves public-only evidence boundaries.\n'

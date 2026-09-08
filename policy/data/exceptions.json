@@ -235,6 +235,60 @@
       "expires_at": "2026-10-03T00:00:00Z"
     },
     {
+      "rule": "iac.checkov",
+      "check_id": "CKV_AWS_144",
+      "subject": "aws_s3_bucket.audit_replica_access_logs",
+      "owner": "fjybjinsu",
+      "rationale": "TERMINAL-REPLICA",
+      "issue": "docs/security/checkov-2026-09-08-disposition.md#terminal-replica",
+      "expires_at": "2026-10-03T00:00:00Z"
+    },
+    {
+      "rule": "iac.checkov",
+      "check_id": "CKV_AWS_144",
+      "subject": "aws_s3_bucket.release_artifacts_replica_access_logs",
+      "owner": "fjybjinsu",
+      "rationale": "TERMINAL-REPLICA",
+      "issue": "docs/security/checkov-2026-09-08-disposition.md#terminal-replica",
+      "expires_at": "2026-10-03T00:00:00Z"
+    },
+    {
+      "rule": "iac.checkov",
+      "check_id": "CKV_AWS_145",
+      "subject": "aws_s3_bucket.audit_access_logs",
+      "owner": "fjybjinsu",
+      "rationale": "S3-LOG-ENCRYPTION",
+      "issue": "docs/security/checkov-2026-09-08-disposition.md#s3-log-encryption",
+      "expires_at": "2026-10-03T00:00:00Z"
+    },
+    {
+      "rule": "iac.checkov",
+      "check_id": "CKV_AWS_145",
+      "subject": "aws_s3_bucket.audit_replica_access_logs",
+      "owner": "fjybjinsu",
+      "rationale": "S3-LOG-ENCRYPTION",
+      "issue": "docs/security/checkov-2026-09-08-disposition.md#s3-log-encryption",
+      "expires_at": "2026-10-03T00:00:00Z"
+    },
+    {
+      "rule": "iac.checkov",
+      "check_id": "CKV_AWS_145",
+      "subject": "aws_s3_bucket.release_artifacts_access_logs",
+      "owner": "fjybjinsu",
+      "rationale": "S3-LOG-ENCRYPTION",
+      "issue": "docs/security/checkov-2026-09-08-disposition.md#s3-log-encryption",
+      "expires_at": "2026-10-03T00:00:00Z"
+    },
+    {
+      "rule": "iac.checkov",
+      "check_id": "CKV_AWS_145",
+      "subject": "aws_s3_bucket.release_artifacts_replica_access_logs",
+      "owner": "fjybjinsu",
+      "rationale": "S3-LOG-ENCRYPTION",
+      "issue": "docs/security/checkov-2026-09-08-disposition.md#s3-log-encryption",
+      "expires_at": "2026-10-03T00:00:00Z"
+    },
+    {
       "rule": "workflow.unsafe",
       "check_id": "dangerous-triggers",
       "subject": ".github/workflows/ci-review-refresh-handler.yml",

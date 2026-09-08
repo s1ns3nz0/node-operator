@@ -17,6 +17,7 @@ GH_TOKEN=fixture GITHUB_REPOSITORY=owner/repo GH_CAPTURE="$temporary_directory/p
 grep -Fx 'head_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "$temporary_directory/pass.args" >/dev/null
 grep -Fx 'conclusion=success' "$temporary_directory/pass.args" >/dev/null
 grep -Fx 'name=CI Evidence Decision' "$temporary_directory/pass.args" >/dev/null
+grep -Fx 'external_id=ci-evidence-workflow-run:123:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "$temporary_directory/pass.args" >/dev/null
 
 printf '%s\n' '{"violations":[{"id":"sast.synthetic","class":"block"}],"summary":{"block":1,"warn":0,"require_approval":0}}' > "$temporary_directory/fail.json"
 GH_TOKEN=fixture GITHUB_REPOSITORY=owner/repo GH_CAPTURE="$temporary_directory/fail.args" PATH="$temporary_directory/bin:$PATH" \

@@ -1,0 +1,25 @@
+{
+  "task_id": "2026-09-08-security-activation",
+  "objective": "Activate remaining CI security controls and reconcile actual Hoodi AWS settings with hardened IaC without weakening gates.",
+  "authorized": [
+    "local implementation and checks",
+    "feature branch and draft PR",
+    "read scoped AWS configuration",
+    "apply reviewed non-destructive in-scope AWS hardening"
+  ],
+  "forbidden": [
+    "merge or release publication",
+    "secret access or ceremony",
+    "unreviewed deletion replacement or downtime",
+    "billing or repository visibility changes",
+    "weakening controls to pass"
+  ],
+  "integration_owner": {
+    "tier": "sol",
+    "owner": "/root/ci_optimization"
+  },
+  "routing": {
+    "requested": "sol",
+    "fallback": "Root coordinates evidence; designated Sol owns security integration"
+  }
+}

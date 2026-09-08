@@ -1,6 +1,8 @@
 locals {
-  state_bucket = "${var.name}-tfstate-${var.aws_account_id}-${replace(var.aws_region, "-", "")}"
-  lock_table   = "${var.name}-terraform-lock"
+  generated_state_bucket = "${var.name}-tfstate-${var.aws_account_id}-${replace(var.aws_region, "-", "")}"
+  state_bucket           = coalesce(var.state_bucket_name, local.generated_state_bucket)
+  state_bucket_arn       = "arn:aws:s3:::${local.state_bucket}"
+  lock_table             = "${var.name}-terraform-lock"
   tags = {
     ManagedBy = "terraform"
     Project   = "node-operator"
@@ -12,6 +14,17 @@ resource "aws_s3_bucket" "state" {
   bucket        = local.state_bucket
   force_destroy = false
   tags          = local.tags
+  lifecycle {
+    prevent_destroy = true
+
+    precondition {
+      condition = alltrue([
+        for principal_arn in var.backend_principal_arns :
+        can(regex("^arn:aws:iam::${var.aws_account_id}:role/", principal_arn))
+      ])
+      error_message = "backend_principal_arns must contain only IAM roles in aws_account_id."
+    }
+  }
 }
 
 resource "aws_kms_key" "state" {
@@ -20,11 +33,56 @@ resource "aws_kms_key" "state" {
   enable_key_rotation     = true
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid       = "EnableAccountIamPermissions", Effect = "Allow"
-      Principal = { AWS = "arn:aws:iam::${var.aws_account_id}:root" }
-      Action    = "kms:*", Resource = "*"
-    }]
+    Statement = concat(
+      [{
+        Sid       = "EnableAccountIamPermissions", Effect = "Allow"
+        Principal = { AWS = "arn:aws:iam::${var.aws_account_id}:root" }
+        Action    = "kms:*", Resource = "*"
+      }],
+      length(var.backend_principal_arns) == 0 ? [] : [
+        {
+          Sid       = "AllowNamedBackendRolesS3DataCrypto", Effect = "Allow"
+          Principal = { AWS = tolist(var.backend_principal_arns) }
+          Action    = ["kms:Decrypt", "kms:GenerateDataKey"]
+          Resource  = "*"
+          Condition = {
+            StringEquals = {
+              "kms:CallerAccount" = var.aws_account_id
+              "kms:ViaService"    = "s3.${var.aws_region}.amazonaws.com"
+            }
+            StringLike = {
+              "kms:EncryptionContext:aws:s3:arn" = "${local.state_bucket_arn}/*"
+            }
+          }
+        },
+        {
+          Sid       = "AllowNamedBackendRolesDynamoDataCrypto", Effect = "Allow"
+          Principal = { AWS = tolist(var.backend_principal_arns) }
+          Action = [
+            "kms:Encrypt", "kms:Decrypt", "kms:ReEncryptFrom", "kms:ReEncryptTo",
+            "kms:GenerateDataKey", "kms:GenerateDataKeyWithoutPlaintext"
+          ]
+          Resource = "*"
+          Condition = {
+            StringEquals = {
+              "kms:CallerAccount"                               = var.aws_account_id
+              "kms:ViaService"                                  = "dynamodb.${var.aws_region}.amazonaws.com"
+              "kms:EncryptionContext:aws:dynamodb:tableName"    = local.lock_table
+              "kms:EncryptionContext:aws:dynamodb:subscriberId" = var.aws_account_id
+            }
+          }
+        },
+        {
+          Sid       = "AllowNamedBackendRolesDescribeStateKey", Effect = "Allow"
+          Principal = { AWS = tolist(var.backend_principal_arns) }
+          Action    = ["kms:DescribeKey"]
+          Resource  = "*"
+          Condition = {
+            StringEquals = { "kms:CallerAccount" = var.aws_account_id }
+          }
+        }
+      ]
+    )
   })
   tags = local.tags
   lifecycle { prevent_destroy = true }
@@ -127,11 +185,35 @@ resource "aws_s3_bucket_versioning" "state" {
 resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
   bucket = aws_s3_bucket.state.id
   rule {
+    bucket_key_enabled = false
     apply_server_side_encryption_by_default {
       sse_algorithm     = "aws:kms"
       kms_master_key_id = aws_kms_key.state.arn
     }
   }
+  # Preserve the denial before changing defaults, including with providers
+  # that cannot represent S3's native BlockedEncryptionTypes setting.
+  depends_on = [aws_s3_bucket_policy.state]
+}
+
+resource "aws_s3_bucket_policy" "state" {
+  bucket = aws_s3_bucket.state.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyInsecureTransport", Effect = "Deny", Principal = "*"
+        Action    = "s3:*"
+        Resource  = [local.state_bucket_arn, "${local.state_bucket_arn}/*"]
+        Condition = { Bool = { "aws:SecureTransport" = "false" } }
+      },
+      {
+        Sid       = "DenyCustomerProvidedEncryptionKeys", Effect = "Deny", Principal = "*"
+        Action    = "s3:PutObject", Resource = "${local.state_bucket_arn}/*"
+        Condition = { Null = { "s3:x-amz-server-side-encryption-customer-algorithm" = "false" } }
+      }
+    ]
+  })
 }
 
 resource "aws_s3_bucket_public_access_block" "state" {
@@ -158,4 +240,5 @@ resource "aws_dynamodb_table" "lock" {
     enabled = true
   }
   tags = local.tags
+  lifecycle { prevent_destroy = true }
 }
