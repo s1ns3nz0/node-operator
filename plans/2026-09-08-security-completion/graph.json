@@ -1,0 +1,79 @@
+{
+  "task_id": "2026-09-08-security-completion",
+  "nodes": [
+    {
+      "id": "r1",
+      "title": "Activate verified scanner pin",
+      "tier": "sol",
+      "owner": "/root/security_goal_ci_fallback",
+      "status": "completed"
+    },
+    {
+      "id": "r2",
+      "title": "Integrate source and GitOps hardening",
+      "tier": "sol",
+      "owner": "/root/security_goal_ci_fallback",
+      "status": "completed"
+    },
+    {
+      "id": "r3",
+      "title": "Prove and enforce hosted admission",
+      "tier": "sol",
+      "owner": "/root/security_goal_ci_fallback",
+      "status": "pending"
+    },
+    {
+      "id": "r4",
+      "title": "Execute real private DAST",
+      "tier": "terra",
+      "owner": "/root/security_goal_dast",
+      "status": "completed"
+    },
+    {
+      "id": "r5",
+      "title": "Reconcile live IaC and state ownership",
+      "tier": "sol",
+      "owner": "/root",
+      "status": "in_progress"
+    },
+    {
+      "id": "debrief",
+      "title": "Fresh completion audit",
+      "tier": "terra",
+      "owner": "pending",
+      "status": "pending"
+    }
+  ],
+  "edges": [
+    {
+      "from": "r1",
+      "to": "r2",
+      "kind": "blocks"
+    },
+    {
+      "from": "r2",
+      "to": "r3",
+      "kind": "blocks"
+    },
+    {
+      "from": "r2",
+      "to": "r4",
+      "kind": "blocks"
+    },
+    {
+      "from": "r3",
+      "to": "debrief",
+      "kind": "blocks"
+    },
+    {
+      "from": "r4",
+      "to": "debrief",
+      "kind": "blocks"
+    },
+    {
+      "from": "r5",
+      "to": "debrief",
+      "kind": "blocks"
+    }
+  ]
+}

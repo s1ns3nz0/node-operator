@@ -1,13 +1,15 @@
 data "aws_caller_identity" "foundation" {}
 
 resource "aws_default_security_group" "foundation" {
-  vpc_id  = aws_vpc.this.id
+  count   = local.existing_mode ? 0 : 1
+  vpc_id  = aws_vpc.this[0].id
   ingress = []
   egress  = []
   tags    = merge(local.tags, { Name = "${var.name}-foundation-default-deny" })
 }
 
 resource "aws_kms_key" "foundation_flow_logs" {
+  count                   = local.existing_mode ? 0 : 1
   description             = "Private foundation VPC flow log encryption"
   enable_key_rotation     = true
   deletion_window_in_days = 30
@@ -32,14 +34,16 @@ resource "aws_kms_key" "foundation_flow_logs" {
 }
 
 resource "aws_cloudwatch_log_group" "foundation_flow_logs" {
+  count             = local.existing_mode ? 0 : 1
   name              = "/aws/vpc/${var.name}/foundation-flow-logs"
   retention_in_days = 365
-  kms_key_id        = aws_kms_key.foundation_flow_logs.arn
+  kms_key_id        = aws_kms_key.foundation_flow_logs[0].arn
   tags              = local.tags
 }
 
 resource "aws_iam_role" "foundation_flow_logs" {
-  name = "${var.name}-foundation-flow-logs"
+  count = local.existing_mode ? 0 : 1
+  name  = "${var.name}-foundation-flow-logs"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -55,22 +59,24 @@ resource "aws_iam_role" "foundation_flow_logs" {
 }
 
 resource "aws_iam_role_policy" "foundation_flow_logs" {
-  role = aws_iam_role.foundation_flow_logs.id
+  count = local.existing_mode ? 0 : 1
+  role  = aws_iam_role.foundation_flow_logs[0].id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Effect   = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"]
-      Resource = "${aws_cloudwatch_log_group.foundation_flow_logs.arn}:*"
+      Resource = "${aws_cloudwatch_log_group.foundation_flow_logs[0].arn}:*"
     }]
   })
 }
 
 resource "aws_flow_log" "foundation" {
-  vpc_id               = aws_vpc.this.id
+  count                = local.existing_mode ? 0 : 1
+  vpc_id               = aws_vpc.this[0].id
   traffic_type         = "ALL"
   log_destination_type = "cloud-watch-logs"
-  log_destination      = aws_cloudwatch_log_group.foundation_flow_logs.arn
-  iam_role_arn         = aws_iam_role.foundation_flow_logs.arn
+  log_destination      = aws_cloudwatch_log_group.foundation_flow_logs[0].arn
+  iam_role_arn         = aws_iam_role.foundation_flow_logs[0].arn
   depends_on           = [aws_iam_role_policy.foundation_flow_logs]
   tags                 = local.tags
 }

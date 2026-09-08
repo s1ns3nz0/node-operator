@@ -1,0 +1,389 @@
+{
+  "requirements": {
+    "1": {
+      "status": "complete",
+      "evidence": "PR129 squash merged27277d9; actual default-main CI Security34194186564 SUCCESS and pulled exact verified scanner digestdf5078a48b7536b5f64e99b97cf6bfceab7c1638fcd534f499600d4d27fd836d"
+    },
+    "2": {
+      "status": "complete",
+      "evidence": "Requested sourcePR127 externally merged6487ffbeb1f693df8007d1ccf6822bc722050b18 after exact-head fjybjinsu approval; GitOps46 and reviewed followups through53 merged. Runtime source followupPR131 remains open and must pass admission/merge separately; this status does not claim every followup is merged."
+    },
+    "3": {
+      "status": "incomplete",
+      "evidence": "Exact-head failure proved for missing approval and actual scanner finding(PR132 block1/sast.semgrep, closed without merge). PR127 and PR131 were externally merged within seconds of approval before positive refresh; both refresh attempts failed and retained old failed decisions. Required app15368 CI Evidence Decision is now enabled with strict/admin/quality/scanners and all other protection fields preserved. PR133 will prove open-PR positive review refresh; GitOps protection403 entitlement still unresolved."
+    },
+    "4": {
+      "status": "complete",
+      "evidence": "Actual run1788855510 PASS after reviewed four SG rules and two proxy corrections. Exact merged GitOps504f7d0 and pinned scanner781a; four HTTP200, VaultCA+hostname verified, alert_count0, alert_metadata[], summary exit0; owned Job cleanup confirmed. Root independently checked artifact fields and SHA f8622f334f0f733de9110c927e70f84652e975e486e54f098dfa50dc9d69e1cc. Three fixed GET responses passively scanned, Nethermind TCP reachability only; no full validator UC or active-attack claim."
+    },
+    "5": {
+      "status": "incomplete",
+      "evidence": "Bootstrap17-resource state and foundation6-resource state now have isolated encrypted S3 owners, identical migrated resource content and independently verified full scoped no-drift plans under approved backend role. Both migrations retain backups and honestly record Terraform1.5.7 empty-remote lineage/serial reset. Reviewed four cross-pool rules also applied with targeted no-drift. Foundation source integration remains pending; ops local-state migration and unapproved EBS-flag host replacement decision remain incomplete."
+    }
+  },
+  "initial_protection": {
+    "required_reviews": 1,
+    "code_owner": true,
+    "last_push_approval": true,
+    "admin_enforcement": true,
+    "required_checks": [
+      "quality",
+      "scanners"
+    ],
+    "user_notified": true
+  },
+  "checks": [
+    {
+      "name": "default scanner activation",
+      "run_id": 34194186564,
+      "result": "success"
+    },
+    {
+      "name": "GitOps corrected OCI publisher",
+      "run_id": 34193621493,
+      "result": "success"
+    },
+    {
+      "name": "bootstrap rendered policy tests",
+      "commit": "ef062c0",
+      "result": "pass"
+    },
+    {
+      "name": "actual Terraform backend canary",
+      "result": "pass",
+      "scope": "isolated non-sensitive backend, named assumed role, current AWS-managed Dynamo key",
+      "object_key": "node-operator/security-cmk-canary-e611da82-e9cb-4c5e-a380-9307b9cd4366/terraform.tfstate",
+      "version": "FQFpn_ZOMzKvmIh.5Lxm9d0TrrvJJWc9"
+    },
+    {
+      "name": "bootstrap encrypted remote readback",
+      "result": "pass",
+      "state_version": "X2cjuh3ZRlBqyKuEArU8.xJEH_tbOiw.",
+      "cmk": "23528ef1-681c-41c3-a565-d19d3ec98c37",
+      "sse_c_block_preserved": true,
+      "dynamo_status": "ACTIVE/ENABLED"
+    },
+    {
+      "name": "bootstrap state content equivalence",
+      "result": "pass",
+      "canonicalization": "jq -S 'del(.lineage,.serial)'",
+      "sha256": "e84c7d21b9223126a1c3920a1930b9686dcfe383ae634cfa839e7c6696bd9aa1",
+      "managed_resources": 17
+    },
+    {
+      "name": "post-CMK-cache assumed backend role read/lock/no-drift",
+      "result": "pass",
+      "observed_utc": "2026-09-08T06:52:47Z"
+    },
+    {
+      "name": "Terraform1.5.7 empty remote migration metadata mechanism",
+      "result": "independently explained",
+      "reviewer": "/root/security_goal_ci_fallback",
+      "source": "https://raw.githubusercontent.com/hashicorp/terraform/v1.5.7/internal/states/remote/state.go"
+    },
+    {
+      "name": "goal bundle harness",
+      "result": "pass",
+      "task_graph_count": 84
+    },
+    {
+      "name": "DAST lifecycle fallback runtime",
+      "result": "diagnostic-only, scan failed",
+      "run_id": 1788851715,
+      "scanner_exit": 137,
+      "scanner_reason": "Error",
+      "scan": null,
+      "cleanup": "pass",
+      "private_evidence": "/private/tmp/node-operator-dast-run.1788851715.sLXLla/evidence.json"
+    },
+    {
+      "name": "neutral ops ownership delta",
+      "result": "reviewed and contract tests pass; not applied",
+      "commit": "11e6de4",
+      "reviewer": "/root/security_goal_ci_fallback"
+    },
+    {
+      "name": "exact previous DAST Pod eviction classification",
+      "result": "cause confirmed for latest run only",
+      "pod": "private-dast-baseline-1788851715-g4f8t",
+      "started_utc": "2026-09-08T07:15:19Z",
+      "evicted_utc": "2026-09-08T07:15:34Z",
+      "classification": {
+        "kind": "emptydir-size-limit",
+        "volume": "temporary",
+        "limit": "16Mi"
+      },
+      "raw_event_saved": false,
+      "reviewer": "/root/security_goal_ci_fallback"
+    },
+    {
+      "name": "capacity-fixed DAST actual run",
+      "result": "failed with usable per-target evidence",
+      "run_id": 1788852508,
+      "stage": "import",
+      "exit_code": 22,
+      "targets": {
+        "prysm": {
+          "status": null,
+          "reason": "transport_failure"
+        },
+        "vault": {
+          "status": 474
+        },
+        "signer": {
+          "status": 403
+        },
+        "nethermind": {
+          "status": 503
+        }
+      },
+      "cleanup": "pass",
+      "private_evidence": "/private/tmp/node-operator-dast-run.1788852508.TigkoZ/evidence.json"
+    },
+    {
+      "name": "signer proxy HTTPHost correction",
+      "result": "reviewed code, serverdryrun and rollout pass; one fixed GET200",
+      "commit": "4224883",
+      "upstream_tls_unchanged": true,
+      "scope": "local-forward-to-reviewed-proxy, not full DAST"
+    }
+  ],
+  "foundation_import_candidate": {
+    "private_directory": "/private/tmp/node-operator-foundation-import.7Df1E7",
+    "plan_sha256": "ccf286ee2dc15623e2172654df611385521e3dd91dd09a1495cff8fb51667b27",
+    "managed_resources": 6,
+    "updates": 5,
+    "no_ops": 1,
+    "changed_attributes": ["tags", "tags_all"],
+    "creates_deletes_replacements_routing_changes": 0,
+    "root_independent_plan_assertion": "pass",
+    "status": "approved tag-only saved plan applied; six-resource refreshed plan no-drift; no remote migration",
+    "post_apply_root_assertion": "all six managed changes no-op, pass",
+    "post_apply_private_plan": "/private/tmp/node-operator-foundation-import.7Df1E7/post-apply-plan.json"
+  },
+  "runtime_followup_integration": {
+    "head": "7656b97113e2f8cfd1d76f1302836e6d5271a687",
+    "base": "6487ffbeb1f693df8007d1ccf6822bc722050b18",
+    "diff_sha256": "7fe1e72f9d684cc93efa416b94be9defb073f7b7d473bcdf46c5057f5df4ffef",
+    "files": 6,
+    "independent_terra_review": "approved",
+    "focused_contracts": "pass",
+    "shellcheck_syntax_fmt_diff_harness": "pass",
+    "optional_kyverno_engine": "explicitly skipped, CLI unavailable",
+    "status": "PR131 externally approved and mergedf3e2123 before review-refresh completed; runtime fixes are now on main, DAST passed. Positive admission still unproven; PR133 carries the next test.",
+    "pr": 131,
+    "portability_ci_quality": "34203163133 success"
+  },
+  "source_pr_127_merge": {
+    "merge": "6487ffbeb1f693df8007d1ccf6822bc722050b18",
+    "merged_by": "fjybjinsu",
+    "merged_at": "2026-09-08T08:00:56Z",
+    "exact_head_approval_at": "2026-09-08T08:00:49Z",
+    "positive_admission_proof": "not achieved: old decision failure remained; review refresh34202245518 failed"
+  },
+  "dast_alert_identification": {
+    "run": "1788855155",
+    "gitops_merge": "504f7d01424dcf5f4fd38cf039c3ff4c915f4558",
+    "gitops_pr": 53,
+    "result": "failed",
+    "all_four_targets_http_200": true,
+    "vault_tls_verified": true,
+    "alert_count": 1,
+    "alert_metadata": [{"plugin_id": 10036, "risk": 1, "confidence": 3}],
+    "report_sha256": "bd7c568c4ca5f8d82f54390ab53b5b5a755ce94c7e24e7ba8d3ec994192703cc",
+    "cleanup": "owned Job absent",
+    "rule_source": "https://www.zaproxy.org/docs/alerts/10036/",
+    "private_evidence": "/private/tmp/node-operator-dast-run.1788855155.tpjQbX/evidence.json"
+  },
+  "hosted_negative_fixture": {
+    "pr": 132,
+    "head": "a976cafd682186197cff01cb3f9a2ab1449d2b9d",
+    "scanner_run": 34204779870,
+    "gate_run": 34204838362,
+    "artifact_id": 10047351347,
+    "decision": {"block": 1, "require_approval": 0, "warn": 0},
+    "violation_id": "sast.semgrep",
+    "exact_head_custom_check": "failure",
+    "private_evidence": "/private/tmp/pr132-evidence.SpsCDK/published/published",
+    "root_independent_decision_validation": "pass",
+    "final_pr_state": "closed without merge; branch retained",
+    "runtime_execution": false
+  },
+  "required_source_evidence_check": {
+    "status": "enabled and exact readback verified",
+    "app_id": 15368,
+    "checks": ["quality", "scanners", "CI Evidence Decision"],
+    "strict": true,
+    "unrelated_protection_fields_unchanged": true,
+    "reason": "Repeated external merge-before-refresh; enforce fail-closed while positive proof is pending",
+    "primary_review": "approved by security_goal_ci_fallback"
+  },
+  "foundation_remote_migration": {
+    "status": "complete for six public-edge resources; source PR integration pending",
+    "key": "node-operator/foundation-network/terraform.tfstate",
+    "source_commit": "41bf8f9d25bf5a040e5d1aa5208365e87c8c89dc",
+    "private_directory": "/private/tmp/node-operator-foundation-migrate.l8NDSm",
+    "resource_content_unchanged": true,
+    "managed_resources": 6,
+    "old_lineage": "e6f5fcda-80ea-670a-171f-3de947e70b8f",
+    "old_serial": 12,
+    "new_lineage": "e39a4d57-c2fb-d8d3-2b4c-8862528d5ea4",
+    "new_serial": 1,
+    "terraform_version_preserved": "1.5.7",
+    "version_id": "NDiRxyYdUCKe4wjUsMbYOplR97CYfzAr",
+    "encryption": "aws:kms, exact reviewed CMK23528",
+    "force_copy": false,
+    "infrastructure_apply_during_migration": false,
+    "remote_plan_sha256": "724701cf07bd1b1d03bf800594dc1953fd827e839ddceb5ecf347e5a990b1e4d",
+    "root_independent_canonical_and_no_drift_checks": "pass",
+    "retired_original_candidate": "mode0400, hash unchanged, private owner README added"
+  },
+  "latest_dast": {
+    "run": "1788855510",
+    "result": "passed",
+    "stage": "summary",
+    "exit_code": 0,
+    "all_four_targets_http_200": true,
+    "vault_ca_and_hostname_verified": true,
+    "alert_count": 0,
+    "alert_metadata": [],
+    "gitops_commit": "504f7d01424dcf5f4fd38cf039c3ff4c915f4558",
+    "proxy_commit": "7656b97113e2f8cfd1d76f1302836e6d5271a687",
+    "report_sha256": "696ffb3c470d3aa8ab34ffbf6decda1f9e6476a7610620b7a4d02870a3feca52",
+    "evidence_sha256": "f8622f334f0f733de9110c927e70f84652e975e486e54f098dfa50dc9d69e1cc",
+    "private_evidence": "/private/tmp/node-operator-dast-run.1788855510.nvDH2C/evidence.json",
+    "root_independent_validation": "pass",
+    "cleanup": "owned Job absent, integration owner verified",
+    "scope": "three fixed GET header-only passive responses and one TCP P2P reachability probe; not full API or validator-duty testing"
+  },
+  "historical_connectivity_dast": {
+    "run": "1788854088",
+    "result": "failed",
+    "stage": "summary",
+    "all_four_targets_http_200": true,
+    "vault_ca_and_hostname_verified": true,
+    "alert_count": 1,
+    "report_sha256": "b6c02ca77476cc1e7b96f42874153197be5d7ab59eb699883a89455d268aac10",
+    "cleanup": "owned resources absent, reported by integration owner",
+    "private_evidence": "/private/tmp/node-operator-dast-run.1788854088.t0H4Uq/evidence.json",
+    "next": "Review bounded numeric alert metadata collection; no finding waiver or automatic retry"
+  },
+  "protection_recheck_before_user_approval": {
+    "source_required_reviews": 0,
+    "source_code_owner_required": false,
+    "source_required_checks": ["quality", "scanners"],
+    "source_pr_127_head": "cb4e002f1c479c55febb32d5f58214bd0e94a7de",
+    "source_pr_127_reviews": 0,
+    "source_pr_127_evidence_decision": "FAILURE",
+    "gitops_protection": "HTTP 403: private repository entitlement unavailable"
+  },
+  "external_mutations": [
+    {
+      "type": "reviewed_four_cross_pool_sg_rules",
+      "commit": "b9c77611a71f695d5a9a3207ab69f629f13efe17",
+      "plan_sha256": "38a6c913b909a3d7ddd7f3c6cc3f5041813f08f8aec32459a7a07d8266c6ea40",
+      "result": "exact four creations; readback and same-target no-drift passed",
+      "rules": ["sgr-0ae42f8724e41b4b1", "sgr-0e865bcf251130f33", "sgr-07c2a5e3c9029ebf1", "sgr-0152afac9bef60b08"],
+      "baseline_state_version": "cIY8rHrQ_CW5lKjcQwAl73LkBpRKoT4o",
+      "baseline_state_encryption": "aws:kms",
+      "scope": "targeted connectivity only, not full baseline no-drift"
+    },
+    {
+      "type": "normal_squash_merge",
+      "repository": "node-operator",
+      "pr": 129,
+      "merge": "27277d9d6492d4b0b324cdb984935c7ef475a5ce"
+    },
+    {
+      "type": "normal_merges",
+      "repository": "node-operator-gitops",
+      "prs": [
+        46,
+        47,
+        48
+      ],
+      "head": "5e6bc4320bfc4981cb56e3d63babd3c04c18206c"
+    },
+    {
+      "type": "reviewed_bootstrap_stage1",
+      "result": "1create2update0destroy",
+      "plan_sha256": "a8a078aac621968b42340973a9e448da1b936906a9f50866b901a08d1560b284"
+    },
+    {
+      "type": "reviewed_private_DAST_prerequisites",
+      "result": "applied and ready, scan not passed"
+    },
+    {
+      "type": "reviewed_bootstrap_stage2",
+      "result": "10create2update0destroy",
+      "plan_sha256": "0d2b08d0ba42d00bb7ea9e5596610050fe14144c6337dc6f751fb3044d1ea1f2"
+    },
+    {
+      "type": "normal_bootstrap_backend_migration",
+      "key": "node-operator/bootstrap/terraform.tfstate",
+      "force_copy": false,
+      "resource_content_unchanged": true,
+      "old_lineage": "43433424-4274-677a-050f-5f725c172eac",
+      "old_serial": 23,
+      "new_lineage": "1ab1c89b-c841-5119-dff7-48606a2148bf",
+      "new_serial": 1,
+      "explanation_source": "https://raw.githubusercontent.com/hashicorp/terraform/v1.5.7/internal/states/remote/state.go",
+      "reviewer": "/root/security_goal_ci_fallback"
+    },
+    {
+      "type": "reviewed_signer_proxy_args_only_patch",
+      "commit": "4224883",
+      "result": "rollout success",
+      "guard": "JSON Patch original-code test before replacement"
+    }
+  ],
+  "model_fallbacks": [
+    {
+      "requested": "gpt-5.6-sol",
+      "actual": "gpt-6-astra",
+      "owner": "/root/security_goal_ci_fallback",
+      "reason": "requested model at capacity"
+    },
+    {
+      "requested": "gpt-5.6-luna reconnaissance agent",
+      "actual": "root gpt-6-astra",
+      "reason": "agent thread limit; bounded state reconnaissance performed locally"
+    }
+  ],
+  "previous_goal_turn_classification": "progress: private foundation import changed next action and canonical runtime evidence was recorded. Current continuation applied reviewed tag reconciliation, pushed source followupPR131, merged GitOps53, corrected real proxy header disclosure, and obtained actual zero-alert DAST PASS; no blocked audit applies.",
+  "protection_observed": {
+    "required_reviews": 0,
+    "code_owner": false,
+    "last_push_approval": false,
+    "admin_enforcement": true,
+    "required_checks": [
+      "quality",
+      "scanners"
+    ]
+  },
+  "private_state_evidence": "/private/tmp/node-operator-bootstrap-goal.RIf9Ci",
+  "ops_state_discovery": {
+    "path": "/private/tmp/node-operator-zero-to-hoodi/infra/ops-access/terraform.tfstate",
+    "lineage": "4194a7ca-cf28-4cce-2f92-84cb76ddbe60",
+    "serial": 10,
+    "managed_resources": 9,
+    "actual_host": "i-02c57d75e7f6810b1",
+    "note": "Existing local state owns live host; baseline stale hosti-0b1e225356d83549e is not migration source. Do not duplicate ownership."
+  },
+  "foundation_existing_import_candidate": {
+    "status": "Sol-approved exact private-local candidate plan applied; not an ownership migration",
+    "scope": "six reviewed public-edge addresses only; no baseline VPC, private subnet, private route table, routes, associations, remote state, or apply",
+    "provenance": {
+      "aws_subnet.nat": "subnet-0a132b51cd663eeaa",
+      "aws_eip.hoodi_nat": "eipalloc-0ae83bf5a52ce9364",
+      "aws_internet_gateway.nat": "igw-0d5c4a38f3238bf7c",
+      "aws_route_table.public": "rtb-0d44b65f6b8fd3095",
+      "aws_route_table_association.public": "rtbassoc-052bdd657504684b9",
+      "aws_nat_gateway.hoodi": "nat-02d4eabc0b940f8d4"
+    },
+    "association_import": "provider rejected raw association ID; approved composite subnet-0a132b51cd663eeaa/rtb-0d44b65f6b8fd3095 imported state ID rtbassoc-052bdd657504684b9 after exact EC2 readback",
+    "plan_summary": "approved saved plan SHA-256 ccf286ee2dc15623e2172654df611385521e3dd91dd09a1495cff8fb51667b27; 0 create, 0 delete, 0 replacement; five metadata-tag updates and one no-op; routing fields unchanged",
+    "post_apply_readback": "local refresh plan exit 0 with six managed resources and no drift; EC2 identity, NAT allocation/subnet/VPC, public default-IGW route, and public association unchanged",
+    "private_evidence": "/private/tmp/node-operator-foundation-import.7Df1E7"
+  }
+}
