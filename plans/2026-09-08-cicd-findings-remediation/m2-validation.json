@@ -1,0 +1,19 @@
+{
+  "scope": "M2 Checkov reconciliation and policy exception validation",
+  "observed_date": "2026-09-08",
+  "checks": [
+    {"command": "checkov --directory infra --framework terraform --output json --quiet --skip-download --compact", "tool_version": "3.2.522", "finding_count": 26, "unregistered_exact_check_id_resource_pairs": 0, "note": "Findings remain visible to OPA; registered exceptions are not passed controls."},
+    {"command": "opa test --ignore fixtures policy", "passed": 67, "failed": 0, "note": "Includes malformed-expiry rejection and exact-scope exception matching regression tests."},
+    {"command": "terraform fmt -check infra/bootstrap-state infra/ops-access infra/foundation-network infra/terraform", "exit_code": 0},
+    {"command": "terraform validate -no-color", "modules": ["infra/bootstrap-state", "infra/ops-access", "infra/foundation-network", "infra/terraform"], "result": "all valid", "provider": "hashicorp/aws 5.100.0", "initialization": "backend=false; no remote state or apply"},
+    {"command": "npm run harness:check", "exit_code": 0, "task_graphs_checked": 81},
+    {"command": "npm run harness:verify", "exit_code": 0, "note": "Insecure fixture failures and malformed-report rejection are expected negative tests; adapter completed successfully."},
+    {"command": "bash scripts/ci/test-pr-baseline-findings.sh", "exit_code": 0},
+    {"command": "bash scripts/ci/test-script-quality.sh", "exit_code": 0}
+  ],
+  "limitations": [
+    "No Terraform plan or apply was performed; live infrastructure remediation is not claimed.",
+    "26 Checkov findings are subject to exact scoped expiring exceptions; new deviations are Hoodi-test-only and expire 2026-10-03.",
+    "Fresh CI evidence must be collected after all integration commits."
+  ]
+}

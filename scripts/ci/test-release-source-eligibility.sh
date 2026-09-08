@@ -41,6 +41,18 @@ if SOURCE_CHECK_FIXTURE="$temporary_directory/spoofed.json" PR_CHECK_FIXTURE="$t
   printf 'eligibility accepted a check from an untrusted app\n' >&2
   exit 1
 fi
+jq '.["101"].path = ".github/workflows/untrusted.yml"' "$temporary_directory/runs.json" > "$temporary_directory/spoofed-runs.json"
+if SOURCE_CHECK_FIXTURE="$temporary_directory/pass.json" PR_CHECK_FIXTURE="$temporary_directory/pr-check.json" PULL_FIXTURE="$temporary_directory/pulls.json" RUN_FIXTURE="$temporary_directory/spoofed-runs.json" GH_TOKEN=fixture GITHUB_REPOSITORY=owner/repo PATH="$temporary_directory/bin:$PATH" \
+  "$script_dir/verify-release-source-eligibility.sh" "$sha" 2>/dev/null; then
+  printf 'eligibility accepted a check created by the wrong workflow\n' >&2
+  exit 1
+fi
+jq '.[0].merge_commit_sha = "cccccccccccccccccccccccccccccccccccccccc"' "$temporary_directory/pulls.json" > "$temporary_directory/stale-pulls.json"
+if SOURCE_CHECK_FIXTURE="$temporary_directory/pass.json" PR_CHECK_FIXTURE="$temporary_directory/pr-check.json" PULL_FIXTURE="$temporary_directory/stale-pulls.json" RUN_FIXTURE="$temporary_directory/runs.json" GH_TOKEN=fixture GITHUB_REPOSITORY=owner/repo PATH="$temporary_directory/bin:$PATH" \
+  "$script_dir/verify-release-source-eligibility.sh" "$sha" 2>/dev/null; then
+  printf 'eligibility accepted an associated pull request for an old merge commit\n' >&2
+  exit 1
+fi
 if GIT_RESULT=1 SOURCE_CHECK_FIXTURE="$temporary_directory/pass.json" PR_CHECK_FIXTURE="$temporary_directory/pr-check.json" PULL_FIXTURE="$temporary_directory/pulls.json" RUN_FIXTURE="$temporary_directory/runs.json" GH_TOKEN=fixture GITHUB_REPOSITORY=owner/repo PATH="$temporary_directory/bin:$PATH" \
   "$script_dir/verify-release-source-eligibility.sh" "$sha" 2>/dev/null; then
   printf 'eligibility accepted a source outside origin/main\n' >&2
