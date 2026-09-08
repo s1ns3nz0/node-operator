@@ -1,6 +1,7 @@
 locals {
-  state_bucket = "${var.name}-tfstate-${var.aws_account_id}-${replace(var.aws_region, "-", "")}"
-  lock_table   = "${var.name}-terraform-lock"
+  generated_state_bucket = "${var.name}-tfstate-${var.aws_account_id}-${replace(var.aws_region, "-", "")}"
+  state_bucket           = coalesce(var.state_bucket_name, local.generated_state_bucket)
+  lock_table             = "${var.name}-terraform-lock"
   tags = {
     ManagedBy = "terraform"
     Project   = "node-operator"
@@ -12,6 +13,17 @@ resource "aws_s3_bucket" "state" {
   bucket        = local.state_bucket
   force_destroy = false
   tags          = local.tags
+  lifecycle {
+    prevent_destroy = true
+
+    precondition {
+      condition = alltrue([
+        for principal_arn in var.backend_principal_arns :
+        can(regex("^arn:aws:iam::${var.aws_account_id}:role/", principal_arn))
+      ])
+      error_message = "backend_principal_arns must contain only IAM roles in aws_account_id."
+    }
+  }
 }
 
 resource "aws_kms_key" "state" {
@@ -20,11 +32,39 @@ resource "aws_kms_key" "state" {
   enable_key_rotation     = true
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid       = "EnableAccountIamPermissions", Effect = "Allow"
-      Principal = { AWS = "arn:aws:iam::${var.aws_account_id}:root" }
-      Action    = "kms:*", Resource = "*"
-    }]
+    Statement = concat(
+      [{
+        Sid       = "EnableAccountIamPermissions", Effect = "Allow"
+        Principal = { AWS = "arn:aws:iam::${var.aws_account_id}:root" }
+        Action    = "kms:*", Resource = "*"
+      }],
+      length(var.backend_principal_arns) == 0 ? [] : [
+        {
+          Sid       = "AllowNamedBackendRolesS3DataCrypto", Effect = "Allow"
+          Principal = { AWS = tolist(var.backend_principal_arns) }
+          Action    = ["kms:Decrypt", "kms:GenerateDataKey"]
+          Resource  = "*"
+          Condition = {
+            StringEquals = {
+              "kms:CallerAccount" = var.aws_account_id
+              "kms:ViaService"    = "s3.${var.aws_region}.amazonaws.com"
+            }
+            StringLike = {
+              "kms:EncryptionContext:aws:s3:arn" = "${aws_s3_bucket.state.arn}/*"
+            }
+          }
+        },
+        {
+          Sid       = "AllowNamedBackendRolesDescribeStateKey", Effect = "Allow"
+          Principal = { AWS = tolist(var.backend_principal_arns) }
+          Action    = ["kms:DescribeKey"]
+          Resource  = "*"
+          Condition = {
+            StringEquals = { "kms:CallerAccount" = var.aws_account_id }
+          }
+        }
+      ]
+    )
   })
   tags = local.tags
   lifecycle { prevent_destroy = true }
@@ -158,4 +198,5 @@ resource "aws_dynamodb_table" "lock" {
     enabled = true
   }
   tags = local.tags
+  lifecycle { prevent_destroy = true }
 }
