@@ -88,7 +88,10 @@ spec:
               import http.client, ssl
               from http.server import BaseHTTPRequestHandler, HTTPServer
               context = ssl.create_default_context(cafile='/etc/signer-ca/ca.crt')
-              upstream = 'validator-hoodi-001-remote-signer.validator-operations.svc'
+              # The current ceremony certificate has a CN but no SAN. This
+              # short same-namespace Service name is intentionally the exact
+              # CN, so Python still performs CA and hostname verification.
+              upstream = 'validator-hoodi-001-remote-signer'
               class Handler(BaseHTTPRequestHandler):
                   def do_GET(self):
                       if self.path != '/upcheck': self.send_error(404); return

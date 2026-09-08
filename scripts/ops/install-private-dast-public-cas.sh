@@ -18,15 +18,25 @@ fi
 
 for command in kubectl openssl mktemp; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 vault_ca="$(mktemp /private/tmp/node-operator-dast-vault-ca.XXXXXX)"
-cleanup() { rm -f "$vault_ca"; }
+vault_certificate="$(mktemp /private/tmp/node-operator-dast-vault-certificate.XXXXXX)"
+signer_certificate="$(mktemp /private/tmp/node-operator-dast-signer-certificate.XXXXXX)"
+cleanup() { rm -f "$vault_ca" "$vault_certificate" "$signer_certificate"; }
 trap cleanup EXIT
 
 # The mounted Vault CA is public trust material. This command never reads a
 # Kubernetes Secret object, a Vault token, a private key, or a signer key.
 kubectl -n vault exec vault-0 -- sh -c 'cat /vault/userconfig/vault-tls/ca.crt' > "$vault_ca"
-openssl x509 -in "$vault_ca" -noout >/dev/null
-openssl x509 -in "$signer_ca" -noout >/dev/null
-for spec in "private-dast-vault-ca=$vault_ca" "private-dast-signer-ca=$signer_ca"; do
+for source in "$vault_ca" "$signer_ca"; do
+  if grep -Eq -- '-----BEGIN ([A-Z ]* )?PRIVATE KEY-----' "$source"; then
+    printf 'refusing PEM that contains a private key\n' >&2
+    exit 1
+  fi
+done
+# Canonicalize only a parsed X.509 certificate into the ConfigMap. This
+# prevents trailing non-certificate material from entering the DAST namespace.
+openssl x509 -in "$vault_ca" -out "$vault_certificate"
+openssl x509 -in "$signer_ca" -out "$signer_certificate"
+for spec in "private-dast-vault-ca=$vault_certificate" "private-dast-signer-ca=$signer_certificate"; do
   name="${spec%%=*}"
   file="${spec#*=}"
   kubectl -n node-operator-dast create configmap "$name" --from-file=ca.crt="$file" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
