@@ -17,7 +17,7 @@ jobs:
           persist-credentials: false
       - name: Verify ephemeral runner boundary
         env:
-          RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:68a353d39970bb296e957f33a95fd7368ee5a42584e5b04e92c0b5b300bc5314
+          RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:f6b2550a3bf8a5b2e8bbdbb301120136d01bc38963d1a70d0d7ff3008acb70be
         run: |
           set -eu
           test -n "$CODEBUILD_BUILD_ID"
