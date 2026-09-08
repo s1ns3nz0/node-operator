@@ -32,7 +32,9 @@ private_path() {
     esac
     parent="$(dirname "$parent")"
   done
-  mode="$(stat -f '%OLp' "$(dirname "$candidate")" 2>/dev/null || stat -c '%a' "$(dirname "$candidate")")"
+  if ! mode="$(stat -c '%a' "$(dirname "$candidate")" 2>/dev/null)"; then
+    mode="$(stat -f '%OLp' "$(dirname "$candidate")")"
+  fi
   [ $((8#$mode & 077)) -eq 0 ] || { printf 'plan directory must not be accessible by group or others\n' >&2; return 1; }
 }
 
