@@ -29,6 +29,13 @@ test_workflow_exception_does_not_cover_another_path if {
   result := decision.decision with input as fixture
   result.summary.block == 1
 }
+test_workflow_exception_does_not_cover_another_rule if {
+  exception := {"rule": "workflow.unsafe", "check_id": "dangerous-triggers", "subject": ".github/workflows/ci-review-refresh-handler.yml", "owner": "fjybjinsu", "rationale": "trusted review refresh", "issue": "docs/security/workflow-trigger-exception.md#ci-review-refresh", "expires_at": "2026-10-03T00:00:00Z"}
+  finding := {"path": ".github/workflows/ci-review-refresh-handler.yml", "rule_id": "unpinned-uses", "message": "unpinned action"}
+  fixture := object.union(base_input, {"evidence": object.union(base_input.evidence, {"zizmor": {"findings": [finding]}}), "policy": {"exceptions": [exception]}})
+  result := decision.decision with input as fixture
+  result.summary.block == 1
+}
 test_critical_vulnerability_blocks if { fixture := object.union(base_input, {"evidence": object.union(base_input.evidence, {"osv": {"vulnerabilities": [{"package": "example", "severity": "CRITICAL", "fix_available": false}]}})}); result := decision.decision with input as fixture; result.summary.block == 1 }
 test_high_without_fix_warns if { fixture := object.union(base_input, {"evidence": object.union(base_input.evidence, {"osv": {"vulnerabilities": [{"package": "example", "severity": "HIGH", "fix_available": false}]}})}); result := decision.decision with input as fixture; result.summary.warn == 1 }
 test_expired_exception_blocks if { fixture := object.union(base_input, {"policy": {"exceptions": [{"rule": "iac.checkov", "check_id": "CKV_AWS_58", "subject": "aws_eks_cluster.private", "owner": "fjy", "rationale": "temporary", "issue": "https://github.com/s1ns3nz0/node-operator/issues/1", "expires_at": "2020-01-01T00:00:00Z"}]}}); result := decision.decision with input as fixture; result.summary.block == 1 }
