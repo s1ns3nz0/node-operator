@@ -191,6 +191,9 @@ spec:
             - --slashing-protection-db-url=jdbc:postgresql://validator-REPLACE_WITH_VALIDATOR_SET-slashing-db.validator-operations.svc:5432/web3signer
             - --slashing-protection-db-username=web3signer
             - --slashing-protection-db-pool-configuration-file=/vault/secrets/slashing-db.properties
+            # Web3Signer 26.x creates a separate pruning pool. It must use
+            # the same Vault-rendered password file; never inline a password.
+            - --slashing-protection-pruning-db-pool-configuration-file=/vault/secrets/slashing-db.properties
           ports: [{name: signer-api, containerPort: 9000}]
           volumeMounts:
             - {name: vault-auth, mountPath: /var/run/secrets/vault.hashicorp.com/serviceaccount, readOnly: true}
