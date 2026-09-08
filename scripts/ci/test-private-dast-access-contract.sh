@@ -151,6 +151,24 @@ for method in ('do_POST', 'do_PUT', 'do_DELETE', 'do_PATCH'):
     assert invoke(method, '/upcheck') == [('error', 405)]
 assert invoke('do_GET', '/api/v1/eth2/sign/0x00') == [('error', 404)]
 assert calls == [('GET', '/upcheck')]
+
+# Exercise real HTTP serialization, not the send_response mock above.
+import io
+class Request:
+    def __init__(self, method, path):
+        self.input = io.BytesIO(f'{method} {path} HTTP/1.1\r\nHost: localhost\r\n\r\n'.encode())
+        self.output = io.BytesIO()
+    def makefile(self, *args): return self.input
+    def sendall(self, data): self.output.write(data)
+def unavailable_response(self): raise OSError('fixture upstream unavailable')
+for method, path, status in [('GET', '/upcheck', 200), ('GET', '/denied', 404), ('POST', '/upcheck', 405), ('GET', '/upcheck', 503)]:
+    if status == 503: Connection.getresponse = unavailable_response
+    request = Request(method, path)
+    Handler(request, ('127.0.0.1', 1), None)
+    headers = request.output.getvalue().split(b'\r\n\r\n', 1)[0].lower()
+    assert headers.startswith(f'http/1.0 {status} '.encode())
+    assert b'\r\ndate:' in headers
+    assert b'\r\nserver:' not in headers and b'python' not in headers
 PY
 
 # Execute the fixed Nethermind reachability proxy. It may establish and close
@@ -193,6 +211,23 @@ for method in ('do_POST', 'do_PUT', 'do_DELETE', 'do_PATCH'):
     assert invoke(method, '/upcheck') == [('error', 405)]
 assert invoke('do_GET', '/jsonrpc') == [('error', 404)]
 assert connections == ['connected', 'closed']
+
+import io
+class Request:
+    def __init__(self, method, path):
+        self.input = io.BytesIO(f'{method} {path} HTTP/1.1\r\nHost: localhost\r\n\r\n'.encode())
+        self.output = io.BytesIO()
+    def makefile(self, *args): return self.input
+    def sendall(self, data): self.output.write(data)
+def unavailable_connection(*args, **kwargs): raise OSError('fixture upstream unavailable')
+for method, path, status in [('GET', '/upcheck', 200), ('GET', '/denied', 404), ('POST', '/upcheck', 405), ('GET', '/upcheck', 503)]:
+    if status == 503: socket.create_connection = unavailable_connection
+    request = Request(method, path)
+    Handler(request, ('127.0.0.1', 1), None)
+    headers = request.output.getvalue().split(b'\r\n\r\n', 1)[0].lower()
+    assert headers.startswith(f'http/1.0 {status} '.encode())
+    assert b'\r\ndate:' in headers
+    assert b'\r\nserver:' not in headers and b'python' not in headers
 PY
 if [ -n "${KYVERNO_BIN:-}" ] || command -v kyverno >/dev/null 2>&1; then
   bash "$root/scripts/ci/test-kyverno-workload-baseline.sh"
