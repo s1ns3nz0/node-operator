@@ -37,6 +37,10 @@ jobs:
         run: scripts/ci/test-image-publisher-isolation.sh
       - name: Test private DAST mirror boundary
         run: scripts/ci/test-private-dast-mirror-contract.sh
+      - name: Test private DAST target access boundary
+        run: scripts/ci/test-private-dast-access-contract.sh
+      - name: Test cross-pool connectivity plan boundary
+        run: scripts/ci/test-cross-pool-connectivity-plan.sh
       - name: Test validator runtime mirror boundary
         run: scripts/ci/test-validator-runtime-mirror-contract.sh
       - name: Test release reproducibility gate
