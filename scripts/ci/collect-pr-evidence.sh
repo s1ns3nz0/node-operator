@@ -140,7 +140,7 @@ collect_zizmor() {
   require_json_report zizmor "$report_path"
   require_json_shape zizmor "$report_path" 'type == "array"'
   jq '[.[]? | {
-        path:(.locations[0].symbolic.key.Local.verbatim_path // "unknown"),
+        path:((.locations[0].symbolic.key.Local.verbatim_path // .locations[0].symbolic.key.Local.given_path // "unknown") | if contains("/.github/") then ".github/" + (split("/.github/")[1]) else . end),
         rule_id:(.ident // "unknown"),
         message:(.desc // "unsafe workflow finding")
       }]' "$report_path" | jq -c '{findings:.}' > "$result_path"

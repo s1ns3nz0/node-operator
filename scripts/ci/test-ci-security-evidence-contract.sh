@@ -19,7 +19,7 @@ if grep -Fq 'include-hidden-files: true' "$workflow"; then
   exit 1
 fi
 
-grep -Fq 'checks: write' "$gate_workflow"
+test "$(grep -Fc 'checks: write' "$gate_workflow")" -eq 2
 grep -Fq 'resolve-pr-evidence-context.sh' "$gate_workflow"
 grep -Fq 'ref: ${{ steps.context.outputs.trusted_sha }}' "$gate_workflow"
 grep -Fq 'Publish exact-SHA evidence check' "$gate_workflow"
