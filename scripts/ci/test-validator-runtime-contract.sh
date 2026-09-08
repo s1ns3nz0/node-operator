@@ -4,7 +4,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 renderer="$root/scripts/ops/render-hoodi-validator-runtime.sh"
 tmp="$(mktemp -d /private/tmp/node-operator-runtime-render.XXXXXX)"
-web3signer='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-runtime-web3signer@sha256:4a76635561a7877bf694b81ff1707c118dff6ea48f47c5d1c514e91e637db51a'
+web3signer='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-runtime-web3signer@sha256:9a20e02a5821ad72fd318fa2a3ec0158a9a5acd9db80aa9214e9cc991ad4dbc3'
 postgres='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-runtime-postgres@sha256:030da09481c3876b71a7e49738a932e1c18c398201a1e4ccfdbff1e5a541215b'
 "$renderer" --validator-set hoodi-test-001 --web3signer-image "$web3signer" --postgres-image "$postgres" --output "$tmp/runtime.yaml" >/dev/null
 grep -Fq 'POSTGRES_PASSWORD_FILE' "$tmp/runtime.yaml"
