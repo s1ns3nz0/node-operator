@@ -56,7 +56,7 @@ variable "baseline_state_key" {
 }
 
 variable "backend_principal_arns" {
-  description = "Exact same-account IAM role ARNs permitted to use the state bucket CMK through S3."
+  description = "Exact same-account IAM role ARNs permitted to use the state CMK through S3 and the regional DynamoDB lock table, without granting key administration."
   type        = set(string)
   default     = []
 

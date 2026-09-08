@@ -43,8 +43,9 @@ rg -F 'AllowNamedBackendRolesDescribeStateKey' "$main" >/dev/null || fail 'S3 CM
 rg -F 'Action    = ["kms:Decrypt", "kms:GenerateDataKey"]' "$main" >/dev/null || fail 'S3 CMK data-plane permissions are not the exact required actions'
 ! rg -F 'kms:GenerateDataKey*' "$main" >/dev/null || fail 'S3 CMK data-plane permissions must not include GenerateDataKeyWithoutPlaintext'
 rg -F '"kms:ViaService"    = "s3.${var.aws_region}.amazonaws.com"' "$main" >/dev/null || fail 'S3 CMK service restriction is missing'
-rg -F '"kms:EncryptionContext:aws:s3:arn" = "${aws_s3_bucket.state.arn}/*"' "$main" >/dev/null || fail 'S3 CMK encryption-context restriction is missing'
-! rg -F 'kms:CreateGrant' "$main" >/dev/null || fail 'DynamoDB CMK grant semantics must remain deferred'
+rg -F '"kms:EncryptionContext:aws:s3:arn" = "${local.state_bucket_arn}/*"' "$main" >/dev/null || fail 'S3 CMK encryption-context restriction is missing'
+! rg -F 'kms:CreateGrant' "$main" >/dev/null || fail 'Backend roles must not receive grant-management permissions'
+rg -F 'depends_on = [aws_s3_bucket_policy.state]' "$main" >/dev/null || fail 'SSE-C denial must precede encryption default changes'
 
 # Evaluate actual Terraform plans and variable validation in a disposable,
 # backend-free copy. The test-only provider override has no AWS endpoint.
@@ -65,6 +66,45 @@ terraform -chdir="$workspace/module" plan -refresh=false -input=false \
   -out="$workspace/legacy.plan" >/dev/null
 terraform -chdir="$workspace/module" show -json "$workspace/legacy.plan" > "$workspace/legacy.json"
 jq -e 'any(.resource_changes[]?; .address == "aws_s3_bucket.state" and .change.after.bucket == "node-operator-tfstate-106760547719-apne2")' "$workspace/legacy.json" >/dev/null || fail 'legacy bucket override did not evaluate'
+
+terraform -chdir="$workspace/module" plan -refresh=false -input=false \
+  -var='aws_account_id=106760547719' \
+  -var='state_bucket_name=node-operator-tfstate-106760547719-apne2' \
+  -var='backend_principal_arns=["arn:aws:iam::106760547719:role/NodeOperatorTerraformApply"]' \
+  -out="$workspace/roles.plan" >/dev/null
+terraform -chdir="$workspace/module" show -json "$workspace/roles.plan" > "$workspace/roles.json"
+jq -e '
+  [.resource_changes[] | select(.address == "aws_kms_key.state") | .change.after.policy | fromjson | .Statement[]] as $s |
+  ($s | length == 4) and
+  ([$s[] | select(.Sid == "AllowNamedBackendRolesDynamoDataCrypto")] | length == 1) and
+  ($s[] | select(.Sid == "AllowNamedBackendRolesDynamoDataCrypto") |
+    .Effect == "Allow" and .Resource == "*" and
+    .Principal == {"AWS":["arn:aws:iam::106760547719:role/NodeOperatorTerraformApply"]} and
+    (.Action | sort) == (["kms:Encrypt","kms:Decrypt","kms:ReEncryptFrom","kms:ReEncryptTo","kms:GenerateDataKey","kms:GenerateDataKeyWithoutPlaintext"] | sort) and
+    .Condition == {"StringEquals":{
+      "kms:CallerAccount":"106760547719",
+      "kms:ViaService":"dynamodb.ap-northeast-2.amazonaws.com",
+      "kms:EncryptionContext:aws:dynamodb:tableName":"node-operator-terraform-lock",
+      "kms:EncryptionContext:aws:dynamodb:subscriberId":"106760547719"}}) and
+  ($s[] | select(.Sid == "AllowNamedBackendRolesS3DataCrypto") |
+    (.Action | sort) == (["kms:Decrypt","kms:GenerateDataKey"] | sort) and
+    .Condition == {"StringEquals":{"kms:CallerAccount":"106760547719","kms:ViaService":"s3.ap-northeast-2.amazonaws.com"},
+      "StringLike":{"kms:EncryptionContext:aws:s3:arn":"arn:aws:s3:::node-operator-tfstate-106760547719-apne2/*"}}) and
+  ($s[] | select(.Sid == "AllowNamedBackendRolesDescribeStateKey") |
+    .Action == ["kms:DescribeKey"] and .Condition == {"StringEquals":{"kms:CallerAccount":"106760547719"}})
+' "$workspace/roles.json" >/dev/null || fail 'Rendered KMS policy widened or omitted exact backend data-plane permissions'
+jq -e '
+  .resource_changes[] | select(.address == "aws_s3_bucket_policy.state") | .change.after.policy | fromjson |
+  .Statement == [
+    {"Sid":"DenyInsecureTransport","Effect":"Deny","Principal":"*","Action":"s3:*",
+     "Resource":["arn:aws:s3:::node-operator-tfstate-106760547719-apne2","arn:aws:s3:::node-operator-tfstate-106760547719-apne2/*"],
+     "Condition":{"Bool":{"aws:SecureTransport":"false"}}},
+    {"Sid":"DenyCustomerProvidedEncryptionKeys","Effect":"Deny","Principal":"*","Action":"s3:PutObject",
+     "Resource":"arn:aws:s3:::node-operator-tfstate-106760547719-apne2/*",
+     "Condition":{"Null":{"s3:x-amz-server-side-encryption-customer-algorithm":"false"}}}
+  ]
+' "$workspace/roles.json" >/dev/null || fail 'Rendered state policy must retain TLS denial and reject SSE-C new writes'
+jq -e '.resource_changes[] | select(.address == "aws_kms_key.state") | .change.after.policy | fromjson | .Statement | length == 1' "$workspace/default.json" >/dev/null || fail 'Empty backend allowlist must grant no role permissions'
 
 expect_invalid_plan() {
   local expected_message="$1"

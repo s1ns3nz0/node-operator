@@ -41,9 +41,19 @@ backend_principal_arns = [
 The allowlist accepts only exact same-account IAM role ARNs. It is empty by
 default. The S3 state CMK policy then grants listed roles only `Decrypt`,
 `GenerateDataKey`, and `DescribeKey`, with account, S3 service, and state
-bucket encryption-context restrictions. It deliberately does not add a
-DynamoDB CMK grant: the live lock table is already encrypted, and changing
-that service's grant semantics requires a reviewed imported-state plan.
+bucket encryption-context restrictions. For the regional DynamoDB lock table,
+it also grants the exact crypto actions only through DynamoDB in the configured
+Region and only with the exact lock-table/account encryption context. Backend
+roles receive no `CreateGrant` or key-administration permission. The separately
+authorized bootstrap updater must already have the permissions DynamoDB needs
+to create its service-managed grants when changing the table key. Global tables
+and cross-Region DynamoDB use are outside this module's contract.
+
+Changing encryption still requires a reviewed imported-state plan. Verify the
+actual backend role can read/write a non-sensitive canary and acquire/release
+an isolated lock; repeat its read after DynamoDB's five-minute key cache window.
+Never use a real Terraform lock ID as the canary. A successful administrator
+request is not proof of backend-role access.
 
 ## Import workflow
 
@@ -51,7 +61,7 @@ that service's grant semantics requires a reviewed imported-state plan.
    authenticate as the approved account role. Never put credentials, backend
    configuration, `.terraform/`, `terraform.tfstate*`, or plan files in Git.
 2. Confirm identity and the existing resource inventory with read-only AWS
-   commands. The only five observed existing resources are listed below. Do
+   commands. The six observed existing resources are listed below. Do
    not infer an additional resource ID from a generated Terraform name.
 
    | Terraform address | Reviewed import ID |
@@ -60,10 +70,17 @@ that service's grant semantics requires a reviewed imported-state plan.
    | `aws_s3_bucket_versioning.state` | `node-operator-tfstate-106760547719-apne2` |
    | `aws_s3_bucket_server_side_encryption_configuration.state` | `node-operator-tfstate-106760547719-apne2` |
    | `aws_s3_bucket_public_access_block.state` | `node-operator-tfstate-106760547719-apne2` |
+   | `aws_s3_bucket_policy.state` | `node-operator-tfstate-106760547719-apne2` |
    | `aws_dynamodb_table.lock` | `node-operator-terraform-lock` |
 
    The current state bucket uses SSE-S3. No existing state CMK was observed,
    so `aws_kms_key.state` is not an import target.
+   The observed state bucket policy denies insecure transport. Preserve that
+   denial and add the scoped SSE-C write denial; never overwrite other policy
+   statements without reviewing a fresh inventory. Also verify the bucket's
+   native `BlockedEncryptionTypes` remains `SSE-C` before and after changing
+   default encryption. Provider 5.x does not represent that native setting;
+   a zero-drift Terraform plan alone cannot prove it was preserved.
 3. Initialise without a backend and validate the reviewed configuration:
 
    ```sh
@@ -79,6 +96,7 @@ that service's grant semantics requires a reviewed imported-state plan.
    terraform -chdir="$operator_root/module" import -var-file="$operator_root/bootstrap-state.reconciliation.tfvars" aws_s3_bucket_versioning.state node-operator-tfstate-106760547719-apne2
    terraform -chdir="$operator_root/module" import -var-file="$operator_root/bootstrap-state.reconciliation.tfvars" aws_s3_bucket_server_side_encryption_configuration.state node-operator-tfstate-106760547719-apne2
    terraform -chdir="$operator_root/module" import -var-file="$operator_root/bootstrap-state.reconciliation.tfvars" aws_s3_bucket_public_access_block.state node-operator-tfstate-106760547719-apne2
+   terraform -chdir="$operator_root/module" import -var-file="$operator_root/bootstrap-state.reconciliation.tfvars" aws_s3_bucket_policy.state node-operator-tfstate-106760547719-apne2
    terraform -chdir="$operator_root/module" import -var-file="$operator_root/bootstrap-state.reconciliation.tfvars" aws_dynamodb_table.lock node-operator-terraform-lock
    ```
 
@@ -87,7 +105,7 @@ that service's grant semantics requires a reviewed imported-state plan.
 5. Run a refresh-only plan and a normal plan with the same private inputs.
    A reviewer must verify that there are no replacements or deletes before any
    change is considered. New CMK and unobserved child-resource configuration
-   creation is separate from importing these five resources, and requires a
+   creation is separate from importing these six resources, and requires a
    saved, reviewed imported-state plan. `prevent_destroy` protects the state
    bucket and lock table, but it is not an approval to alter their live
    settings.

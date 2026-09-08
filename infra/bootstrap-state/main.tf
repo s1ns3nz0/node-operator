@@ -1,6 +1,7 @@
 locals {
   generated_state_bucket = "${var.name}-tfstate-${var.aws_account_id}-${replace(var.aws_region, "-", "")}"
   state_bucket           = coalesce(var.state_bucket_name, local.generated_state_bucket)
+  state_bucket_arn       = "arn:aws:s3:::${local.state_bucket}"
   lock_table             = "${var.name}-terraform-lock"
   tags = {
     ManagedBy = "terraform"
@@ -50,7 +51,24 @@ resource "aws_kms_key" "state" {
               "kms:ViaService"    = "s3.${var.aws_region}.amazonaws.com"
             }
             StringLike = {
-              "kms:EncryptionContext:aws:s3:arn" = "${aws_s3_bucket.state.arn}/*"
+              "kms:EncryptionContext:aws:s3:arn" = "${local.state_bucket_arn}/*"
+            }
+          }
+        },
+        {
+          Sid       = "AllowNamedBackendRolesDynamoDataCrypto", Effect = "Allow"
+          Principal = { AWS = tolist(var.backend_principal_arns) }
+          Action = [
+            "kms:Encrypt", "kms:Decrypt", "kms:ReEncryptFrom", "kms:ReEncryptTo",
+            "kms:GenerateDataKey", "kms:GenerateDataKeyWithoutPlaintext"
+          ]
+          Resource = "*"
+          Condition = {
+            StringEquals = {
+              "kms:CallerAccount"                               = var.aws_account_id
+              "kms:ViaService"                                  = "dynamodb.${var.aws_region}.amazonaws.com"
+              "kms:EncryptionContext:aws:dynamodb:tableName"    = local.lock_table
+              "kms:EncryptionContext:aws:dynamodb:subscriberId" = var.aws_account_id
             }
           }
         },
@@ -172,6 +190,29 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
       kms_master_key_id = aws_kms_key.state.arn
     }
   }
+  # Preserve the denial before changing defaults, including with providers
+  # that cannot represent S3's native BlockedEncryptionTypes setting.
+  depends_on = [aws_s3_bucket_policy.state]
+}
+
+resource "aws_s3_bucket_policy" "state" {
+  bucket = aws_s3_bucket.state.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyInsecureTransport", Effect = "Deny", Principal = "*"
+        Action    = "s3:*"
+        Resource  = [local.state_bucket_arn, "${local.state_bucket_arn}/*"]
+        Condition = { Bool = { "aws:SecureTransport" = "false" } }
+      },
+      {
+        Sid       = "DenyCustomerProvidedEncryptionKeys", Effect = "Deny", Principal = "*"
+        Action    = "s3:PutObject", Resource = "${local.state_bucket_arn}/*"
+        Condition = { Null = { "s3:x-amz-server-side-encryption-customer-algorithm" = "false" } }
+      }
+    ]
+  })
 }
 
 resource "aws_s3_bucket_public_access_block" "state" {
