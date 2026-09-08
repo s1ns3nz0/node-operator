@@ -1,0 +1,8 @@
+{
+  "task_id": "2026-09-08-scanner-bootstrap-activation",
+  "objective": "Merge the reviewed OSV prerequisite PR128 through normal protection and verify the resulting main scanner image before preparing a separate digest promotion.",
+  "authorized": ["mark PR128 ready", "normally merge exact reviewed PR128", "publish the resulting main scanner image", "verify publisher run, build inputs and immutable digest", "prepare a separate digest promotion"],
+  "forbidden": ["bypass reviews or checks", "admin merge", "alter repository protection", "impersonate another reviewer", "merge PR127 or GitOps PR46", "cloud deployment", "secret access"],
+  "integration_owner": {"tier": "sol", "owner": "/root/scanner_bootstrap_activation"},
+  "routing": {"requested": "sol", "fallback": "none"}
+}
