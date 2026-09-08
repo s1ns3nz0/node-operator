@@ -215,7 +215,7 @@ canonical_checkov_file_path() {
     /*) ;;
     *) return 0 ;;
   esac
-  case "/$candidate/" in
+  case "$candidate/" in
     *'//'*|*'/./'*|*'/../'*) return 0 ;;
   esac
   [[ "$candidate" == *\\* ]] && return 0

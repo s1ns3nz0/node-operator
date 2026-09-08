@@ -35,7 +35,7 @@ rg -F 'local.create_ssm_endpoints || var.manage_existing_endpoint_ingress_rule ?
 rg -F 'variable "manage_existing_endpoint_ingress_rule"' "$root/infra/ops-access/variables.tf" >/dev/null
 for rule in cluster endpoints; do
   rg -F "from = aws_vpc_security_group_ingress_rule.$rule" "$root/infra/ops-access/main.tf" >/dev/null
-  rg -F "to   = aws_vpc_security_group_ingress_rule.$rule[0]" "$root/infra/ops-access/main.tf" >/dev/null
+  rg -F "to   = aws_vpc_security_group_ingress_rule.${rule}[0]" "$root/infra/ops-access/main.tf" >/dev/null
 done
 if rg -n 'scheduler|vault' "$ops_entrypoint"; then
   printf 'ops-access command crosses its intended boundary\n' >&2

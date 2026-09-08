@@ -2,6 +2,16 @@
   "exceptions": [
     {
       "rule": "iac.checkov",
+      "check_id": "CKV_AWS_126",
+      "subject": "aws_instance.host",
+      "file_path": "infra/ops-access/main.tf",
+      "owner": "s1ns3nz0",
+      "rationale": "SSM-BASIC-MONITORING: user explicitly selected basic monitoring for the dedicated private operations host; other EC2 modules are not exempt",
+      "issue": "docs/security/ssm-basic-monitoring-disposition.md",
+      "expires_at": "2026-10-03T00:00:00Z"
+    },
+    {
+      "rule": "iac.checkov",
       "check_id": "CKV_AWS_109",
       "subject": "aws_iam_policy_document.kms_key_administrator",
       "owner": "fjybjinsu",
