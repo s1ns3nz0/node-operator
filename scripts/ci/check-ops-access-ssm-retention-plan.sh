@@ -38,11 +38,15 @@ jq -e '
   [$before[] | select(.address == $host_address and .type == "aws_instance")] as $before_host |
   [$after[] | select(.address == $host_address and .type == "aws_instance")] as $after_host |
   [$changes[] | select(.address == $host_address and .type == "aws_instance")] as $host_change |
+  ($plan.variables.retained_host_instance_id.value == $host_id) and
   ($before | map(.address | normalized_address) | sort) == $expected_addresses and
   ($after | map(.address) | sort) == $expected_addresses and
+  ($changes | map(.address | normalized_address) | sort) == $expected_addresses and
+  ($changes | length) == 9 and
   (all($before[]; (.values.id | type == "string" and length > 0))) and
   (all($after[]; (.values.id | type == "string" and length > 0))) and
   (($before | identity_map) == ($after | identity_map)) and
+  (all($changes[]; (.change.before.id == (.change.after.id)) and (.change.before.id | type == "string" and length > 0))) and
   ($before_host | length) == 1 and
   ($after_host | length) == 1 and
   ($host_change | length) == 1 and
@@ -60,7 +64,7 @@ jq -e '
   ($host_change[0].change.before.ebs_optimized == false) and
   ($host_change[0].change.after.ebs_optimized == false) and
   (all($changes[]; (.change.actions | index("create") | not) and (.change.actions | index("delete") | not))) and
-  (all($changes[]; .change.after_unknown.ebs_optimized != true)) and
+  (all($changes[]; .change.after_unknown.ebs_optimized != true and .change.after_unknown.id != true and .change.after_unknown.instance_type != true and .change.after_unknown.monitoring != true and .change.after_unknown.ami != true)) and
   (all($before[]; if .values.ebs_optimized? == false then
     .address == $host_address and .type == "aws_instance" and .values.id == $host_id and .values.instance_type == "t3.micro"
   else true end)) and

@@ -34,9 +34,7 @@ jq -n '
     {address:"aws_vpc_security_group_ingress_rule.cluster",mode:"managed",type:"aws_vpc_security_group_ingress_rule",values:{id:"ingress-cluster"}},
     {address:"aws_vpc_security_group_ingress_rule.endpoints",mode:"managed",type:"aws_vpc_security_group_ingress_rule",values:{id:"ingress-endpoints"}}
   ];
-  {prior_state:{values:{root_module:{resources:resources}}},planned_values:{root_module:{resources:(resources | map(if .address == "aws_vpc_security_group_ingress_rule.cluster" then .address = "aws_vpc_security_group_ingress_rule.cluster[0]" elif .address == "aws_vpc_security_group_ingress_rule.endpoints" then .address = "aws_vpc_security_group_ingress_rule.endpoints[0]" else . end))}},resource_changes:[
-    {address:"aws_instance.host",mode:"managed",type:"aws_instance",change:{actions:["no-op"],before:{id:"i-02c57d75e7f6810b1",instance_type:"t3.micro",ebs_optimized:false},after:{id:"i-02c57d75e7f6810b1",instance_type:"t3.micro",ebs_optimized:false},after_unknown:{ebs_optimized:false}}}
-  ]}
+  {variables:{retained_host_instance_id:{value:"i-02c57d75e7f6810b1"}},prior_state:{values:{root_module:{resources:resources}}},planned_values:{root_module:{resources:(resources | map(if .address == "aws_vpc_security_group_ingress_rule.cluster" then .address = "aws_vpc_security_group_ingress_rule.cluster[0]" elif .address == "aws_vpc_security_group_ingress_rule.endpoints" then .address = "aws_vpc_security_group_ingress_rule.endpoints[0]" else . end))}},resource_changes:(resources | map({address:.address,mode,type,change:{actions:["no-op"],before:.values,after:.values,after_unknown:{ebs_optimized:false,id:false,instance_type:false,monitoring:false,ami:false}}}))}
 ' > "$scratch/valid.json"
 bash "$guard" "$scratch/valid.json" >/dev/null
 
