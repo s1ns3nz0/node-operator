@@ -14,10 +14,8 @@ grep -Fq 'name: nethermind-upcheck-proxy' "$manifest"
 grep -Fq "upstream = 'nethermind-execution'" "$manifest"
 grep -Fq "socket.create_connection((upstream, 30303), timeout=5)" "$manifest"
 grep -Fq "upstream = 'validator-hoodi-001-remote-signer'" "$manifest"
-if grep -Fq 'validator-hoodi-001-remote-signer.validator-operations.svc' "$manifest"; then
-  printf 'proxy hostname must match the certificate CN while the certificate has no SAN\n' >&2
-  exit 1
-fi
+# TLS uses the certificate CN; HTTP Host independently matches the existing
+# signer allowlist. The behavioral test below enforces both identities.
 grep -Fq "if self.path != '/upcheck': self.send_error(404); return" "$manifest"
 grep -Fq 'def do_POST(self): self.send_error(405)' "$manifest"
 grep -Fq 'def do_PATCH(self): self.send_error(405)' "$manifest"
@@ -61,6 +59,7 @@ if grep -Ev '^[[:space:]]*#' "$installer" | grep -Eq 'get[[:space:]]+secret|VAUL
 fi
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
+export TMPDIR="$scratch"
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$scratch/key.pem" -out "$scratch/cert.pem" -subj /CN=test-dast-ca -days 1 >/dev/null 2>&1
 cat "$scratch/cert.pem" "$scratch/key.pem" > "$scratch/mixed.pem"
 mkdir -p "$scratch/bin"
@@ -74,6 +73,7 @@ elif [[ " $* " == *' create configmap '* ]]; then
   for argument in "$@"; do
     if [[ "$argument" == --from-file=ca.crt=* ]]; then
       file="${argument#--from-file=ca.crt=}"
+      [[ "$file" == "$TMPDIR"/node-operator-dast-* ]]
       openssl x509 -in "$file" -noout >/dev/null
       ! grep -q 'PRIVATE KEY' "$file"
     fi
@@ -119,12 +119,18 @@ class Connection:
     def __init__(self, host, port, context, timeout):
         assert host == 'validator-hoodi-001-remote-signer'
         assert port == 9000 and timeout == 5
-    def request(self, method, path): calls.append((method, path))
+        assert context.check_hostname and context.verify_mode == ssl.CERT_REQUIRED
+    def request(self, method, path, headers=None):
+        assert headers == {'Host': 'validator-hoodi-001-remote-signer.validator-operations.svc'}
+        calls.append((method, path))
     def getresponse(self): return Response()
     def close(self): closed.append(True)
 
 http.client.HTTPSConnection = Connection
-ssl.create_default_context = lambda cafile: object()
+def default_context(cafile):
+    assert cafile == '/etc/signer-ca/ca.crt'
+    return ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+ssl.create_default_context = default_context
 scope = {}
 exec(os.environ['PROXY_CODE'], scope)
 Handler = scope['Handler']
@@ -145,6 +151,24 @@ for method in ('do_POST', 'do_PUT', 'do_DELETE', 'do_PATCH'):
     assert invoke(method, '/upcheck') == [('error', 405)]
 assert invoke('do_GET', '/api/v1/eth2/sign/0x00') == [('error', 404)]
 assert calls == [('GET', '/upcheck')]
+
+# Exercise real HTTP serialization, not the send_response mock above.
+import io
+class Request:
+    def __init__(self, method, path):
+        self.input = io.BytesIO(f'{method} {path} HTTP/1.1\r\nHost: localhost\r\n\r\n'.encode())
+        self.output = io.BytesIO()
+    def makefile(self, *args): return self.input
+    def sendall(self, data): self.output.write(data)
+def unavailable_response(self): raise OSError('fixture upstream unavailable')
+for method, path, status in [('GET', '/upcheck', 200), ('GET', '/denied', 404), ('POST', '/upcheck', 405), ('GET', '/upcheck', 503)]:
+    if status == 503: Connection.getresponse = unavailable_response
+    request = Request(method, path)
+    Handler(request, ('127.0.0.1', 1), None)
+    headers = request.output.getvalue().split(b'\r\n\r\n', 1)[0].lower()
+    assert headers.startswith(f'http/1.0 {status} '.encode())
+    assert b'\r\ndate:' in headers
+    assert b'\r\nserver:' not in headers and b'python' not in headers
 PY
 
 # Execute the fixed Nethermind reachability proxy. It may establish and close
@@ -187,6 +211,23 @@ for method in ('do_POST', 'do_PUT', 'do_DELETE', 'do_PATCH'):
     assert invoke(method, '/upcheck') == [('error', 405)]
 assert invoke('do_GET', '/jsonrpc') == [('error', 404)]
 assert connections == ['connected', 'closed']
+
+import io
+class Request:
+    def __init__(self, method, path):
+        self.input = io.BytesIO(f'{method} {path} HTTP/1.1\r\nHost: localhost\r\n\r\n'.encode())
+        self.output = io.BytesIO()
+    def makefile(self, *args): return self.input
+    def sendall(self, data): self.output.write(data)
+def unavailable_connection(*args, **kwargs): raise OSError('fixture upstream unavailable')
+for method, path, status in [('GET', '/upcheck', 200), ('GET', '/denied', 404), ('POST', '/upcheck', 405), ('GET', '/upcheck', 503)]:
+    if status == 503: socket.create_connection = unavailable_connection
+    request = Request(method, path)
+    Handler(request, ('127.0.0.1', 1), None)
+    headers = request.output.getvalue().split(b'\r\n\r\n', 1)[0].lower()
+    assert headers.startswith(f'http/1.0 {status} '.encode())
+    assert b'\r\ndate:' in headers
+    assert b'\r\nserver:' not in headers and b'python' not in headers
 PY
 if [ -n "${KYVERNO_BIN:-}" ] || command -v kyverno >/dev/null 2>&1; then
   bash "$root/scripts/ci/test-kyverno-workload-baseline.sh"
