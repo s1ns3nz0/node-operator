@@ -7,6 +7,7 @@ if [ "$#" -ne 1 ]; then
 fi
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
 : "${GH_TOKEN:?GH_TOKEN is required}"
+command -v unzip >/dev/null || { printf 'missing command: unzip\n' >&2; exit 1; }
 source_sha="$1"
 [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]] || { printf 'source SHA must be 40 lowercase hexadecimal characters\n' >&2; exit 64; }
 git merge-base --is-ancestor "$source_sha" refs/remotes/origin/main || { printf 'release source is not reachable from origin/main\n' >&2; exit 1; }
@@ -22,22 +23,60 @@ fetch_checks() {
 }
 trusted_check_present() {
   local input="$1" name="$2" sha="$3" expected_path="$4" expected_event="$5" require_run_head="$6"
-  local details_url run_id run_json
-  details_url="$(jq -er --arg name "$name" --arg repo "$GITHUB_REPOSITORY" --arg sha "$sha" '
+  local check_json details_url run_id run_json check_id external_id custom_check=false artifacts artifact_id archive evidence_member decision_member details_run_id
+  check_json="$(jq -ec --arg name "$name" --arg repo "$GITHUB_REPOSITORY" --arg sha "$sha" '
     [.[] | select(
       .name == $name and .status == "completed" and .conclusion == "success" and .head_sha == $sha and
       .app.slug == "github-actions" and
-      (.details_url | type == "string" and startswith("https://github.com/" + $repo + "/actions/runs/"))
-    )] | select(length == 1) | .[0].details_url
+      (.details_url | type == "string")
+    )] | select(length == 1) | .[0]
   ' "$input")" || return 1
-  run_id="$(printf '%s' "$details_url" | sed -E 's#^https://github.com/[^/]+/[^/]+/actions/runs/([0-9]+)(/.*)?$#\1#')"
+  details_url="$(jq -r '.details_url' <<<"$check_json")"
+  if [ "$name" = 'CI Evidence Decision' ]; then
+    custom_check=true
+    external_id="$(jq -er --arg sha "$sha" '.external_id | select(type == "string" and test("^ci-evidence-workflow-run:[0-9]+:[0-9a-f]{40}$")) | select(endswith(":" + $sha)) | split(":")[1]' <<<"$check_json")" || return 1
+    run_id="$external_id"
+  fi
+  case "$details_url" in
+    "https://github.com/$GITHUB_REPOSITORY/actions/runs/"*)
+      details_run_id="$(printf '%s' "$details_url" | sed -E 's#^https://github.com/[^/]+/[^/]+/actions/runs/([0-9]+)(/.*)?$#\1#')"
+      if [ "$custom_check" = true ]; then [ "$details_run_id" = "$run_id" ] || return 1; else run_id="$details_run_id"; fi
+      ;;
+    "https://github.com/$GITHUB_REPOSITORY/runs/"*)
+      [ "$custom_check" = true ] || return 1
+      check_id="$(printf '%s' "$details_url" | sed -E 's#^https://github.com/[^/]+/[^/]+/runs/([0-9]+)(/.*)?$#\1#')"
+      [ "$(jq -r '.id | tostring' <<<"$check_json")" = "$check_id" ] || return 1
+      ;;
+    *) return 1 ;;
+  esac
   [[ "$run_id" =~ ^[0-9]+$ ]] || return 1
   run_json="$temporary_directory/run-$run_id.json"
-  gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "$run_json"
-  jq -e --arg repo "$GITHUB_REPOSITORY" --arg path "$expected_path" --arg event "$expected_event" --arg sha "$sha" --arg require_head "$require_run_head" '
-    .repository.full_name == $repo and .path == $path and .event == $event and
-    (if $require_head == "true" then .head_sha == $sha else true end)
-  ' "$run_json" >/dev/null
+  gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "$run_json" || return 1
+  jq -se --arg repo "$GITHUB_REPOSITORY" --arg path "$expected_path" --arg event "$expected_event" --arg sha "$sha" --arg require_head "$require_run_head" '
+    length == 1 and (.[0] |
+      .repository.full_name == $repo and .path == $path and .event == $event and
+      .status == "completed" and .conclusion == "success" and
+      (if $require_head == "true" then .head_sha == $sha else true end))
+  ' "$run_json" >/dev/null || return 1
+  if [ "$custom_check" = true ]; then
+    artifacts="$temporary_directory/artifacts-$run_id.json"
+    gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" > "$artifacts" || return 1
+    artifact_id="$(jq -er --arg name "ci-evidence-gate-$sha" --argjson run_id "$run_id" '
+      [.artifacts[] | select(.name == $name and .expired == false and .workflow_run.id == $run_id)] |
+      select(length == 1) | .[0].id
+    ' "$artifacts")" || return 1
+    [[ "$artifact_id" =~ ^[1-9][0-9]*$ ]] || return 1
+    archive="$temporary_directory/evidence-$artifact_id.zip"
+    gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > "$archive" || return 1
+    evidence_member="$(unzip -Z1 "$archive" | awk -F/ '$NF == "evidence.json"' | sed -n '1p')" || return 1
+    decision_member="$(unzip -Z1 "$archive" | awk -F/ '$NF == "decision.json"' | sed -n '1p')" || return 1
+    [ -n "$evidence_member" ] && [ "$(unzip -Z1 "$archive" | awk -F/ '$NF == "evidence.json"' | wc -l | tr -d ' ')" = 1 ] || return 1
+    [ -n "$decision_member" ] && [ "$(unzip -Z1 "$archive" | awk -F/ '$NF == "decision.json"' | wc -l | tr -d ' ')" = 1 ] || return 1
+    unzip -p "$archive" "$evidence_member" > "$temporary_directory/evidence-$artifact_id.json" || return 1
+    unzip -p "$archive" "$decision_member" > "$temporary_directory/decision-$artifact_id.json" || return 1
+    jq -se --arg sha "$sha" 'length == 1 and (.[0].subject.commit_sha == $sha)' "$temporary_directory/evidence-$artifact_id.json" >/dev/null || return 1
+    jq -se 'length == 1 and (.[0].summary.block == 0 and .[0].summary.require_approval == 0 and (.[0].violations | type == "array"))' "$temporary_directory/decision-$artifact_id.json" >/dev/null || return 1
+  fi
 }
 fetch_checks "$source_sha" "$checks"
 

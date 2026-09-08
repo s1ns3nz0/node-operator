@@ -18,6 +18,8 @@ case "$details_url" in
   "https://github.com/$GITHUB_REPOSITORY/actions/runs/"[0-9]*) ;;
   *) printf 'details URL must identify this repository Actions run\n' >&2; exit 64 ;;
 esac
+publisher_run_id="$(printf '%s' "$details_url" | sed -E 's#^.*/actions/runs/([0-9]+)(/.*)?$#\1#')"
+[[ "$publisher_run_id" =~ ^[0-9]+$ ]] || { printf 'details URL must contain a numeric Actions run ID\n' >&2; exit 64; }
 
 conclusion="failure"
 title="CI evidence policy rejected this revision"
@@ -45,6 +47,7 @@ gh api --method POST "repos/$GITHUB_REPOSITORY/check-runs" \
   -f status=completed \
   -f conclusion="$conclusion" \
   -f details_url="$details_url" \
+  -f external_id="ci-evidence-workflow-run:$publisher_run_id:$head_sha" \
   -f "output[title]=$title" \
   -f "output[summary]=$summary" >/dev/null
 
