@@ -1,0 +1,8 @@
+{
+  "strict": true,
+  "checks": [
+    {"context": "quality", "app_id": 15368},
+    {"context": "scanners", "app_id": 15368},
+    {"context": "CI Evidence Decision", "app_id": 15368}
+  ]
+}

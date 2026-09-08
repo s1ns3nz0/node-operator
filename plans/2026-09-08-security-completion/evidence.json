@@ -10,7 +10,7 @@
     },
     "3": {
       "status": "incomplete",
-      "evidence": "Exact-head negative custom-check publication proved on PR127 and PR131. PR127 was merged immediately after approval before positive review-refresh proof; refresh34202245518 failed. PR131 frozen7656b97 allfiveordinarychecksPASS, actual approval/review-refresh/positive decision pending. GitOps protection403 entitlement remains; source required evidence check not yet enabled."
+      "evidence": "Exact-head failure proved for missing approval and actual scanner finding(PR132 block1/sast.semgrep, closed without merge). PR127 and PR131 were externally merged within seconds of approval before positive refresh; both refresh attempts failed and retained old failed decisions. Required app15368 CI Evidence Decision is now enabled with strict/admin/quality/scanners and all other protection fields preserved. PR133 will prove open-PR positive review refresh; GitOps protection403 entitlement still unresolved."
     },
     "4": {
       "status": "complete",
@@ -170,7 +170,7 @@
     "focused_contracts": "pass",
     "shellcheck_syntax_fmt_diff_harness": "pass",
     "optional_kyverno_engine": "explicitly skipped, CLI unavailable",
-    "status": "PR131 final head frozen; five ordinary CI checks pass; actual gate34203739928 block0/require_approval1 onlyreview.sensitive-path; approval and positive refresh pending. Reviewed header fix deployed and DAST passed.",
+    "status": "PR131 externally approved and mergedf3e2123 before review-refresh completed; runtime fixes are now on main, DAST passed. Positive admission still unproven; PR133 carries the next test.",
     "pr": 131,
     "portability_ci_quality": "34203163133 success"
   },
@@ -208,6 +208,15 @@
     "root_independent_decision_validation": "pass",
     "final_pr_state": "closed without merge; branch retained",
     "runtime_execution": false
+  },
+  "required_source_evidence_check": {
+    "status": "enabled and exact readback verified",
+    "app_id": 15368,
+    "checks": ["quality", "scanners", "CI Evidence Decision"],
+    "strict": true,
+    "unrelated_protection_fields_unchanged": true,
+    "reason": "Repeated external merge-before-refresh; enforce fail-closed while positive proof is pending",
+    "primary_review": "approved by security_goal_ci_fallback"
   },
   "foundation_remote_migration": {
     "status": "complete for six public-edge resources; source PR integration pending",
