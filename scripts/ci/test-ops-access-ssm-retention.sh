@@ -12,6 +12,10 @@ grep -F 'variable "retained_host_instance_id"' "$module/variables.tf" >/dev/null
 grep -F 'var.retained_host_instance_id == null || var.retained_host_instance_id == "i-02c57d75e7f6810b1"' "$module/variables.tf" >/dev/null
 grep -F 'ebs_optimized                        = local.retain_existing_host ? false : true' "$module/main.tf" >/dev/null
 grep -F 'ebs_optimized_support == "default"' "$module/main.tf" >/dev/null
+grep -E '^  monitoring[[:space:]]*=[[:space:]]*false$' "$module/main.tf" >/dev/null
+grep -F 'encrypted   = true' "$module/main.tf" >/dev/null
+grep -F 'volume_type = "gp3"' "$module/main.tf" >/dev/null
+grep -F 'http_tokens                 = "required"' "$module/main.tf" >/dev/null
 if grep -Eq 'ignore_changes|checkov:skip' "$module/main.tf" "$module/variables.tf"; then
   printf 'retained-host implementation must not suppress drift or Checkov findings\n' >&2
   exit 1
@@ -76,10 +80,11 @@ for case_name in default opt-in; do
     default)
       test "$status" = "FAIL" || { printf 'Checkov default status is %s, not expected FAIL\n' "$status" >&2; exit 1; }
       jq -e 'any(.results.failed_checks[]?; .check_id == "CKV_AWS_135")' "$report" >/dev/null
+      jq -e 'any(.results.failed_checks[]?; .check_id == "CKV_AWS_126")' "$report" >/dev/null
       ;;
     opt-in)
-      test "$status" = "PASS" || { printf 'Checkov opt-in status is %s, not expected PASS\n' "$status" >&2; exit 1; }
-      jq -e '(.summary.failed == 0 and .summary.passed > 0)' "$report" >/dev/null
+      test "$status" = "FAIL" || { printf 'Checkov opt-in status is %s, not expected FAIL\n' "$status" >&2; exit 1; }
+      jq -e 'any(.results.failed_checks[]?; .check_id == "CKV_AWS_126")' "$report" >/dev/null
       ;;
   esac
 done

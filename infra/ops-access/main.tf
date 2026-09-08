@@ -131,7 +131,8 @@ resource "aws_iam_instance_profile" "host" {
 resource "aws_instance" "host" {
   ami           = data.aws_ssm_parameter.al2023.value
   instance_type = "t3.micro"
-  monitoring    = true
+  # Basic EC2 monitoring is sufficient for this SSM-only operations host.
+  monitoring = false
   # Fresh hosts retain the secure default. Only the reviewed legacy host uses
   # its observed false representation after all identity/capability checks.
   ebs_optimized                        = local.retain_existing_host ? false : true

@@ -53,6 +53,11 @@ The resource lifecycle preconditions require the configured VPC/subnet, type
 `ebs_optimized_support = default`. Any other host, type, network identity, or
 capability fails planning; this is not a generic drift suppression.
 
+The dedicated SSM-only operations host uses basic EC2 monitoring
+(`monitoring = false`) for both fresh and retained representations. This
+matches the observed host and avoids enabling detailed-monitoring charges; it
+does not change encrypted gp3 root storage, IMDSv2, IAM, or network controls.
+
 Before any separately authorized state or infrastructure action, render a
 saved plan and run `scripts/ci/check-ops-access-ssm-retention-plan.sh` on its
 private JSON form. The guard requires the exact host in prior state, requires
