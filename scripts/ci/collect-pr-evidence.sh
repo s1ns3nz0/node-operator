@@ -155,10 +155,19 @@ collect_zizmor() {
         rule_id:(.ident // "unknown"),
         message:(.desc // "unsafe workflow finding")
       }]' "$report_path" | jq -c '{findings:.}' > "$result_path"
-  if [ -n "$base_sha" ] && git -C "$source_directory" cat-file -e "${base_sha}^{commit}" 2>/dev/null &&
-     git -C "$source_directory" diff --unified=0 "$base_sha" "$commit_sha" -- .github/workflows \
-       | grep -E '^\+[^+].*zizmor:[[:space:]]*ignore' >/dev/null; then
-    jq '.findings += [{path:".github/workflows",rule_id:"untrusted-zizmor-suppression",message:"pull request adds or changes a zizmor inline suppression"}]' "$result_path" > "$temporary_directory/zizmor-result-with-suppression.json"
+  local changed_yaml has_changed_suppression=false
+  changed_yaml="$temporary_directory/zizmor-changed-yaml"
+  if [ -n "$base_sha" ] && git -C "$source_directory" cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
+    git -C "$source_directory" diff --name-only "$base_sha" "$commit_sha" -- '*.yml' '*.yaml' > "$changed_yaml"
+    while IFS= read -r path; do
+      if git -C "$source_directory" show "$commit_sha:$path" 2>/dev/null | grep -E 'zizmor:[[:space:]]*ignore' >/dev/null; then
+        has_changed_suppression=true
+        break
+      fi
+    done < "$changed_yaml"
+  fi
+  if [ "$has_changed_suppression" = true ]; then
+    jq '.findings += [{path:"workflow-yaml",rule_id:"untrusted-zizmor-suppression",message:"pull request changes YAML containing a zizmor inline suppression"}]' "$result_path" > "$temporary_directory/zizmor-result-with-suppression.json"
     mv "$temporary_directory/zizmor-result-with-suppression.json" "$result_path"
   fi
   write_envelope "$output_directory/zizmor.json" zizmor "$result_path"

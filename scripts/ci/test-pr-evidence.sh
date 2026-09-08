@@ -52,7 +52,8 @@ write_mock git '
 if [ "$1" = "-C" ]; then shift 2; fi
 case "$1" in
   cat-file) exit 0 ;;
-  diff) if [ "${GIT_ADDED_ZIZMOR_IGNORE:-false}" = true ] && printf "%s\\n" "$*" | grep -Fq ".github/workflows"; then printf "%s\\n" "+# zizmor: ignore[dangerous-triggers]"; fi; exit 0 ;;
+  diff) if [ "${GIT_CHANGED_ZIZMOR_SUPPRESSED:-false}" = true ]; then printf "%s\\n" "nested/action/action.yml"; fi; exit 0 ;;
+  show) if [ "${GIT_CHANGED_ZIZMOR_SUPPRESSED:-false}" = true ]; then printf "%s\\n" "# zizmor: ignore[dangerous-triggers]" "runs: {using: composite, steps: []}"; fi; exit 0 ;;
   rev-parse) printf "%s\\n" "'"$root"'" ;;
 esac
 '
@@ -66,7 +67,7 @@ jq -e '.result.findings == [{path:"config.env",rule_id:"fixture-secret"}]' "$out
 jq -e '.result.vulnerabilities[0] == {package:"fixture-package",id:"OSV-1",severity:"HIGH",fix_available:true}' "$output_directory/osv.json" >/dev/null
 jq -e '.result.failed_checks[] | select(.check_id == "CKV_SKIPPED" and .check_name == "IaC check was suppressed in pull-request source")' "$output_directory/checkov.json" >/dev/null
 suppression_directory="$temporary_directory/suppression-evidence"
-GIT_ADDED_ZIZMOR_IGNORE=true PATH="$mock_directory:$PATH" TERRAFORM_PLUGIN_MIRROR="$temporary_directory/plugin-mirror" "$script_dir/collect-pr-evidence.sh" "$suppression_directory" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$fixture_directory" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+GIT_CHANGED_ZIZMOR_SUPPRESSED=true PATH="$mock_directory:$PATH" TERRAFORM_PLUGIN_MIRROR="$temporary_directory/plugin-mirror" "$script_dir/collect-pr-evidence.sh" "$suppression_directory" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$fixture_directory" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 jq -e '.result.findings[] | select(.rule_id == "untrusted-zizmor-suppression")' "$suppression_directory/zizmor.json" >/dev/null
 jq -e '.result.status == "passed"' "$output_directory/format.json" >/dev/null
 jq -e '.result.status == "passed" and .result.modules == [{module:"infrastructure",status:"passed"}]' "$output_directory/terraform.json" >/dev/null

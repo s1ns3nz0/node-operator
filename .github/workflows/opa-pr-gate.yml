@@ -98,12 +98,15 @@ jobs:
           persist-credentials: false
       - name: Reject pull-request scanner policy replacement
         run: |
-          git -C .pr-source diff --quiet "$BASE_SHA" "$SUBJECT_SHA" -- \
-            .semgrep .semgrepignore .gitleaks.toml .gitleaksignore \
-            .checkov.yml .checkov.yaml osv-scanner.toml .osv-scanner.toml || {
-              echo 'Pull requests cannot replace trusted scanner policy or ignore files.' >&2
-              exit 1
-            }
+          while IFS= read -r path; do
+            name="${path##*/}"
+            case "$path:$name" in
+              .semgrep/*:*|*/.semgrep/*:*|*:*.semgrepignore|*:*.gitleaks.toml|*:*.gitleaksignore|*:*.checkov.yml|*:*.checkov.yaml|*:osv-scanner.toml|*:.osv-scanner.toml)
+                echo "Pull requests cannot replace trusted scanner policy or ignore files: $path" >&2
+                exit 1
+                ;;
+            esac
+          done < <(git -C .pr-source diff --name-only "$BASE_SHA" "$SUBJECT_SHA")
       - name: Collect trusted security evidence from untrusted source
         env:
           REGISTRY_TOKEN: ${{ github.token }}
