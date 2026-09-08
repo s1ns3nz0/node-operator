@@ -6,6 +6,9 @@ manifest="$root/deploy/dast/service-and-network-policies.yaml"
 installer="$root/scripts/ops/install-private-dast-public-cas.sh"
 
 grep -Fq 'name: prysm-beacon' "$manifest"
+for label in 'pod-security.kubernetes.io/enforce: restricted' 'pod-security.kubernetes.io/enforce-version: v1.35' 'pod-security.kubernetes.io/audit: restricted' 'pod-security.kubernetes.io/warn: restricted'; do
+  grep -Fq "$label" "$manifest"
+done
 grep -Fq 'name: validator-signer-upcheck-proxy' "$manifest"
 grep -Fq "upstream = 'validator-hoodi-001-remote-signer'" "$manifest"
 if grep -Fq 'validator-hoodi-001-remote-signer.validator-operations.svc' "$manifest"; then
