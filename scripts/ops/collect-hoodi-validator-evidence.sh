@@ -32,7 +32,7 @@ timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 record="$output_dir/${phase}-${validator_set}-$(date -u +%Y%m%dT%H%M%SZ).json"
 node_json="$(kubectl -n node-operator get pods -l 'app.kubernetes.io/part-of=hoodi-node' -o json)"
 validator_json="$(kubectl -n validator-operations get pods -l "node-operator.io/validator-set=${validator_set}" -o json 2>/dev/null || printf '{"items":[]}')"
-lease_json="$(kubectl -n validator-operations get lease "${validator_set}-primary" -o json 2>/dev/null || printf '{}')"
+lease_json="$(kubectl -n validator-operations get lease "validator-${validator_set}-primary" -o json 2>/dev/null || printf '{}')"
 events_json="$(kubectl -n validator-operations get events --field-selector involvedObject.namespace=validator-operations -o json 2>/dev/null || printf '{"items":[]}')"
 
 # Event messages can include operator-provided strings. Retain only standard
