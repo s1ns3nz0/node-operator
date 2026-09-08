@@ -10,11 +10,11 @@
     },
     "3": {
       "status": "incomplete",
-      "evidence": "PR130 actual approval observed but post-approval trusted gate skipped after external merge; do not claim hosted positive admission. PR127 final headcb4e002 requires fresh approval and gate proof. GitOps protection remains403 entitlement; source required check still onlyquality/scanners."
+      "evidence": "Frozen PR127 cb4e002: all5standardchecksPASS; actual hosted gate34197954234 summaryblock0/require_approval1/warn0. Await actual current-head review; no positive-admission claim yet. GitOps protection403 entitlement remains; required source checks unchanged."
     },
     "4": {
       "status": "incomplete",
-      "evidence": "Reviewed prerequisites and Kyverno fix deployed; three actual bounded DAST jobs failed and were cleaned. Third runner6dcc606 could not parse null termination message and exited5 without validated artifact. No DAST pass. Lifecycle-only fallback implementation and independent review underway; no further runtime retry authorized."
+      "evidence": "GitOps lifecycle-fallback PR50 normally merged7922fcf1497603d37f361ce65edc03c0f63c1481; hosted34198286774 and main34198364213 PASS. Fourth bounded run1788851715 retained exact-image Error/exit137/restart0/scan:null, cleanupPASS. Not OOM proof, no stage or DAST pass. No-network image compatibility diagnostic preparation separately approved, execution pending exact-artifact review."
     },
     "5": {
       "status": "incomplete",
@@ -85,6 +85,22 @@
       "name": "goal bundle harness",
       "result": "pass",
       "task_graph_count": 84
+    },
+    {
+      "name": "DAST lifecycle fallback runtime",
+      "result": "diagnostic-only, scan failed",
+      "run_id": 1788851715,
+      "scanner_exit": 137,
+      "scanner_reason": "Error",
+      "scan": null,
+      "cleanup": "pass",
+      "private_evidence": "/private/tmp/node-operator-dast-run.1788851715.sLXLla/evidence.json"
+    },
+    {
+      "name": "neutral ops ownership delta",
+      "result": "reviewed and contract tests pass; not applied",
+      "commit": "11e6de4",
+      "reviewer": "/root/security_goal_ci_fallback"
     }
   ],
   "external_mutations": [
