@@ -5,16 +5,16 @@
       "evidence": "PR129 squash merged27277d9; actual default-main CI Security34194186564 SUCCESS and pulled exact verified scanner digestdf5078a48b7536b5f64e99b97cf6bfceab7c1638fcd534f499600d4d27fd836d"
     },
     "2": {
-      "status": "incomplete",
-      "evidence": "GitOps46/47/48/49 merged with reviewed tests; signed publisher34193621493 SUCCESS. PR130 externally merged60e28e3d190c73eeb9156477af42b349f9e349ce after actual exact-head fjybjinsu approval. Source127 integrated main and bootstrap completion docs, final frozen headcb4e002f1c479c55febb32d5f58214bd0e94a7de awaiting exact-head approval/checks."
+      "status": "complete",
+      "evidence": "Requested sourcePR127 externally merged6487ffbeb1f693df8007d1ccf6822bc722050b18 after exact-head fjybjinsu approval; GitOps46 and reviewed followups through53 merged. Runtime source followupPR131 remains open and must pass admission/merge separately; this status does not claim every followup is merged."
     },
     "3": {
       "status": "incomplete",
-      "evidence": "Frozen PR127 cb4e002: all5standardchecksPASS; actual hosted gate34197954234 summaryblock0/require_approval1/warn0. Await actual current-head review; no positive-admission claim yet. GitOps protection403 entitlement remains; required source checks unchanged."
+      "evidence": "Exact-head negative custom-check publication proved on PR127 and PR131. PR127 was merged immediately after approval before positive review-refresh proof; refresh34202245518 failed. PR131 frozen7656b97 allfiveordinarychecksPASS, actual approval/review-refresh/positive decision pending. GitOps protection403 entitlement remains; source required evidence check not yet enabled."
     },
     "4": {
-      "status": "incomplete",
-      "evidence": "Temporary-volume eviction fixed by reviewed GitOpsPR51 merge72cd84c. Actualrun1788852508 now retainsv3 stageimport/exit22 and four targetfailures, cleanupPASS. Wrong ZAP API prefix fixed by PR52 merge5cdecac (hosted+mainPASS), no subsequent fullscan. Signer HTTPHost mismatch fixed source4224883, proxy-only reviewedrolloutPASS and actualfixedGET200. Live Pod ENIs/SG rules show four missing private cross-pool ingress rules; exact4-create plan under independentreview. No DAST completion claim."
+      "status": "complete",
+      "evidence": "Actual run1788855510 PASS after reviewed four SG rules and two proxy corrections. Exact merged GitOps504f7d0 and pinned scanner781a; four HTTP200, VaultCA+hostname verified, alert_count0, alert_metadata[], summary exit0; owned Job cleanup confirmed. Root independently checked artifact fields and SHA f8622f334f0f733de9110c927e70f84652e975e486e54f098dfa50dc9d69e1cc. Three fixed GET responses passively scanned, Nethermind TCP reachability only; no full validator UC or active-attack claim."
     },
     "5": {
       "status": "incomplete",
@@ -157,20 +157,63 @@
     "changed_attributes": ["tags", "tags_all"],
     "creates_deletes_replacements_routing_changes": 0,
     "root_independent_plan_assertion": "pass",
-    "status": "private local import candidate only; no apply or remote migration"
+    "status": "approved tag-only saved plan applied; six-resource refreshed plan no-drift; no remote migration",
+    "post_apply_root_assertion": "all six managed changes no-op, pass",
+    "post_apply_private_plan": "/private/tmp/node-operator-foundation-import.7Df1E7/post-apply-plan.json"
   },
   "runtime_followup_integration": {
-    "head": "573968f",
-    "base": "cb4e002",
+    "head": "1c6a564",
+    "base": "6487ffbeb1f693df8007d1ccf6822bc722050b18",
     "diff_sha256": "7fe1e72f9d684cc93efa416b94be9defb073f7b7d473bcdf46c5057f5df4ffef",
     "files": 6,
     "independent_terra_review": "approved",
     "focused_contracts": "pass",
     "shellcheck_syntax_fmt_diff_harness": "pass",
     "optional_kyverno_engine": "explicitly skipped, CLI unavailable",
-    "status": "local commits; stacked draft PR pending primary integration review"
+    "status": "PR131 pushed, retargeted main after parent merge; portability regression fixed6391187; header fix pending review",
+    "pr": 131,
+    "portability_ci_quality": "34203163133 success"
+  },
+  "source_pr_127_merge": {
+    "merge": "6487ffbeb1f693df8007d1ccf6822bc722050b18",
+    "merged_by": "fjybjinsu",
+    "merged_at": "2026-09-08T08:00:56Z",
+    "exact_head_approval_at": "2026-09-08T08:00:49Z",
+    "positive_admission_proof": "not achieved: old decision failure remained; review refresh34202245518 failed"
+  },
+  "dast_alert_identification": {
+    "run": "1788855155",
+    "gitops_merge": "504f7d01424dcf5f4fd38cf039c3ff4c915f4558",
+    "gitops_pr": 53,
+    "result": "failed",
+    "all_four_targets_http_200": true,
+    "vault_tls_verified": true,
+    "alert_count": 1,
+    "alert_metadata": [{"plugin_id": 10036, "risk": 1, "confidence": 3}],
+    "report_sha256": "bd7c568c4ca5f8d82f54390ab53b5b5a755ce94c7e24e7ba8d3ec994192703cc",
+    "cleanup": "owned Job absent",
+    "rule_source": "https://www.zaproxy.org/docs/alerts/10036/",
+    "private_evidence": "/private/tmp/node-operator-dast-run.1788855155.tpjQbX/evidence.json"
   },
   "latest_dast": {
+    "run": "1788855510",
+    "result": "passed",
+    "stage": "summary",
+    "exit_code": 0,
+    "all_four_targets_http_200": true,
+    "vault_ca_and_hostname_verified": true,
+    "alert_count": 0,
+    "alert_metadata": [],
+    "gitops_commit": "504f7d01424dcf5f4fd38cf039c3ff4c915f4558",
+    "proxy_commit": "7656b97113e2f8cfd1d76f1302836e6d5271a687",
+    "report_sha256": "696ffb3c470d3aa8ab34ffbf6decda1f9e6476a7610620b7a4d02870a3feca52",
+    "evidence_sha256": "f8622f334f0f733de9110c927e70f84652e975e486e54f098dfa50dc9d69e1cc",
+    "private_evidence": "/private/tmp/node-operator-dast-run.1788855510.nvDH2C/evidence.json",
+    "root_independent_validation": "pass",
+    "cleanup": "owned Job absent, integration owner verified",
+    "scope": "three fixed GET header-only passive responses and one TCP P2P reachability probe; not full API or validator-duty testing"
+  },
+  "historical_connectivity_dast": {
     "run": "1788854088",
     "result": "failed",
     "stage": "summary",
@@ -182,7 +225,7 @@
     "private_evidence": "/private/tmp/node-operator-dast-run.1788854088.t0H4Uq/evidence.json",
     "next": "Review bounded numeric alert metadata collection; no finding waiver or automatic retry"
   },
-  "latest_user_change_recheck": {
+  "protection_recheck_before_user_approval": {
     "source_required_reviews": 0,
     "source_code_owner_required": false,
     "source_required_checks": ["quality", "scanners"],
@@ -264,7 +307,7 @@
       "reason": "agent thread limit; bounded state reconnaissance performed locally"
     }
   ],
-  "previous_goal_turn_classification": "no progress: preceding response only rechecked unchanged protection/approval blockers. Current continuation changes next action with independently verified Terraform metadata explanation and actual cloud readback; DAST lifecycle fix delegated.",
+  "previous_goal_turn_classification": "progress: private foundation import changed next action and canonical runtime evidence was recorded. Current continuation applied reviewed tag reconciliation, pushed source followupPR131, merged GitOps53, corrected real proxy header disclosure, and obtained actual zero-alert DAST PASS; no blocked audit applies.",
   "protection_observed": {
     "required_reviews": 0,
     "code_owner": false,

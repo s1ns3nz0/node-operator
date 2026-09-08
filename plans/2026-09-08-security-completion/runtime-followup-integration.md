@@ -23,3 +23,10 @@ create a draft stacked PR against PR127's branch. No deployment or merge is
 part of this slice. After parent merge, retarget and rerun required checks.
 
 Ops EBS representation and foundation ownership changes remain separate.
+
+Hosted PR131 quality run `34202878737` exposed a real Linux portability defect:
+the public CA installer hard-coded macOS `/private/tmp`. Extend this slice to
+its installer only: honor `${TMPDIR:-/tmp}` for the same three mktemp files,
+retaining exclusive creation and exact-file cleanup. The behavioral fixture
+sets a custom TMPDIR and asserts the ConfigMap certificate paths use it. Do
+not skip the CI test or create a macOS-specific directory on the runner.
