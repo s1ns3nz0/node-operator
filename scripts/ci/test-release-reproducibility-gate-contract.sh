@@ -5,6 +5,16 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 integrity="$root/.github/workflows/ci-release-integrity.yml"
 release="$root/.github/workflows/release.yml"
 grep -Fq 'workflow_call:' "$integrity"
+if grep -Fq "tags: ['v*.*.*']" "$integrity"; then
+  printf 'reusable integrity workflow must not also run independently for release tags\n' >&2
+  exit 1
+fi
 grep -Fq 'uses: ./.github/workflows/ci-release-integrity.yml' "$release"
 grep -Fq 'needs: reproducibility' "$release"
-printf '%s\n' 'PASS: release publication is blocked on reusable reproducibility evidence.'
+grep -Fq 'test-build-release-bundle.sh /output/current' "$integrity"
+grep -Fq 'install-release-sca-tool.sh "$RUNNER_TEMP/release-sca-bin"' "$integrity"
+grep -Fq 'scan-release-sbom.sh' "$integrity"
+grep -Fq 'sbom.cyclonedx.json' "$integrity"
+grep -Fq 'Enforce release SBOM SCA decision' "$integrity"
+grep -Fq '.findings.critical == 0 and .findings.high == 0 and .findings.unknown == 0' "$integrity"
+printf '%s\n' 'PASS: release publication is blocked on one reusable reproducibility and exact-SBOM SCA gate.'

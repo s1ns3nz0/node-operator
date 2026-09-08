@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ "$#" -gt 1 ]; then
+  printf 'usage: %s [OUTPUT_DIRECTORY]\n' "$0" >&2
+  exit 64
+fi
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/lib/common.sh"
 require_command jq
@@ -10,14 +15,14 @@ require_command cmp
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
 
-"$script_dir/build-release-bundle.sh" "$temporary_directory/first" >/dev/null
+first="${1:-$temporary_directory/first}"
+"$script_dir/build-release-bundle.sh" "$first" >/dev/null
 "$script_dir/build-release-bundle.sh" "$temporary_directory/second" >/dev/null
 
 for filename in node-operator-release-bundle.tar node-operator-release-bundle.sha256 manifest.json provenance-input.json; do
-  cmp "$temporary_directory/first/$filename" "$temporary_directory/second/$filename"
+  cmp "$first/$filename" "$temporary_directory/second/$filename"
 done
 
-first="$temporary_directory/first"
 digest="$(awk '{print $1}' "$first/node-operator-release-bundle.sha256")"
 [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
 actual="sha256:$(shasum -a 256 "$first/node-operator-release-bundle.tar" | awk '{print $1}')"

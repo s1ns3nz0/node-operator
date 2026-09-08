@@ -1,0 +1,26 @@
+{
+  "task_id": "2026-09-08-cicd-optimization",
+  "owner": "sol",
+  "objective": "Red-team the source CI/CD pipeline and close the highest-value remaining release supply-chain gap with reproducible, non-sensitive evidence.",
+  "scope": [
+    "GitHub Actions source workflows and job dependency gates",
+    "release SBOM vulnerability analysis and evidence retention",
+    "contract tests and framework-mapped red-team report"
+  ],
+  "out_of_scope": [
+    "GitOps repository and live CD inspection owned by the parent task",
+    "deployment, release publication, secrets, Vault, and validator key material"
+  ],
+  "authorizations": {
+    "source_changes": "user authorized CI/CD optimization",
+    "external_mutations": "not authorized in this subtask"
+  },
+  "success_criteria": [
+    "Release candidates fail closed on actionable SBOM vulnerabilities",
+    "The scan consumes the exact SBOM produced for the release artifact",
+    "Only compact non-sensitive scan evidence is retained",
+    "Workflow graph and implementation contracts pass locally"
+  ],
+  "model_fallbacks": [],
+  "escalation_trigger": "Any deployment, publish, merge, secret access, or production mutation returns to the primary task owner."
+}
