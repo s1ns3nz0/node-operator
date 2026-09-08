@@ -43,6 +43,9 @@ for required_path in \
   source/infra/foundation-network/main.tf \
   source/infra/foundation-network/backend.hcl.example \
   source/infra/ops-access/main.tf \
+  source/infra/ops-access/backend.hcl.example \
+  source/infra/ops-access/terraform.tfvars.example \
+  source/scripts/ci/check-ops-access-ssm-retention-plan.sh \
   source/infra/baseline/variables.tf \
   source/release/hoodi-release-contract.json \
   source/scripts/release/node-operator-release.sh \

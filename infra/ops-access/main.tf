@@ -10,9 +10,28 @@ provider "aws" { region = var.aws_region }
 
 data "aws_ssm_parameter" "al2023" { name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64" }
 
+# This read-only discovery path is deliberately unavailable to fresh defaults.
+# It accommodates only the reviewed host whose EC2 API represents the default
+# EBS optimization capability as false.
+data "aws_instance" "retained_host" {
+  count       = var.retained_host_instance_id == null ? 0 : 1
+  instance_id = var.retained_host_instance_id
+}
+
+data "aws_subnet" "retained_host" {
+  count = var.retained_host_instance_id == null ? 0 : 1
+  id    = data.aws_instance.retained_host[0].subnet_id
+}
+
+data "aws_ec2_instance_type" "retained_host" {
+  count         = var.retained_host_instance_id == null ? 0 : 1
+  instance_type = data.aws_instance.retained_host[0].instance_type
+}
+
 locals {
   create_ssm_endpoints       = var.existing_ssm_endpoint_security_group_id == null
   endpoint_security_group_id = local.create_ssm_endpoints ? aws_security_group.endpoints[0].id : var.existing_ssm_endpoint_security_group_id
+  retain_existing_host       = var.retained_host_instance_id != null
 }
 
 resource "aws_security_group" "host" {
@@ -110,10 +129,12 @@ resource "aws_iam_instance_profile" "host" {
 }
 
 resource "aws_instance" "host" {
-  ami                                  = data.aws_ssm_parameter.al2023.value
-  instance_type                        = "t3.micro"
-  monitoring                           = true
-  ebs_optimized                        = true
+  ami           = data.aws_ssm_parameter.al2023.value
+  instance_type = "t3.micro"
+  monitoring    = true
+  # Fresh hosts retain the secure default. Only the reviewed legacy host uses
+  # its observed false representation after all identity/capability checks.
+  ebs_optimized                        = local.retain_existing_host ? false : true
   subnet_id                            = var.subnet_id
   associate_public_ip_address          = false
   iam_instance_profile                 = aws_iam_instance_profile.host.name
@@ -131,6 +152,26 @@ resource "aws_instance" "host" {
   }
   tags       = { ManagedBy = "terraform", Project = "node-operator", Purpose = "ops-access" }
   depends_on = [aws_iam_role_policy_attachment.ssm, aws_vpc_endpoint.ssm]
+
+  lifecycle {
+    precondition {
+      condition = local.retain_existing_host ? (
+        data.aws_instance.retained_host[0].id == "i-02c57d75e7f6810b1" &&
+        data.aws_instance.retained_host[0].instance_type == "t3.micro" &&
+        data.aws_instance.retained_host[0].subnet_id == var.subnet_id &&
+        data.aws_subnet.retained_host[0].vpc_id == var.vpc_id
+      ) : true
+      error_message = "retained host opt-in requires the reviewed i-02c57d75e7f6810b1 t3.micro host in the configured VPC and subnet."
+    }
+
+    precondition {
+      condition = local.retain_existing_host ? (
+        data.aws_instance.retained_host[0].ebs_optimized == false &&
+        data.aws_ec2_instance_type.retained_host[0].ebs_optimized_support == "default"
+      ) : true
+      error_message = "retained host opt-in requires observed ebs_optimized=false and EC2 EBS optimization support=default."
+    }
+  }
 }
 
 output "instance_id" { value = aws_instance.host.id }

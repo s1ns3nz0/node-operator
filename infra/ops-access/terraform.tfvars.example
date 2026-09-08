@@ -6,3 +6,7 @@ cluster_security_group_id = "sg-0123456789abcdef0"
 
 existing_ssm_endpoint_security_group_id = null
 manage_cluster_ingress_rule              = true
+
+# Leave null for every fresh deployment. The reviewed migration procedure may
+# set only i-02c57d75e7f6810b1 after its saved-plan guard is accepted.
+retained_host_instance_id = null

@@ -28,3 +28,15 @@ variable "manage_existing_endpoint_ingress_rule" {
   type        = bool
   default     = false
 }
+
+variable "retained_host_instance_id" {
+  description = "Exact reviewed host opt-in for reconciling the legacy EBS optimization representation. Null retains the secure fresh-host default."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.retained_host_instance_id == null || var.retained_host_instance_id == "i-02c57d75e7f6810b1"
+    error_message = "retained_host_instance_id must be null or the reviewed host i-02c57d75e7f6810b1."
+  }
+}

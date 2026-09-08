@@ -42,15 +42,39 @@ missing. Do not replace or stop the host, disable hardening for new instances,
 or add an exception without a reviewed decision. Any future host-changing plan
 also requires checking active SSM/DAST sessions and explicit impact approval.
 
+## Reviewed retained-host representation opt-in
+
+Fresh `ops-access` hosts always retain `ebs_optimized = true`. The nullable
+`retained_host_instance_id` variable is null by default and may name only
+`i-02c57d75e7f6810b1`. When set, Terraform reads the exact host, its subnet,
+and its EC2 instance-type capability before accepting the legacy false value.
+The resource lifecycle preconditions require the configured VPC/subnet, type
+`t3.micro`, observed `ebs_optimized = false`, and type capability
+`ebs_optimized_support = default`. Any other host, type, network identity, or
+capability fails planning; this is not a generic drift suppression.
+
+Before any separately authorized state or infrastructure action, render a
+saved plan and run `scripts/ci/check-ops-access-ssm-retention-plan.sh` on its
+private JSON form. The guard requires the exact host in prior state, requires
+the host to remain a no-op with the reviewed false representation, and rejects
+create, delete, replacement, unknown EBS optimization values, or a false EBS
+optimization value on any other managed instance. Keep saved plans and raw
+state outside Git. This guard does not authorize apply, import, remote-state
+migration, or a host restart.
+
 ## General migration sequence
 
 1. Create the new root with a distinct encrypted state key and no dependency on
    workload, Vault, or GitOps resources except read-only EKS/VPC outputs. Copy
    `infra/ops-access/backend.hcl.example` outside the bundle and use the
    `node-operator/ops-access/terraform.tfstate` key; do not use local state.
-2. Run the isolated `ops-access plan` command. It may propose a new host only
-   for a genuinely zero-resource environment. Against an existing environment,
-   it is evidence to review: do not apply a plan that replaces an active host,
+2. Run the isolated `ops-access plan` command with a new private `--plan-file`.
+   It prints the saved-plan SHA-256 only after the wrapper renders and checks
+   the plan JSON. Apply requires that same path and `--expected-sha`; it
+   re-renders, rechecks, and rehashes immediately before applying the exact
+   saved plan. It may propose a new host only for a genuinely zero-resource
+   environment with `--allow-create`. Against an existing environment, it is
+   evidence to review: do not apply a plan that replaces an active host,
    endpoint, IAM role, or security-group rule.
 3. In a reviewed maintenance window, create the isolated host resources in the
    new state using Terraform import or a state move procedure that preserves
@@ -65,10 +89,10 @@ also requires checking active SSM/DAST sessions and explicit impact approval.
 5. Remove both legacy and transitional addresses from the baseline state only
    after the isolated state plans no replacement or destroy. Then remove their
    baseline configuration.
-6. Test `ops-access apply --allow-create`, private EKS tunnel, and
-   `ops-access destroy --allow-create` independently in a disposable
-   environment. There is deliberately no Scheduler implementation or
-   permission in this root.
+6. Test the saved-plan apply path, private EKS tunnel, and a separately
+   reviewed explicit destroy-plan interface independently in a disposable
+   environment. Direct destroy remains disabled. There is deliberately no
+   Scheduler implementation or permission in this root.
 
 Do not combine this migration with a client, Vault, validator, or generic
 baseline Terraform apply.
