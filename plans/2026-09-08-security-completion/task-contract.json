@@ -1,0 +1,16 @@
+{
+  "task_id":"2026-09-08-security-completion",
+  "objective":"Complete all five requested security activation tasks, not just code preparation.",
+  "requirements":[
+    "1: merge verified scanner pin and prove default-branch CI uses it",
+    "2: review and merge source security PR127 and GitOps PR46, resolving integration conflicts without reverting hardening",
+    "3: demonstrate hosted positive and negative exact-head admission, require the evidence check, and resolve GitOps protection enforcement",
+    "4: deploy reviewed private DAST prerequisites and obtain actual per-target passive scan evidence inside private EKS",
+    "5: establish bootstrap/foundation/ops state ownership, reconcile approved IaC and live settings, preserve resources, and verify scoped no-drift plans"
+  ],
+  "authorized":["create and normally merge scoped reviewed PRs","run scoped CI and runtime tests","deploy reviewed DAST prerequisites","reviewed non-destructive IaC reconciliation","enable verified security enforcement"],
+  "human_managed":["temporary disabling of required code-owner and minimum human review protection"],
+  "forbidden":["admin merge bypass","silently waive findings","billing or repository visibility changes","expose credentials or raw state/logs","delete all project resources","unreviewed replacement or downtime","secret recovery ceremonies without user input"],
+  "integration_owner":{"tier":"sol","owner":"/root/security_goal_ci_fallback"},
+  "routing":{"requested":"gpt-5.6-sol","fallback":"gpt-6-astra; requested model at capacity; same Sol-role security ownership retained"}
+}

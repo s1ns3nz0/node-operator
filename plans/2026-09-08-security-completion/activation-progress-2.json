@@ -1,0 +1,24 @@
+{
+  "requirements": {
+    "1": {"status":"incomplete","evidence":"PR129 ready; last-push approval remains enabled after user change"},
+    "2": {"status":"incomplete","evidence":"GitOps46 merged53f640e; follow-up47 merged1d63d13 and48 merged5e6bc432. Source127 open786b542"},
+    "3": {"status":"incomplete","evidence":"evidence check not required; hosted proof absent; private GitOps protection API entitlement403"},
+    "4": {"status":"incomplete","evidence":"server-side dry-run rejected proxy privileged omission and null-unsafe existing Kyverno volumes expression; no apply/scan"},
+    "5": {"status":"incomplete","evidence":"five bootstrap resources imported private locally; saved plan11create3update0delete; no cloud apply"}
+  },
+  "checks": [
+    {"name":"GitOps main verify after46","run_id":34192842590,"result":"success"},
+    {"name":"GitOps publisher after46","run_id":34192842993,"result":"failure","cause":"Cosign2.6.1 emits in-toto Statement/v0.1; verifier allowed onlyv1"},
+    {"name":"GitOps PR47 independent Terra review","commit":"a95241e10296c814bd30af96507e668173eba20f","result":"approved; both envelope versions retain exact bindings and negative tests"},
+    {"name":"Bootstrap imported-state plan","result":"11create3update0delete; apply withheld pending backend-role DynamoDB CMK crypto and native SSE-C preservation","raw_private_path":"/private/tmp/node-operator-bootstrap-goal.RIf9Ci/bootstrap.tfplan"}
+  ],
+  "external_mutations": [
+    {"type":"normal_merge","repository":"node-operator-gitops","pr":46,"merge":"53f640e96fbd8d02aae40c21281bcdcf7a154aab"},
+    {"type":"normal_merge","repository":"node-operator-gitops","pr":47,"merge":"1d63d13da307754c4dc7d6e46895afad83b21df9"},
+    {"type":"normal_merge","repository":"node-operator-gitops","pr":48,"merge":"5e6bc4320bfc4981cb56e3d63babd3c04c18206c"},
+    {"type":"authorized_publisher_dispatch","repository":"node-operator-gitops","run_id":34193621493,"head":"5e6bc4320bfc4981cb56e3d63babd3c04c18206c","result":"pending"}
+  ],
+  "model_fallbacks": [{"requested":"gpt-5.6-luna reconnaissance","actual":"root","reason":"repeated agent thread-limit rejection"}],
+  "previous_goal_turn_classification":"progress: protection API revalidated changed settings and independent review resumed",
+  "current_continuation_progress":"private bootstrap imports and saved plan; reviewed GitOps merges; runtime admission blocker identified"
+}

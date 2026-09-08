@@ -1,0 +1,167 @@
+{
+  "requirements": {
+    "1": {
+      "status": "complete",
+      "evidence": "PR129 squash merged27277d9; actual default-main CI Security34194186564 SUCCESS and pulled exact verified scanner digestdf5078a48b7536b5f64e99b97cf6bfceab7c1638fcd534f499600d4d27fd836d"
+    },
+    "2": {
+      "status": "incomplete",
+      "evidence": "GitOps46/47/48/49 merged with reviewed tests; signed publisher34193621493 SUCCESS. PR130 externally merged60e28e3d190c73eeb9156477af42b349f9e349ce after actual exact-head fjybjinsu approval. Source127 integrated main and bootstrap completion docs, final frozen headcb4e002f1c479c55febb32d5f58214bd0e94a7de awaiting exact-head approval/checks."
+    },
+    "3": {
+      "status": "incomplete",
+      "evidence": "PR130 actual approval observed but post-approval trusted gate skipped after external merge; do not claim hosted positive admission. PR127 final headcb4e002 requires fresh approval and gate proof. GitOps protection remains403 entitlement; source required check still onlyquality/scanners."
+    },
+    "4": {
+      "status": "incomplete",
+      "evidence": "Reviewed prerequisites and Kyverno fix deployed; three actual bounded DAST jobs failed and were cleaned. Third runner6dcc606 could not parse null termination message and exited5 without validated artifact. No DAST pass. Lifecycle-only fallback implementation and independent review underway; no further runtime retry authorized."
+    },
+    "5": {
+      "status": "incomplete",
+      "evidence": "Reviewed bootstrap stage2 applied10create2update0destroy. Actual state bucket and Dynamo use CMK23528ef1-681c-41c3-a565-d19d3ec98c37, SSE-C block preserved. Assumed backend role post-cache read/lock/no-drift PASS. Bootstrap17-resource state migrated to encrypted remote key with identical content, fullplan0. Terraform1.5.7 changed lineage/serial via empty-remote refresh, independently explained; preserved backup/version. Foundation and ops ownership reconciliation remain incomplete; ops preview proposes unapproved EBS-flag host replacement."
+    }
+  },
+  "initial_protection": {
+    "required_reviews": 1,
+    "code_owner": true,
+    "last_push_approval": true,
+    "admin_enforcement": true,
+    "required_checks": [
+      "quality",
+      "scanners"
+    ],
+    "user_notified": true
+  },
+  "checks": [
+    {
+      "name": "default scanner activation",
+      "run_id": 34194186564,
+      "result": "success"
+    },
+    {
+      "name": "GitOps corrected OCI publisher",
+      "run_id": 34193621493,
+      "result": "success"
+    },
+    {
+      "name": "bootstrap rendered policy tests",
+      "commit": "ef062c0",
+      "result": "pass"
+    },
+    {
+      "name": "actual Terraform backend canary",
+      "result": "pass",
+      "scope": "isolated non-sensitive backend, named assumed role, current AWS-managed Dynamo key",
+      "object_key": "node-operator/security-cmk-canary-e611da82-e9cb-4c5e-a380-9307b9cd4366/terraform.tfstate",
+      "version": "FQFpn_ZOMzKvmIh.5Lxm9d0TrrvJJWc9"
+    },
+    {
+      "name": "bootstrap encrypted remote readback",
+      "result": "pass",
+      "state_version": "X2cjuh3ZRlBqyKuEArU8.xJEH_tbOiw.",
+      "cmk": "23528ef1-681c-41c3-a565-d19d3ec98c37",
+      "sse_c_block_preserved": true,
+      "dynamo_status": "ACTIVE/ENABLED"
+    },
+    {
+      "name": "bootstrap state content equivalence",
+      "result": "pass",
+      "canonicalization": "jq -S 'del(.lineage,.serial)'",
+      "sha256": "e84c7d21b9223126a1c3920a1930b9686dcfe383ae634cfa839e7c6696bd9aa1",
+      "managed_resources": 17
+    },
+    {
+      "name": "post-CMK-cache assumed backend role read/lock/no-drift",
+      "result": "pass",
+      "observed_utc": "2026-09-08T06:52:47Z"
+    },
+    {
+      "name": "Terraform1.5.7 empty remote migration metadata mechanism",
+      "result": "independently explained",
+      "reviewer": "/root/security_goal_ci_fallback",
+      "source": "https://raw.githubusercontent.com/hashicorp/terraform/v1.5.7/internal/states/remote/state.go"
+    },
+    {
+      "name": "goal bundle harness",
+      "result": "pass",
+      "task_graph_count": 84
+    }
+  ],
+  "external_mutations": [
+    {
+      "type": "normal_squash_merge",
+      "repository": "node-operator",
+      "pr": 129,
+      "merge": "27277d9d6492d4b0b324cdb984935c7ef475a5ce"
+    },
+    {
+      "type": "normal_merges",
+      "repository": "node-operator-gitops",
+      "prs": [
+        46,
+        47,
+        48
+      ],
+      "head": "5e6bc4320bfc4981cb56e3d63babd3c04c18206c"
+    },
+    {
+      "type": "reviewed_bootstrap_stage1",
+      "result": "1create2update0destroy",
+      "plan_sha256": "a8a078aac621968b42340973a9e448da1b936906a9f50866b901a08d1560b284"
+    },
+    {
+      "type": "reviewed_private_DAST_prerequisites",
+      "result": "applied and ready, scan not passed"
+    },
+    {
+      "type": "reviewed_bootstrap_stage2",
+      "result": "10create2update0destroy",
+      "plan_sha256": "0d2b08d0ba42d00bb7ea9e5596610050fe14144c6337dc6f751fb3044d1ea1f2"
+    },
+    {
+      "type": "normal_bootstrap_backend_migration",
+      "key": "node-operator/bootstrap/terraform.tfstate",
+      "force_copy": false,
+      "resource_content_unchanged": true,
+      "old_lineage": "43433424-4274-677a-050f-5f725c172eac",
+      "old_serial": 23,
+      "new_lineage": "1ab1c89b-c841-5119-dff7-48606a2148bf",
+      "new_serial": 1,
+      "explanation_source": "https://raw.githubusercontent.com/hashicorp/terraform/v1.5.7/internal/states/remote/state.go",
+      "reviewer": "/root/security_goal_ci_fallback"
+    }
+  ],
+  "model_fallbacks": [
+    {
+      "requested": "gpt-5.6-sol",
+      "actual": "gpt-6-astra",
+      "owner": "/root/security_goal_ci_fallback",
+      "reason": "requested model at capacity"
+    },
+    {
+      "requested": "gpt-5.6-luna reconnaissance agent",
+      "actual": "root gpt-6-astra",
+      "reason": "agent thread limit; bounded state reconnaissance performed locally"
+    }
+  ],
+  "previous_goal_turn_classification": "no progress: preceding response only rechecked unchanged protection/approval blockers. Current continuation changes next action with independently verified Terraform metadata explanation and actual cloud readback; DAST lifecycle fix delegated.",
+  "protection_observed": {
+    "required_reviews": 0,
+    "code_owner": false,
+    "last_push_approval": false,
+    "admin_enforcement": true,
+    "required_checks": [
+      "quality",
+      "scanners"
+    ]
+  },
+  "private_state_evidence": "/private/tmp/node-operator-bootstrap-goal.RIf9Ci",
+  "ops_state_discovery": {
+    "path": "/private/tmp/node-operator-zero-to-hoodi/infra/ops-access/terraform.tfstate",
+    "lineage": "4194a7ca-cf28-4cce-2f92-84cb76ddbe60",
+    "serial": 10,
+    "managed_resources": 9,
+    "actual_host": "i-02c57d75e7f6810b1",
+    "note": "Existing local state owns live host; baseline stale hosti-0b1e225356d83549e is not migration source. Do not duplicate ownership."
+  }
+}
