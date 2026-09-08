@@ -1,0 +1,16 @@
+{
+  "task_id": "2026-09-08-scanner-digest-promotion",
+  "nodes": [
+    {"id":"pin","title":"Update two immutable digest pins","tier":"sol","owner":"/root/ci_optimization","status":"complete"},
+    {"id":"local-validation","title":"Focused and harness validation","tier":"sol","owner":"/root/ci_optimization","status":"complete"},
+    {"id":"pr-validation","title":"Draft PR exact-head gate observation","tier":"sol","owner":"/root/ci_optimization","status":"fail_closed_pending_codeowner_review"},
+    {"id":"review","title":"Independent review","tier":"terra","owner":"fresh Terra","status":"complete_conditionally_ready_after_codeowner"},
+    {"id":"debrief","title":"Clean-room debrief","tier":"terra","owner":"fresh Terra","status":"complete"}
+  ],
+  "edges": [
+    {"from":"pin","to":"local-validation","kind":"blocks"},
+    {"from":"local-validation","to":"pr-validation","kind":"blocks"},
+    {"from":"pr-validation","to":"review","kind":"blocks"},
+    {"from":"review","to":"debrief","kind":"blocks"}
+  ]
+}

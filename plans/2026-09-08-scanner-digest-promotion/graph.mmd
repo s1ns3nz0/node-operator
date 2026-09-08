@@ -1,0 +1,5 @@
+flowchart LR
+  pin[Update digest pins] --> local[Local validation]
+  local --> pr[Draft PR exact-head validation]
+  pr --> review[Independent review]
+  review --> debrief[Clean-room debrief]

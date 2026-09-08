@@ -62,7 +62,7 @@ jobs:
       EVIDENCE_ROOT: ${{ github.workspace }}/.opa-evidence
       SUBJECT_SHA: ${{ github.event.workflow_run.head_sha }}
       BASE_SHA: ${{ github.event.workflow_run.pull_requests[0].base.sha }}
-      SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:010ca69dc9d08d2d255c2e9d80b54544245fad8d85c670f723cce788e3bb16af
+      SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:9f6300a37edb593aa09e0085f07787098079cbba75c01d0538aff99ebaac04ce
       TERRAFORM_IMAGE: ghcr.io/s1ns3nz0/node-operator/terraform-validation@sha256:1f2ac75ec09b43b4a79eaaae94eca8f8f1655315a5aa81e7c80d3a8a14ac189a
     steps:
       - name: Resolve trusted control-plane and current PR head
