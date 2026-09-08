@@ -2,10 +2,8 @@ name: CI Policy
 
 on:
   pull_request:
-    paths: ['policy/**', 'scripts/ci/**', '.github/workflows/**']
   push:
     branches: [main]
-    paths: ['policy/**', 'scripts/ci/**', '.github/workflows/**']
 
 permissions:
   contents: read

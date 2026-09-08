@@ -1,10 +1,8 @@
 name: Policy Foundation
 on:
   pull_request:
-    paths: ['policy/**', 'scripts/ci/**', '.github/workflows/policy-foundation.yml']
   push:
     branches: [main]
-    paths: ['policy/**', 'scripts/ci/**', '.github/workflows/policy-foundation.yml']
 permissions:
   contents: read
 jobs:

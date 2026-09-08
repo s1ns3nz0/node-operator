@@ -2,7 +2,8 @@ name: CI Terraform
 
 on:
   pull_request:
-    paths: ['infra/terraform/**', 'policy/terraform/**', 'scripts/ci/**']
+  push:
+    branches: [main]
 
 permissions:
   contents: read
