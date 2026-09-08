@@ -78,7 +78,7 @@ suppression_directory="$temporary_directory/suppression-evidence"
 GIT_CHANGED_ZIZMOR_SUPPRESSED=true PATH="$mock_directory:$PATH" TERRAFORM_PLUGIN_MIRROR="$temporary_directory/plugin-mirror" "$script_dir/collect-pr-evidence.sh" "$suppression_directory" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$fixture_directory" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 jq -e '.result.findings[] | select(.rule_id == "untrusted-zizmor-suppression")' "$suppression_directory/zizmor.json" >/dev/null
 jq -e '.result.status == "passed"' "$output_directory/format.json" >/dev/null
-jq -e '.result.status == "passed" and .result.modules == [{module:"infrastructure",status:"passed"}]' "$output_directory/terraform.json" >/dev/null
+jq -e '.result.status == "passed" and (.result.modules | sort_by(.module)) == [{module:"infra/ops-access",status:"passed"},{module:"infra/other-module",status:"passed"},{module:"infrastructure",status:"passed"}]' "$output_directory/terraform.json" >/dev/null
 if rg -l 'DO_NOT_PERSIST' "$output_directory" >/dev/null; then
   printf 'raw Gitleaks secret content was retained in collector output\n' >&2
   exit 1

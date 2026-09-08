@@ -8,10 +8,20 @@ test_registered_checkov_exceptions_are_exact_and_current if {
   every exception in data.data.exceptions {
     not decision.invalid_exception(exception)
     fixture := {"policy":{"exceptions":[exception]}}
-    decision.exception_applies(exception.rule, exception.subject, exception.check_id) with input as fixture
+    registered_exception_matches(exception) with input as fixture
     not decision.exception_applies(exception.rule, sprintf("%s-other", [exception.subject]), exception.check_id) with input as fixture
     not decision.exception_applies(exception.rule, exception.subject, "CKV_UNREGISTERED") with input as fixture
   }
+}
+
+registered_exception_matches(exception) if {
+  not "file_path" in object.keys(exception)
+  decision.exception_applies(exception.rule, exception.subject, exception.check_id)
+}
+
+registered_exception_matches(exception) if {
+  "file_path" in object.keys(exception)
+  decision.checkov_exception_applies({"resource":exception.subject,"check_id":exception.check_id,"file_path":exception.file_path})
 }
 
 test_malformed_expiry_cannot_exempt_checkov if {
