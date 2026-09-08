@@ -1,9 +1,8 @@
 name: CI Evidence Gate
 
 on:
-  # zizmor: ignore[dangerous-triggers]
-  # This workflow consumes validated JSON only; policy and collectors are
-  # checked out from the default branch and run with read-only permissions.
+  # Control code comes from the trusted default branch. PR source is read-only
+  # scanner/Terraform input; scoped check publication stays in trusted steps.
   workflow_run:
     workflows: [CI Security]
     types: [completed]
