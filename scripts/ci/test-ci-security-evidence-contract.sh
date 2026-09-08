@@ -4,6 +4,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 workflow="$script_dir/../../.github/workflows/ci-security.yml"
+gate_workflow="$script_dir/../../.github/workflows/opa-pr-gate.yml"
 
 # The scanner produces the sole uploadable evidence in a non-hidden directory,
 # rather than a hidden checkout path. This preserves upload-artifact's safe
@@ -17,5 +18,33 @@ if grep -Fq 'include-hidden-files: true' "$workflow"; then
   printf 'security evidence upload must not include hidden files\n' >&2
   exit 1
 fi
+
+test "$(grep -Fc 'checks: write' "$gate_workflow")" -eq 2
+grep -Fq 'resolve-pr-evidence-context.sh' "$gate_workflow"
+grep -Fq 'ref: ${{ steps.context.outputs.trusted_sha }}' "$gate_workflow"
+grep -Fq 'Collect trusted security evidence from untrusted source' "$gate_workflow"
+grep -Fq -- '--volume "$GITHUB_WORKSPACE/.pr-source:/workspace:ro"' "$gate_workflow"
+grep -Fq -- '--volume "$RUNNER_TEMP/head-security-evidence:/evidence"' "$gate_workflow"
+grep -Fq -- '--env SEMGREP_RULES=/trusted-config/semgrep.yml' "$gate_workflow"
+grep -Fq -- '--env GITLEAKS_CONFIG=/trusted-config/gitleaks.toml' "$gate_workflow"
+grep -Fq -- '--volume "$GITHUB_WORKSPACE/.semgrep/ci.yml:/trusted-config/semgrep.yml:ro"' "$gate_workflow"
+grep -Fq -- '--volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaks.toml:/trusted-config/gitleaks.toml:ro"' "$gate_workflow"
+grep -Fq 'Reject pull-request scanner policy replacement' "$gate_workflow"
+grep -Fq '*:osv-scanner.toml|*:.osv-scanner.toml' "$gate_workflow"
+grep -Fq 'git -C .pr-source diff --name-only -z' "$gate_workflow"
+grep -Fq 'read -r -d' "$gate_workflow"
+grep -Fq -- '--env CHECKOV_CONFIG_FILE=/trusted-config/checkov.yml' "$gate_workflow"
+grep -Fq -- '--env OSV_CONFIG_FILE=/trusted-config/osv-scanner.toml' "$gate_workflow"
+grep -Fq -- 'osv-scanner --config="$OSV_CONFIG_FILE" scan source --no-ignore' "$script_dir/collect-pr-evidence.sh"
+grep -Fq -- '--disable-nosem --no-git-ignore' "$script_dir/collect-pr-evidence.sh"
+grep -Fq -- 'zizmor --offline --no-config' "$script_dir/collect-pr-evidence.sh"
+grep -Fq 'untrusted-zizmor-suppression' "$script_dir/collect-pr-evidence.sh"
+if grep -Fq 'Download scanner evidence from the completed PR run' "$gate_workflow"; then
+  printf 'trusted decision must not consume a pull-request-controlled scanner artifact\n' >&2
+  exit 1
+fi
+grep -Fq 'Publish exact-SHA evidence check' "$gate_workflow"
+grep -Fq 'Publish failed exact-SHA evidence check' "$gate_workflow"
+grep -Fq 'publish-pr-evidence-check.sh "$SUBJECT_SHA"' "$gate_workflow"
 
 printf 'PASS: scanner evidence is confined to a non-hidden dedicated directory.\n'

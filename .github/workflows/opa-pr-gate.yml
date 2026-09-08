@@ -14,12 +14,50 @@ permissions:
   actions: read
 
 jobs:
+  upstream-failure:
+    if: >-
+      github.event.workflow_run.conclusion != 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.pull_requests[0].number != null
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: write
+    env:
+      SUBJECT_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Resolve trusted control-plane and current PR head
+        id: context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRUSTED_WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          event_script="$RUNNER_TEMP/resolve-pr-evidence-context.sh"
+          gh api "repos/$GITHUB_REPOSITORY/contents/scripts/ci/resolve-pr-evidence-context.sh?ref=$GITHUB_SHA" --jq .content | base64 --decode > "$event_script"
+          chmod 0700 "$event_script"
+          "$event_script" "$GITHUB_EVENT_PATH" "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.context.outputs.trusted_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Publish failed exact-SHA evidence check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DETAILS_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: scripts/ci/publish-pr-evidence-check.sh "$SUBJECT_SHA" - "$DETAILS_URL"
   evidence-gate:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.pull_requests[0].number != null
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+      packages: read
+      checks: write
     env:
       EVIDENCE_ROOT: ${{ github.workspace }}/.opa-evidence
       SUBJECT_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -27,34 +65,73 @@ jobs:
       SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:010ca69dc9d08d2d255c2e9d80b54544245fad8d85c670f723cce788e3bb16af
       TERRAFORM_IMAGE: ghcr.io/s1ns3nz0/node-operator/terraform-validation@sha256:1f2ac75ec09b43b4a79eaaae94eca8f8f1655315a5aa81e7c80d3a8a14ac189a
     steps:
+      - name: Resolve trusted control-plane and current PR head
+        id: context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRUSTED_WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          event_script="$RUNNER_TEMP/resolve-pr-evidence-context.sh"
+          gh api "repos/$GITHUB_REPOSITORY/contents/scripts/ci/resolve-pr-evidence-context.sh?ref=$GITHUB_SHA" --jq .content | base64 --decode > "$event_script"
+          chmod 0700 "$event_script"
+          "$event_script" "$GITHUB_EVENT_PATH" "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The policy engine and collector are a trusted control-plane input:
           # never execute them from the untrusted pull-request checkout.
-          ref: ${{ github.event.repository.default_branch }}
+          ref: ${{ steps.context.outputs.trusted_sha }}
           fetch-depth: 1
           persist-credentials: false
-      - name: Download scanner evidence from the completed PR run
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5.0.0
-        with:
-          name: security-evidence-${{ env.SUBJECT_SHA }}
-          path: ${{ env.EVIDENCE_ROOT }}/raw
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ github.token }}
       - name: Checkout pull-request source as untrusted Terraform input
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.SUBJECT_SHA }}
           path: .pr-source
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
       - name: Checkout pull-request base as untrusted scanner input
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.BASE_SHA }}
           path: .base-source
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
+      - name: Reject pull-request scanner policy replacement
+        run: |
+          while IFS= read -r -d '' path; do
+            name="${path##*/}"
+            case "$path:$name" in
+              .semgrep/*:*|*/.semgrep/*:*|*:*.semgrepignore|*:*.gitleaks.toml|*:*.gitleaksignore|*:*.checkov.yml|*:*.checkov.yaml|*:osv-scanner.toml|*:.osv-scanner.toml)
+                echo "Pull requests cannot replace trusted scanner policy or ignore files: $path" >&2
+                exit 1
+                ;;
+            esac
+          done < <(git -C .pr-source diff --name-only -z "$BASE_SHA" "$SUBJECT_SHA")
+      - name: Collect trusted security evidence from untrusted source
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USERNAME: ${{ github.actor }}
+        run: |
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
+          docker pull "$SCANNER_IMAGE"
+          mkdir -p "$RUNNER_TEMP/head-security-evidence"
+          docker run --rm \
+            --env SKIP_TERRAFORM=true \
+            --env SEMGREP_RULES=/trusted-config/semgrep.yml \
+            --env GITLEAKS_CONFIG=/trusted-config/gitleaks.toml \
+            --env GITLEAKS_IGNORE_PATH=/trusted-config/gitleaksignore \
+            --env CHECKOV_CONFIG_FILE=/trusted-config/checkov.yml \
+            --env OSV_CONFIG_FILE=/trusted-config/osv-scanner.toml \
+            --volume "$GITHUB_WORKSPACE/.semgrep/ci.yml:/trusted-config/semgrep.yml:ro" \
+            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaks.toml:/trusted-config/gitleaks.toml:ro" \
+            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaksignore:/trusted-config/gitleaksignore:ro" \
+            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/checkov.yml:/trusted-config/checkov.yml:ro" \
+            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/osv-scanner.toml:/trusted-config/osv-scanner.toml:ro" \
+            --volume "$GITHUB_WORKSPACE/.pr-source:/workspace:ro" \
+            --volume "$RUNNER_TEMP/head-security-evidence:/evidence" \
+            "$SCANNER_IMAGE" /evidence "$SUBJECT_SHA" "$BASE_SHA"
+          mkdir -p "$EVIDENCE_ROOT/raw"
+          cp "$RUNNER_TEMP/head-security-evidence"/*.json "$EVIDENCE_ROOT/raw/"
       - uses: open-policy-agent/setup-opa@b2b258e089860efaadaaf71bf6e3aecb4a3eeff1 # v2.4.0
         with:
           version: v1.17.0
@@ -85,6 +162,16 @@ jobs:
           mkdir -p "$RUNNER_TEMP/base-security-evidence"
           docker run --rm \
             --env SKIP_TERRAFORM=true \
+            --env SEMGREP_RULES=/trusted-config/semgrep.yml \
+            --env GITLEAKS_CONFIG=/trusted-config/gitleaks.toml \
+            --env GITLEAKS_IGNORE_PATH=/trusted-config/gitleaksignore \
+            --env CHECKOV_CONFIG_FILE=/trusted-config/checkov.yml \
+            --env OSV_CONFIG_FILE=/trusted-config/osv-scanner.toml \
+            --volume "$GITHUB_WORKSPACE/.semgrep/ci.yml:/trusted-config/semgrep.yml:ro" \
+            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaks.toml:/trusted-config/gitleaks.toml:ro" \
+            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaksignore:/trusted-config/gitleaksignore:ro" \
+            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/checkov.yml:/trusted-config/checkov.yml:ro" \
+            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/osv-scanner.toml:/trusted-config/osv-scanner.toml:ro" \
             --volume "$GITHUB_WORKSPACE/.base-source:/workspace:ro" \
             --volume "$RUNNER_TEMP/base-security-evidence:/evidence" \
             "$SCANNER_IMAGE" /evidence "$BASE_SHA" "$BASE_SHA"
@@ -118,6 +205,12 @@ jobs:
             ${{ env.EVIDENCE_ROOT }}/policy-input/baseline-summary.json
           if-no-files-found: error
           retention-days: 90
+      - name: Publish exact-SHA evidence check
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DETAILS_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: scripts/ci/publish-pr-evidence-check.sh "$SUBJECT_SHA" "$EVIDENCE_ROOT/published/decision.json" "$DETAILS_URL"
       - name: Enforce OPA decision
         if: always()
         run: scripts/ci/verify-policy-decision.sh "$EVIDENCE_ROOT/published/decision.json"

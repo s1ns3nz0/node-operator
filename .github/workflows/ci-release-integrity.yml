@@ -2,9 +2,11 @@ name: CI Release Integrity
 
 on:
   workflow_call:
+    outputs:
+      artifact_digest:
+        description: Immutable digest approved by reproducibility and SCA
+        value: ${{ jobs.reproducibility.outputs.artifact_digest }}
   workflow_dispatch:
-  push:
-    tags: ['v*.*.*']
 
 permissions:
   contents: read
@@ -12,6 +14,8 @@ permissions:
 jobs:
   reproducibility:
     runs-on: ubuntu-24.04
+    outputs:
+      artifact_digest: ${{ steps.sca-binding.outputs.artifact_digest }}
     env:
       RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:f6b2550a3bf8a5b2e8bbdbb301120136d01bc38963d1a70d0d7ff3008acb70be
     steps:
@@ -25,9 +29,27 @@ jobs:
         run: |
           echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
           docker pull "$RELEASE_BUILD_IMAGE"
-          docker run --rm --user "$(id -u):$(id -g)" --volume "$GITHUB_WORKSPACE:/workspace:ro" --volume "$RUNNER_TEMP:/output" --workdir /workspace "$RELEASE_BUILD_IMAGE" bash scripts/ci/test-build-release-bundle.sh
-          mkdir -p "$RUNNER_TEMP/current"
-          docker run --rm --user "$(id -u):$(id -g)" --volume "$GITHUB_WORKSPACE:/workspace:ro" --volume "$RUNNER_TEMP:/output" --workdir /workspace "$RELEASE_BUILD_IMAGE" bash scripts/ci/build-release-bundle.sh /output/current
+          docker run --rm --user "$(id -u):$(id -g)" --volume "$GITHUB_WORKSPACE:/workspace:ro" --volume "$RUNNER_TEMP:/output" --workdir /workspace "$RELEASE_BUILD_IMAGE" bash scripts/ci/test-build-release-bundle.sh /output/current
+      - name: Analyze exact release SBOM
+        run: |
+          scripts/ci/install-release-sca-tool.sh "$RUNNER_TEMP/release-sca-bin"
+          PATH="$RUNNER_TEMP/release-sca-bin:$PATH" scripts/ci/scan-release-sbom.sh \
+            "$RUNNER_TEMP/current/sbom.cyclonedx.json" \
+            "$RUNNER_TEMP/current/sbom-sca.json"
+      - name: Upload release SBOM SCA evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: release-sbom-sca-${{ github.sha }}
+          path: ${{ runner.temp }}/current/sbom-sca.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Enforce release SBOM SCA decision
+        run: jq -e '.status == "passed" and .findings.critical == 0 and .findings.high == 0 and .findings.unknown == 0' "$RUNNER_TEMP/current/sbom-sca.json" >/dev/null
+      - name: Export approved release binding
+        id: sca-binding
+        run: |
+          artifact_digest="$(jq -er '.artifact_digest' "$RUNNER_TEMP/current/sbom-sca.json")"
+          printf 'artifact_digest=%s\n' "$artifact_digest" >> "$GITHUB_OUTPUT"
       - name: Fetch previous approved release when available
         id: previous
         env:

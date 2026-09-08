@@ -6,21 +6,39 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 jobs:
+  eligibility:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source release eligibility
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/ci/verify-release-source-eligibility.sh "$GITHUB_SHA"
   reproducibility:
+    needs: eligibility
     uses: ./.github/workflows/ci-release-integrity.yml
     permissions:
       contents: read
+      checks: read
   build-and-publish:
-    needs: reproducibility
+    needs: [eligibility, reproducibility]
     # A CodeBuild-hosted runner is ephemeral per workflow job and is bound to
     # the dedicated private project by its name plus run identity. A
     # GitHub-hosted or broadly shared runner must never acquire this path.
     runs-on: codebuild-node-operator-baseline-private-release-${{ github.run_id }}-${{ github.run_attempt }}
     environment: release
+    permissions:
+      contents: write
+      id-token: write
     env:
       RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:f6b2550a3bf8a5b2e8bbdbb301120136d01bc38963d1a70d0d7ff3008acb70be
     steps:
@@ -31,11 +49,15 @@ jobs:
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
+          APPROVED_ARTIFACT_DIGEST: ${{ needs.reproducibility.outputs.artifact_digest }}
         run: |
           echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
           docker pull "$RELEASE_BUILD_IMAGE"
           mkdir -p "$RUNNER_TEMP/release"
           docker run --rm --user "$(id -u):$(id -g)" --volume "$GITHUB_WORKSPACE:/workspace:ro" --volume "$RUNNER_TEMP:/output" --workdir /workspace "$RELEASE_BUILD_IMAGE" bash scripts/ci/build-release-bundle.sh /output/release
+          actual_artifact_digest="sha256:$(sha256sum "$RUNNER_TEMP/release/node-operator-release-bundle.tar" | awk '{print $1}')"
+          test "$actual_artifact_digest" = "$APPROVED_ARTIFACT_DIGEST"
+          test "$(jq -er '.metadata.component.version' "$RUNNER_TEMP/release/sbom.cyclonedx.json")" = "$APPROVED_ARTIFACT_DIGEST"
       - name: Upload signer input to S3
         env:
           AWS_ROLE_ARN: ${{ vars.RELEASE_RUNNER_ROLE_ARN }}

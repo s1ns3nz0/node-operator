@@ -1,0 +1,17 @@
+{
+  "observations": [
+    {"name":"release_sbom_sca_before","value":"missing","evidence":"ci-release-integrity generated CycloneDX but did not analyze it"},
+    {"name":"tag_integrity_runs_before","value":"duplicated","evidence":"ci-release-integrity and release both triggered the same reusable gate on v* tags"},
+    {"name":"bundle_builds_per_integrity_before","value":3,"evidence":"two builds in reproducibility test plus a third current artifact build"},
+    {"name":"supplementary_local_sca","value":"passed","evidence":"Grype 0.111.0 against release SBOM digest sha256:f69d8c7cd454f6775098680eea63157bfd23dbb8c5d3aa4d0b19096285677ef1; 0 findings; independently corroborated before the selected 0.118.0 Actions run"}
+  ],
+  "validations": [
+    {"name":"release_sbom_sca_contract","value":"passed","evidence":"clean, high+critical, malformed evidence, and raw-detail retention cases"},
+    {"name":"release_reproducibility_contract","value":"passed","evidence":"single reusable trigger, two retained deterministic builds, blocking exact-SBOM gate"},
+    {"name":"harness_verify","value":"passed","evidence":"65 Rego tests; expected negative Conftest fixtures rejected; adapters completed"},
+    {"name":"git_diff_check","value":"passed","evidence":"no whitespace errors"},
+    {"name":"hosted_release_integrity","value":"passed","evidence":"commit c2f20c5068a5ea6f2573ef020e747ebcc63ead9f, run 34179484345; Grype 0.118.0, valid DB v6.1.9, all finding counts zero, artifact sha256:664a10b2350557edfe4b7251986641e79f22c820efff63076c8450240697641e"},
+    {"name":"feature_head_ci","value":"passed","evidence":"quality 34179482908, security 34179482875, policy 34179482869, foundation 34179482915, terraform 34179482866"},
+    {"name":"gitops_provenance_verification","value":"passed","evidence":"draft PR 46, verification run 34178913852; exact workflow identity, source, builder, build type, and subject digest binding"}
+  ]
+}

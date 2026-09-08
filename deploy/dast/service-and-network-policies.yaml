@@ -1,0 +1,199 @@
+# Deliberately narrow connectivity for the disposable, no-token DAST Job.
+# The selector requires both the dedicated namespace label and scanner label.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: node-operator-dast
+  labels:
+    node-operator.io/dast-client: "true"
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.35
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.35
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.35
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prysm-beacon
+  namespace: node-operator
+spec:
+  selector:
+    app.kubernetes.io/name: prysm-beacon
+  ports:
+    - name: beacon-api
+      port: 3500
+      targetPort: 3500
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-private-dast-node-readonly-ingress
+  namespace: node-operator
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [nethermind, prysm-beacon]
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {node-operator.io/dast-client: "true"}
+          podSelector:
+            matchLabels: {app.kubernetes.io/component: private-dast-scanner}
+      ports:
+        - {protocol: TCP, port: 8551}
+        - {protocol: TCP, port: 3500}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-private-dast-vault-health-ingress
+  namespace: vault
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: vault, component: server}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {node-operator.io/dast-client: "true"}
+          podSelector:
+            matchLabels: {app.kubernetes.io/component: private-dast-scanner}
+      ports: [{protocol: TCP, port: 8200}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: validator-signer-upcheck-proxy, namespace: validator-operations}
+spec:
+  selector: {app.kubernetes.io/component: validator-signer-upcheck-proxy}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: validator-signer-upcheck-proxy, namespace: validator-operations}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app.kubernetes.io/component: validator-signer-upcheck-proxy}}
+  template:
+    metadata: {labels: {app.kubernetes.io/component: validator-signer-upcheck-proxy}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: proxy
+          # This approved immutable image is also used by the disposable DAST
+          # scanner. Its only configured route is the upstream GET /upcheck.
+          image: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-dast-zap-baseline@sha256:781a2bdaea47324e7bab583e2263f21d257b0aee61ed51521a5be45f5f5081ef
+          command: [python3, -c]
+          args:
+            - |
+              import http.client, ssl
+              from http.server import BaseHTTPRequestHandler, HTTPServer
+              context = ssl.create_default_context(cafile='/etc/signer-ca/ca.crt')
+              # The current ceremony certificate has a CN but no SAN. This
+              # short same-namespace Service name is intentionally the exact
+              # CN, so Python still performs CA and hostname verification.
+              upstream = 'validator-hoodi-001-remote-signer'
+              class Handler(BaseHTTPRequestHandler):
+                  def do_GET(self):
+                      if self.path != '/upcheck': self.send_error(404); return
+                      conn = None
+                      try:
+                          conn = http.client.HTTPSConnection(upstream, 9000, context=context, timeout=5)
+                          conn.request('GET', '/upcheck')
+                          response = conn.getresponse()
+                          response.read(0)
+                          self.send_response(response.status); self.end_headers()
+                      except Exception: self.send_error(503)
+                      finally:
+                          if conn is not None: conn.close()
+                  def do_POST(self): self.send_error(405)
+                  def do_PUT(self): self.send_error(405)
+                  def do_DELETE(self): self.send_error(405)
+                  def do_PATCH(self): self.send_error(405)
+                  def log_message(self, *_): pass
+              HTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
+          ports: [{name: http, containerPort: 8080}]
+          volumeMounts: [{name: signer-ca, mountPath: /etc/signer-ca, readOnly: true}]
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, readOnlyRootFilesystem: true, runAsNonRoot: true}
+          resources: {requests: {cpu: 25m, memory: 64Mi}, limits: {cpu: 100m, memory: 128Mi}}
+      volumes:
+        - name: signer-ca
+          configMap: {name: validator-hoodi-001-signer-ca}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: signer-upcheck-proxy-to-signer, namespace: validator-operations}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/component: validator-remote-signer, node-operator.io/validator-set: hoodi-001}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/component: validator-signer-upcheck-proxy}}
+      ports: [{protocol: TCP, port: 9000}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: signer-upcheck-proxy-egress, namespace: validator-operations}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/component: validator-signer-upcheck-proxy}}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/component: validator-remote-signer, node-operator.io/validator-set: hoodi-001}}
+      ports: [{protocol: TCP, port: 9000}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: signer-upcheck-proxy-dast-ingress, namespace: validator-operations}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/component: validator-signer-upcheck-proxy}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {node-operator.io/dast-client: "true"}}
+          podSelector: {matchLabels: {app.kubernetes.io/component: private-dast-scanner}}
+      ports: [{protocol: TCP, port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-private-dast-egress
+  namespace: node-operator-dast
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/component: private-dast-scanner}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: node-operator}
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [nethermind, prysm-beacon]
+      ports: [{protocol: TCP, port: 8551}, {protocol: TCP, port: 3500}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: vault}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: vault, component: server}
+      ports: [{protocol: TCP, port: 8200}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: validator-operations}
+          podSelector:
+            matchLabels: {app.kubernetes.io/component: validator-signer-upcheck-proxy}
+      ports: [{protocol: TCP, port: 8080}]

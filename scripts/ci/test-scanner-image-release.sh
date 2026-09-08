@@ -10,6 +10,11 @@ trap 'rm -rf "$temporary_directory"' EXIT
 grep -Eqx 'FROM ubuntu@sha256:[0-9a-f]{64}' "$root/.ci/scanners/Dockerfile"
 grep -Eq 'GITLEAKS_SHA256=[0-9a-f]{64}' "$root/.ci/scanners/Dockerfile"
 grep -Eq 'OSV_SCANNER_SHA256=[0-9a-f]{64}' "$root/.ci/scanners/Dockerfile"
+grep -Fq 'gitleaks git "$source_directory"' "$root/scripts/ci/collect-pr-evidence.sh"
+if grep -Eq 'gitleaks git .*--no-git([[:space:]]|$)' "$root/scripts/ci/collect-pr-evidence.sh"; then
+  printf 'scanner collector must not disable Git history analysis\n' >&2
+  exit 1
+fi
 if grep -qE 'curl[^\n]*\|[[:space:]]*(tar|install)' "$root/.ci/scanners/Dockerfile"; then
   printf 'scanner image must verify downloads before extraction or installation\n' >&2
   exit 1

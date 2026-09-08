@@ -1,0 +1,16 @@
+{
+  "task_id": "2026-09-08-cicd-optimization",
+  "nodes": [
+    {"id":"inventory","title":"Inventory source CI/CD controls","tier":"sol","owner":"/root/ci_optimization","status":"completed"},
+    {"id":"sca-gate","title":"Implement release SBOM SCA gate","tier":"sol","owner":"/root/ci_optimization","status":"completed"},
+    {"id":"validation","title":"Validate contracts and harness","tier":"terra","owner":"/root/cleanroom_review","status":"completed"},
+    {"id":"integration","title":"Integrate and map framework findings","tier":"sol","owner":"/root/ci_optimization","status":"completed"},
+    {"id":"debrief","title":"Produce clean-room debrief","tier":"terra","owner":"/root/cleanroom_review","status":"completed"}
+  ],
+  "edges": [
+    {"from":"inventory","to":"sca-gate","kind":"blocks"},
+    {"from":"sca-gate","to":"validation","kind":"blocks"},
+    {"from":"validation","to":"integration","kind":"blocks"},
+    {"from":"integration","to":"debrief","kind":"blocks"}
+  ]
+}

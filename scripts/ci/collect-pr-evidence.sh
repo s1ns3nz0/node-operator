@@ -74,7 +74,16 @@ require_json_shape() {
 collect_gitleaks() {
   local report_path="$temporary_directory/gitleaks.json" result_path="$temporary_directory/gitleaks-result.json"
   set +e
-  gitleaks detect --no-git --source "$source_directory" --redact=100 --report-format json --report-path "$report_path" --no-banner --no-color > "$temporary_directory/gitleaks.stdout" 2> "$temporary_directory/gitleaks.stderr"
+  # The checkout is intentionally full-depth in CI. Scan commit history so a
+  # secret cannot be hidden by deleting it in the pull request's final tree.
+  local -a trusted_options=()
+  if [ -n "${GITLEAKS_CONFIG:-}" ]; then trusted_options+=(--config "$GITLEAKS_CONFIG"); fi
+  if [ -n "${GITLEAKS_IGNORE_PATH:-}" ]; then trusted_options+=(--gitleaks-ignore-path "$GITLEAKS_IGNORE_PATH"); fi
+  if [ "${#trusted_options[@]}" -gt 0 ]; then
+    gitleaks git "$source_directory" "${trusted_options[@]}" --ignore-gitleaks-allow --redact=100 --report-format json --report-path "$report_path" --no-banner --no-color > "$temporary_directory/gitleaks.stdout" 2> "$temporary_directory/gitleaks.stderr"
+  else
+    gitleaks git "$source_directory" --ignore-gitleaks-allow --redact=100 --report-format json --report-path "$report_path" --no-banner --no-color > "$temporary_directory/gitleaks.stdout" 2> "$temporary_directory/gitleaks.stderr"
+  fi
   collector_exit_code=$?
   set -e
   [ "$collector_exit_code" -eq 0 ] || [ "$collector_exit_code" -eq 1 ] || { printf 'gitleaks failed before producing evidence\n' >&2; exit 1; }
@@ -89,7 +98,11 @@ collect_gitleaks() {
 
 collect_osv() {
   local report_path="$temporary_directory/osv.json" result_path="$temporary_directory/osv-result.json"
-  run_report "$report_path" "$temporary_directory/osv.stderr" osv-scanner scan source --format=json "$source_directory"
+  if [ -n "${OSV_CONFIG_FILE:-}" ]; then
+    run_report "$report_path" "$temporary_directory/osv.stderr" osv-scanner --config="$OSV_CONFIG_FILE" scan source --no-ignore --format=json "$source_directory"
+  else
+    run_report "$report_path" "$temporary_directory/osv.stderr" osv-scanner scan source --format=json "$source_directory"
+  fi
   if [ "$collector_exit_code" -eq 128 ] && grep -Fqx 'No package sources found, --help for usage information.' "$temporary_directory/osv.stderr"; then
     # OSV uses exit 128 when the repository contains no supported dependency
     # manifest. This is not a clean dependency scan: retain that distinction
@@ -117,7 +130,7 @@ collect_semgrep() {
   local semgrep_rules="${SEMGREP_RULES:-$source_directory/.semgrep/ci.yml}"
   require_file "$semgrep_rules"
   set +e
-  semgrep scan --config "$semgrep_rules" --metrics=off --error --json-output "$report_path" "$source_directory" > "$temporary_directory/semgrep.stdout" 2> "$temporary_directory/semgrep.stderr"
+  semgrep scan --config "$semgrep_rules" --metrics=off --error --disable-nosem --no-git-ignore --json-output "$report_path" "$source_directory" > "$temporary_directory/semgrep.stdout" 2> "$temporary_directory/semgrep.stderr"
   collector_exit_code=$?
   set -e
   [ "$collector_exit_code" -eq 0 ] || [ "$collector_exit_code" -eq 1 ] || { printf 'semgrep failed before producing evidence\n' >&2; exit 1; }
@@ -133,28 +146,49 @@ collect_semgrep() {
 
 collect_zizmor() {
   local report_path="$temporary_directory/zizmor.json" result_path="$temporary_directory/zizmor-result.json"
-  run_report "$report_path" "$temporary_directory/zizmor.stderr" zizmor --offline --format=json-v1 "$source_directory"
+  run_report "$report_path" "$temporary_directory/zizmor.stderr" zizmor --offline --no-config --format=json-v1 "$source_directory"
   [ "$collector_exit_code" -eq 0 ] || [ "$collector_exit_code" -ge 10 ] || { printf 'zizmor failed before producing evidence\n' >&2; exit 1; }
   require_json_report zizmor "$report_path"
   require_json_shape zizmor "$report_path" 'type == "array"'
   jq '[.[]? | {
-        path:(.locations[0].symbolic.key.Local.verbatim_path // "unknown"),
+        path:((.locations[0].symbolic.key.Local.verbatim_path // .locations[0].symbolic.key.Local.given_path // "unknown") | if contains("/.github/") then ".github/" + (split("/.github/")[1]) else . end),
         rule_id:(.ident // "unknown"),
         message:(.desc // "unsafe workflow finding")
       }]' "$report_path" | jq -c '{findings:.}' > "$result_path"
+  local changed_yaml has_changed_suppression=false
+  changed_yaml="$temporary_directory/zizmor-changed-yaml"
+  if [ -n "$base_sha" ] && git -C "$source_directory" cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
+    git -C "$source_directory" diff --name-only -z "$base_sha" "$commit_sha" -- '*.yml' '*.yaml' > "$changed_yaml"
+    while IFS= read -r -d '' path; do
+      if git -C "$source_directory" show "$commit_sha:$path" 2>/dev/null | grep -E 'zizmor:[[:space:]]*ignore' >/dev/null; then
+        has_changed_suppression=true
+        break
+      fi
+    done < "$changed_yaml"
+  fi
+  if [ "$has_changed_suppression" = true ]; then
+    jq '.findings += [{path:"workflow-yaml",rule_id:"untrusted-zizmor-suppression",message:"pull request changes YAML containing a zizmor inline suppression"}]' "$result_path" > "$temporary_directory/zizmor-result-with-suppression.json"
+    mv "$temporary_directory/zizmor-result-with-suppression.json" "$result_path"
+  fi
   write_envelope "$output_directory/zizmor.json" zizmor "$result_path"
 }
 
 collect_checkov() {
   local report_path="$temporary_directory/checkov.json" result_path="$temporary_directory/checkov-result.json"
-  run_report "$report_path" "$temporary_directory/checkov.stderr" checkov --directory "$source_directory" --framework terraform --output json --quiet
+  local -a trusted_options=()
+  if [ -n "${CHECKOV_CONFIG_FILE:-}" ]; then trusted_options+=(--config-file "$CHECKOV_CONFIG_FILE"); fi
+  if [ "${#trusted_options[@]}" -gt 0 ]; then
+    run_report "$report_path" "$temporary_directory/checkov.stderr" checkov "${trusted_options[@]}" --directory "$source_directory" --framework terraform --output json --quiet
+  else
+    run_report "$report_path" "$temporary_directory/checkov.stderr" checkov --directory "$source_directory" --framework terraform --output json --quiet
+  fi
   [ "$collector_exit_code" -eq 0 ] || [ "$collector_exit_code" -eq 1 ] || { printf 'checkov failed before producing evidence\n' >&2; exit 1; }
   require_json_report checkov "$report_path"
   require_json_shape checkov "$report_path" '.results.failed_checks | type == "array"'
-  jq '[.results.failed_checks[]? | {
+  jq '[((.results.failed_checks // []) + (.results.skipped_checks // []))[]? | {
         resource:(.resource // .resource_address // "unknown"),
         check_id:(.check_id // "unknown"),
-        check_name:(.check_name // "IaC policy failure")
+        check_name:(if (.check_result.suppress_comment? // "") != "" then "IaC check was suppressed in pull-request source" else (.check_name // "IaC policy failure") end)
       }]' "$report_path" | jq -c '{failed_checks:.}' > "$result_path"
   write_envelope "$output_directory/checkov.json" checkov "$result_path"
 }

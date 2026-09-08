@@ -1,0 +1,25 @@
+{
+  "task_id": "2026-09-08-cicd-findings-remediation",
+  "owner": "sol",
+  "objective": "Resolve every HIGH and MEDIUM finding from the 2026-09-08 CI/CD red-team report with tested, fail-closed controls.",
+  "scope": [
+    "H1 exact-PR-head trusted OPA check and required-check wiring",
+    "H2 full-history secret scanning",
+    "H3 deploy-time signature, provenance, SBOM, and SCA admission",
+    "H4 private service endpoint DAST coverage",
+    "M1 release eligibility and protected tag creation",
+    "M2 Checkov finding reconciliation"
+  ],
+  "out_of_scope": ["release publication", "validator or Vault secret access", "weakening repository protections"],
+  "authorizations": {"source_and_gitops_changes":"user authorized", "feature_push_and_pr":"user authorized", "merge_and_scoped_security_configuration":"coordinate through primary owner before mutation"},
+  "success_criteria": [
+    "A trusted workflow publishes a fail-closed check on the exact pull-request head SHA without executing untrusted code under a write token",
+    "Gitleaks evaluates repository history in protected branch and release contexts",
+    "Only security-eligible source revisions can create release tags",
+    "GitOps promotion verifies signature, provenance, SBOM SCA, and actual private service DAST",
+    "Every Checkov finding is fixed or mapped to a current bounded exception",
+    "All relevant negative tests and live non-production checks pass"
+  ],
+  "model_fallbacks": [],
+  "escalation_trigger": "Any release publication, protection weakening, secret access, or destructive production action stops for the primary owner."
+}

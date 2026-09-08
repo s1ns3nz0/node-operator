@@ -24,7 +24,8 @@ printf '{"schema_version":"v1","tool":"checkov","commit_sha":"%s","collected_at"
 printf '{"schema_version":"v1","tool":"zizmor","commit_sha":"%s","collected_at":"2026-09-07T00:00:00Z","result":{"findings":[{"path":".github/workflows/legacy.yml","rule_id":"unpinned-uses","message":"legacy finding"},{"path":".github/workflows/new.yml","rule_id":"dangerous-triggers","message":"new finding"}]}}\n' "$sha" > "$head/zizmor.json"
 
 bash "$script_dir/filter-pr-baseline-findings.sh" "$head" "$base" "$output" "$sha"
-jq -e '.result.failed_checks == [{resource:"aws_iam_policy.new",check_id:"CKV_AWS_999",check_name:"new finding"}]' "$output/checkov.json" >/dev/null
+cmp "$head/checkov.json" "$output/checkov.json"
+jq -e '.result.failed_checks | length == 2' "$output/checkov.json" >/dev/null
 jq -e '.result.findings == [{path:".github/workflows/new.yml",rule_id:"dangerous-triggers",message:"new finding"}]' "$output/zizmor.json" >/dev/null
 jq -e '.tools.checkov == {base_count:1,head_count:2} and .tools.zizmor == {base_count:1,head_count:2}' "$output/baseline-summary.json" >/dev/null
-printf 'PASS PR baseline filter preserves counts and blocks only newly introduced Checkov/Zizmor findings.\n'
+printf 'PASS pre-existing and new Checkov findings both reach OPA without implicit baseline exemptions.\n'

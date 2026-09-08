@@ -24,6 +24,8 @@ write_mock() {
 }
 
 write_mock gitleaks '
+[ "$1" = "git" ]
+[ "$2" = "'"$fixture_directory"'" ]
 report=""
 while [ "$#" -gt 0 ]; do
   if [ "$1" = "--report-path" ]; then report="$2"; shift 2; continue; fi
@@ -41,7 +43,7 @@ done
 printf "%s\\n" "{\"results\":[{\"path\":\"app.js\",\"check_id\":\"fixture-rule\",\"extra\":{\"severity\":\"WARNING\",\"message\":\"fixture finding\"}}]}" > "$report"
 exit 1'
 write_mock zizmor 'printf "%s\\n" "[{\"ident\":\"unpinned-uses\",\"desc\":\"fixture workflow finding\",\"locations\":[{\"symbolic\":{\"key\":{\"Local\":{\"verbatim_path\":\".github/workflows/ci.yml\"}}}}]}]"; exit 11'
-write_mock checkov 'printf "%s\\n" "{\"results\":{\"failed_checks\":[{\"resource\":\"aws_instance.fixture\",\"check_id\":\"CKV_FIXTURE\",\"check_name\":\"fixture check\"}]}}"; exit 1'
+write_mock checkov 'printf "%s\\n" "{\"results\":{\"failed_checks\":[{\"resource\":\"aws_instance.fixture\",\"check_id\":\"CKV_FIXTURE\",\"check_name\":\"fixture check\"}],\"skipped_checks\":[{\"resource\":\"aws_s3_bucket.skipped\",\"check_id\":\"CKV_SKIPPED\",\"check_name\":\"skipped fixture\",\"check_result\":{\"suppress_comment\":\"pull-request suppression\"}}]}}"; exit 1'
 write_mock terraform '
 if [ "$2" = "init" ]; then exit 0; fi
 printf "%s\\n" "{\"valid\":true}"
@@ -50,7 +52,8 @@ write_mock git '
 if [ "$1" = "-C" ]; then shift 2; fi
 case "$1" in
   cat-file) exit 0 ;;
-  diff) exit 0 ;;
+  diff) if [ "${GIT_CHANGED_ZIZMOR_SUPPRESSED:-false}" = true ]; then printf "nested/유니코드\\taction.yml\\0"; fi; exit 0 ;;
+  show) if [ "${GIT_CHANGED_ZIZMOR_SUPPRESSED:-false}" = true ]; then printf "%s\\n" "# zizmor: ignore[dangerous-triggers]" "runs: {using: composite, steps: []}"; fi; exit 0 ;;
   rev-parse) printf "%s\\n" "'"$root"'" ;;
 esac
 '
@@ -62,6 +65,10 @@ for tool in gitleaks osv semgrep zizmor checkov; do
 done
 jq -e '.result.findings == [{path:"config.env",rule_id:"fixture-secret"}]' "$output_directory/gitleaks.json" >/dev/null
 jq -e '.result.vulnerabilities[0] == {package:"fixture-package",id:"OSV-1",severity:"HIGH",fix_available:true}' "$output_directory/osv.json" >/dev/null
+jq -e '.result.failed_checks[] | select(.check_id == "CKV_SKIPPED" and .check_name == "IaC check was suppressed in pull-request source")' "$output_directory/checkov.json" >/dev/null
+suppression_directory="$temporary_directory/suppression-evidence"
+GIT_CHANGED_ZIZMOR_SUPPRESSED=true PATH="$mock_directory:$PATH" TERRAFORM_PLUGIN_MIRROR="$temporary_directory/plugin-mirror" "$script_dir/collect-pr-evidence.sh" "$suppression_directory" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$fixture_directory" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+jq -e '.result.findings[] | select(.rule_id == "untrusted-zizmor-suppression")' "$suppression_directory/zizmor.json" >/dev/null
 jq -e '.result.status == "passed"' "$output_directory/format.json" >/dev/null
 jq -e '.result.status == "passed" and .result.modules == [{module:"infrastructure",status:"passed"}]' "$output_directory/terraform.json" >/dev/null
 if rg -l 'DO_NOT_PERSIST' "$output_directory" >/dev/null; then

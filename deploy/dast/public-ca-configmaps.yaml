@@ -1,0 +1,11 @@
+# These ConfigMaps have intentionally empty data until the public-CA installer
+# runs. They contain no Vault token, JWT, private key, signer key, or keystore.
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: private-dast-vault-ca, namespace: node-operator-dast}
+data: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: private-dast-signer-ca, namespace: node-operator-dast}
+data: {}

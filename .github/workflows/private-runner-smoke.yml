@@ -20,12 +20,14 @@ jobs:
       - name: Verify ephemeral runner boundary
         env:
           RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:f6b2550a3bf8a5b2e8bbdbb301120136d01bc38963d1a70d0d7ff3008acb70be
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USERNAME: ${{ github.actor }}
         run: |
           set -eu
           test -n "$CODEBUILD_BUILD_ID"
           test -n "$GITHUB_RUN_ID"
           docker version --format '{{.Server.Version}}' >/dev/null
-          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
           docker pull "$RELEASE_BUILD_IMAGE" >/dev/null
       - name: Verify private AWS service paths
         run: |

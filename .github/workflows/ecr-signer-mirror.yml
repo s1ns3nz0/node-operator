@@ -54,13 +54,15 @@ jobs:
           AWS_REGION: ap-northeast-2
           ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
           SOURCE: ${{ inputs.source }}
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USERNAME: ${{ github.actor }}
         run: |
           set -euo pipefail
           test -n "$ACCOUNT_ID"
           destination_repository='node-operator-baseline-vault-release-signer'
           destination_registry="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
           immutable_tag="approved-${SOURCE_DIGEST#sha256:}"
-          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
           docker pull "$SOURCE"
           aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$destination_registry"
           docker tag "$SOURCE" "$destination_registry/$destination_repository:$immutable_tag"
