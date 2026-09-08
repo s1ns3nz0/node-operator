@@ -29,3 +29,29 @@ Execution requires root review of the exact prepared artifact before running.
 
 Passing this diagnostic does not complete requirement 4: actual per-target
 passive DAST evidence remains required.
+
+## Superseded by verified eviction cause
+
+The compatibility Job was prepared but **not executed**. A read-only query of
+the exact previous Pod's retained events found Started at 07:15:19Z and
+Evicted/Killing at 07:15:34Z. Root then separately authorized an in-memory
+fixed-enum classifier of that exact Evicted event's message. No raw message was
+returned or saved. Exact matching produced:
+
+```json
+{"kind":"emptydir-size-limit","volume":"temporary","limit":"16Mi"}
+```
+
+The format was independently verified against Kubernetes v1.35.0
+[eviction helpers](https://github.com/kubernetes/kubernetes/blob/v1.35.0/pkg/kubelet/eviction/helpers.go)
+and [emptyDir eviction logic](https://github.com/kubernetes/kubernetes/blob/v1.35.0/pkg/kubelet/eviction/eviction_manager.go).
+This establishes the latest run's shared temporary-volume eviction cause; it
+does not prove the causes of all earlier failures or a successful DAST scan.
+
+The next bounded code proposal increases only that disk-backed scratch volume
+to 512Mi, retains the 32Mi work volume, and declares a 512Mi ephemeral-storage
+request with a 1Gi limit. These are explicit provisional capacity bounds, not a
+claim of measured peak usage. Image, security context, network requests, TLS
+verification and pass criteria must remain unchanged. Root independently
+reviews the rendered resource bounds and regression tests before integration
+and any one authorized runtime retry. Do not launch the superseded JVM Job.

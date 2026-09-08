@@ -29,3 +29,23 @@ requirement 5, not a replacement for fresh deployment or the original goal.
 Evidence starts as implementation pending. Success of this code task alone
 does not complete requirement 5; actual state ownership and no-drift/access
 proof remain separate completion gates.
+
+## Subsequent private import preview authorization
+
+Following independent Sol approval of commit `5c1169` and the complete synthetic
+11-address upgrade fixture, root authorized exactly six private local imports.
+This supersedes the implementation-only import prohibition for this bounded
+preview, not for any remote backend write or infrastructure apply.
+
+Fresh identity and relevant known-state ownership checks are required. Import
+only the six public-edge inventory entries; retain baseline ownership of all
+private network resources. Verify a local backend and keep state and saved plan
+in a private directory. The candidate state is not yet an authoritative remote
+owner. A plan may contain metadata tag updates only; any create, delete,
+replacement or routing change stops the preview for review.
+
+The provider rejected the literal association ID as its import argument.
+Root approved the provider-required `subnet ID/route table ID` representation
+for the same exact association only, contingent live readback and verification
+that the resulting state ID equals `rtbassoc-052bdd657504684b9`. This authorizes
+no reassociation or new resource. Migration and apply need separate review.

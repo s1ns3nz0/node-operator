@@ -14,7 +14,7 @@
     },
     "4": {
       "status": "incomplete",
-      "evidence": "GitOps lifecycle-fallback PR50 normally merged7922fcf1497603d37f361ce65edc03c0f63c1481; hosted34198286774 and main34198364213 PASS. Fourth bounded run1788851715 retained exact-image Error/exit137/restart0/scan:null, cleanupPASS. Not OOM proof, no stage or DAST pass. No-network image compatibility diagnostic preparation separately approved, execution pending exact-artifact review."
+      "evidence": "Temporary-volume eviction fixed by reviewed GitOpsPR51 merge72cd84c. Actualrun1788852508 now retainsv3 stageimport/exit22 and four targetfailures, cleanupPASS. Wrong ZAP API prefix fixed by PR52 merge5cdecac (hosted+mainPASS), no subsequent fullscan. Signer HTTPHost mismatch fixed source4224883, proxy-only reviewedrolloutPASS and actualfixedGET200. Live Pod ENIs/SG rules show four missing private cross-pool ingress rules; exact4-create plan under independentreview. No DAST completion claim."
     },
     "5": {
       "status": "incomplete",
@@ -101,9 +101,107 @@
       "result": "reviewed and contract tests pass; not applied",
       "commit": "11e6de4",
       "reviewer": "/root/security_goal_ci_fallback"
+    },
+    {
+      "name": "exact previous DAST Pod eviction classification",
+      "result": "cause confirmed for latest run only",
+      "pod": "private-dast-baseline-1788851715-g4f8t",
+      "started_utc": "2026-09-08T07:15:19Z",
+      "evicted_utc": "2026-09-08T07:15:34Z",
+      "classification": {
+        "kind": "emptydir-size-limit",
+        "volume": "temporary",
+        "limit": "16Mi"
+      },
+      "raw_event_saved": false,
+      "reviewer": "/root/security_goal_ci_fallback"
+    },
+    {
+      "name": "capacity-fixed DAST actual run",
+      "result": "failed with usable per-target evidence",
+      "run_id": 1788852508,
+      "stage": "import",
+      "exit_code": 22,
+      "targets": {
+        "prysm": {
+          "status": null,
+          "reason": "transport_failure"
+        },
+        "vault": {
+          "status": 474
+        },
+        "signer": {
+          "status": 403
+        },
+        "nethermind": {
+          "status": 503
+        }
+      },
+      "cleanup": "pass",
+      "private_evidence": "/private/tmp/node-operator-dast-run.1788852508.TigkoZ/evidence.json"
+    },
+    {
+      "name": "signer proxy HTTPHost correction",
+      "result": "reviewed code, serverdryrun and rollout pass; one fixed GET200",
+      "commit": "4224883",
+      "upstream_tls_unchanged": true,
+      "scope": "local-forward-to-reviewed-proxy, not full DAST"
     }
   ],
+  "foundation_import_candidate": {
+    "private_directory": "/private/tmp/node-operator-foundation-import.7Df1E7",
+    "plan_sha256": "ccf286ee2dc15623e2172654df611385521e3dd91dd09a1495cff8fb51667b27",
+    "managed_resources": 6,
+    "updates": 5,
+    "no_ops": 1,
+    "changed_attributes": ["tags", "tags_all"],
+    "creates_deletes_replacements_routing_changes": 0,
+    "root_independent_plan_assertion": "pass",
+    "status": "private local import candidate only; no apply or remote migration"
+  },
+  "runtime_followup_integration": {
+    "head": "573968f",
+    "base": "cb4e002",
+    "diff_sha256": "7fe1e72f9d684cc93efa416b94be9defb073f7b7d473bcdf46c5057f5df4ffef",
+    "files": 6,
+    "independent_terra_review": "approved",
+    "focused_contracts": "pass",
+    "shellcheck_syntax_fmt_diff_harness": "pass",
+    "optional_kyverno_engine": "explicitly skipped, CLI unavailable",
+    "status": "local commits; stacked draft PR pending primary integration review"
+  },
+  "latest_dast": {
+    "run": "1788854088",
+    "result": "failed",
+    "stage": "summary",
+    "all_four_targets_http_200": true,
+    "vault_ca_and_hostname_verified": true,
+    "alert_count": 1,
+    "report_sha256": "b6c02ca77476cc1e7b96f42874153197be5d7ab59eb699883a89455d268aac10",
+    "cleanup": "owned resources absent, reported by integration owner",
+    "private_evidence": "/private/tmp/node-operator-dast-run.1788854088.t0H4Uq/evidence.json",
+    "next": "Review bounded numeric alert metadata collection; no finding waiver or automatic retry"
+  },
+  "latest_user_change_recheck": {
+    "source_required_reviews": 0,
+    "source_code_owner_required": false,
+    "source_required_checks": ["quality", "scanners"],
+    "source_pr_127_head": "cb4e002f1c479c55febb32d5f58214bd0e94a7de",
+    "source_pr_127_reviews": 0,
+    "source_pr_127_evidence_decision": "FAILURE",
+    "gitops_protection": "HTTP 403: private repository entitlement unavailable"
+  },
   "external_mutations": [
+    {
+      "type": "reviewed_four_cross_pool_sg_rules",
+      "commit": "b9c77611a71f695d5a9a3207ab69f629f13efe17",
+      "plan_sha256": "38a6c913b909a3d7ddd7f3c6cc3f5041813f08f8aec32459a7a07d8266c6ea40",
+      "result": "exact four creations; readback and same-target no-drift passed",
+      "rules": ["sgr-0ae42f8724e41b4b1", "sgr-0e865bcf251130f33", "sgr-07c2a5e3c9029ebf1", "sgr-0152afac9bef60b08"],
+      "baseline_state_version": "cIY8rHrQ_CW5lKjcQwAl73LkBpRKoT4o",
+      "baseline_state_encryption": "aws:kms",
+      "scope": "targeted connectivity only, not full baseline no-drift"
+    },
     {
       "type": "normal_squash_merge",
       "repository": "node-operator",
@@ -145,6 +243,12 @@
       "new_serial": 1,
       "explanation_source": "https://raw.githubusercontent.com/hashicorp/terraform/v1.5.7/internal/states/remote/state.go",
       "reviewer": "/root/security_goal_ci_fallback"
+    },
+    {
+      "type": "reviewed_signer_proxy_args_only_patch",
+      "commit": "4224883",
+      "result": "rollout success",
+      "guard": "JSON Patch original-code test before replacement"
     }
   ],
   "model_fallbacks": [
