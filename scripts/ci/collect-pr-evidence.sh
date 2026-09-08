@@ -98,7 +98,11 @@ collect_gitleaks() {
 
 collect_osv() {
   local report_path="$temporary_directory/osv.json" result_path="$temporary_directory/osv-result.json"
-  run_report "$report_path" "$temporary_directory/osv.stderr" osv-scanner scan source --format=json "$source_directory"
+  if [ -n "${OSV_CONFIG_FILE:-}" ]; then
+    run_report "$report_path" "$temporary_directory/osv.stderr" osv-scanner --config="$OSV_CONFIG_FILE" scan source --no-ignore --format=json "$source_directory"
+  else
+    run_report "$report_path" "$temporary_directory/osv.stderr" osv-scanner scan source --format=json "$source_directory"
+  fi
   if [ "$collector_exit_code" -eq 128 ] && grep -Fqx 'No package sources found, --help for usage information.' "$temporary_directory/osv.stderr"; then
     # OSV uses exit 128 when the repository contains no supported dependency
     # manifest. This is not a clean dependency scan: retain that distinction

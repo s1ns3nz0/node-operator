@@ -32,6 +32,8 @@ grep -Fq -- '--volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaks.tom
 grep -Fq 'Reject pull-request scanner policy replacement' "$gate_workflow"
 grep -Fq '.checkov.yml .checkov.yaml osv-scanner.toml .osv-scanner.toml' "$gate_workflow"
 grep -Fq -- '--env CHECKOV_CONFIG_FILE=/trusted-config/checkov.yml' "$gate_workflow"
+grep -Fq -- '--env OSV_CONFIG_FILE=/trusted-config/osv-scanner.toml' "$gate_workflow"
+grep -Fq -- 'osv-scanner --config="$OSV_CONFIG_FILE" scan source --no-ignore' "$script_dir/collect-pr-evidence.sh"
 grep -Fq -- '--disable-nosem --no-git-ignore' "$script_dir/collect-pr-evidence.sh"
 grep -Fq -- 'zizmor --offline --no-config' "$script_dir/collect-pr-evidence.sh"
 grep -Fq 'untrusted-zizmor-suppression' "$script_dir/collect-pr-evidence.sh"
