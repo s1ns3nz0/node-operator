@@ -34,11 +34,15 @@ Back up the original state privately, verify that the destination key is empty,
 and use the reviewed backend migration procedure; never force-copy or discard
 the original state. Do not simultaneously leave two writable authoritative
 copies. Monitoring and EBS-optimization changes are separate from ownership
-migration. The current private preview with AWS provider 5.100 proposes host
+migration. The initial private preview with AWS provider 5.100 proposed host
 replacement solely for `ebs_optimized: false -> true`; this blocks resource
 apply. EC2 reports that this `t3.micro` type is EBS-optimized by default, so
 the representation mismatch is not evidence that the actual capability is
-missing. Do not replace or stop the host, disable hardening for new instances,
+missing. The reviewed explicit retained-host inputs below subsequently produced
+a read-only preview with the host unchanged and four rule-description updates.
+That preview used a private state copy, was not applied, and is not an
+authoritative state owner. Re-plan from the canonical owner before execution.
+Do not replace or stop the host, disable hardening for new instances,
 or add an exception without a reviewed decision. Any future host-changing plan
 also requires checking active SSM/DAST sessions and explicit impact approval.
 
@@ -77,6 +81,13 @@ network or IAM change. Keep saved plans and raw state outside Git. This guard
 does not authorize apply, import, remote-state migration, or a host restart.
 
 ## General migration sequence
+
+This sequence describes other legacy ownership layouts, not the current
+nine-resource local-state migration above. Do not import the current host again
+or apply these generic ingress ownership flags to its already-owned rules.
+For the current host, migrate the existing canonical local state rather than
+initializing an empty remote state and planning a second host. A fresh-user
+deployment is a separate path and must not import this environment's resources.
 
 1. Create the new root with a distinct encrypted state key and no dependency on
    workload, Vault, or GitOps resources except read-only EKS/VPC outputs. Copy

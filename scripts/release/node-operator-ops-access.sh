@@ -63,6 +63,35 @@ fresh_plan() {
       (.metadata_options[0].http_put_response_hop_limit != true) and
       (.root_block_device[0].encrypted != true) and (.root_block_device[0].volume_type != true);
     . as $plan |
+    def resource_map: reduce .[] as $resource ({}; .[$resource.address] = $resource);
+    def expected_resources($create_endpoints; $manage_endpoint_ingress; $manage_cluster_ingress):
+      {
+        "aws_iam_instance_profile.host":"aws_iam_instance_profile",
+        "aws_iam_role.host":"aws_iam_role",
+        "aws_iam_role_policy_attachment.ssm":"aws_iam_role_policy_attachment",
+        "aws_instance.host":"aws_instance",
+        "aws_security_group.host":"aws_security_group",
+        "aws_vpc_security_group_egress_rule.to_cluster":"aws_vpc_security_group_egress_rule",
+        "aws_vpc_security_group_egress_rule.to_endpoints":"aws_vpc_security_group_egress_rule"
+      } +
+      (if $manage_cluster_ingress then {"aws_vpc_security_group_ingress_rule.cluster[0]":"aws_vpc_security_group_ingress_rule"} else {} end) +
+      (if $create_endpoints then {
+        "aws_security_group.endpoints[0]":"aws_security_group",
+        "aws_vpc_security_group_ingress_rule.endpoints[0]":"aws_vpc_security_group_ingress_rule",
+        "aws_vpc_endpoint.ssm[\"ec2messages\"]":"aws_vpc_endpoint",
+        "aws_vpc_endpoint.ssm[\"ssm\"]":"aws_vpc_endpoint",
+        "aws_vpc_endpoint.ssm[\"ssmmessages\"]":"aws_vpc_endpoint"
+      } elif $manage_endpoint_ingress then {"aws_vpc_security_group_ingress_rule.endpoints[0]":"aws_vpc_security_group_ingress_rule"} else {} end);
+    ($plan.variables.existing_ssm_endpoint_security_group_id.value?) as $endpoint_security_group_id |
+    ($plan.variables.manage_existing_endpoint_ingress_rule.value?) as $manage_endpoint_ingress |
+    ($plan.variables.manage_cluster_ingress_rule.value?) as $manage_cluster_ingress |
+    ($endpoint_security_group_id == null) as $create_endpoints |
+    (expected_resources($create_endpoints; $manage_endpoint_ingress; $manage_cluster_ingress)) as $expected |
+    ($expected | keys | sort) as $addresses |
+    ($plan.planned_values.root_module | managed) as $planned |
+    [$plan.resource_changes[]? | select(.mode == "managed")] as $changes |
+    ($planned | resource_map) as $planned_map |
+    ($changes | resource_map) as $change_map |
     ($plan.planned_values.root_module | managed | map(select(.address == "aws_instance.host" and .type == "aws_instance"))) as $planned_hosts |
     ($plan.planned_values.root_module | managed | map(select(.type == "aws_instance"))) as $planned_instances |
     [$plan.resource_changes[]? | select(.mode == "managed" and .address == "aws_instance.host" and .type == "aws_instance")] as $host_changes |
@@ -75,10 +104,19 @@ fresh_plan() {
     ($plan.variables | has("retained_host_instance_id")) and
     ($plan.variables.retained_host_instance_id | has("value")) and
     ($plan.variables.retained_host_instance_id.value == null) and
+    ($plan.variables | has("existing_ssm_endpoint_security_group_id") and has("manage_existing_endpoint_ingress_rule") and has("manage_cluster_ingress_rule")) and
+    (all(["existing_ssm_endpoint_security_group_id", "manage_existing_endpoint_ingress_rule", "manage_cluster_ingress_rule"][]; $plan.variables[.] | has("value"))) and
+    (($endpoint_security_group_id == null) or ($endpoint_security_group_id | type == "string" and length > 0)) and
+    ($manage_endpoint_ingress | type == "boolean") and ($manage_cluster_ingress | type == "boolean") and
     ($plan.prior_state.values.root_module | managed | length == 0) and
+    ($planned | length == ($addresses | length)) and ($changes | length == ($addresses | length)) and
+    ($planned_map | keys | sort) == $addresses and ($change_map | keys | sort) == $addresses and
+    (all($addresses[]; $planned_map[.].type == $expected[.] and $change_map[.].type == $expected[.] and
+      $change_map[.].change.actions == ["create"] and $change_map[.].change.before == null and
+      $change_map[.].change.after == $planned_map[.].values)) and
     ($prior_hosts | length == 0) and ($planned_hosts | length == 1) and ($planned_instances | length == 1) and
     ($host_changes | length == 1) and ($instance_changes | length == 1) and
-    ($owned_sg_changes | length == 1) and
+    ($owned_sg_changes | length == 1) and ($owned_profile_changes | length == 1) and
     ($host_changes[0].change.actions == ["create"]) and ($host_changes[0].change.after == $planned_hosts[0].values) and
     ($configured_hosts | length > 0) and
     (all($configured_hosts[]; .expressions.iam_instance_profile.references == ["aws_iam_instance_profile.host.name"] and .expressions.vpc_security_group_ids.references == ["aws_security_group.host.id"])) and

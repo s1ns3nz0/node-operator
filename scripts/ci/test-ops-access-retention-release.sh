@@ -39,10 +39,18 @@ jq -n '
 ' > "$scratch/retention.json"
 jq -n '
   def host: {ebs_optimized:true,monitoring:false,associate_public_ip_address:false,subnet_id:"subnet-private",iam_instance_profile:null,vpc_security_group_ids:[null],metadata_options:[{http_tokens:"required",http_endpoint:"enabled",http_put_response_hop_limit:1}],root_block_device:[{encrypted:true,volume_type:"gp3"}]};
-  {variables:{retained_host_instance_id:{value:null}},configuration:{root_module:{resources:[{address:"aws_instance.host",mode:"managed",type:"aws_instance",expressions:{iam_instance_profile:{references:["aws_iam_instance_profile.host.name"]},vpc_security_group_ids:{references:["aws_security_group.host.id"]}}}]}},prior_state:{values:{root_module:{resources:[]}}},planned_values:{root_module:{resources:[{address:"aws_instance.host",mode:"managed",type:"aws_instance",values:host}]}},resource_changes:[
+  def owned: [
+    {address:"aws_security_group.host",mode:"managed",type:"aws_security_group",values:{id:null,name:"owned-host-sg"}},
+    {address:"aws_vpc_security_group_egress_rule.to_cluster",mode:"managed",type:"aws_vpc_security_group_egress_rule",values:{id:null}},
+    {address:"aws_vpc_security_group_egress_rule.to_endpoints",mode:"managed",type:"aws_vpc_security_group_egress_rule",values:{id:null}},
+    {address:"aws_vpc_security_group_ingress_rule.cluster[0]",mode:"managed",type:"aws_vpc_security_group_ingress_rule",values:{id:null}},
+    {address:"aws_iam_instance_profile.host",mode:"managed",type:"aws_iam_instance_profile",values:{id:null,name:"owned-host-profile"}},
+    {address:"aws_iam_role.host",mode:"managed",type:"aws_iam_role",values:{id:null}},
+    {address:"aws_iam_role_policy_attachment.ssm",mode:"managed",type:"aws_iam_role_policy_attachment",values:{id:null}}
+  ];
+  {variables:{retained_host_instance_id:{value:null},existing_ssm_endpoint_security_group_id:{value:"sg-shared"},manage_existing_endpoint_ingress_rule:{value:false},manage_cluster_ingress_rule:{value:true}},configuration:{root_module:{resources:[{address:"aws_instance.host",mode:"managed",type:"aws_instance",expressions:{iam_instance_profile:{references:["aws_iam_instance_profile.host.name"]},vpc_security_group_ids:{references:["aws_security_group.host.id"]}}}]}},prior_state:{values:{root_module:{resources:[]}}},planned_values:{root_module:{resources:([{address:"aws_instance.host",mode:"managed",type:"aws_instance",values:host}] + owned)}},resource_changes:[
     {address:"aws_instance.host",mode:"managed",type:"aws_instance",change:{actions:["create"],before:null,after:host,after_unknown:{id:true,arn:true,private_ip:true,iam_instance_profile:true,vpc_security_group_ids:[true],ebs_optimized:false,monitoring:false,associate_public_ip_address:false,subnet_id:false,metadata_options:[{http_tokens:false,http_endpoint:false,http_put_response_hop_limit:false}],root_block_device:[{encrypted:false,volume_type:false}]}}},
-    {address:"aws_security_group.host",mode:"managed",type:"aws_security_group",change:{actions:["create"],before:null,after:{name:"owned-host-sg"},after_unknown:{id:true}}},
-    {address:"aws_iam_instance_profile.host",mode:"managed",type:"aws_iam_instance_profile",change:{actions:["create"],before:null,after:{name:"owned-host-profile"},after_unknown:{id:true}}}
+    (owned[] | {address,mode,type,change:{actions:["create"],before:null,after:.values,after_unknown:{id:true}}})
   ]}
 ' > "$scratch/fresh.json"
 
@@ -57,7 +65,24 @@ run_apply() {
 
 run_apply "$scratch/retention.json"
 run_apply "$scratch/fresh.json" true
-test "$(wc -l < "$scratch/trace" | tr -d ' ')" = 2
+jq '
+  def endpoint: [
+    {address:"aws_security_group.endpoints[0]",mode:"managed",type:"aws_security_group",values:{id:null}},
+    {address:"aws_vpc_security_group_ingress_rule.endpoints[0]",mode:"managed",type:"aws_vpc_security_group_ingress_rule",values:{id:null}},
+    {address:"aws_vpc_endpoint.ssm[\"ec2messages\"]",mode:"managed",type:"aws_vpc_endpoint",values:{id:null}},
+    {address:"aws_vpc_endpoint.ssm[\"ssm\"]",mode:"managed",type:"aws_vpc_endpoint",values:{id:null}},
+    {address:"aws_vpc_endpoint.ssm[\"ssmmessages\"]",mode:"managed",type:"aws_vpc_endpoint",values:{id:null}}
+  ];
+  .variables.existing_ssm_endpoint_security_group_id.value = null |
+  .planned_values.root_module.resources += endpoint |
+  .resource_changes += [endpoint[] | {address,mode,type,change:{actions:["create"],before:null,after:.values,after_unknown:{id:true}}}]
+' "$scratch/fresh.json" > "$scratch/fresh-isolated-endpoints.json"
+run_apply "$scratch/fresh-isolated-endpoints.json" true
+for scope_variable in existing_ssm_endpoint_security_group_id manage_existing_endpoint_ingress_rule manage_cluster_ingress_rule; do
+  jq --arg variable "$scope_variable" 'del(.variables[$variable].value)' "$scratch/fresh-isolated-endpoints.json" > "$scratch/fresh-missing-scope-value.json"
+  if run_apply "$scratch/fresh-missing-scope-value.json" true >/dev/null 2>&1; then printf 'fresh plan with missing scope value applied\n' >&2; exit 1; fi
+done
+test "$(wc -l < "$scratch/trace" | tr -d ' ')" = 3
 
 # --allow-create cannot transform a retained or malformed plan into fresh mode.
 if run_apply "$scratch/retention.json" true >/dev/null 2>&1; then printf 'allow-create bypassed retention guard\n' >&2; exit 1; fi
@@ -77,6 +102,18 @@ jq '.planned_values.root_module.resources[0].values.vpc_security_group_ids=["sg-
 if run_apply "$scratch/fresh-arbitrary-sg.json" true >/dev/null 2>&1; then printf 'fresh plan with arbitrary security group value applied\n' >&2; exit 1; fi
 jq '.planned_values.root_module.resources += [{address:"aws_instance.other",mode:"managed",type:"aws_instance",values:{}}]' "$scratch/fresh.json" > "$scratch/fresh-other-instance.json"
 if run_apply "$scratch/fresh-other-instance.json" true >/dev/null 2>&1; then printf 'fresh plan with a second instance applied\n' >&2; exit 1; fi
+jq '.planned_values.root_module.resources += [{address:"aws_iam_policy.extra",mode:"managed",type:"aws_iam_policy",values:{id:null}}] | .resource_changes += [{address:"aws_iam_policy.extra",mode:"managed",type:"aws_iam_policy",change:{actions:["create"],before:null,after:{id:null},after_unknown:{id:true}}}]' "$scratch/fresh.json" > "$scratch/fresh-extra-iam.json"
+if run_apply "$scratch/fresh-extra-iam.json" true >/dev/null 2>&1; then printf 'fresh plan with extra IAM resource applied\n' >&2; exit 1; fi
+jq '(.resource_changes[] | select(.address == "aws_iam_role.host")).change.actions=["update"]' "$scratch/fresh.json" > "$scratch/fresh-update.json"
+if run_apply "$scratch/fresh-update.json" true >/dev/null 2>&1; then printf 'fresh plan with an update action applied\n' >&2; exit 1; fi
+jq '(.resource_changes[] | select(.address == "aws_iam_role.host")).change.actions=["delete"]' "$scratch/fresh.json" > "$scratch/fresh-delete.json"
+if run_apply "$scratch/fresh-delete.json" true >/dev/null 2>&1; then printf 'fresh plan with a delete action applied\n' >&2; exit 1; fi
+jq '(.resource_changes[] | select(.address == "aws_iam_role.host")).change.actions=["delete","create"]' "$scratch/fresh.json" > "$scratch/fresh-replacement.json"
+if run_apply "$scratch/fresh-replacement.json" true >/dev/null 2>&1; then printf 'fresh plan with a replacement action applied\n' >&2; exit 1; fi
+jq '.planned_values.root_module.resources |= map(select(.address != "aws_iam_instance_profile.host")) | .resource_changes |= map(select(.address != "aws_iam_instance_profile.host"))' "$scratch/fresh.json" > "$scratch/fresh-missing-profile.json"
+if run_apply "$scratch/fresh-missing-profile.json" true >/dev/null 2>&1; then printf 'fresh plan missing the owned profile applied\n' >&2; exit 1; fi
+jq 'del(.variables.manage_cluster_ingress_rule.value)' "$scratch/fresh.json" > "$scratch/fresh-missing-ingress-value.json"
+if run_apply "$scratch/fresh-missing-ingress-value.json" true >/dev/null 2>&1; then printf 'fresh plan with missing ingress value applied\n' >&2; exit 1; fi
 
 # An expected digest mismatch stops before show/apply, and no unsafe path is accepted.
 plan="$scratch/private/hash-plan"; printf 'changed\n' > "$plan"
