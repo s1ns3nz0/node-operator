@@ -1,0 +1,25 @@
+{
+  "task_id": "2026-09-08-security-remaining",
+  "objective": "Remediate remaining CI promotion and scanner governance gaps and safely reconcile remaining infrastructure ownership/settings.",
+  "authorized": [
+    "implementation and tests",
+    "update draft PR127",
+    "read scoped live state/configuration",
+    "reviewed non-destructive in-scope hardening"
+  ],
+  "forbidden": [
+    "merge",
+    "billing or repository visibility change",
+    "secret ceremonies",
+    "unreviewed replacement/deletion/downtime",
+    "silent scanner waivers"
+  ],
+  "integration_owner": {
+    "tier": "sol",
+    "owner": "/root/ci_optimization"
+  },
+  "routing": {
+    "requested": "sol",
+    "fallback": "none"
+  }
+}

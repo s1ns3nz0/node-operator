@@ -1,15 +1,14 @@
 # Access-log replication
 
-This configuration is a proposal only. It adds live, one-way S3 cross-region
-replication from the Seoul access-log buckets to the existing Tokyo DR
-access-log buckets:
+This configuration provides live, one-way S3 cross-region replication from
+the Seoul access-log buckets to the existing Tokyo DR access-log buckets:
 
 | Source | Included object prefixes | Destination |
 | --- | --- | --- |
 | `audit_access_logs` | `audit/`, `validator-audit/`, `vault-snapshot/` | `audit_replica_access_logs` |
 | `release_artifacts_access_logs` (when `enable_release_signer=true`) | `release-artifacts/` | `release_artifacts_replica_access_logs` |
 
-The proposed Terraform addresses are
+The Terraform addresses are
 `aws_s3_bucket_replication_configuration.audit_access_logs` and
 `aws_s3_bucket_replication_configuration.release_artifacts_access_logs[0]`,
 with their corresponding dedicated `aws_iam_role` and `aws_iam_role_policy`
@@ -36,18 +35,21 @@ re-replicate replicas, so the absence of a reciprocal rule is intentional.
 See [What does Amazon S3 replicate?](https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication-what-is-isnot-replicated.html)
 and [Setting up permissions for live replication](https://docs.aws.amazon.com/AmazonS3/latest/userguide/setting-repl-config-perm-overview.html).
 
-## Rollout constraints
+## Activation evidence and future changes
 
-No cloud change is authorized by this proposal. Before a future, separately
-approved activation, create and review a saved Terraform plan. It must contain
-only the two access-log replication configurations and their dedicated IAM
-roles and inline policies; it must show no replacements or deletions. Confirm
-both source and destination versioning resources are enabled, and confirm the
-release configuration is present only when `enable_release_signer=true`.
+On 2026-09-08, the explicitly reviewed saved plan created only the two
+replication configurations, two dedicated IAM roles, and two inline policies;
+it contained no update, replacement, or deletion. Both configurations read
+back enabled with delete-marker replication disabled. One retained, zero-byte,
+non-secret canary per source reached `COMPLETED` and appeared at the same key in
+the corresponding Tokyo bucket as an AES256-encrypted `REPLICA`. A targeted
+post-activation plan reported no managed change. The durable evidence and
+remaining boundaries are in
+`reports/2026-09-08-security-remaining-status.md`.
 
-After activation, write fresh source objects and verify their replication
-status and same-key destination presence. Do not use S3 Batch Replication or
-another backfill process without a separate approval.
+Any future rule, role, prefix, region, backfill, delete replication, ownership,
+or encryption change requires a new saved plan and approval. Do not use S3
+Batch Replication or another backfill process without separate authorization.
 
 The existing Seoul-to-Tokyo DR pattern incurs inter-region replication transfer,
 destination S3 request, and destination storage/lifecycle charges. Estimate
