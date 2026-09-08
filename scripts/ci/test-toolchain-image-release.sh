@@ -14,6 +14,7 @@ for dockerfile in "$root/.ci/toolchains/terraform-validation.Dockerfile" "$root/
     exit 1
   fi
 done
+grep -Fq 'ripgrep' "$root/.ci/toolchains/release-build.Dockerfile"
 
 for required in \
   'ARG CA_CERTIFICATES_VERSION=' \
