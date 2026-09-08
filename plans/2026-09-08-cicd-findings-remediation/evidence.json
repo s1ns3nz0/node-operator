@@ -4,11 +4,14 @@
     {"finding":"H2","result":"Collector now scans Git history; the immutable scanner image must be rebuilt and its reviewed digest promoted before activation."},
     {"finding":"M1","result":"Release eligibility binds an exact main merge SHA to trusted workflow identities and its merged PR-head evidence decision."},
     {"finding":"M2","result":"All 26 current Checkov findings reach OPA and have exact, expiring dispositions; exceptions are bounded risks, not passed controls."}
+    ,{"finding":"H4","result":"Restricted-PSA DAST namespace can reach only fixed read-only service probes; signer access is mediated by a fixed GET /upcheck proxy with CA and hostname verification."}
   ],
   "validations": [
     {"command":"scripts/ci/test-release-source-eligibility.sh","result":"pass","coverage":"rejects wrong app, wrong workflow, failed evidence, stale merged PR, and non-main source"},
     {"command":"scripts/ci/validate-terraform-module-offline.sh for bootstrap-state, foundation-network, ops-access","result":"pass","coverage":"AWS provider 5.100.0; readonly lockfiles; backend disabled"},
     {"command":"npm run harness:check","result":"pass","task_graphs_checked":81},
     {"artifact":"m2-validation.json","result":"pass","note":"Detailed non-sensitive M2 scanner, OPA and Terraform validation evidence"}
+    ,{"commit":"b601906","result":"pass","hosted_runs":{"quality":34182735198,"scanners":34182735179,"policy":34182735205,"policy_foundation":34182735180,"terraform":34182735215},"note":"Exact final implementation head; scanner image PR build remained pending when recorded."}
+    ,{"review":"Terra independent M2 review","result":"approve","scope":"2b7a9b2","limitations":"No live Terraform plan/apply or issued OIDC-claim validation."}
   ]
 }

@@ -15,13 +15,15 @@ This is an implementation checkpoint, not a declaration that all HIGH/MEDIUM con
 
 ## Observed validation
 
-- Source integration commit `2b7a9b2`: hosted quality, scanners, policy, policy-foundation and terraform passed. Later commits require their own checks.
+- Final implementation commit `b601906`: hosted quality (`34182735198`), scanners (`34182735179`), policy (`34182735205`), policy-foundation (`34182735180`) and terraform (`34182735215`) passed.
+- H1 scanner policy inputs are pinned to the trusted default-branch checkout. Semgrep, Gitleaks, OSV and Checkov local ignore/config replacement is rejected; inline scanner suppressions are disabled or surfaced as blocking evidence. NUL-delimited path handling covers nested and non-ASCII filenames.
 - Terraform 4 modules validate successfully with AWS provider 5.100.0; formatting passed. Initialization used `-backend=false`; no remote state or resource apply.
 - OPA: 67/67 passed. `npm run harness:check` and `npm run harness:verify` passed, including expected negative fixtures.
 - GitOps H3 commit `f93751f`: hosted supply-chain verification run `34181792373` succeeded. Local negative tests reject changed chart contents even when the tag lookup still returns the approved manifest digest.
 - H4 commit `f279cfa`: root independently reran the behavioral access contract successfully. Only GET `/upcheck` contacts the mock TLS upstream once; other GET paths and signing methods do not contact upstream.
 - Actual Checkov 3.2.522 scan: 26 findings, zero findings lacking an exact registered check-ID/resource pair. These are not 26 passed checks. Detailed scope, rationale and expiry are in `docs/security/checkov-2026-09-08-disposition.md`.
 - Read-only TLS probe: signer certificate is self-signed, CN `validator-hoodi-001-remote-signer`, no SAN. Verification against the existing public CA and exact short hostname succeeds. The proxy must keep CA and hostname validation; SAN reissuance is a separate custody ceremony, not permission to disable TLS validation.
+- Independent Terra review approved the scoped M2 changes at `2b7a9b2`; live Terraform plans/applies and an actually issued OIDC claim remain unverified.
 
 ## Integration boundary
 

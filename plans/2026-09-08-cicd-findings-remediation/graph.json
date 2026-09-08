@@ -4,7 +4,7 @@
     {"id":"h1-pr-check","title":"Exact-SHA trusted OPA required check","tier":"sol","owner":"/root/ci_optimization","status":"implemented_pending_activation"},
     {"id":"h2-history","title":"Full-history Gitleaks rollout","tier":"sol","owner":"/root/ci_optimization","status":"implemented_pending_image_promotion"},
     {"id":"h3-deploy-admission","title":"Deploy signature and SBOM admission","tier":"terra","owner":"/root/gitops_fix","status":"in_progress"},
-    {"id":"h4-service-dast","title":"Private service endpoint DAST","tier":"terra","owner":"/root/gitops_fix","status":"in_progress"},
+    {"id":"h4-service-dast","title":"Private service endpoint DAST","tier":"terra","owner":"/root/gitops_fix","status":"implemented_pending_deployment"},
     {"id":"m1-release-eligibility","title":"Release eligibility enforcement","tier":"sol","owner":"/root/ci_optimization","status":"implemented_pending_activation"},
     {"id":"m2-checkov","title":"Checkov reconciliation","tier":"sol","owner":"/root","status":"implemented_pending_plan"},
     {"id":"live-validation","title":"Live positive and negative validation","tier":"sol","owner":"/root","status":"pending"},
