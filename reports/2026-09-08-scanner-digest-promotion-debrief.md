@@ -21,4 +21,3 @@ The PR-produced scanner artifact recorded zero gitleaks and Semgrep findings and
 The narrow two-pin change is consistent with the recorded published-image binding and preserves the security boundaries shown by the diff. Its promotion is conditionally ready only after the required CODEOWNER approval and subsequent activation on the trusted default branch. Pending review/activation means no claim is warranted that the new digest is already the active trusted-gate image.
 
 This review does not claim closure of all High or Medium findings. The recorded M1 release-eligibility compatibility issue remains open: the actual custom-check `details_url` is `/runs/101930466432`, while `verify-release-source-eligibility` accepts only `/actions/runs/<workflow-run-id>`. It is correctly a separate follow-up and was not fixed in this PR. If it is not resolved, M1 live eligibility must not be claimed.
-
