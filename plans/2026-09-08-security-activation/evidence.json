@@ -1,0 +1,33 @@
+{
+  "base_sha": "290880f1a281ff6d07ac4cbb8eaa1fea8591af0b",
+  "account": "106760547719",
+  "caller": "arn:aws:iam::106760547719:user/jsyang",
+  "checks": [
+    {"scope":"fresh clean-room debrief", "reviewer":"/root/security_activation_debrief", "artifact":"reports/2026-09-08-security-activation-debrief.md", "result":"scoped partial completion; local checks corroborated, cloud readbacks supplied rather than independently re-observed; hosted activation remains pending"},
+    {"scope":"CI integration", "commit":"883bebd", "commands":["test-pr-evidence-refresh.sh","test-pr-evidence-check.sh","test-release-source-eligibility.sh","test-scm-posture.sh","test-ci-security-evidence-contract.sh","test-script-quality.sh"],"result":"pass", "independent_reviewer":"/root/remediation_debrief", "review":"former trust-boundary and URL/fail-close blockers resolved; live promotion guard remains unresolved"},
+    {"command":"actual pinned scanner image synthetic full-history canary", "image_digest":"sha256:9f6300a37edb593aa09e0085f07787098079cbba75c01d0538aff99ebaac04ce", "full_history_exit":1, "latest_commit_only_exit":0, "historical_findings":1, "latest_findings":0, "rule":"github-pat", "redaction":"verified", "isolation":"network none; source read-only; synthetic repository never pushed", "scope":"local scanner binary/flags, not hosted exact-head PR gate"},
+    {"command":"terraform validate and fmt -check", "result":"pass"},
+    {"command":"scripts/ci/test-validator-observability-contract.sh", "result":"pass"},
+    {"command":"npm run harness:check", "result":"pass", "graphs":83},
+    {"command":"npm run harness:verify", "result":"pass", "rego":"67/67", "tools":"checksum-verified repository pins OPA 1.17.0, Conftest 0.69.0, ShellCheck 0.10.0"},
+    {"command":"Checkov 3.2.522 infra with trusted config", "failed":26, "skipped":8, "parsing_errors":0, "status":"not clean; eight skips lack central exceptions"},
+    {"reviewer":"/root/remediation_debrief", "tier":"terra", "scope":"Firehose IAM ordering diff", "result":"no blocking issue or new Checkov finding"},
+    {"command":"final scoped Terraform plan -detailed-exitcode", "exit_code":0, "managed_changes":[], "scope":"Firehose, producer policy, two bucket logging/notifications, snapshot lifecycle, workload log retention"},
+    {"observation":"Firehose readback", "at":"2026-09-08T04:18:16Z", "stream_status":"ACTIVE", "encryption_status":"ENABLED", "key_type":"CUSTOMER_MANAGED_CMK", "key_id":"f1815b98-4450-4308-bcea-879e163f9c60"},
+    {"observation":"post-activation Firehose metrics", "at":"2026-09-08T04:20:00Z", "delivery_success_sum":1, "delivered_records":277, "kms_error_sums":{"AccessDenied":0,"Disabled":0,"InvalidState":0,"NotFound":0}, "note":"bounded observation, not full validator activity completeness proof"}
+  ],
+  "mutations": [
+    {"action":"CloudWatch retention update", "resource":"/aws/eks/node-operator/validator-workloads", "before":90, "after":365, "readback":"pass", "security_review":"Sol approved"},
+    {"action":"Terraform stage1", "plan_sha256":"bade207c8ff7278f3395b792362182ed32741e30b94ef38621ec220528ac8719", "added":6,"changed":1,"destroyed":0,"readback":"pass","security_review":"Sol approved"},
+    {"action":"Terraform stage2", "plan_sha256":"9c4b7c38a01a9a518d92537bbf738d1cf554cc7fe4c82bb85c9b83375e284950", "added":1,"changed":0,"destroyed":0,"readback":"exact-key policy and both IAM simulation actions allowed","security_review":"Sol approved"},
+    {"action":"Terraform stage3", "plan_sha256":"6aa47ce648b864fa47c0dab1c5475902e29e09ff6d92d3b5cfebdd8cb92f11dd", "added":0,"changed":1,"destroyed":0,"readback":"ACTIVE/ENABLED exact CMK","security_review":"Sol approved"},
+    {"action":"DynamoDB PITR enable", "resource":"node-operator-terraform-lock", "before":"DISABLED","after":"ENABLED","recovery_period_days":35,"readback":"pass","security_review":"Sol approved"}
+  ],
+  "open_dependencies": [
+    "GitOps protection API requires account upgrade or visibility change; neither authorized",
+    "Resource replacements and disruptive changes require separate approval"
+  ],
+  "model_fallbacks": [],
+  "recon_correction":"Luna initially cited stale empty t2 state report; root verified populated live state and Luna corrected. No bootstrap/foundation state found; do not infer those roots own live resources.",
+  "artifact_handling":"Raw Terraform plans and scan JSON kept outside Git in private mode-0700 directory; no secrets or raw logs included here."
+}

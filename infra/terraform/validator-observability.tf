@@ -348,7 +348,10 @@ resource "aws_kinesis_firehose_delivery_stream" "validator_audit" {
     kms_key_arn         = aws_kms_key.validator_audit.arn
   }
 
-  depends_on = [aws_iam_role_policy.validator_audit_firehose]
+  depends_on = [
+    aws_iam_role_policy.validator_audit_firehose,
+    aws_iam_role_policy.validator_firehose_buffer,
+  ]
 }
 
 data "aws_iam_policy_document" "validator_cloudwatch_subscription_assume_role" {
@@ -368,11 +371,6 @@ resource "aws_iam_role" "validator_cloudwatch_subscription" {
 }
 
 data "aws_iam_policy_document" "validator_cloudwatch_subscription" {
-  statement {
-    sid       = "EncryptOnlyFirehoseBuffer"
-    actions   = ["kms:GenerateDataKey", "kms:Decrypt"]
-    resources = [aws_kms_key.validator_firehose_buffer.arn]
-  }
   statement {
     actions   = ["firehose:PutRecord", "firehose:PutRecordBatch"]
     resources = [aws_kinesis_firehose_delivery_stream.validator_audit.arn]
