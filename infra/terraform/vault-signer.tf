@@ -262,7 +262,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "release_artifacts" {
 # The logging destination must remain non-recursive. S3 server access log
 # delivery supports SSE-S3 but does not support a default SSE-KMS key.
 resource "aws_s3_bucket" "release_artifacts_access_logs" {
-  #checkov:skip=CKV_AWS_144:Replicating this delivery target would create a second unbounded audit-log stream; the release artifacts are replicated instead.
   #checkov:skip=CKV_AWS_145:S3 server access log delivery does not support a default SSE-KMS destination key.
   count         = var.enable_release_signer ? 1 : 0
   bucket_prefix = "${local.name_prefix}-rl-"

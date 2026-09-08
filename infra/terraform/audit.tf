@@ -75,7 +75,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit" {
 # This dedicated, non-recursive destination therefore uses SSE-S3, while the
 # audited source continues to use its purpose-specific KMS key above.
 resource "aws_s3_bucket" "audit_access_logs" {
-  #checkov:skip=CKV_AWS_144:Replicating this delivery target would create a second unbounded audit-log stream; the audited source is replicated instead.
   #checkov:skip=CKV_AWS_145:S3 server access log delivery does not support a default SSE-KMS destination key.
   bucket_prefix = "${local.name_prefix}-al-"
   force_destroy = false
