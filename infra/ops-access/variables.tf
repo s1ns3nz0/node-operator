@@ -40,3 +40,10 @@ variable "retained_host_instance_id" {
     error_message = "retained_host_instance_id must be null or the reviewed host i-02c57d75e7f6810b1."
   }
 }
+
+variable "ebs_optimized" {
+  description = "Guarded EC2 API representation, not a tuning knob: true for every fresh host; false requires the exact retained-host opt-in and capability checks."
+  type        = bool
+  default     = true
+  nullable    = false
+}

@@ -6,7 +6,8 @@ module="$root/infra/ops-access"
 
 terraform -chdir="$module" fmt -check -recursive
 grep -E '^  monitoring[[:space:]]*=[[:space:]]*false$' "$module/main.tf" >/dev/null
-grep -F 'ebs_optimized                        = local.retain_existing_host ? false : true' "$module/main.tf" >/dev/null
+grep -F 'ebs_optimized                        = var.ebs_optimized' "$module/main.tf" >/dev/null
+grep -F 'condition     = var.ebs_optimized == !local.retain_existing_host' "$module/main.tf" >/dev/null
 grep -F 'encrypted   = true' "$module/main.tf" >/dev/null
 grep -F 'volume_type = "gp3"' "$module/main.tf" >/dev/null
 grep -F 'http_endpoint               = "enabled"' "$module/main.tf" >/dev/null

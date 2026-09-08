@@ -135,7 +135,7 @@ resource "aws_instance" "host" {
   monitoring = false
   # Fresh hosts retain the secure default. Only the reviewed legacy host uses
   # its observed false representation after all identity/capability checks.
-  ebs_optimized                        = local.retain_existing_host ? false : true
+  ebs_optimized                        = var.ebs_optimized
   subnet_id                            = var.subnet_id
   associate_public_ip_address          = false
   iam_instance_profile                 = aws_iam_instance_profile.host.name
@@ -155,6 +155,11 @@ resource "aws_instance" "host" {
   depends_on = [aws_iam_role_policy_attachment.ssm, aws_vpc_endpoint.ssm]
 
   lifecycle {
+    precondition {
+      condition     = var.ebs_optimized == !local.retain_existing_host
+      error_message = "EBS optimization must be true for fresh hosts and false only for the exact reviewed retained-host representation."
+    }
+
     precondition {
       condition = local.retain_existing_host ? (
         data.aws_instance.retained_host[0].id == "i-02c57d75e7f6810b1" &&

@@ -58,6 +58,12 @@ The dedicated SSM-only operations host uses basic EC2 monitoring
 matches the observed host and avoids enabling detailed-monitoring charges; it
 does not change encrypted gp3 root storage, IMDSv2, IAM, or network controls.
 
+The guarded `ebs_optimized` input defaults to true. It is not a general tuning
+option: a blocking lifecycle precondition requires true for a fresh host and
+false only alongside the exact retained-host ID. A retained-host configuration
+must explicitly set both `retained_host_instance_id` and `ebs_optimized = false`.
+All existing identity, network and default-capability checks still apply.
+
 Before any separately authorized state or infrastructure action, render a
 saved plan and run `scripts/ci/check-ops-access-ssm-retention-plan.sh` on its
 private JSON form. The guard requires the exact host in prior state, requires

@@ -3,3 +3,4 @@ subnet_id                 = "subnet-0123456789abcdef0"
 cluster_security_group_id = "sg-0123456789abcdef0"
 
 retained_host_instance_id = "i-02c57d75e7f6810b1"
+ebs_optimized             = false
