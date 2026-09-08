@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+if [ "${PRIVATE_EKS_SESSION:-}" != 1 ]; then
+  exec "$dir/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$0" "$@"
+fi
+
 usage() { printf '%s\n' "Usage: ${0##*/} --validator-set <hoodi-id> [--dry-run]" >&2; exit 64; }
 validator_set=''; dry_run=false
 while [ "$#" -gt 0 ]; do case "$1" in --validator-set) validator_set="${2:-}"; shift 2 ;; --dry-run) dry_run=true; shift ;; *) usage ;; esac; done

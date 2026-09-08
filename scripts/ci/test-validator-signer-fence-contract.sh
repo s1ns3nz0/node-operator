@@ -3,6 +3,8 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 script="$root/scripts/ops/start-hoodi-validator-signer.sh"
+grep -Fq 'with-private-eks.sh' "$script"
+grep -Fq 'PRIVATE_EKS_SESSION' "$script"
 grep -Fq 'op:"test"' "$script"
 grep -Fq '/spec/holderIdentity' "$script"
 grep -Fq 'date -u +%Y-%m-%dT%H:%M:%S.000000Z' "$script"
