@@ -106,6 +106,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/head-security-evidence"
           docker run --rm \
             --env SKIP_TERRAFORM=true \
+            --env SEMGREP_RULES=/trusted-config/semgrep.yml \
+            --env GITLEAKS_CONFIG=/trusted-config/gitleaks.toml \
+            --env GITLEAKS_IGNORE_PATH=/trusted-config/gitleaksignore \
+            --volume "$GITHUB_WORKSPACE/.semgrep/ci.yml:/trusted-config/semgrep.yml:ro" \
+            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaks.toml:/trusted-config/gitleaks.toml:ro" \
+            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaksignore:/trusted-config/gitleaksignore:ro" \
             --volume "$GITHUB_WORKSPACE/.pr-source:/workspace:ro" \
             --volume "$RUNNER_TEMP/head-security-evidence:/evidence" \
             "$SCANNER_IMAGE" /evidence "$SUBJECT_SHA" "$BASE_SHA"
@@ -141,6 +147,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/base-security-evidence"
           docker run --rm \
             --env SKIP_TERRAFORM=true \
+            --env SEMGREP_RULES=/trusted-config/semgrep.yml \
+            --env GITLEAKS_CONFIG=/trusted-config/gitleaks.toml \
+            --env GITLEAKS_IGNORE_PATH=/trusted-config/gitleaksignore \
+            --volume "$GITHUB_WORKSPACE/.semgrep/ci.yml:/trusted-config/semgrep.yml:ro" \
+            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaks.toml:/trusted-config/gitleaks.toml:ro" \
+            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaksignore:/trusted-config/gitleaksignore:ro" \
             --volume "$GITHUB_WORKSPACE/.base-source:/workspace:ro" \
             --volume "$RUNNER_TEMP/base-security-evidence:/evidence" \
             "$SCANNER_IMAGE" /evidence "$BASE_SHA" "$BASE_SHA"

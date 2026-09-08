@@ -25,6 +25,10 @@ grep -Fq 'ref: ${{ steps.context.outputs.trusted_sha }}' "$gate_workflow"
 grep -Fq 'Collect trusted security evidence from untrusted source' "$gate_workflow"
 grep -Fq -- '--volume "$GITHUB_WORKSPACE/.pr-source:/workspace:ro"' "$gate_workflow"
 grep -Fq -- '--volume "$RUNNER_TEMP/head-security-evidence:/evidence"' "$gate_workflow"
+grep -Fq -- '--env SEMGREP_RULES=/trusted-config/semgrep.yml' "$gate_workflow"
+grep -Fq -- '--env GITLEAKS_CONFIG=/trusted-config/gitleaks.toml' "$gate_workflow"
+grep -Fq -- '--volume "$GITHUB_WORKSPACE/.semgrep/ci.yml:/trusted-config/semgrep.yml:ro"' "$gate_workflow"
+grep -Fq -- '--volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaks.toml:/trusted-config/gitleaks.toml:ro"' "$gate_workflow"
 if grep -Fq 'Download scanner evidence from the completed PR run' "$gate_workflow"; then
   printf 'trusted decision must not consume a pull-request-controlled scanner artifact\n' >&2
   exit 1

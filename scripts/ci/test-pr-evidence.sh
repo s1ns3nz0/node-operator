@@ -43,7 +43,7 @@ done
 printf "%s\\n" "{\"results\":[{\"path\":\"app.js\",\"check_id\":\"fixture-rule\",\"extra\":{\"severity\":\"WARNING\",\"message\":\"fixture finding\"}}]}" > "$report"
 exit 1'
 write_mock zizmor 'printf "%s\\n" "[{\"ident\":\"unpinned-uses\",\"desc\":\"fixture workflow finding\",\"locations\":[{\"symbolic\":{\"key\":{\"Local\":{\"verbatim_path\":\".github/workflows/ci.yml\"}}}}]}]"; exit 11'
-write_mock checkov 'printf "%s\\n" "{\"results\":{\"failed_checks\":[{\"resource\":\"aws_instance.fixture\",\"check_id\":\"CKV_FIXTURE\",\"check_name\":\"fixture check\"}]}}"; exit 1'
+write_mock checkov 'printf "%s\\n" "{\"results\":{\"failed_checks\":[{\"resource\":\"aws_instance.fixture\",\"check_id\":\"CKV_FIXTURE\",\"check_name\":\"fixture check\"}],\"skipped_checks\":[{\"resource\":\"aws_s3_bucket.skipped\",\"check_id\":\"CKV_SKIPPED\",\"check_name\":\"skipped fixture\",\"check_result\":{\"suppress_comment\":\"pull-request suppression\"}}]}}"; exit 1'
 write_mock terraform '
 if [ "$2" = "init" ]; then exit 0; fi
 printf "%s\\n" "{\"valid\":true}"
@@ -64,6 +64,7 @@ for tool in gitleaks osv semgrep zizmor checkov; do
 done
 jq -e '.result.findings == [{path:"config.env",rule_id:"fixture-secret"}]' "$output_directory/gitleaks.json" >/dev/null
 jq -e '.result.vulnerabilities[0] == {package:"fixture-package",id:"OSV-1",severity:"HIGH",fix_available:true}' "$output_directory/osv.json" >/dev/null
+jq -e '.result.failed_checks[] | select(.check_id == "CKV_SKIPPED" and .check_name == "IaC check was suppressed in pull-request source")' "$output_directory/checkov.json" >/dev/null
 jq -e '.result.status == "passed"' "$output_directory/format.json" >/dev/null
 jq -e '.result.status == "passed" and .result.modules == [{module:"infrastructure",status:"passed"}]' "$output_directory/terraform.json" >/dev/null
 if rg -l 'DO_NOT_PERSIST' "$output_directory" >/dev/null; then

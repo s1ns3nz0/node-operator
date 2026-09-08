@@ -76,7 +76,14 @@ collect_gitleaks() {
   set +e
   # The checkout is intentionally full-depth in CI. Scan commit history so a
   # secret cannot be hidden by deleting it in the pull request's final tree.
-  gitleaks git "$source_directory" --redact=100 --report-format json --report-path "$report_path" --no-banner --no-color > "$temporary_directory/gitleaks.stdout" 2> "$temporary_directory/gitleaks.stderr"
+  local -a trusted_options=()
+  if [ -n "${GITLEAKS_CONFIG:-}" ]; then trusted_options+=(--config "$GITLEAKS_CONFIG"); fi
+  if [ -n "${GITLEAKS_IGNORE_PATH:-}" ]; then trusted_options+=(--gitleaks-ignore-path "$GITLEAKS_IGNORE_PATH"); fi
+  if [ "${#trusted_options[@]}" -gt 0 ]; then
+    gitleaks git "$source_directory" "${trusted_options[@]}" --ignore-gitleaks-allow --redact=100 --report-format json --report-path "$report_path" --no-banner --no-color > "$temporary_directory/gitleaks.stdout" 2> "$temporary_directory/gitleaks.stderr"
+  else
+    gitleaks git "$source_directory" --ignore-gitleaks-allow --redact=100 --report-format json --report-path "$report_path" --no-banner --no-color > "$temporary_directory/gitleaks.stdout" 2> "$temporary_directory/gitleaks.stderr"
+  fi
   collector_exit_code=$?
   set -e
   [ "$collector_exit_code" -eq 0 ] || [ "$collector_exit_code" -eq 1 ] || { printf 'gitleaks failed before producing evidence\n' >&2; exit 1; }
@@ -119,7 +126,7 @@ collect_semgrep() {
   local semgrep_rules="${SEMGREP_RULES:-$source_directory/.semgrep/ci.yml}"
   require_file "$semgrep_rules"
   set +e
-  semgrep scan --config "$semgrep_rules" --metrics=off --error --json-output "$report_path" "$source_directory" > "$temporary_directory/semgrep.stdout" 2> "$temporary_directory/semgrep.stderr"
+  semgrep scan --config "$semgrep_rules" --metrics=off --error --disable-nosem --no-git-ignore --json-output "$report_path" "$source_directory" > "$temporary_directory/semgrep.stdout" 2> "$temporary_directory/semgrep.stderr"
   collector_exit_code=$?
   set -e
   [ "$collector_exit_code" -eq 0 ] || [ "$collector_exit_code" -eq 1 ] || { printf 'semgrep failed before producing evidence\n' >&2; exit 1; }
@@ -153,10 +160,10 @@ collect_checkov() {
   [ "$collector_exit_code" -eq 0 ] || [ "$collector_exit_code" -eq 1 ] || { printf 'checkov failed before producing evidence\n' >&2; exit 1; }
   require_json_report checkov "$report_path"
   require_json_shape checkov "$report_path" '.results.failed_checks | type == "array"'
-  jq '[.results.failed_checks[]? | {
+  jq '[((.results.failed_checks // []) + (.results.skipped_checks // []))[]? | {
         resource:(.resource // .resource_address // "unknown"),
         check_id:(.check_id // "unknown"),
-        check_name:(.check_name // "IaC policy failure")
+        check_name:(if (.check_result.suppress_comment? // "") != "" then "IaC check was suppressed in pull-request source" else (.check_name // "IaC policy failure") end)
       }]' "$report_path" | jq -c '{failed_checks:.}' > "$result_path"
   write_envelope "$output_directory/checkov.json" checkov "$result_path"
 }
