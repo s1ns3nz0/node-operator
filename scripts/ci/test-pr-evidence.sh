@@ -69,10 +69,10 @@ done
 jq -e '.result.findings == [{path:"config.env",rule_id:"fixture-secret"}]' "$output_directory/gitleaks.json" >/dev/null
 jq -e '.result.vulnerabilities[0] == {package:"fixture-package",id:"OSV-1",severity:"HIGH",fix_available:true}' "$output_directory/osv.json" >/dev/null
 jq -e '.result.failed_checks[] | select(.check_id == "CKV_SKIPPED" and .check_name == "IaC check was suppressed in pull-request source")' "$output_directory/checkov.json" >/dev/null
-jq -e '.result.failed_checks[] | select(.check_id == "CKV_AWS_126" and .check_name == "valid fixture check" and .file_path == "infra/ops-access/main.tf")' "$output_directory/checkov.json" >/dev/null
-jq -e '.result.failed_checks[] | select(.check_id == "CKV_AWS_126" and .check_name == "other module same address" and .file_path == "infra/other-module/main.tf")' "$output_directory/checkov.json" >/dev/null
+jq -e 'any(.result.failed_checks[]; .check_id == "CKV_AWS_126" and .check_name == "valid fixture check" and .file_path == "infra/ops-access/main.tf")' "$output_directory/checkov.json" >/dev/null
+jq -e 'any(.result.failed_checks[]; .check_id == "CKV_AWS_126" and .check_name == "other module same address" and .file_path == "infra/other-module/main.tf")' "$output_directory/checkov.json" >/dev/null
 for check_id in CKV_MISSING CKV_OUTSIDE CKV_TRAVERSAL CKV_BACKSLASH CKV_SKIPPED; do
-  jq -e --arg check_id "$check_id" '.result.failed_checks[] | select((.check_id == $check_id) and (has("file_path") | not))' "$output_directory/checkov.json" >/dev/null
+  jq -e --arg check_id "$check_id" 'any(.result.failed_checks[]; (.check_id == $check_id) and (has("file_path") | not))' "$output_directory/checkov.json" >/dev/null
 done
 suppression_directory="$temporary_directory/suppression-evidence"
 GIT_CHANGED_ZIZMOR_SUPPRESSED=true PATH="$mock_directory:$PATH" TERRAFORM_PLUGIN_MIRROR="$temporary_directory/plugin-mirror" "$script_dir/collect-pr-evidence.sh" "$suppression_directory" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$fixture_directory" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

@@ -57,3 +57,7 @@ jobs:
         run: scripts/ci/test-pr-evidence-check.sh
       - name: Test zero-resource foundation contract
         run: scripts/ci/test-zero-resource-contract.sh
+      - name: Test retained SSM plan boundary
+        run: scripts/ci/test-ops-access-ssm-retention.sh
+      - name: Test saved-plan SSM release wrapper
+        run: scripts/ci/test-ops-access-retention-release.sh
