@@ -24,7 +24,9 @@ mkdir -p "$output_dir"; chmod 700 "$output_dir"; output_dir="$(cd "$output_dir" 
 port="${PRIVATE_BEACON_LOCAL_PORT:-19500}"
 nc -z 127.0.0.1 "$port" >/dev/null 2>&1 && { printf 'local beacon port %s is already in use\n' "$port" >&2; exit 75; }
 port_log="$(mktemp /private/tmp/node-operator-beacon-port.XXXXXX)"; port_pid=''
-cleanup() { set +e; [ -z "$port_pid" ] || kill -TERM "$port_pid" 2>/dev/null || true; [ -z "$port_pid" ] || wait "$port_pid" 2>/dev/null || true; unlink "$port_log" 2>/dev/null || true; }
+validator_file="$(mktemp /private/tmp/node-operator-validator-state.XXXXXX)"
+pending_file="$(mktemp /private/tmp/node-operator-validator-pending.XXXXXX)"
+cleanup() { set +e; [ -z "$port_pid" ] || kill -TERM "$port_pid" 2>/dev/null || true; [ -z "$port_pid" ] || wait "$port_pid" 2>/dev/null || true; unlink "$port_log" "$validator_file" "$pending_file" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 # A release may expose the Beacon API through its Service or directly from the
 # singleton StatefulSet Pod. Both are private. Refuse ambiguity rather than
@@ -43,11 +45,19 @@ done
 nc -z 127.0.0.1 "$port" >/dev/null || { printf 'private beacon port-forward did not become ready\n' >&2; exit 75; }
 
 sync="$(curl --fail --silent --show-error "http://127.0.0.1:${port}/eth/v1/node/syncing")"
-validator_file="$(mktemp /private/tmp/node-operator-validator-state.XXXXXX)"
+jq -e '.data.head_slot | type == "string" and test("^[0-9]+$")' <<<"$sync" >/dev/null || { printf 'private Beacon sync response is malformed\n' >&2; exit 65; }
 validator_status="$(curl --silent --show-error --output "$validator_file" --write-out '%{http_code}' "http://127.0.0.1:${port}/eth/v1/beacon/states/head/validators/${public_key}")"
+[ "$validator_status" = 200 ] || [ "$validator_status" = 404 ] || { printf 'private Beacon validator lookup returned HTTP %s\n' "$validator_status" >&2; exit 65; }
+if [ "$validator_status" = 404 ]; then
+  curl --fail --silent --show-error --max-filesize 150000000 "http://127.0.0.1:${port}/eth/v1/beacon/states/head/pending_deposits" |
+    jq --arg key "$public_key" '{total:(.data|length),matches:[.data|to_entries[]|select(.value.pubkey==$key)|{position:(.key+1),amount:.value.amount,slot:.value.slot,withdrawal_credentials:.value.withdrawal_credentials}]}' > "$pending_file"
+  jq -e '(.total | type == "number") and (.matches | type == "array" and length <= 1)' "$pending_file" >/dev/null || { printf 'private Beacon pending-deposit response is malformed or ambiguous\n' >&2; exit 65; }
+else
+  jq -e --arg key "$public_key" '.data.validator.pubkey == $key and (.data.index | type == "string" and test("^[0-9]+$"))' "$validator_file" >/dev/null || { printf 'private Beacon validator response is malformed or identifies another key\n' >&2; exit 65; }
+  printf '%s\n' '{"total":0,"matches":[]}' > "$pending_file"
+fi
 timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 record="$output_dir/uc-3-private-beacon-$(date -u +%Y%m%dT%H%M%SZ).json"
-jq -n --arg collected "$timestamp" --arg correlation "$correlation_id" --arg set "$validator_set" --arg key "$public_key" --arg status "$validator_status" --argjson syncing "$sync" --slurpfile validator "$validator_file" '
-  {schema_version:1,event_type:"uc-3",collected_at_utc:$collected,correlation_id:$correlation,network:"hoodi",validator_set:$set,validator_public_key:$key,source:"private-beacon",payload:{syncing:($syncing.data | {head_slot,is_syncing,is_optimistic,el_offline}),validator_http_status:$status,validator:($validator[0].data? | if . then {index,status,balance,validator:(.validator | {pubkey,effective_balance,slashed,activation_eligibility_epoch,activation_epoch})} else null end)}}' > "$record"
-unlink "$validator_file"
-printf 'PASS: private Beacon API evidence written to %s\n' "$record"
+jq -n --arg collected "$timestamp" --arg correlation "$correlation_id" --arg set "$validator_set" --arg key "$public_key" --arg status "$validator_status" --argjson syncing "$sync" --slurpfile validator "$validator_file" --slurpfile pending "$pending_file" '
+  {schema_version:1,event_type:"uc-3",collected_at_utc:$collected,correlation_id:$correlation,network:"hoodi",validator_set:$set,validator_public_key:$key,source:"private-beacon",payload:{syncing:($syncing.data | {head_slot,is_syncing,is_optimistic,el_offline}),validator_http_status:$status,deposit_state:(if $status=="200" then "validator-record-present" elif ($pending[0].matches|length)==1 then "pending-deposit" else "unresolved-not-found" end),pending_deposit:(if ($pending[0].matches|length)==1 then ($pending[0].matches[0] + {queue_total:$pending[0].total}) else null end),validator:($validator[0].data? | if . then {index,status,balance,validator:(.validator | {pubkey,effective_balance,slashed,activation_eligibility_epoch,activation_epoch})} else null end)}}' > "$record"
+printf 'COLLECTED: private Beacon API evidence written to %s; collection alone does not establish UC-3 completion.\n' "$record"

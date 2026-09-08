@@ -47,4 +47,4 @@ jq -n --arg timestamp "$timestamp" --arg phase "$phase" --arg validator_set "$va
    redaction:"No Vault response, credential, raw pod log, keystore, mnemonic, password, recovery material, or wallet material is collected."}' > "$record"
 chmod 600 "$record"
 phase_label="$(printf '%s' "$phase" | tr '[:lower:]' '[:upper:]')"
-printf 'PASS %s: non-secret lifecycle evidence written to %s\n' "$phase_label" "$record"
+printf 'COLLECTED %s: non-secret lifecycle evidence written to %s; collection alone does not establish use-case success.\n' "$phase_label" "$record"

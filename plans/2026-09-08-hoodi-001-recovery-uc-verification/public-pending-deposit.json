@@ -1,0 +1,20 @@
+{
+  "collected_at_utc": "2026-09-08T12:41:43Z",
+  "source": "https://ethereum-hoodi-beacon-api.publicnode.com/eth/v1/beacon/states/head/pending_deposits",
+  "authority": "External corroboration only; not a signing gate.",
+  "version": "fulu",
+  "finalized": false,
+  "execution_optimistic": false,
+  "pending_count": 1231,
+  "matching": [
+    {
+      "position_zero_based": 1000,
+      "deposit": {
+        "pubkey": "0xa3866b82651039224bfd725fc81e7ff17c1765021dff37f3fd4bc01405e2ed14c97c7c5c82cd95104d8f82c4229ab0d0",
+        "withdrawal_credentials": "0x010000000000000000000000403ff64383b8ddf994d5563550c8040d89f025ac",
+        "amount": "32000000000",
+        "slot": "3880931"
+      }
+    }
+  ]
+}

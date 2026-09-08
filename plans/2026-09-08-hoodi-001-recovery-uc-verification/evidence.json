@@ -1,0 +1,30 @@
+{
+  "task_id": "2026-09-08-hoodi-001-recovery-uc-verification",
+  "status": "in_progress",
+  "observed": [
+    "Public execution receipt 0xd6a606fd... succeeded on Hoodi chain 560048 at block 3576625 and emitted the canonical DepositContract event for the intended public key, 32 ETH amount, and type-1 withdrawal credentials.",
+    "The public deposit file SSZ roots match the emitted event and its BLS proof-of-possession signature verifies with @noble/curves 2.0.1; plans/2026-09-08-hoodi-001-recovery-uc-verification/public-deposit-verification.json is public corroboration only.",
+    "A public Hoodi Beacon API pending_deposits response contains the exact validator public key at position 1000 of 1231, so the current validator-record HTTP 404 means the valid deposit is pending consensus processing rather than proving a key mismatch or failed deposit.",
+    "The corrected private observer independently returned the exact deposit at position 937 of 1168 with the same 32 ETH amount, slot, and withdrawal credentials while Prysm was synced/non-optimistic; the record passes the evidence-envelope validator and the point-in-time position is not an ETA.",
+    "The runtime Web3Signer TLS endpoint returned exactly one public key and it matches the deposit key; the CA chain and certificate name were verified, the configured allowlisted Host was used, and no Vault or key material was accessed.",
+    "The validator-client-ecr-mirror GitHub Environment now contains only the public AWS account ID and exact existing mirror-role ARN required by the protected OIDC workflow; no credential or secret was stored.",
+    "The approved Prysm v7.1.8 source and linux/amd64 manifest are digest-pinned; the protected mirror workflow now masks temporary STS values, uses a pinned checkout, and verifies the destination digest.",
+    "The hardened public-RPC observer independently accepted the live Hoodi receipt and canonical DepositEvent and emitted a schema-valid public-rpc UC-1 record; weak status-plus-arbitrary-log matching was removed.",
+    "Fresh runtime readback found one Ready signer, one Ready retained slashing database with a Bound KMS-backed PVC, zero validator-client objects cluster-wide, and an expired fence timestamp; activation remains denied until the fence is safely reacquired/refreshed under the reviewed gate.",
+    "The activation gate now rejects stale or future evidence, optimistic or EL-offline Beacon state, mismatched nested keys or validator sets, non-singleton signer/client inventory, and expired fencing; its behavioral offline suite passes.",
+    "The private duty observer now uses standards-shaped current/next-epoch requests, fails closed on HTTP and response-shape errors, and explicitly distinguishes assignments from signed outcomes.",
+    "The private-EKS wrapper now captures and terminates only its exact owned SSM SessionId and preserves stdin, signals, and child exit status; focused cleanup tests pass.",
+    "The bounded Firehose adapter accepted the exact double-gzip live sample (186 batches, 636 events) without persisting or printing raw logs. A separate locked UC-5 archive sample contains 97 Vault audit records and four role delete/create request-response pairs with request IDs; this corroborates the limited revocation exercise but not a live validator duty.",
+    "Prior sanitized inspection found a synced private Prysm head but HTTP 404 for the queried validator public key.",
+    "No validator-client Deployment or Pod was observed; the operational signer and database were Running and the retained PVC was Bound.",
+    "The bounded UC-5 role revocation failed closed, restored signer readiness, and kept the client fenced, but did not prove a post-recovery duty.",
+    "The pre-fix private-EKS wrapper required out-of-band cleanup of sixteen server-side SSM sessions because it did not capture exact owned session IDs."
+  ],
+  "pending": [
+    "Wait for the already-valid deposit to leave pending_deposits and obtain a fresh active_ongoing record; do not submit another deposit.",
+    "Implement and independently review a continuously renewed fence controller or equivalent fail-closed client enforcement. A one-time manual Lease renewal is not an acceptable activation control.",
+    "Publish the reviewed local changes through a human-gated PR, mirror the approved client image from main, then render and review exactly one zero-replica client.",
+    "Scale the single client from zero to one only after every fresh activation gate passes, then correlate an actual assignment, signer request, client outcome, and canonical archive record.",
+    "Re-run UC-2 through UC-5 against the live client; the existing UC-5 exercise and archive correlation remain limited because they do not prove a post-recovery duty or cached-key revocation behavior."
+  ]
+}

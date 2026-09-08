@@ -1,0 +1,29 @@
+{
+  "review_date_utc": "2026-09-08",
+  "validator_set": "hoodi-001",
+  "bucket": "node-operator-baseline-va-20260907071015746500000001",
+  "key": "validator/year=2026/month=09/day=08/node-operator-baseline-validator-audit-1-2026-09-08-01-35-23-e81507ae-bfb8-4508-9df5-4e1b177278b7.gz",
+  "version_id": "PG4tsjre2Sj3wp5lQ5xGMTPedbUXq0hH",
+  "compressed_object_sha256": "52f83882e18751fa60fb44636e50a6c7b4170912fc9c80af3caeaf3be6849e95",
+  "head_version_unchanged_after_review": true,
+  "encryption": "aws:kms",
+  "lock_mode": "GOVERNANCE",
+  "retain_until": "2028-09-08T01:40:29.884Z",
+  "method": "Stream exact S3 object, decode two gzip layers and concatenated CloudWatch batches; remove standard CRI timestamp/stream/full-record prefix before parsing Vault audit JSON; emit only allowlisted metadata and counts",
+  "vault_audit_records": 97,
+  "audit_records_with_request_id": 97,
+  "paired_request_ids_in_sample": 41,
+  "kubernetes_login_records": 26,
+  "target_role_path": "auth/kubernetes/role/hoodi-hoodi-001-runtime",
+  "target_role_operations": [
+    {"operation": "delete", "request_time": "2026-09-08T01:36:23.954175886Z", "response_time": "2026-09-08T01:36:23.960432226Z", "request_id": "b9f47eb6-de5d-ba01-7b37-a77f11feb5df", "response_error_present": false},
+    {"operation": "create", "request_time": "2026-09-08T01:37:01.236391808Z", "response_time": "2026-09-08T01:37:01.246734644Z", "request_id": "38fcc6e5-4229-c8dd-895f-8cafdeeac0f3", "response_error_present": false},
+    {"operation": "delete", "request_time": "2026-09-08T01:37:37.047194896Z", "response_time": "2026-09-08T01:37:37.053348121Z", "request_id": "589bda0c-d41a-cfb6-76c0-c812896dadf8", "response_error_present": false},
+    {"operation": "create", "request_time": "2026-09-08T01:37:44.957238839Z", "response_time": "2026-09-08T01:37:44.967420312Z", "request_id": "43c3d975-d60f-7db1-1732-56916af9a150", "response_error_present": false}
+  ],
+  "unredacted_hvs_token_pattern_matches": 0,
+  "raw_audit_body_persisted_or_printed": false,
+  "live_revised_archive_adapter": {"exit_code": 0, "verified_batches": 316, "normalized_metadata_records": 1039},
+  "assessment": "Independent archive corroboration of the prior bounded role deletion/restoration exercise. Timing and exact role path are consistent with the existing UC-5 evidence; this does not establish which individual invocation produced each final evidence file, nor signer denial timing, slashing continuity or post-recovery duty.",
+  "limits": ["The narrow token-pattern check is not proof of absence of every secret type", "Complete UC-5 still requires live post-recovery duty and slashing continuity"]
+}

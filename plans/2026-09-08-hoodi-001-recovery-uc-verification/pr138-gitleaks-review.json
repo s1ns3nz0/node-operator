@@ -1,0 +1,25 @@
+{
+  "pull_request": 138,
+  "reviewed_head": "40718e6ab732cdfe027f4841c8499c9ef515bdaa",
+  "ci_run": 34235523423,
+  "decision": {"block": 1, "require_approval": 0},
+  "finding": {
+    "rule": "generic-api-key",
+    "path": "scripts/ops/activate-hoodi-validator-client.sh",
+    "original_line": 71,
+    "classification": "false positive: adjacent public-key predicate and constant source-label comparison"
+  },
+  "change": "Split adjacent jq predicates onto separate lines without changing comparisons or scanner policy.",
+  "verification": {
+    "gitleaks_version": "8.30.1",
+    "trusted_scanner_configuration": "scripts/ci/trusted-scanner/gitleaks.toml",
+    "redaction_percent": 100,
+    "before_findings": 1,
+    "after_findings": 0,
+    "validator_client_contract": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "scanner_suppression_added": false,
+  "runtime_mutated": false,
+  "secret_material_accessed": false
+}

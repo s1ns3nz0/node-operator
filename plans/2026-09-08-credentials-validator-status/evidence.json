@@ -1,0 +1,20 @@
+{
+  "task_id": "2026-09-08-credentials-validator-status",
+  "status": "completed",
+  "observations": [
+    {"source":"prior completion record","fact":"The canonical ops-access S3 state has nine managed resources; an existing management identity produced a lock-free nine-no-op verification without changing the object or its version."},
+    {"source":"prior completion record","fact":"NodeOperatorTerraformApply could access the backend but provider refresh failed at iam:GetRole; no permission expansion was made."},
+    {"source":"parent-supplied sanitized UC-5 evidence","fact":"The role-revocation exercise observed signer fail-closed, role restoration, signer readiness after restoration, and the validator client remaining fenced."},
+    {"source":"task authorization","fact":"Credential cleanup is authorized locally, but IAM mutation, apply, workload deployment, merge, push, secrets, and raw state are excluded."},
+    {"source":"local focused checks","fact":"Credential-boundary test, retained-host wrapper regression, ShellCheck, harness:check, and git diff check passed."},
+    {"source":"AWS read-only verification 2026-09-08","fact":"After the final lockfile-readonly revision, the separated path verified exact backend role NodeOperatorTerraformApply and exact provider user jsyang, produced nine managed no-ops with lock disabled (ephemeral plan digest 8e28b77261555deba465f5c0851392b5752c45982b03029b50fca742ae5f79eb), removed plan/JSON/Terraform-data artifacts, and left both the canonical S3 object version and tracked dependency lock file unchanged."},
+    {"source":"sanitized private EKS evidence fb9d1bb8... and 92b55eff...","fact":"Prysm had a fresh synced non-optimistic head while the existing public key lookup returned HTTP 404; no validator client Deployment, Pod, or matching custom resource was observed."},
+    {"source":"sanitized UC-5 evidence 3e634b3a...","fact":"Role revocation failed the signer closed, restoration recovered signer readiness, and the validator client remained fenced."}
+  ],
+  "inferences": [
+    "Backend and provider authentication should be independently selectable so state access does not imply provider IAM permissions.",
+    "The UC-5 evidence proves the bounded revoke/restore control but not a first post-recovery duty.",
+    "A beacon HTTP 404 is unresolved until the existing deposit event and runtime public key are correlated; it must not be relabeled as inactive or queued."
+  ],
+  "pending": []
+}

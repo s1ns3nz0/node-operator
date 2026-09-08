@@ -8,6 +8,8 @@ contract="$root/docs/operations/validator-observability-contract.md"
 terraform_config="$root/infra/terraform/validator-observability.tf"
 for file in "$schema" "$validator" "$contract" "$terraform_config"; do test -f "$file" || { printf 'missing validator observability artifact: %s\n' "$file" >&2; exit 1; }; done
 jq -e '.properties.network.const == "hoodi" and .properties.validator_public_key.pattern == "^0x[0-9a-fA-F]{96}$"' "$schema" >/dev/null
+jq -e '.properties.source.enum | index("public-rpc") != null' "$schema" >/dev/null
+grep -Fq '"public-rpc"' "$validator"
 grep -Fq 'Etherscan and Beaconcha.in are asynchronous' "$contract"
 grep -Fq 'forbidden field name' "$validator"
 grep -Fq '!{firehose:error-output-type}' "$terraform_config"

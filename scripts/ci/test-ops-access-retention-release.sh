@@ -17,6 +17,7 @@ set -euo pipefail
 case "$*" in
   *' init '*) exit 0 ;;
   *' show -json '*) [ -z "${MUTATE_PLAN:-}" ] || printf 'changed-after-review\n' > "$MUTATE_PLAN"; cat "$MOCK_PLAN_JSON" ;;
+  *' plan '*) for argument in "$@"; do case "$argument" in -out=*) printf 'verification-plan\n' > "${argument#-out=}" ;; esac; done; exit "${MOCK_PLAN_EXIT:-0}" ;;
   *' apply '*) printf 'apply\n' >> "$MOCK_TRACE" ;;
   *) exit 64 ;;
 esac
@@ -53,6 +54,18 @@ jq -n '
     (owned[] | {address,mode,type,change:{actions:["create"],before:null,after:.values,after_unknown:{id:true}}})
   ]}
 ' > "$scratch/fresh.json"
+
+verify_plan="$scratch/private/verify-plan"
+verify_output="$(PATH="$scratch/bin:$PATH" MOCK_PLAN_JSON="$scratch/retention.json" MOCK_TRACE="$scratch/trace" bash "$entrypoint" verify --root "$bundle" --config "$scratch/config.tfvars" --backend-config "$scratch/backend.hcl" --plan-file "$verify_plan")"
+printf '%s' "$verify_output" | grep -Eq '^verification_mode=retention managed_no_op=9 saved_plan_sha256=[0-9a-f]{64} retained=false$'
+if [ -e "$verify_plan" ] || [ -e "${verify_plan}.json" ]; then
+  printf 'verification artifacts were retained\n' >&2
+  exit 1
+fi
+if PATH="$scratch/bin:$PATH" MOCK_PLAN_JSON="$scratch/retention.json" MOCK_TRACE="$scratch/trace" bash "$entrypoint" verify --root "$bundle" --config "$scratch/config.tfvars" --backend-config "$scratch/backend.hcl" --plan-file "$verify_plan" --allow-create >/dev/null 2>&1; then
+  printf 'read-only verification accepted allow-create\n' >&2
+  exit 1
+fi
 
 run_apply() {
   local json="$1" allow="${2:-false}" plan="$scratch/private/plan-$RANDOM"

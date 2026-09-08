@@ -1,0 +1,32 @@
+{
+  "observation_window_utc": "2026-09-08T12:44:00Z/2026-09-08T12:46:00Z",
+  "bucket": "node-operator-baseline-va-20260907071015746500000001",
+  "key": "validator/year=2026/month=09/day=08/node-operator-baseline-validator-audit-3-2026-09-08-12-36-46-c616296f-a3a2-4316-8360-b8b93c4972ff.gz",
+  "method": "AWS S3 stdout stream; gzip detection and decoding in memory; jq structural counts only",
+  "gzip_layers": 2,
+  "compressed_bytes": 153590,
+  "inner_gzip_bytes": 190444,
+  "decoded_json_bytes": 951262,
+  "cloudwatch_batches": 186,
+  "log_events": 636,
+  "valid_json_message_count": 636,
+  "batch_keys": ["logEvents", "logGroup", "logStream", "messageType", "owner", "subscriptionFilters"],
+  "message_keys": ["kubernetes", "log"],
+  "security_sample_classification": {
+    "security_events": 180,
+    "events_matching_fixed_terms_TLS_handshake_error_and_EOF": 180,
+    "events_containing_request_id_marker": 0,
+    "nested_json_audit_records": 0,
+    "interpretation": "This sample demonstrates Vault-namespace runtime log delivery, not an audited-request correlation. TLS EOF can result from a TCP probe; no certificate-verification failure is established. A controlled audited request or prior ceremony correlation is still required."
+  },
+  "log_groups": ["/aws/eks/node-operator/validator-security", "/aws/eks/node-operator/validator-workloads"],
+  "raw_body_persisted_or_printed": false,
+  "revised_adapter_live_test": {
+    "method": "verify-validator-audit-restore.sh --firehose-archive with Bash process substitution streaming the exact S3 sample",
+    "exit_code": 0,
+    "verified_batches": 186,
+    "normalized_non_secret_metadata_records": 636,
+    "raw_body_persisted_or_printed": false
+  },
+  "limits": ["The revised bounded adapter accepted this exact transport sample and emitted normalized non-secret metadata only", "No full historical archive restoration, search-index rebuild, or validator-duty correlation claim"]
+}

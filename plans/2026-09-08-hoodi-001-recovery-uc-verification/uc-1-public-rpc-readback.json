@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "event_type": "uc-1",
+  "collected_at_utc": "2026-09-08T13:03:12Z",
+  "correlation_id": "a3866b82-6510-3922-4bfd-725fc81e7ff1",
+  "network": "hoodi",
+  "validator_set": "hoodi-001",
+  "validator_public_key": "0xa3866b82651039224bfd725fc81e7ff17c1765021dff37f3fd4bc01405e2ed14c97c7c5c82cd95104d8f82c4229ab0d0",
+  "source": "public-rpc",
+  "payload": {
+    "verification_status": "observed",
+    "chain_id": 560048,
+    "transaction_hash": "0xd6a606fd918fbf5902e37863c27a1b42964916d188a7e0fae55291738930dc85",
+    "deposit_contract_event_observed": true,
+    "response_sha256": "ee10bd27970a5de04ec6f326bf9101094ff19f0d91582b0aee064487fbfdfef9"
+  }
+}

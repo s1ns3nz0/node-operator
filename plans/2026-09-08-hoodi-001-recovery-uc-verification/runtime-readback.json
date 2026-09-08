@@ -1,0 +1,27 @@
+{
+  "collected_at_utc": "2026-09-08T13:05:30Z",
+  "validator_set": "hoodi-001",
+  "remote_signer": {
+    "desired": 1,
+    "ready": 1,
+    "image": "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-runtime-web3signer@sha256:9a20e02a5821ad72fd318fa2a3ec0158a9a5acd9db80aa9214e9cc991ad4dbc3"
+  },
+  "slashing_database": {
+    "desired": 1,
+    "ready": 1,
+    "pvc": "data-validator-hoodi-001-slashing-db-0",
+    "pvc_phase": "Bound",
+    "storage_class": "validator-hoodi-gp3-kms",
+    "retention_when_deleted": "Retain",
+    "retention_when_scaled": "Retain"
+  },
+  "fence": {
+    "holder_present": true,
+    "renew_time": "2026-09-08T00:36:58.000000Z",
+    "duration_seconds": 60,
+    "fresh": false
+  },
+  "cluster_wide_validator_client_objects": [],
+  "active_ssm_sessions_after_cleanup": 0,
+  "redaction": "No Secret, Vault value, raw log, credential, keystore, password, or kubeconfig was read or retained."
+}
