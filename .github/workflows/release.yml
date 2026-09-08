@@ -10,7 +10,12 @@ permissions:
   id-token: write
 
 jobs:
+  reproducibility:
+    uses: ./.github/workflows/ci-release-integrity.yml
+    permissions:
+      contents: read
   build-and-publish:
+    needs: reproducibility
     # A CodeBuild-hosted runner is ephemeral per workflow job and is bound to
     # the dedicated private project by its name plus run identity. A
     # GitHub-hosted or broadly shared runner must never acquire this path.
