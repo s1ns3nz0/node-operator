@@ -163,5 +163,20 @@
     "managed_resources": 9,
     "actual_host": "i-02c57d75e7f6810b1",
     "note": "Existing local state owns live host; baseline stale hosti-0b1e225356d83549e is not migration source. Do not duplicate ownership."
+  },
+  "foundation_existing_import_candidate": {
+    "status": "private-local candidate imported and planned; not an ownership migration",
+    "scope": "six reviewed public-edge addresses only; no baseline VPC, private subnet, private route table, routes, associations, remote state, or apply",
+    "provenance": {
+      "aws_subnet.nat": "subnet-0a132b51cd663eeaa",
+      "aws_eip.hoodi_nat": "eipalloc-0ae83bf5a52ce9364",
+      "aws_internet_gateway.nat": "igw-0d5c4a38f3238bf7c",
+      "aws_route_table.public": "rtb-0d44b65f6b8fd3095",
+      "aws_route_table_association.public": "rtbassoc-052bdd657504684b9",
+      "aws_nat_gateway.hoodi": "nat-02d4eabc0b940f8d4"
+    },
+    "association_import": "provider rejected raw association ID; approved composite subnet-0a132b51cd663eeaa/rtb-0d44b65f6b8fd3095 imported state ID rtbassoc-052bdd657504684b9 after exact EC2 readback",
+    "plan_summary": "0 create, 0 delete, 0 replacement; five metadata-tag updates and one no-op; routing fields unchanged",
+    "private_evidence": "/private/tmp/node-operator-foundation-import.7Df1E7"
   }
 }
