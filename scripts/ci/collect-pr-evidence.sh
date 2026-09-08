@@ -99,7 +99,7 @@ collect_gitleaks() {
 collect_osv() {
   local report_path="$temporary_directory/osv.json" result_path="$temporary_directory/osv-result.json"
   if [ -n "${OSV_CONFIG_FILE:-}" ]; then
-    run_report "$report_path" "$temporary_directory/osv.stderr" osv-scanner --config="$OSV_CONFIG_FILE" scan source --no-ignore --format=json "$source_directory"
+    run_report "$report_path" "$temporary_directory/osv.stderr" osv-scanner scan source --config="$OSV_CONFIG_FILE" --no-ignore --format=json "$source_directory"
   else
     run_report "$report_path" "$temporary_directory/osv.stderr" osv-scanner scan source --format=json "$source_directory"
   fi

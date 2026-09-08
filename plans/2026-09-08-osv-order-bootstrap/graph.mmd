@@ -1,0 +1,5 @@
+flowchart LR
+  fix[Correct OSV command ordering] --> validate[Focused and harness validation]
+  validate --> pr[Draft PR]
+  pr --> review[Independent review]
+  review --> debrief[Clean-room debrief]

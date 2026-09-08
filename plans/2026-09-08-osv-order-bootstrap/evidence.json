@@ -1,0 +1,14 @@
+{
+  "source_main": "290880f1a281ff6d07ac4cbb8eaa1fea8591af0b",
+  "validations": [
+    {"command":"scripts/ci/test-ci-security-evidence-contract.sh","result":"pass"},
+    {"command":"scripts/ci/test-script-quality.sh","result":"pass"},
+    {"command":"npm run harness:check","result":"pass","graphs":83},
+    {"command":"npm run harness:verify","result":"pass","rego":"67/67","conftest":"expected insecure fixtures rejected"},
+    {"command":"git diff --check","result":"pass"},
+    {"observation":"exact pinned scanner image reproduction","result":"old ordering fails by treating scan as the source path; corrected OSV v2.4 ordering exits zero with zero results","source":"observed during security-activation diagnosis"}
+  ],
+  "external_mutations": [],
+  "not_performed": ["merge", "manual image publication", "branch-rule change", "cloud mutation", "secret access"],
+  "activation_sequence": ["reviewed prerequisite merge", "automatic main scanner image build", "new digest verification", "separate workflow pin promotion"]
+}
