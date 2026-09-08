@@ -1,0 +1,19 @@
+{
+  "source_main": "a9a1f7a3de147bff5863c2dd344fc251732a4835",
+  "scanner_publish_run": 34183851988,
+  "publish_job": 101928506646,
+  "old_digest": "010ca69dc9d08d2d255c2e9d80b54544245fad8d85c670f723cce788e3bb16af",
+  "new_digest": "9f6300a37edb593aa09e0085f07787098079cbba75c01d0538aff99ebaac04ce",
+  "image_input_sha": "0e1290a5e22a954482acb978af0cf0fee944cd2cf1ee4e9058f3560532dc64c1",
+  "validations": [
+    {"command":"scripts/ci/test-ci-security-evidence-contract.sh","result":"pass"},
+    {"command":"scripts/ci/test-scanner-image-release.sh","result":"pass"},
+    {"command":"scripts/ci/test-pr-evidence-check.sh","result":"pass"},
+    {"command":"scripts/ci/test-script-quality.sh","result":"pass"},
+    {"command":"npm run harness:check","result":"pass","graphs":82},
+    {"command":"npm run harness:verify","result":"pass","rego":"67/67","conftest":"expected insecure fixtures rejected"},
+    {"command":"git diff --check","result":"pass"},
+    {"observation":"GHCR anonymous HEAD","result":"HTTP 200 with exact new digest; linux/amd64 entrypoint and image input label verified by root"}
+  ],
+  "external_mutations": []
+}

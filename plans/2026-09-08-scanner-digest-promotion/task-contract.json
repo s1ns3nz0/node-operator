@@ -1,0 +1,8 @@
+{
+  "task_id": "2026-09-08-scanner-digest-promotion",
+  "objective": "Promote the verified immutable scanner image digest into the two trusted source security workflows and prove the exact-head gate on a draft PR.",
+  "authorized": ["edit two workflow digest pins", "run non-sensitive checks", "push a feature branch", "open a draft pull request"],
+  "forbidden": ["merge", "publish an image", "change branch rules", "mutate cloud resources", "access secrets"],
+  "integration_owner": {"tier": "sol", "owner": "/root/ci_optimization"},
+  "routing": {"requested": "sol", "fallback": "none"}
+}

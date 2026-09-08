@@ -17,7 +17,7 @@ jobs:
   scanners:
     runs-on: ubuntu-24.04
     env:
-      SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:010ca69dc9d08d2d255c2e9d80b54544245fad8d85c670f723cce788e3bb16af
+      SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:9f6300a37edb593aa09e0085f07787098079cbba75c01d0538aff99ebaac04ce
       # Keep the only uploadable scanner output in a non-hidden directory.
       # upload-artifact v6 excludes hidden paths by default; enabling them
       # would risk collecting unrelated hidden workspace state. The scanner
