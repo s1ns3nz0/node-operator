@@ -81,6 +81,7 @@ violations contains violation if {
 
 violations contains violation if {
   item := object.get(object.get(object.get(input, "evidence", {}), "zizmor", {}), "findings", [])[_]
+  not exception_applies("workflow.unsafe", object.get(item, "path", "unknown"), object.get(item, "rule_id", "unknown"))
   violation := finding("workflow.unsafe", "block", object.get(item, "message", "unsafe workflow finding"), object.get(item, "path", "unknown"), "evidence.zizmor")
 }
 
