@@ -1,5 +1,38 @@
 # Bootstrap-state reconciliation
 
+## Reconciled deployment: 2026-09-08
+
+The existing Seoul deployment has completed the separately reviewed bootstrap
+reconciliation. Do not replay the initial import procedure below against it.
+Its canonical bootstrap state is now
+`s3://node-operator-tfstate-106760547719-apne2/node-operator/bootstrap/terraform.tfstate`.
+The legacy baseline remains at `node-operator/t2/terraform.tfstate`; it is not
+the bootstrap state and was not migrated by this operation.
+
+The bootstrap root owns 17 managed resources. The state bucket and DynamoDB
+lock table now use CMK `23528ef1-681c-41c3-a565-d19d3ec98c37`; the state bucket's
+native SSE-C block is preserved. A named backend-role canary verified encrypted
+state read/write and locking, including a read/lock check after DynamoDB's key
+cache window. The final full bootstrap plan reported no changes. These checks
+do not prove that foundation, ops-access, or the entire baseline is reconciled.
+
+Normal `init -migrate-state` into the empty remote key changed the bootstrap
+lineage from `43433424-4274-677a-050f-5f725c172eac` (serial 23) to
+`1ab1c89b-c841-5119-dff7-48606a2148bf` (serial 1). All state content excluding
+those two metadata fields was identical. This matches the empty-remote refresh
+path in [Terraform 1.5.7's remote state manager](https://github.com/hashicorp/terraform/blob/v1.5.7/internal/states/remote/state.go):
+it clears imported metadata before creating the first remote snapshot. Do not
+rewrite the lineage or force-copy state to conceal this transition. The private
+pre-migration backup and remote version `X2cjuh3ZRlBqyKuEArU8.xJEH_tbOiw.` are
+retained. Future migrations must independently compare content, resource IDs,
+outputs, metadata and the final plan; this observation is not permission to
+ignore an arbitrary state mismatch.
+
+## Historical initial inventory and procedure
+
+The inventory below describes the pre-reconciliation state, not the current
+deployment. Re-inventory and obtain a new reviewed plan for any future action.
+
 This module defaults to a new deployment name and baseline state key:
 
 - bucket: `node-operator-tfstate-<account-id>-apnortheast2`
