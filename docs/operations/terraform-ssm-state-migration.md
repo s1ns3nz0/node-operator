@@ -62,10 +62,13 @@ Before any separately authorized state or infrastructure action, render a
 saved plan and run `scripts/ci/check-ops-access-ssm-retention-plan.sh` on its
 private JSON form. The guard requires the exact host in prior state, requires
 the host to remain a no-op with the reviewed false representation, and rejects
-create, delete, replacement, unknown EBS optimization values, or a false EBS
-optimization value on any other managed instance. Keep saved plans and raw
-state outside Git. This guard does not authorize apply, import, remote-state
-migration, or a host restart.
+create, delete, replacement, unknown guarded values, or a false EBS
+optimization value on any other managed instance. It requires precisely the
+nine reviewed managed addresses (including the moved ingress addresses), exact
+IDs and complete before/planned/change value consistency. Apart from optional
+description and tag metadata on non-host resources, it rejects every retained
+network or IAM change. Keep saved plans and raw state outside Git. This guard
+does not authorize apply, import, remote-state migration, or a host restart.
 
 ## General migration sequence
 
@@ -78,8 +81,14 @@ migration, or a host restart.
    the plan JSON. Apply requires that same path and `--expected-sha`; it
    re-renders, rechecks, and rehashes immediately before applying the exact
    saved plan. It may propose a new host only for a genuinely zero-resource
-   environment with `--allow-create`. Against an existing environment, it is
-   evidence to review: do not apply a plan that replaces an active host,
+   environment with `--allow-create` and an explicit null retention opt-in.
+   Fresh mode positively requires a single created `aws_instance.host` with
+   EBS optimization, encrypted gp3 root storage, IMDSv2, private addressing,
+   IAM profile/security group, and basic monitoring. A failed retained-host
+   plan cannot fall through to fresh mode. Plan paths must be absolute,
+   private, and non-symlinked; the wrapper creates JSON with a restrictive
+   umask. Against an existing environment, it is evidence to review: do not
+   apply a plan that replaces an active host,
    endpoint, IAM role, or security-group rule.
 3. In a reviewed maintenance window, create the isolated host resources in the
    new state using Terraform import or a state move procedure that preserves

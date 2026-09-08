@@ -9,71 +9,67 @@ fi
 plan="$1"
 test -f "$plan" || { printf 'missing plan JSON: %s\n' "$plan" >&2; exit 1; }
 
+# This intentionally accepts only the reviewed nine-resource representation.
+# It is a release guard, not a general Terraform plan validator.
 jq -e '
   . as $plan |
-  def managed_resources:
-    [.. | objects | .resources?[]? | select(.mode == "managed")];
+  def expected:
+    {
+      "aws_iam_instance_profile.host":"aws_iam_instance_profile",
+      "aws_iam_role.host":"aws_iam_role",
+      "aws_iam_role_policy_attachment.ssm":"aws_iam_role_policy_attachment",
+      "aws_instance.host":"aws_instance",
+      "aws_security_group.host":"aws_security_group",
+      "aws_vpc_security_group_egress_rule.to_cluster":"aws_vpc_security_group_egress_rule",
+      "aws_vpc_security_group_egress_rule.to_endpoints":"aws_vpc_security_group_egress_rule",
+      "aws_vpc_security_group_ingress_rule.cluster[0]":"aws_vpc_security_group_ingress_rule",
+      "aws_vpc_security_group_ingress_rule.endpoints[0]":"aws_vpc_security_group_ingress_rule"
+    };
   def normalized_address:
     if . == "aws_vpc_security_group_ingress_rule.cluster" then "aws_vpc_security_group_ingress_rule.cluster[0]"
     elif . == "aws_vpc_security_group_ingress_rule.endpoints" then "aws_vpc_security_group_ingress_rule.endpoints[0]"
     else . end;
-  def identity_map:
-    reduce .[] as $resource ({}; .[$resource.address | normalized_address] = {type:$resource.type,id:$resource.values.id});
-  [
-    "aws_iam_instance_profile.host",
-    "aws_iam_role.host",
-    "aws_iam_role_policy_attachment.ssm",
-    "aws_instance.host",
-    "aws_security_group.host",
-    "aws_vpc_security_group_egress_rule.to_cluster",
-    "aws_vpc_security_group_egress_rule.to_endpoints",
-    "aws_vpc_security_group_ingress_rule.cluster[0]",
-    "aws_vpc_security_group_ingress_rule.endpoints[0]"
-  ] | sort as $expected_addresses |
-  "aws_instance.host" as $host_address |
+  def managed_resources: [.. | objects | .resources?[]? | select(.mode == "managed")];
+  def resource_map: reduce .[] as $r ({}; .[$r.address | normalized_address] = $r);
+  def without_permitted_metadata: del(.description?, .tags?, .tags_all?);
+  def no_guarded_unknown:
+    [paths(scalars) as $path | select(getpath($path) == true and
+      (["description", "tags", "tags_all"] | index($path[0]) | not))] | length == 0;
+  def change_map: reduce .[] as $r ({}; .[$r.address | normalized_address] = $r);
+
+  expected as $expected |
+  ($expected | keys | sort) as $addresses |
+  "aws_instance.host" as $host |
   "i-02c57d75e7f6810b1" as $host_id |
   ($plan.prior_state.values.root_module | managed_resources) as $before |
-  ($plan.planned_values.root_module | managed_resources) as $after |
+  ($plan.planned_values.root_module | managed_resources) as $planned |
   [$plan.resource_changes[]? | select(.mode == "managed")] as $changes |
-  [$before[] | select(.address == $host_address and .type == "aws_instance")] as $before_host |
-  [$after[] | select(.address == $host_address and .type == "aws_instance")] as $after_host |
-  [$changes[] | select(.address == $host_address and .type == "aws_instance")] as $host_change |
-  ($plan.variables.retained_host_instance_id.value == $host_id) and
-  ($before | map(.address | normalized_address) | sort) == $expected_addresses and
-  ($after | map(.address) | sort) == $expected_addresses and
-  ($changes | map(.address | normalized_address) | sort) == $expected_addresses and
-  ($changes | length) == 9 and
-  (all($before[]; (.values.id | type == "string" and length > 0))) and
-  (all($after[]; (.values.id | type == "string" and length > 0))) and
-  (($before | identity_map) == ($after | identity_map)) and
-  (all($changes[]; (.change.before.id == (.change.after.id)) and (.change.before.id | type == "string" and length > 0))) and
-  ($before_host | length) == 1 and
-  ($after_host | length) == 1 and
-  ($host_change | length) == 1 and
-  ($before_host[0].values.id == $host_id) and
-  ($before_host[0].values.instance_type == "t3.micro") and
-  ($before_host[0].values.ebs_optimized == false) and
-  ($after_host[0].values.id == $host_id) and
-  ($after_host[0].values.instance_type == "t3.micro") and
-  ($after_host[0].values.ebs_optimized == false) and
-  ($host_change[0].change.actions == ["no-op"]) and
-  ($host_change[0].change.before.id == $host_id) and
-  ($host_change[0].change.after.id == $host_id) and
-  ($host_change[0].change.before.instance_type == "t3.micro") and
-  ($host_change[0].change.after.instance_type == "t3.micro") and
-  ($host_change[0].change.before.ebs_optimized == false) and
-  ($host_change[0].change.after.ebs_optimized == false) and
-  (all($changes[]; (.change.actions | index("create") | not) and (.change.actions | index("delete") | not))) and
-  (all($changes[]; .change.after_unknown.ebs_optimized != true and .change.after_unknown.id != true and .change.after_unknown.instance_type != true and .change.after_unknown.monitoring != true and .change.after_unknown.ami != true)) and
-  (all($before[]; if .values.ebs_optimized? == false then
-    .address == $host_address and .type == "aws_instance" and .values.id == $host_id and .values.instance_type == "t3.micro"
-  else true end)) and
-  (all($after[]; if .values.ebs_optimized? == false then
-    .address == $host_address and .type == "aws_instance" and .values.instance_type == "t3.micro"
-  else true end)) and
-  (all($changes[]; if .change.after.ebs_optimized? == false then
-    .address == $host_address and .type == "aws_instance" and .change.before.id == $host_id and .change.after.instance_type == "t3.micro"
-  else true end))
+  ($before | resource_map) as $before_map |
+  ($planned | resource_map) as $planned_map |
+  ($changes | change_map) as $change_map |
+  ($plan.variables.retained_host_instance_id.value? == $host_id) and
+  ($before_map | keys | sort) == $addresses and
+  ($planned_map | keys | sort) == $addresses and
+  ($change_map | keys | sort) == $addresses and
+  ($before | length) == 9 and ($planned | length) == 9 and ($changes | length) == 9 and
+  (all($addresses[]; $before_map[.].type == $expected[.] and $planned_map[.].type == $expected[.] and $change_map[.].type == $expected[.])) and
+  (all($addresses[];
+    ($before_map[.].values.id | type == "string" and length > 0) and
+    $before_map[.].values.id == $planned_map[.].values.id and
+    $before_map[.].values.id == $change_map[.].change.before.id and
+    $planned_map[.].values.id == $change_map[.].change.after.id)) and
+  (all($addresses[]; $change_map[.].change.before == $before_map[.].values and $change_map[.].change.after == $planned_map[.].values)) and
+  (all($addresses[]; $change_map[.].change.after_unknown | no_guarded_unknown)) and
+  ($before_map[$host].values.id == $host_id) and
+  ($before_map[$host].values.instance_type == "t3.micro") and
+  ($before_map[$host].values.ebs_optimized == false) and
+  ($planned_map[$host].values == $before_map[$host].values) and
+  ($change_map[$host].change.actions == ["no-op"]) and
+  ($change_map[$host].change.before == $change_map[$host].change.after) and
+  (all($addresses[] | select(. != $host);
+    ($change_map[.].change.actions == ["no-op"] or $change_map[.].change.actions == ["update"]) and
+    ($change_map[.].change.before | without_permitted_metadata) ==
+      ($change_map[.].change.after | without_permitted_metadata)))
 ' "$plan" >/dev/null
 
 printf 'PASS ops-access retained-host plan is identity-bound and non-destructive.\n'
