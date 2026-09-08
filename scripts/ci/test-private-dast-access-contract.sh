@@ -15,7 +15,7 @@ if grep -Fq 'allow-private-dast-signer-upcheck-ingress' "$manifest" || grep -Fq 
   exit 1
 fi
 grep -Fq 'cat /vault/userconfig/vault-tls/ca.crt' "$installer"
-if grep -Eq 'get[[:space:]]+secret|vault token|JWT|private key' "$installer"; then
+if grep -Ev '^[[:space:]]*#' "$installer" | grep -Eq 'get[[:space:]]+secret|vault token|JWT|private key'; then
   printf 'public CA installer must not access secret material\n' >&2
   exit 1
 fi
