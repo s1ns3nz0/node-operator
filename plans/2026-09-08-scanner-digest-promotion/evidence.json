@@ -14,6 +14,15 @@
     {"command":"npm run harness:verify","result":"pass","rego":"67/67","conftest":"expected insecure fixtures rejected"},
     {"command":"git diff --check","result":"pass"},
     {"observation":"GHCR anonymous HEAD","result":"HTTP 200 with exact new digest; linux/amd64 entrypoint and image input label verified by root"}
+    ,{"observation":"PR 126 standard checks","head_sha":"75488ed6b0c3cd64c0728d30255787e89a765346","result":"five checks passed"}
+    ,{"observation":"trusted exact-head gate","workflow_run":34184570050,"check_run":101930466432,"result":"failure","decision":{"block":0,"require_approval":1},"reason":"review.sensitive-path requires CODEOWNER fjybjinsu; fail-closed behavior is expected before review"}
+    ,{"observation":"new scanner PR artifact","result":{"gitleaks_findings":0,"semgrep_findings":0,"zizmor_findings":1},"note":"Zizmor finding is untrusted-zizmor-suppression from the changed OPA workflow YAML containing an existing ignore marker. The active trusted gate still uses the default-branch pin and deliberately ignores the PR-produced artifact."}
+    ,{"follow_up":"M1 release eligibility compatibility","status":"open","note":"Actual custom check details_url is /runs/101930466432, while verify-release-source-eligibility currently accepts only /actions/runs/<workflow-run-id>. Resolve separately before claiming M1 live eligibility."}
+    ,{"review":"Fresh Terra clean-room debrief","result":"conditionally ready after required CODEOWNER approval","artifact":"reports/2026-09-08-scanner-digest-promotion-debrief.md","note":"New scanner artifact is not a clean profile: one expected untrusted-zizmor-suppression finding remains, and the active trusted gate still uses the predecessor digest."}
   ],
-  "external_mutations": []
+  "external_mutations": [
+    {"action":"feature branch push","commit":"75488ed6b0c3cd64c0728d30255787e89a765346","authorized":true},
+    {"action":"draft pull request creation","pull_request":126,"authorized":true}
+  ],
+  "not_performed": ["merge", "image publication", "branch-rule change", "cloud mutation", "secret access"]
 }
