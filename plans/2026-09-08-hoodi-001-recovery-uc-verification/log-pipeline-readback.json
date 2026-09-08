@@ -1,0 +1,27 @@
+{
+  "observed_at_utc": "2026-09-08T12:43:00Z",
+  "timestamp_precision": "minute; approximate observation time",
+  "method": "AWS read-only metadata APIs; no raw log messages or object body exported",
+  "account": "106760547719",
+  "region": "ap-northeast-2",
+  "log_groups": [
+    {"name": "/aws/eks/node-operator/validator-security", "retention_days": 365, "subscription": "validator-security-immutable-archive"},
+    {"name": "/aws/eks/node-operator/validator-workloads", "retention_days": 365, "subscription": "validator-workloads-immutable-archive"}
+  ],
+  "kms_key_id": "0a81c83a-35ff-4cdb-b503-79ab2578d9e6",
+  "firehose": {"name": "node-operator-baseline-validator-audit", "status": "ACTIVE", "compression": "GZIP", "both_log_groups_subscribed": true},
+  "bucket": "node-operator-baseline-va-20260907071015746500000001",
+  "default_retention": {"mode": "GOVERNANCE", "years": 2},
+  "today_canonical_object_count_at_observation": 152,
+  "sample_latest_object": {
+    "key": "validator/year=2026/month=09/day=08/node-operator-baseline-validator-audit-3-2026-09-08-12-36-46-c616296f-a3a2-4316-8360-b8b93c4972ff.gz",
+    "last_modified": "2026-09-08T12:41:54Z",
+    "bytes": 153590,
+    "encryption": "aws:kms",
+    "lock_mode": "GOVERNANCE",
+    "retain_until": "2028-09-08T12:41:53.711Z",
+    "version_id": "1xQRlyYlqdMpz1iL26pkWidj1tP0pLWi"
+  },
+  "stream_names_confirmed_for": ["Vault audit", "Nethermind", "Prysm beacon", "hoodi-001 Web3Signer", "hoodi-001 Vault Agent init", "hoodi-001 slashing database"],
+  "limits": ["Metadata does not prove individual duty/request correlation", "No validator client or actual signed duty is established", "Hot retention is 365 days for both groups in live AWS and IaC, unlike the older 90-day workload plan; retention was not shortened", "Manifest, reindex, restore and fault tests remain separate"]
+}

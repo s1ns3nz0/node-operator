@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "images": [
+    {
+      "component": "prysm-validator",
+      "version": "v7.1.8",
+      "source": "offchainlabs/prysm-validator@sha256:7fe554adf0efd27c0e5c5a3f80a3bbbec3d3872626208cf0a003b0dee7761f89",
+      "linux_amd64_manifest": "sha256:d8bd148411aa37df0d748ca011e950424a3b66178eabf1778470b6b5f4400307",
+      "approved": true,
+      "rationale": "Matches the reviewed Prysm v7.1.8 beacon release and is pinned to the upstream multi-platform OCI index."
+    }
+  ]
+}

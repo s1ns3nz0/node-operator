@@ -14,7 +14,7 @@ jq -e '
   (.validator_set | test("^hoodi-[a-z0-9][a-z0-9-]*$")) and
   (.validator_public_key | test("^0x[0-9a-fA-F]{96}$")) and
   (.correlation_id | test("^[a-f0-9-]{16,64}$")) and
-  (.source | IN("private-beacon", "vault-audit", "kubernetes", "etherscan", "beaconcha-in", "archive")) and
+  (.source | IN("private-beacon", "vault-audit", "kubernetes", "etherscan", "public-rpc", "beaconcha-in", "archive")) and
   (.payload | type == "object")
 ' "$evidence_file" >/dev/null || { printf 'evidence envelope is invalid\n' >&2; exit 65; }
 

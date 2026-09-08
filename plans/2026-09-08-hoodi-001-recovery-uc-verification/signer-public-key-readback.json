@@ -1,0 +1,17 @@
+{
+  "collected_at_utc": "2026-09-08T12:59:30Z",
+  "schema_version": 1,
+  "event_type": "signer-public-key",
+  "network": "hoodi",
+  "validator_set": "hoodi-001",
+  "validator_public_key": "0xa3866b82651039224bfd725fc81e7ff17c1765021dff37f3fd4bc01405e2ed14c97c7c5c82cd95104d8f82c4229ab0d0",
+  "source": "web3signer-tls",
+  "tls_verified": true,
+  "http_status": 200,
+  "public_key_count": 1,
+  "public_key_match": true,
+  "host_header": "validator-hoodi-001-remote-signer.validator-operations.svc",
+  "certificate_name": "validator-hoodi-001-remote-signer",
+  "secret_material_accessed": false,
+  "wrapper_sha256": "1ca62fa3fad1610c6c5623b7a4c75393b03c6787c445d11631f237ab552ae7e1"
+}

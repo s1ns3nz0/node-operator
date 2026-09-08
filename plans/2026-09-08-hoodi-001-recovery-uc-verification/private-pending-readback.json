@@ -1,0 +1,28 @@
+{
+  "collected_at_utc": "2026-09-08T13:04:49Z",
+  "schema_version": 1,
+  "event_type": "uc-3",
+  "correlation_id": "a3866b82-6510-3922-4bfd-725fc81e7ff2",
+  "network": "hoodi",
+  "validator_set": "hoodi-001",
+  "validator_public_key": "0xa3866b82651039224bfd725fc81e7ff17c1765021dff37f3fd4bc01405e2ed14c97c7c5c82cd95104d8f82c4229ab0d0",
+  "source": "private-beacon",
+  "payload": {
+    "syncing": {
+      "head_slot": "3888273",
+      "is_syncing": false,
+      "is_optimistic": false,
+      "el_offline": false
+    },
+    "validator_http_status": "404",
+    "deposit_state": "pending-deposit",
+    "pending_deposit": {
+      "position": 937,
+      "amount": "32000000000",
+      "slot": "3880931",
+      "withdrawal_credentials": "0x010000000000000000000000403ff64383b8ddf994d5563550c8040d89f025ac",
+      "queue_total": 1168
+    },
+    "validator": null
+  }
+}

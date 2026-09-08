@@ -12,7 +12,7 @@
     "network": {"const": "hoodi"},
     "validator_set": {"type": "string", "pattern": "^hoodi-[a-z0-9][a-z0-9-]*$"},
     "validator_public_key": {"type": "string", "pattern": "^0x[0-9a-fA-F]{96}$"},
-    "source": {"enum": ["private-beacon", "vault-audit", "kubernetes", "etherscan", "beaconcha-in", "archive"]},
+    "source": {"enum": ["private-beacon", "vault-audit", "kubernetes", "etherscan", "public-rpc", "beaconcha-in", "archive"]},
     "payload": {"type": "object"}
   },
   "not": {

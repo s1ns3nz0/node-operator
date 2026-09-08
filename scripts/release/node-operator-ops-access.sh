@@ -2,19 +2,89 @@
 set -euo pipefail
 umask 077
 
-usage() { printf '%s\n' 'usage: node-operator-ops-access.sh plan|apply|destroy --root BUNDLE_ROOT --config TFVARS --backend-config BACKEND_HCL --plan-file PRIVATE_SAVED_PLAN [--expected-sha SHA256] [--allow-create]'; }
+usage() { printf '%s\n' 'usage: node-operator-ops-access.sh verify|plan|apply|destroy --root BUNDLE_ROOT --config TFVARS --backend-config BACKEND_HCL --plan-file PRIVATE_SAVED_PLAN [--backend-profile PROFILE --expected-backend-principal-arn IAM_PRINCIPAL_ARN --provider-profile PROFILE --expected-provider-principal-arn IAM_PRINCIPAL_ARN] [--expected-sha SHA256] [--allow-create]'; }
 operation="${1:-}"
-[ "$operation" = plan ] || [ "$operation" = apply ] || [ "$operation" = destroy ] || { usage; exit 64; }
+[ "$operation" = verify ] || [ "$operation" = plan ] || [ "$operation" = apply ] || [ "$operation" = destroy ] || { usage; exit 64; }
 shift
 root=""; config=""; backend_config=""; plan_file=""; expected_sha=""; allow_create=false
+backend_profile=""; provider_profile=""; expected_backend_principal_arn=""; expected_provider_principal_arn=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --root) root="${2:-}"; shift 2 ;; --config) config="${2:-}"; shift 2 ;;
     --backend-config) backend_config="${2:-}"; shift 2 ;; --plan-file) plan_file="${2:-}"; shift 2 ;;
+    --backend-profile) backend_profile="${2:-}"; shift 2 ;;
+    --provider-profile) provider_profile="${2:-}"; shift 2 ;;
+    --expected-backend-principal-arn) expected_backend_principal_arn="${2:-}"; shift 2 ;;
+    --expected-provider-principal-arn) expected_provider_principal_arn="${2:-}"; shift 2 ;;
     --expected-sha) expected_sha="${2:-}"; shift 2 ;; --allow-create) allow_create=true; shift ;;
     *) usage; exit 64 ;;
   esac
 done
+
+credential_boundary=false
+if [ -n "$backend_profile$provider_profile$expected_backend_principal_arn$expected_provider_principal_arn" ]; then
+  [ -n "$backend_profile" ] && [ -n "$provider_profile" ] &&
+    [ -n "$expected_backend_principal_arn" ] && [ -n "$expected_provider_principal_arn" ] || {
+      printf 'credential separation requires both profiles and both expected principal ARNs\n' >&2
+      exit 64
+    }
+  credential_boundary=true
+  [ "$backend_profile" != "$provider_profile" ] &&
+    [ "$expected_backend_principal_arn" != "$expected_provider_principal_arn" ] || {
+      printf 'backend and provider credentials must resolve through distinct profiles and principals\n' >&2
+      exit 64
+    }
+fi
+
+for variable in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_SECURITY_TOKEN; do
+  [ -z "${!variable:-}" ] || {
+    printf 'static or exported AWS credentials are not accepted; use short-lived named profiles\n' >&2
+    exit 1
+  }
+done
+
+validate_profile() {
+  case "$1" in
+    ''|*[!A-Za-z0-9._-]*) printf 'AWS profile name is invalid\n' >&2; return 1 ;;
+  esac
+}
+
+validate_principal_arn() {
+  case "$1" in
+    arn:aws:iam::*:role/*|arn:aws:iam::*:user/*) ;;
+    *) printf 'expected identity must be an IAM role or user ARN\n' >&2; return 1 ;;
+  esac
+  case "$1" in *[!A-Za-z0-9_+=,.@:/-]*) printf 'expected role ARN is invalid\n' >&2; return 1 ;; esac
+}
+
+profile_principal_arn() {
+  local profile="$1" identity account arn role_path
+  identity="$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN \
+    -u AWS_DEFAULT_PROFILE -u AWS_WEB_IDENTITY_TOKEN_FILE -u AWS_ROLE_ARN -u AWS_ROLE_SESSION_NAME \
+    -u AWS_CONTAINER_CREDENTIALS_FULL_URI -u AWS_CONTAINER_CREDENTIALS_RELATIVE_URI \
+    AWS_PROFILE="$profile" aws sts get-caller-identity --output json)"
+  account="$(printf '%s' "$identity" | jq -er '.Account')"
+  arn="$(printf '%s' "$identity" | jq -er '.Arn')"
+  case "$arn" in
+    arn:aws:sts::*:assumed-role/*/*)
+      role_path="${arn#*:assumed-role/}"; role_path="${role_path%/*}"
+      printf 'arn:aws:iam::%s:role/%s\n' "$account" "$role_path"
+      ;;
+    arn:aws:iam::*:role/*|arn:aws:iam::*:user/*) printf '%s\n' "$arn" ;;
+    *) printf 'profile did not resolve to an allowed IAM principal\n' >&2; return 1 ;;
+  esac
+}
+
+terraform_scoped() {
+  if [ "$credential_boundary" = true ]; then
+    env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN \
+      -u AWS_DEFAULT_PROFILE -u AWS_WEB_IDENTITY_TOKEN_FILE -u AWS_ROLE_ARN -u AWS_ROLE_SESSION_NAME \
+      -u AWS_CONTAINER_CREDENTIALS_FULL_URI -u AWS_CONTAINER_CREDENTIALS_RELATIVE_URI \
+      AWS_PROFILE="$provider_profile" terraform "$@"
+  else
+    terraform "$@"
+  fi
+}
 
 private_path() {
   local candidate="$1" parent mode
@@ -46,6 +116,17 @@ private_path "$plan_file" || exit 1
 command -v terraform >/dev/null 2>&1 || { printf 'terraform is required\n' >&2; exit 127; }
 command -v jq >/dev/null 2>&1 || { printf 'jq is required\n' >&2; exit 127; }
 command -v shasum >/dev/null 2>&1 || { printf 'shasum is required\n' >&2; exit 127; }
+if [ "$credential_boundary" = true ]; then
+  command -v aws >/dev/null 2>&1 || { printf 'aws is required for credential identity verification\n' >&2; exit 127; }
+  validate_profile "$backend_profile"; validate_profile "$provider_profile"
+  validate_principal_arn "$expected_backend_principal_arn"; validate_principal_arn "$expected_provider_principal_arn"
+  [ "$(profile_principal_arn "$backend_profile")" = "$expected_backend_principal_arn" ] || {
+    printf 'backend profile principal does not match the allowlist\n' >&2; exit 1;
+  }
+  [ "$(profile_principal_arn "$provider_profile")" = "$expected_provider_principal_arn" ] || {
+    printf 'provider profile principal does not match the allowlist\n' >&2; exit 1;
+  }
+fi
 module="$root/infra/ops-access"; guard="$root/scripts/ci/check-ops-access-ssm-retention-plan.sh"
 [ -x "$guard" ] || { printf 'retained-host plan guard is missing\n' >&2; exit 1; }
 
@@ -143,7 +224,7 @@ render_json() {
   else
     [ ! -e "$output" ] && [ ! -L "$output" ] || { printf 'refusing to overwrite plan JSON\n' >&2; return 1; }
   fi
-  terraform -chdir="$module" show -json "$plan_file" > "$output"
+  terraform_scoped -chdir="$module" show -json "$plan_file" > "$output"
   jq -e . "$output" >/dev/null
 }
 classify_plan() {
@@ -158,13 +239,44 @@ classify_plan() {
   fi
 }
 
-terraform -chdir="$module" init -input=false -backend-config="$backend_config"
+backend_args=(-backend-config="$backend_config")
+[ "$credential_boundary" = false ] || backend_args+=(-backend-config="profile=$backend_profile")
+verification_data_dir=""
+if [ "$operation" = verify ]; then
+  verification_data_dir="${plan_file}.terraform-data"
+  [ ! -e "$verification_data_dir" ] && [ ! -L "$verification_data_dir" ] || {
+    printf 'refusing to reuse verification Terraform data directory\n' >&2; exit 1;
+  }
+  mkdir "$verification_data_dir"; chmod 700 "$verification_data_dir"
+  export TF_DATA_DIR="$verification_data_dir"
+  trap 'rm -rf "$plan_file" "${plan_file}.json" "$verification_data_dir"' EXIT
+fi
+terraform_scoped -chdir="$module" init -input=false -lockfile=readonly "${backend_args[@]}"
 case "$operation" in
+  verify)
+    [ "$allow_create" = false ] || { printf 'read-only verification cannot allow creation\n' >&2; exit 1; }
+    [ ! -e "$plan_file" ] && [ ! -L "$plan_file" ] || { printf 'refusing to overwrite verification plan\n' >&2; exit 1; }
+    plan_json="${plan_file}.json"; private_path "$plan_json" || exit 1
+    [ ! -e "$plan_json" ] && [ ! -L "$plan_json" ] || { printf 'refusing to overwrite verification JSON\n' >&2; exit 1; }
+    verify_exit=0
+    terraform_scoped -chdir="$module" plan -input=false -lock=false -detailed-exitcode -var-file="$config" -out="$plan_file" || verify_exit=$?
+    [ "$verify_exit" -eq 0 ] || [ "$verify_exit" -eq 2 ] || exit "$verify_exit"
+    render_json "$plan_json"
+    mode="$(classify_plan "$plan_json")"
+    [ "$mode" = retention ] || { printf 'verification is not a retained-host plan\n' >&2; exit 1; }
+    no_op_count="$(jq -er '[.resource_changes[]? | select(.mode == "managed" and .change.actions == ["no-op"])] | length' "$plan_json")"
+    managed_count="$(jq -er '[.resource_changes[]? | select(.mode == "managed")] | length' "$plan_json")"
+    [ "$no_op_count" -eq "$managed_count" ] && [ "$verify_exit" -eq 0 ] || {
+      printf 'verification found Terraform drift; inspect privately and do not apply\n' >&2; exit 2;
+    }
+    plan_sha="$(shasum -a 256 "$plan_file" | awk '{print $1}')"
+    printf 'verification_mode=%s managed_no_op=%s saved_plan_sha256=%s retained=false\n' "$mode" "$no_op_count" "$plan_sha"
+    ;;
   plan)
     [ ! -e "$plan_file" ] && [ ! -L "$plan_file" ] || { printf 'refusing to overwrite saved plan\n' >&2; exit 1; }
     plan_json="${plan_file}.json"; private_path "$plan_json" || exit 1
     [ ! -e "$plan_json" ] && [ ! -L "$plan_json" ] || { printf 'refusing to overwrite saved plan JSON\n' >&2; exit 1; }
-    terraform -chdir="$module" plan -input=false -var-file="$config" -out="$plan_file"
+    terraform_scoped -chdir="$module" plan -input=false -var-file="$config" -out="$plan_file"
     render_json "$plan_json"; mode="$(classify_plan "$plan_json")"
     plan_sha="$(shasum -a 256 "$plan_file" | awk '{print $1}')"
     printf 'saved_plan_mode=%s saved_plan_sha256=%s\n' "$mode" "$plan_sha"
@@ -176,7 +288,7 @@ case "$operation" in
     plan_json="$(mktemp "$(dirname "$plan_file")/.node-operator-ops-access-plan.XXXXXX")"; trap 'rm -f "$plan_json"' EXIT
     render_json "$plan_json" true; mode="$(classify_plan "$plan_json")"
     actual_sha="$(shasum -a 256 "$plan_file" | awk '{print $1}')"; [ "$actual_sha" = "$expected_sha" ] || { printf 'saved plan changed during validation\n' >&2; exit 1; }
-    terraform -chdir="$module" apply -input=false "$plan_file"
+    terraform_scoped -chdir="$module" apply -input=false "$plan_file"
     ;;
   destroy)
     printf 'destroy requires a separately reviewed explicit destroy-plan interface; direct destroy is disabled\n' >&2

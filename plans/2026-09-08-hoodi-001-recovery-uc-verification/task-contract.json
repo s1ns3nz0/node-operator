@@ -1,0 +1,49 @@
+{
+  "task_id": "2026-09-08-hoodi-001-recovery-uc-verification",
+  "objective": "Safely restore the one existing hoodi-001 validator and complete or accurately disposition UC-1 through UC-5 verification gaps.",
+  "authorized": [
+    "local implementation, tests, runtime rendering, evidence review, and integration documentation",
+    "read-only AWS, public-chain, private EKS, and authenticated public-only signer inspection",
+    "scoped reviewed deployment or remediation required to restore exactly one existing validator after identity, deposit, fencing, and slashing-continuity gates pass",
+    "task-scoped GitOps push, PR, merge, and reconciliation only when it is the reviewed delivery path for this exact restoration"
+  ],
+  "forbidden": [
+    "new validator key, new deposit, wallet action, or custody-material access or disclosure",
+    "Vault secret value, keystore, password, mnemonic, withdrawal secret, kubeconfig, token, raw state, or raw service-log retention",
+    "slashing database reset, deletion, replacement, import bypass, force operation, duplicate client, or unfenced signing",
+    "broad IAM expansion, public EKS or execution RPC, Engine JWT access, unrelated workload deployment, all-resource teardown, or destructive recreation",
+    "creating or updating task graphs or debrief reports"
+  ],
+  "activation_gates": [
+    "existing public deposit transaction and DepositContract event identify the intended validator public key",
+    "runtime signer exposes exactly that public key through an authenticated public-only endpoint",
+    "the retained slashing database PVC and schema continuity are healthy without reset",
+    "exactly one validator client is rendered and all legacy or duplicate signer/client paths are absent",
+    "the fence lease is scoped to hoodi-001 and activation keeps one active holder",
+    "the exact deployment diff and rollback are reviewed before external mutation"
+  ],
+  "integration_owner": {
+    "tier": "sol",
+    "owner": "/root/credential_validator_integration",
+    "model": "gpt-5.6-sol",
+    "fallback": "none"
+  },
+  "delegations": [
+    {
+      "owner": "/root/credential_validator_integration/duty_observer_fix",
+      "tier": "terra",
+      "files": ["scripts/ops/observe-private-hoodi-validator-duties.sh", "scripts/ci/test-private-beacon-observer-contract.sh"],
+      "validation": ["focused observer contract", "ShellCheck"],
+      "escalation": "spec ambiguity, secret access, or live activation required",
+      "fallback": "none planned"
+    },
+    {
+      "owner": "/root/credential_validator_integration/ssm_cleanup_fix",
+      "tier": "terra",
+      "files": ["scripts/ops/with-private-eks.sh", "scripts/ci/test-hoodi-session-contract.sh"],
+      "validation": ["focused session contract", "ShellCheck"],
+      "escalation": "cannot identify exact owned server-side session or cleanup risks unrelated sessions",
+      "fallback": "none planned"
+    }
+  ]
+}

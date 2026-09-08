@@ -42,7 +42,12 @@
     "test:hoodi-deposit-data-contract": "bash scripts/ci/test-hoodi-deposit-data-contract.sh",
     "test:private-beacon-observer-contract": "bash scripts/ci/test-private-beacon-observer-contract.sh",
     "test:validator-evidence-collector-contract": "bash scripts/ci/test-validator-evidence-collector-contract.sh",
+    "test:validator-audit-restore-contract": "bash scripts/ci/test-validator-audit-restore-contract.sh",
+    "test:validator-activation-gate-contract": "bash scripts/ci/test-validator-activation-gate-contract.sh",
+    "test:validator-client-mirror-contract": "bash scripts/ci/test-validator-client-mirror-contract.sh",
+    "test:external-hoodi-validator-contract": "bash scripts/ci/test-external-hoodi-validator-contract.sh",
     "test:vault-bootstrap-enabled-plan": "bash scripts/ci/test-vault-bootstrap-enabled-plan.sh",
-    "test:release-bootstrap-contract": "bash scripts/ci/test-release-bootstrap-contract.sh"
+    "test:release-bootstrap-contract": "bash scripts/ci/test-release-bootstrap-contract.sh",
+    "test:ops-access-credential-boundary": "bash scripts/ci/test-ops-access-credential-boundary.sh"
   }
 }
