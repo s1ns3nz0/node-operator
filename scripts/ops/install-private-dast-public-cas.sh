@@ -17,9 +17,9 @@ if [ "${PRIVATE_EKS_SESSION:-}" != 1 ]; then
 fi
 
 for command in kubectl openssl mktemp; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
-vault_ca="$(mktemp /private/tmp/node-operator-dast-vault-ca.XXXXXX)"
-vault_certificate="$(mktemp /private/tmp/node-operator-dast-vault-certificate.XXXXXX)"
-signer_certificate="$(mktemp /private/tmp/node-operator-dast-signer-certificate.XXXXXX)"
+vault_ca="$(mktemp "${TMPDIR:-/tmp}/node-operator-dast-vault-ca.XXXXXX")"
+vault_certificate="$(mktemp "${TMPDIR:-/tmp}/node-operator-dast-vault-certificate.XXXXXX")"
+signer_certificate="$(mktemp "${TMPDIR:-/tmp}/node-operator-dast-signer-certificate.XXXXXX")"
 cleanup() { rm -f "$vault_ca" "$vault_certificate" "$signer_certificate"; }
 trap cleanup EXIT
 
