@@ -96,6 +96,14 @@ jobs:
           path: .base-source
           fetch-depth: 0
           persist-credentials: false
+      - name: Reject pull-request scanner policy replacement
+        run: |
+          git -C .pr-source diff --quiet "$BASE_SHA" "$SUBJECT_SHA" -- \
+            .semgrep .semgrepignore .gitleaks.toml .gitleaksignore \
+            .checkov.yml .checkov.yaml osv-scanner.toml .osv-scanner.toml || {
+              echo 'Pull requests cannot replace trusted scanner policy or ignore files.' >&2
+              exit 1
+            }
       - name: Collect trusted security evidence from untrusted source
         env:
           REGISTRY_TOKEN: ${{ github.token }}
@@ -109,9 +117,11 @@ jobs:
             --env SEMGREP_RULES=/trusted-config/semgrep.yml \
             --env GITLEAKS_CONFIG=/trusted-config/gitleaks.toml \
             --env GITLEAKS_IGNORE_PATH=/trusted-config/gitleaksignore \
+            --env CHECKOV_CONFIG_FILE=/trusted-config/checkov.yml \
             --volume "$GITHUB_WORKSPACE/.semgrep/ci.yml:/trusted-config/semgrep.yml:ro" \
             --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaks.toml:/trusted-config/gitleaks.toml:ro" \
             --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaksignore:/trusted-config/gitleaksignore:ro" \
+            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/checkov.yml:/trusted-config/checkov.yml:ro" \
             --volume "$GITHUB_WORKSPACE/.pr-source:/workspace:ro" \
             --volume "$RUNNER_TEMP/head-security-evidence:/evidence" \
             "$SCANNER_IMAGE" /evidence "$SUBJECT_SHA" "$BASE_SHA"
@@ -150,9 +160,11 @@ jobs:
             --env SEMGREP_RULES=/trusted-config/semgrep.yml \
             --env GITLEAKS_CONFIG=/trusted-config/gitleaks.toml \
             --env GITLEAKS_IGNORE_PATH=/trusted-config/gitleaksignore \
+            --env CHECKOV_CONFIG_FILE=/trusted-config/checkov.yml \
             --volume "$GITHUB_WORKSPACE/.semgrep/ci.yml:/trusted-config/semgrep.yml:ro" \
             --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaks.toml:/trusted-config/gitleaks.toml:ro" \
             --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaksignore:/trusted-config/gitleaksignore:ro" \
+            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/checkov.yml:/trusted-config/checkov.yml:ro" \
             --volume "$GITHUB_WORKSPACE/.base-source:/workspace:ro" \
             --volume "$RUNNER_TEMP/base-security-evidence:/evidence" \
             "$SCANNER_IMAGE" /evidence "$BASE_SHA" "$BASE_SHA"

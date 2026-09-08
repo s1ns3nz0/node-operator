@@ -142,7 +142,7 @@ collect_semgrep() {
 
 collect_zizmor() {
   local report_path="$temporary_directory/zizmor.json" result_path="$temporary_directory/zizmor-result.json"
-  run_report "$report_path" "$temporary_directory/zizmor.stderr" zizmor --offline --format=json-v1 "$source_directory"
+  run_report "$report_path" "$temporary_directory/zizmor.stderr" zizmor --offline --no-config --format=json-v1 "$source_directory"
   [ "$collector_exit_code" -eq 0 ] || [ "$collector_exit_code" -ge 10 ] || { printf 'zizmor failed before producing evidence\n' >&2; exit 1; }
   require_json_report zizmor "$report_path"
   require_json_shape zizmor "$report_path" 'type == "array"'
@@ -151,12 +151,24 @@ collect_zizmor() {
         rule_id:(.ident // "unknown"),
         message:(.desc // "unsafe workflow finding")
       }]' "$report_path" | jq -c '{findings:.}' > "$result_path"
+  if [ -n "$base_sha" ] && git -C "$source_directory" cat-file -e "${base_sha}^{commit}" 2>/dev/null &&
+     git -C "$source_directory" diff --unified=0 "$base_sha" "$commit_sha" -- .github/workflows \
+       | grep -E '^\+[^+].*zizmor:[[:space:]]*ignore' >/dev/null; then
+    jq '.findings += [{path:".github/workflows",rule_id:"untrusted-zizmor-suppression",message:"pull request adds or changes a zizmor inline suppression"}]' "$result_path" > "$temporary_directory/zizmor-result-with-suppression.json"
+    mv "$temporary_directory/zizmor-result-with-suppression.json" "$result_path"
+  fi
   write_envelope "$output_directory/zizmor.json" zizmor "$result_path"
 }
 
 collect_checkov() {
   local report_path="$temporary_directory/checkov.json" result_path="$temporary_directory/checkov-result.json"
-  run_report "$report_path" "$temporary_directory/checkov.stderr" checkov --directory "$source_directory" --framework terraform --output json --quiet
+  local -a trusted_options=()
+  if [ -n "${CHECKOV_CONFIG_FILE:-}" ]; then trusted_options+=(--config-file "$CHECKOV_CONFIG_FILE"); fi
+  if [ "${#trusted_options[@]}" -gt 0 ]; then
+    run_report "$report_path" "$temporary_directory/checkov.stderr" checkov "${trusted_options[@]}" --directory "$source_directory" --framework terraform --output json --quiet
+  else
+    run_report "$report_path" "$temporary_directory/checkov.stderr" checkov --directory "$source_directory" --framework terraform --output json --quiet
+  fi
   [ "$collector_exit_code" -eq 0 ] || [ "$collector_exit_code" -eq 1 ] || { printf 'checkov failed before producing evidence\n' >&2; exit 1; }
   require_json_report checkov "$report_path"
   require_json_shape checkov "$report_path" '.results.failed_checks | type == "array"'

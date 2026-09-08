@@ -29,6 +29,12 @@ grep -Fq -- '--env SEMGREP_RULES=/trusted-config/semgrep.yml' "$gate_workflow"
 grep -Fq -- '--env GITLEAKS_CONFIG=/trusted-config/gitleaks.toml' "$gate_workflow"
 grep -Fq -- '--volume "$GITHUB_WORKSPACE/.semgrep/ci.yml:/trusted-config/semgrep.yml:ro"' "$gate_workflow"
 grep -Fq -- '--volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaks.toml:/trusted-config/gitleaks.toml:ro"' "$gate_workflow"
+grep -Fq 'Reject pull-request scanner policy replacement' "$gate_workflow"
+grep -Fq '.checkov.yml .checkov.yaml osv-scanner.toml .osv-scanner.toml' "$gate_workflow"
+grep -Fq -- '--env CHECKOV_CONFIG_FILE=/trusted-config/checkov.yml' "$gate_workflow"
+grep -Fq -- '--disable-nosem --no-git-ignore' "$script_dir/collect-pr-evidence.sh"
+grep -Fq -- 'zizmor --offline --no-config' "$script_dir/collect-pr-evidence.sh"
+grep -Fq 'untrusted-zizmor-suppression' "$script_dir/collect-pr-evidence.sh"
 if grep -Fq 'Download scanner evidence from the completed PR run' "$gate_workflow"; then
   printf 'trusted decision must not consume a pull-request-controlled scanner artifact\n' >&2
   exit 1
