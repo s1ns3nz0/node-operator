@@ -1,0 +1,27 @@
+{
+  "status": "implementation_reviewed_waiting_for_ci",
+  "checks": [
+    "seven scan evidence unit tests passed, including raw/SBOM subject mismatch and retained Unknown",
+    "IAM contract and negative mutations passed: main-bound, exact three repositories, read only",
+    "wrapper/workflow source contract and seven unsafe mutations rejected",
+    "repository-wide scripts/ci ShellCheck passed",
+    "Terraform fmt and validate passed with locked AWS provider 5.100.0; backend initialization disabled",
+    "workflow YAML parsed successfully with isolated PyYAML 6.0.3",
+    "harness structural check and git diff --check passed",
+    "all three existing frozen local images passed network-disabled version probes with the expected non-root identity and exact ECR RepoDigest"
+  ],
+  "review": {"agent":"/root/vault_verification_review","tier":"Terra","outcome":"approved after credential environment scrubbing and negative wrapper contracts"},
+  "fresh_local_scans": {
+    "directory":"/private/tmp/hoodi-vault-runtime-rescan.IfeJhb",
+    "scanner_version":"0.111.0",
+    "database_built":"2026-09-08T06:30:10Z",
+    "note":"Local observation, not the hosted CI run; hosted CI pins Grype 0.118.0. All raw findings retained.",
+    "each_component_findings":{"critical":0,"high":0,"medium":3,"low":0,"unknown":1},
+    "server_raw_sha256":"722ad3d01ea52d75ab41fca4e9496667a21652727efe2edad3b674c9b0c711c3",
+    "agent_raw_sha256":"d729a0eda430bea6da59d23e3e6b2861261076d70e15abcbeafc495bb998a6d1",
+    "injector_raw_sha256":"ab2946209c46884bfa9cc2198c49cbe00fba0d418f5a56720a555e04c0ac0a3a"
+  },
+  "live_changes":false,
+  "release_eligible":false,
+  "remaining":["merge and configure disabled verifier IAM role through a reviewed narrow plan","run hosted exact-digest verification","bind exact-candidate applicability and honest signing evidence before deployment","live Vault HA/KMS, Agent auth and Injector rollout remain separate"]
+}

@@ -1,0 +1,77 @@
+name: Vault Runtime Candidate Verification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vault-runtime-candidate-verification
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [server, agent, injector]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - name: Verify frozen candidate without rebuilding or publishing
+        env:
+          COMPONENT: ${{ matrix.component }}
+          AWS_REGION: ap-northeast-2
+          AWS_ROLE_ARN: ${{ vars.VAULT_RUNTIME_VERIFIER_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$GITHUB_REF" = refs/heads/main
+          test -n "$AWS_ROLE_ARN"
+          scratch="$(mktemp -d)"
+          cleanup() { rm -rf "$scratch"; }
+          trap cleanup EXIT
+          export DOCKER_CONFIG="$scratch/docker"
+          mkdir -p "$DOCKER_CONFIG"
+          scripts/ci/install-validator-signing-fence-release-tools.sh "$RUNNER_TEMP/vault-runtime-tools"
+          export PATH="$RUNNER_TEMP/vault-runtime-tools:$PATH"
+          printf 'header = "Authorization: bearer %s"\n' "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" > "$scratch/oidc.conf"
+          curl --fail --silent --show-error --config "$scratch/oidc.conf" --output "$scratch/oidc.json" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com"
+          jq -er .value "$scratch/oidc.json" > "$scratch/oidc.token"
+          aws sts assume-role-with-web-identity --role-arn "$AWS_ROLE_ARN" --role-session-name "vault-verify-${GITHUB_RUN_ID}-${COMPONENT}" --web-identity-token "file://$scratch/oidc.token" --duration-seconds 3600 > "$scratch/credentials.json"
+          access_key="$(jq -er .Credentials.AccessKeyId "$scratch/credentials.json")"
+          secret_key="$(jq -er .Credentials.SecretAccessKey "$scratch/credentials.json")"
+          session_token="$(jq -er .Credentials.SessionToken "$scratch/credentials.json")"
+          printf '::add-mask::%s\n' "$access_key" "$secret_key" "$session_token"
+          export AWS_ACCESS_KEY_ID="$access_key" AWS_SECRET_ACCESS_KEY="$secret_key" AWS_SESSION_TOKEN="$session_token"
+          unset access_key secret_key session_token
+          rm -f "$scratch/oidc.conf" "$scratch/oidc.json" "$scratch/oidc.token" "$scratch/credentials.json"
+          registry="$(jq -er .registry .ci/vault-runtime-candidates.json)"
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$registry"
+          bash scripts/ci/verify-vault-runtime-candidate.sh "$COMPONENT" "$RUNNER_TEMP/vault-runtime-evidence"
+      - name: Report scan-only outcome
+        if: always()
+        run: |
+          echo '### Frozen candidate verification (not a release or deployment)' >> "$GITHUB_STEP_SUMMARY"
+          if test -s "$RUNNER_TEMP/vault-runtime-evidence/scan-summary.json"; then
+            jq '{artifact_digest,status,findings,build_provenance,deployment_authorized}' "$RUNNER_TEMP/vault-runtime-evidence/scan-summary.json" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Verification incomplete; not eligible for release.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Retain non-sensitive verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vault-runtime-${{ matrix.component }}-verification
+          path: |
+            ${{ runner.temp }}/vault-runtime-evidence/*.json
+            ${{ runner.temp }}/vault-runtime-evidence/version.txt
+          if-no-files-found: warn
+          retention-days: 30
