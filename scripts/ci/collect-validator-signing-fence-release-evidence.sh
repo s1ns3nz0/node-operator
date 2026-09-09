@@ -25,7 +25,7 @@ digest="${image##*@}"
 cosign verify --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$source_revision" "$image" > "$scratch/signature.json"
 cosign verify-attestation --type slsaprovenance1 --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$source_revision" "$image" > "$scratch/attestation.json"
 cosign verify-attestation --type cyclonedx --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$source_revision" "$image" > "$scratch/sbom-attestation.json"
-cosign verify-attestation --type vuln --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$source_revision" "$image" > "$scratch/scan-attestation.json"
+cosign verify-attestation --type https://github.com/s1ns3nz0/node-operator/attestations/scan-summary/v1 --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$source_revision" "$image" > "$scratch/scan-attestation.json"
 signature_count="$(jq -s -e --arg digest "$digest" '
   (if length == 1 and (.[0] | type) == "array" then .[0] else . end) as $results |
   select(($results | length) > 0 and all($results[]; .critical.image["docker-manifest-digest"] == $digest)) |
@@ -48,12 +48,7 @@ jq -s -e --arg digest "$digest" '
   map(.payload | @base64d | fromjson) |
   any(.[]; .predicate.bomFormat == "CycloneDX" and .predicate.metadata.component.version == $digest)
 ' "$scratch/sbom-attestation.json" >/dev/null || { printf 'verified SBOM attestation is not bound to the image digest\n' >&2; exit 1; }
-jq -s -e --arg digest "$digest" '
-  (if length == 1 and (.[0] | type) == "array" then .[0] else . end) |
-  map(.payload | @base64d | fromjson) |
-  any(.[]; .predicate.artifact_digest == $digest and .predicate.status == "passed" and
-    .predicate.findings.critical == 0 and .predicate.findings.high == 0 and .predicate.findings.unknown == 0)
-' "$scratch/scan-attestation.json" >/dev/null || { printf 'verified vulnerability attestation does not contain a passing exact-digest decision\n' >&2; exit 1; }
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/verify-release-scan-attestation.sh" "$scratch/scan-attestation.json" "$digest"
 
 SYFT_CHECK_FOR_APP_UPDATE=false syft scan "registry:$image" --source-name node-operator-baseline-validator-fence --source-version "$digest" --output "cyclonedx-json=$scratch/sbom.json"
 jq -e --arg digest "$digest" '.bomFormat == "CycloneDX" and .metadata.component.version == $digest and (.components | type == "array")' "$scratch/sbom.json" >/dev/null || { printf 'SBOM is not bound to the exact image digest\n' >&2; exit 1; }

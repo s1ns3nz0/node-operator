@@ -34,6 +34,7 @@ jobs:
           local_image="$repository:local-${GITHUB_SHA}-${GITHUB_RUN_ID}"
           label_format='{{ index .Config.Labels "io.node-operator.vault-audit-relay-input-sha" }}'
           scripts/ci/install-validator-signing-fence-release-tools.sh "$RUNNER_TEMP/vault-audit-relay-tools"; export PATH="$RUNNER_TEMP/vault-audit-relay-tools:$PATH"
+          bash scripts/ci/test-release-scan-cosign-roundtrip.sh
           docker build --pull=false --platform linux/amd64 --build-arg "RELAY_INPUT_SHA=$input_sha" -f .ci/vault-audit-relay/Dockerfile -t "$local_image" .
           test linux/amd64 = "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$local_image")"
           test "$input_sha" = "$(docker image inspect --format "$label_format" "$local_image")"
@@ -52,14 +53,14 @@ jobs:
           digest="$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$repository" --image-ids "imageTag=$tag" --query 'imageDetails[0].imageDigest' --output text)"; [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; subject="${destination%:*}@$digest"
           scan "registry:$subject" "$digest" registry
           jq -n --arg revision "$GITHUB_SHA" --arg run "$GITHUB_RUN_ID" --arg input_sha "$input_sha" '{buildDefinition:{buildType:"https://slsa.dev/container-based-build/v1",externalParameters:{reproducibility_input_sha256:$input_sha},resolvedDependencies:[{uri:"git+https://github.com/s1ns3nz0/node-operator",digest:{gitCommit:$revision}}]},runDetails:{builder:{id:"https://github.com/Attestations/GitHubHostedActions@v1"},metadata:{invocationId:$run}}}' > "$evidence/provenance.json"
-          cosign sign --yes "$subject"; cosign attest --yes --type slsaprovenance1 --predicate "$evidence/provenance.json" "$subject"; cosign attest --yes --type cyclonedx --predicate "$evidence/registry-sbom.json" "$subject"; cosign attest --yes --type vuln --predicate "$evidence/registry-scan-summary.json" "$subject"
+          cosign sign --yes "$subject"; cosign attest --yes --type slsaprovenance1 --predicate "$evidence/provenance.json" "$subject"; cosign attest --yes --type cyclonedx --predicate "$evidence/registry-sbom.json" "$subject"; cosign attest --yes --type https://github.com/s1ns3nz0/node-operator/attestations/scan-summary/v1 --predicate "$evidence/registry-scan-summary.json" "$subject"
           cosign verify --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$GITHUB_SHA" "$subject" > "$evidence/signature-verification.json"
           cosign verify-attestation --type slsaprovenance1 --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$GITHUB_SHA" "$subject" > "$evidence/provenance-verification.json"
           cosign verify-attestation --type cyclonedx --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$GITHUB_SHA" "$subject" > "$evidence/sbom-verification.json"
-          cosign verify-attestation --type vuln --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$GITHUB_SHA" "$subject" > "$evidence/scan-verification.json"
+          cosign verify-attestation --type https://github.com/s1ns3nz0/node-operator/attestations/scan-summary/v1 --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$GITHUB_SHA" "$subject" > "$evidence/scan-verification.json"
           jq -s -e --arg digest "$digest" --arg revision "$GITHUB_SHA" 'map(.payload|@base64d|fromjson)|any(.[]; .predicateType == "https://slsa.dev/provenance/v1" and (.subject|any(.digest.sha256 == ($digest|sub("^sha256:";"")))) and (.predicate.buildDefinition.resolvedDependencies|any(.digest.gitCommit == $revision)))' "$evidence/provenance-verification.json" >/dev/null
           jq -s -e --arg digest "$digest" 'map(.payload|@base64d|fromjson)|any(.[]; (.subject|any(.digest.sha256 == ($digest|sub("^sha256:";"")))) and .predicate.bomFormat == "CycloneDX" and .predicate.metadata.component.version == $digest)' "$evidence/sbom-verification.json" >/dev/null
-          jq -s -e --arg digest "$digest" 'map(.payload|@base64d|fromjson)|any(.[]; (.subject|any(.digest.sha256 == ($digest|sub("^sha256:";"")))) and .predicate.artifact_digest == $digest and .predicate.status == "passed" and .predicate.findings.critical == 0 and .predicate.findings.high == 0 and .predicate.findings.unknown == 0)' "$evidence/scan-verification.json" >/dev/null
+          bash scripts/ci/verify-release-scan-attestation.sh "$evidence/scan-verification.json" "$digest" "$evidence/registry-scan-summary.json"
           printf 'private_image=%s\nsource_revision=%s\nreproducibility_input_sha256=%s\nrelease_verification=PASS\n' "$subject" "$GITHUB_SHA" "$input_sha" >> "$GITHUB_STEP_SUMMARY"
       - name: Retain non-secret release evidence
         if: always()

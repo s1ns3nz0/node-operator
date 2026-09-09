@@ -20,7 +20,7 @@ case "$1" in
   verify-attestation)
     case "$*" in
       *'--type cyclonedx'*) jq -cn --arg payload "$MOCK_SBOM_STATEMENT" '{payload:$payload}' ;;
-      *'--type vuln'*) jq -cn --arg payload "$MOCK_SCAN_STATEMENT" '{payload:$payload}' ;;
+      *'--type https://github.com/s1ns3nz0/node-operator/attestations/scan-summary/v1'*) jq -cn --arg payload "$MOCK_SCAN_STATEMENT" '{payload:$payload}' ;;
       *'--type slsaprovenance1'*) jq -cn --arg payload "$MOCK_STATEMENT" '{payload:$payload}' ;;
       *) exit 64 ;;
     esac ;;
@@ -40,7 +40,7 @@ jq -n --arg severity "${MOCK_SEVERITY:-}" '{descriptor:{name:"grype",version:"0.
 EOF
 chmod +x "$scratch/bin/"*
 sbom_statement="$(jq -cn --arg d "$digest" '{predicate:{bomFormat:"CycloneDX",metadata:{component:{version:$d}}}}' | base64 | tr -d '\n')"
-scan_statement="$(jq -cn --arg d "$digest" '{predicate:{artifact_digest:$d,status:"passed",findings:{critical:0,high:0,unknown:0}}}' | base64 | tr -d '\n')"
+scan_statement="$(jq -cn --arg d "$digest" '{_type:"https://in-toto.io/Statement/v0.1",predicateType:"https://github.com/s1ns3nz0/node-operator/attestations/scan-summary/v1",subject:[{digest:{sha256:($d|sub("^sha256:";""))}}],predicate:{schema_version:"v1",tool:"grype",scanner:{version:"0.118.0",database_built:"2026-09-09T00:00:00Z",database_schema_version:"v6"},artifact_digest:$d,sbom_sha256:"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",scanned_at:"2026-09-09T00:00:00Z",status:"passed",findings:{critical:0,high:0,medium:0,low:0,unknown:0}}}' | base64 | tr -d '\n')"
 run() { PATH="$scratch/bin:$PATH" MOCK_TRACE="$scratch/trace" MOCK_STATEMENT="$statement" MOCK_SBOM_STATEMENT="$sbom_statement" MOCK_SCAN_STATEMENT="$scan_statement" "$collector" "$image" "$revision" "$scratch/result.json"; }
 expect_fail() { if "$@" >/dev/null 2>&1; then printf 'accepted %s\n' "$1" >&2; exit 1; fi; }
 : > "$scratch/trace"; run >/dev/null
