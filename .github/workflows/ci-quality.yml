@@ -51,6 +51,7 @@ jobs:
           python3 scripts/ci/test-vault-runtime-scan.py
           python3 scripts/ci/test-vault-runtime-verification-contract.py
           python3 scripts/ci/test-vault-runtime-applicability.py
+          python3 scripts/ci/test-vault-grpc-patch-contract.py
       - name: Test release scan attestation content contract
         run: |
           bash scripts/ci/test-release-scan-attestation.sh

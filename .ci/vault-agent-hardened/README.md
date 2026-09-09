@@ -17,10 +17,18 @@ observed archive SHA-256. Any upstream archive regeneration fails the build and
 requires explicit review of `upstream.lock.json`.
 
 The binary is built with Go 1.26.6 and the minimal upstream build tag. The only
-source dependency changes are `golang.org/x/crypto` 0.56.0 and Apache Thrift
-0.24.0. The build applies exactly those two requirements, then checks the final
+source dependency changes are `golang.org/x/crypto` 0.56.0, Apache Thrift
+0.24.0 and gRPC 1.83.2. The build applies exactly those three requirements,
+then checks the final
 `go.mod` and `go.sum` hashes against `upstream.lock.json`; `go mod verify` runs
 before compilation.
+
+The existing frozen Agent digest
+`sha256:33458e87c790b140717f2f4c688d31327292f67677ba004d32838deed8b8f30a`
+predates this gRPC patch. Hosted run34325393574 reports
+GHSA-2v4p-qf9q-27wj High on its gRPC1.83.1 dependency, so it is not eligible
+for promotion. The updated recipe requires a new image, scan and exact-binary
+dependency proof; the old applicability record is not transferable.
 
 The runtime is the pinned linux/amd64 Alpine 3.24.1 manifest with OpenSSL
 3.5.8-r0. APK metadata remains present for scanner completeness. The image runs

@@ -1,7 +1,7 @@
 # Vault server candidate
 
 Full Vault 2.1.0 source build pinned to commit and archive checksum, using Go
-1.26.6, x/crypto 0.56.0 and thrift 0.24.0. Final module files are hash checked.
+1.26.6, x/crypto 0.56.0, thrift 0.24.0 and gRPC 1.83.2. Final module files are hash checked.
 This is separate from the agent-only dispatcher. Upstream generate-root and
 snapshot-inspection command tests run during the build. Module/dependency
 inventories and license are retained in `/usr/share/vault/`.
@@ -17,6 +17,13 @@ Registry digest equality and a fresh full C/H=0 scan passed on2026-09-09.
 This is manually reviewed candidate delivery, not CI-attested promotion or
 deployment approval. Keep `enable_node_runtime_ecr=true` and
 `enable_vault_runtime_ecr=true` in subsequent reviewed infrastructure inputs.
+
+The frozen image above predates the gRPC 1.83.2 patch. Hosted run34325393574
+now reports GHSA-2v4p-qf9q-27wj High on its gRPC1.83.1 dependency; it is not
+eligible for promotion. The updated Dockerfile requires a newly scanned
+candidate and a fresh exact-binary/closure assessment, not reuse of its old
+pass. `VAULT_RAFT_TEST_NEW_IMAGE=sha256:...` selects an immutable local
+candidate for the isolated Raft rehearsal while preserving the old default.
 
 Before rollout, require isolated Raft backup/restore and auth/audit tests,
 assessment of GO-2026-5932, and a reviewed recovery ceremony transition.

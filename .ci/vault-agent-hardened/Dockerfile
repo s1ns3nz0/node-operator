@@ -17,12 +17,14 @@ RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
     go mod edit \
       -require=golang.org/x/crypto@v0.56.0 \
       -require=github.com/apache/thrift@v0.24.0 \
+      -require=google.golang.org/grpc@v1.83.2 \
     && go mod download \
       golang.org/x/crypto@v0.56.0 \
       github.com/apache/thrift@v0.24.0 \
+      google.golang.org/grpc@v1.83.2 \
     && printf '%s  %s\n' \
-      b53b65e6b7b8dc7945222418e6d0484757de722caae6c6fd1be98f040d6629e7 go.mod \
-      cd83ac5e32c2f260930f9d3ee0f9daa07093c08ce2411974ed10752b5ab899c6 go.sum \
+      0377034eba756738494bdc0c0f1ff0fef524846398a5f96aa977049331c5d6b2 go.mod \
+      3f06f5ebaed07dc186567fa3a48f0d310e505b090c386ddad77a76ceba72d303 go.sum \
       | sha256sum -c -s \
     && test "$(go list -m -f '{{.Version}}' golang.org/x/crypto)" = v0.56.0 \
     && test "$(go list -m -f '{{.Version}}' github.com/apache/thrift)" = v0.24.0 \
