@@ -45,10 +45,18 @@ class CeremonyError(RuntimeError): pass
 
 
 def xor_decode(encoded, otp):
-    """Vault's generate-root decode: base64 output XOR ASCII base62 OTP."""
-    raw, pad = base64.b64decode(encoded, validate=True), otp.encode("ascii")
-    if not raw or len(raw) != len(pad): raise CeremonyError("invalid generate-root OTP material")
-    return bytes(a ^ b for a, b in zip(raw, pad)).decode("utf-8")
+    """Vault 1.20.4 uses RawStdEncoding (unpadded Base64), then ASCII XOR."""
+    try:
+        if not isinstance(encoded, str) or not isinstance(otp, str): raise ValueError()
+        if not 1 <= len(encoded) <= 4096 or not 1 <= len(otp) <= 4096: raise ValueError()
+        if "=" in encoded or not otp.isascii() or not otp.isalnum(): raise ValueError()
+        raw = base64.b64decode(encoded + "=" * (-len(encoded) % 4), validate=True)
+        if base64.b64encode(raw).decode("ascii").rstrip("=") != encoded: raise ValueError()
+        pad = otp.encode("ascii")
+        if not raw or len(raw) != len(pad): raise ValueError()
+        return bytes(a ^ b for a, b in zip(raw, pad)).decode("utf-8")
+    except (ValueError, UnicodeError) as exc:
+        raise CeremonyError("invalid generate-root OTP material") from exc
 
 
 class LocalVault:
@@ -256,6 +264,10 @@ class Ceremony:
                 warnings.simplefilter("error", getpass.GetPassWarning)
                 try: return getpass.getpass("Recovery key share: ", stream=tty)
                 except getpass.GetPassWarning as exc: raise CeremonyError("refusing recovery-share echo fallback") from exc
+    def begin_root_attempt(self, api):
+        # A lost response does not prove the server rejected the attempt.
+        self.ceremony_started = True
+        return api.request("POST", "/v1/sys/generate-root/attempt", body={})
     def cleanup(self):
         failures = []
         if self.generated:
@@ -343,17 +355,23 @@ class Ceremony:
             self.root = None
             # On the legacy server this ceremony endpoint is intentionally
             # unauthenticated; never reuse the now-invalid ephemeral root.
-            self.stage = "recovery_quorum"
-            initial = api.request("POST", "/v1/sys/generate-root/attempt", body={})
+            self.stage = "recovery_begin"
+            initial = self.begin_root_attempt(api)
             otp = initial["otp"]
             required = initial.get("required")
             if not isinstance(required, int) or not 1 <= required <= 10: raise CeremonyError("unexpected recovery quorum")
-            self.ceremony_started = True
             reply = {}
             for _ in range(required):
-                reply = api.request("POST", "/v1/sys/generate-root/update", body={"nonce": initial["nonce"], "key": self.prompt_share()})
+                self.stage = "recovery_prompt"
+                share = self.prompt_share()
+                self.stage = "recovery_submit"
+                try:
+                    reply = api.request("POST", "/v1/sys/generate-root/update", body={"nonce": initial["nonce"], "key": share})
+                finally:
+                    share = None
                 if reply.get("complete"): break
             if not reply.get("complete"): raise CeremonyError("recovery quorum did not complete")
+            self.stage = "recovery_decode"
             generated = xor_decode(reply["encoded_token"], otp)
             self.generated = generated
             self.ceremony_started = False
@@ -416,6 +434,7 @@ def failure_summary(ceremony, error):
     # Only static labels are reportable. Never interpolate exception messages,
     # subprocess arguments/responses, tokens, paths, or server JSON.
     stages = {"preflight", "local_setup", "image_pull", "snapshot_download", "egress_install", "old_start", "initialize", "snapshot_restore", "recovery_quorum", "restored_verification", "candidate_upgrade", "token_revoke"}
+    stages.update({"recovery_begin", "recovery_prompt", "recovery_submit", "recovery_decode"})
     stage = ceremony.stage if ceremony.stage in stages else "unknown"
     cleanup = ceremony.cleanup_state if ceremony.cleanup_state in {"not_started", "running", "passed", "failed"} else "unknown"
     kind = type(error).__name__

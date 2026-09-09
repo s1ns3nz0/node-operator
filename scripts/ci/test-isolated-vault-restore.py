@@ -20,6 +20,36 @@ SCRIPT = Path(__file__).parents[1] / "ops" / "rehearse-isolated-vault-restore.py
 spec = importlib.util.spec_from_file_location("restore", SCRIPT); restore = importlib.util.module_from_spec(spec); spec.loader.exec_module(restore)
 
 class RestoreTests(unittest.TestCase):
+    def test_lost_attempt_response_still_cancels(self):
+        c = restore.Ceremony()
+        api = unittest.mock.Mock()
+        api.request.side_effect = TimeoutError("synthetic lost response")
+        with self.assertRaises(TimeoutError): c.begin_root_attempt(api)
+        self.assertTrue(c.ceremony_started)
+        with patch.object(restore, "LocalVault") as factory:
+            c.cleanup()
+            factory.return_value.request.assert_called_once_with("DELETE", "/v1/sys/generate-root/attempt")
+
+    def test_raw_base64_all_length_residues(self):
+        for length in (24, 25, 26, 27, 28):
+            token, otp = b"r" * length, b"A" * length
+            encoded = base64.b64encode(bytes(a ^ b for a, b in zip(token, otp))).decode().rstrip("=")
+            self.assertEqual(restore.xor_decode(encoded, otp.decode()), token.decode())
+
+    def test_raw_base64_malformed_is_redacted(self):
+        for encoded, otp in (("!", "A"), ("A", "A"), ("AA==", "A"), ("AB", "A"), ("AA\n", "A"), ("", "A"), (None, "A"), ("AA", "**"), ("AA", "é"), ("AA", "AA")):
+            with self.subTest(encoded=encoded):
+                with self.assertRaisesRegex(restore.CeremonyError, "^invalid generate-root OTP material$"):
+                    restore.xor_decode(encoded, otp)
+
+    def test_recovery_substages_are_static_and_safe(self):
+        c = restore.Ceremony()
+        for stage in ("recovery_begin", "recovery_prompt", "recovery_submit", "recovery_decode"):
+            c.stage = stage
+            result = restore.failure_summary(c, ValueError("SYNTHETIC_SECRET"))
+            self.assertIn("stage=" + stage, result)
+            self.assertNotIn("SYNTHETIC_SECRET", result)
+
     def test_prompt_uses_real_nonseekable_terminal(self):
         # Isolate PTY terminal ownership/SIGHUP behavior from the test runner.
         code = '''import os, signal, importlib.util
@@ -96,7 +126,7 @@ finally:
         self.assertNotIn(restore.SHA256, out.getvalue())
     def test_otp_xor_is_decoded_in_process(self):
         raw, pad = b"root", b"AbC9"
-        encoded = base64.b64encode(bytes(a ^ b for a,b in zip(raw,pad))).decode()
+        encoded = base64.b64encode(bytes(a ^ b for a,b in zip(raw,pad))).decode().rstrip("=")
         self.assertEqual(restore.xor_decode(encoded, pad.decode()), "root")
     def test_wrong_host_and_expiry_are_rejected_before_aws_or_docker(self):
         with patch.object(restore.os, "geteuid", return_value=0), patch.object(restore.sys, "platform", "linux"), patch.object(restore.Path, "read_text", return_value="Filename\tType\tSize\tUsed\tPriority\n"), patch.object(restore.os, "open", return_value=3), patch.object(restore.os, "close"), patch.object(restore, "imds", return_value='{"instanceId":"wrong"}'):
@@ -150,7 +180,7 @@ finally:
         class API:
             def request(self, method, path, token=None, body=None, binary=False):
                 if path == "/v1/sys/generate-root/attempt": return {"otp":"AbCd", "nonce":"n", "required":1}
-                if path == "/v1/sys/generate-root/update": return {"complete":True, "encoded_token":base64.b64encode(bytes(a ^ b for a,b in zip(b"root",b"AbCd"))).decode()}
+                if path == "/v1/sys/generate-root/update": return {"complete":True, "encoded_token":base64.b64encode(bytes(a ^ b for a,b in zip(b"root",b"AbCd"))).decode().rstrip("=")}
                 if path == "/v1/sys/audit": return {"validator-file/":{"type":"file","options":{"file_path":"/vault/audit/validator-audit.json","log_raw":"false"}},"validator-socket/":{"type":"socket","options":{"address":"/vault/audit/validator-audit.sock","socket_type":"unix","log_raw":"false"}}}
                 if path == "/v1/sys/storage/raft/configuration": return {"data":{"config":{"servers":["one"]}}}
                 if path == "/v1/sys/mounts": return {"data":{}}
@@ -184,7 +214,7 @@ finally:
             def request(self, method, path, token=None, body=None, binary=False):
                 if path == "/v1/sys/init": return {"root_token":"ephemeral","recovery_keys_b64":["never-output"]}
                 if path.endswith("attempt"): return {"otp":"AbCd","nonce":"n","required":1}
-                if path.endswith("update"): return {"complete":True,"encoded_token":base64.b64encode(bytes(a^b for a,b in zip(b"root",b"AbCd"))).decode()}
+                if path.endswith("update"): return {"complete":True,"encoded_token":base64.b64encode(bytes(a^b for a,b in zip(b"root",b"AbCd"))).decode().rstrip("=")}
                 if path == "/v1/sys/audit": return audits
                 if path.endswith("configuration"):
                     return {**raft, "request_id":"different-" + str(len(events))}
