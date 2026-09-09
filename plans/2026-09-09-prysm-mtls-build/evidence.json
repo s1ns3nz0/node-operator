@@ -1,4 +1,16 @@
 {
+  "signer_health_boundary_observation_20260909": {
+    "recorded_at": "2026-09-09T03:05:49Z",
+    "namespace": "validator-operations",
+    "deployment": "validator-signer-upcheck-proxy",
+    "method": "GET from proxy container to its own 127.0.0.1:8080; no token or signing payload",
+    "upcheck_status": 503,
+    "signing_path_get_status": 404,
+    "scope_limit": "Confirms local handler response, not DAST namespace routing or actual authenticated signer health",
+    "fence_code_observation": "healthy() only checks !fenced and listener != nil; health HTTP handler reports this state without probing Web3Signer or its DB",
+    "decision": "Do not substitute fence health for signer health or infer HTTP readiness from Pod Ready; retain actual authenticated signer/DB health as separate required verification",
+    "operator_auth": "Human ceremony outcome still unreported; asked user to run exact recovery wrapper without exposing keys or tokens"
+  },
   "signer_proxy_image_staging_20260909": {
     "live_readback": "Vault StatefulSet 3/3, Injector 1/1; signer proxy still old ZAP 781a2bda; signing fence replicas=0",
     "manifest": "deploy/dast/service-and-network-policies.yaml",
