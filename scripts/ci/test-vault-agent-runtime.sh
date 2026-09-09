@@ -207,6 +207,7 @@ vault_server_image="${VAULT_AGENT_TEST_SERVER_IMAGE:-hashicorp/vault@sha256:20ff
 case "$vault_server_image" in
   hashicorp/vault@sha256:20ff3ed4a4da750d1be0757c82e0a10accc00c26c157bde3a694f2b227300caf) server_version='1.20.4' ;;
   sha256:5463f9d70fe71b897b165e019dbc1e85aeaa8271130572bd060729dc124ff51f) server_version='2.1.0' ;;
+  sha256:8fbe048a50769523a577be1fd41fe7f476e1bda4a345cf25874da6426ac25e49) server_version='2.1.0' ;; # gRPC1.83.2 synthetic fixture only
   *) printf 'unreviewed compatibility server image\n' >&2; exit 64 ;;
 esac
 vault_server_container="vault-server-1204-test-$$"

@@ -1,0 +1,42 @@
+{
+  "status":"patched_local_candidates_built_and_verified",
+  "trigger_run":34325393574,
+  "advisory":"GHSA-2v4p-qf9q-27wj",
+  "old_grpc":"v1.83.1",
+  "target_grpc":"v1.83.2",
+  "module_derivation_directory":"/private/tmp/hoodi-vault-grpc-lock.qhOIN4",
+  "module_diff":"one gRPC version line plus two checksum lines; no other dependency requirement changes",
+  "go_mod_sha256":"0377034eba756738494bdc0c0f1ff0fef524846398a5f96aa977049331c5d6b2",
+  "go_sum_sha256":"3f06f5ebaed07dc186567fa3a48f0d310e505b090c386ddad77a76ceba72d303",
+  "build_directory":"/private/tmp/hoodi-vault-grpc-build.WSyrpd",
+  "server":{
+    "local_image":"sha256:8fbe048a50769523a577be1fd41fe7f476e1bda4a345cf25874da6426ac25e49",
+    "binary_sha256":"b81dd1d983442df3e55d7b7ffa23daae178928d5ad1213be5680fb98c3507153",
+    "dependency_sha256":"6e810e887ea958c6e1d711696afe9de28a5c1c0b9b0c26d9be1626ae5ae59029",
+    "dependency_count":2635,
+    "raw_scan_sha256":"9af3062d4924527e68864dc0eacebc7a992d63de587ff2d67316187ae30be7ea",
+    "sbom_sha256":"549a92143daca9da19c5e1184f9683c85103c0e43d329965e17bc4ccc4f46de8",
+    "raft_upgrade_restore_revocation":"passed synthetic single-node Shamir fixture; not live HA/KMS"
+  },
+  "agent":{
+    "local_image":"sha256:dc2c7c7b9a5b312605458422749a399420ad1ac60af5b7fb25b14e299cceaf23",
+    "binary_sha256":"ac711ff251eeef7e15af586cc7c00d86348a9c3460dc71b0ecd0b2afd9de5fa1",
+    "runtime_binary_matches_cached_dependency_export":true,
+    "dependency_sha256":"386770b26b88aa34397b273497a955a6ecb782fc5d66f32f5302072dd13f9d63",
+    "dependency_count":1973,
+    "raw_scan_sha256":"322b4dcfa678f9d5de29d0eb13c17209854f80aab2695846ca665428a21dc0ab",
+    "sbom_sha256":"ebdc4539a5f4f8e4fc56001f893a7b8d6a06591e4fa7d1ebe11f6921660418c6",
+    "compatibility":"Kubernetes auth, KV template and non-raw file audit passed against original Vault1.20.4 and exact patched Vault2.1.0 synthetic servers"
+  },
+  "pinned_scan":{"version":"0.118.0","database_built":"2026-09-09T06:31:00Z","each_findings":{"critical":0,"high":0,"medium":3,"unknown":1},"ignored_matches":0,"grpc_advisory_matches":0},
+  "old_openpgp_affected_package_absent_in_both_new_closures":true,
+  "local_retry_notes":["scanner launcher duplicated bash entrypoint; corrected launcher and reran scan only","Agent v2 test initially refused new exact image; added only that digest to test fixture allowlist and reran without rebuild"],
+  "source_review":"Terra approved dependency pins/hashes and historical-vs-new status documentation",
+  "final_evidence_review":"Terra approved both pinned scans, binary/closure bindings, Raft recovery and patched-server Agent compatibility; test-only digest addition preserves unknown rejection and production selections",
+  "injector_verification":"passed earlier; unchanged here",
+  "live_changes":false,
+  "published":false,
+  "ci_build_attested":false,
+  "production_candidate_allowlists_changed":false,
+  "remaining":["PR CI/review and merge","separately authorize exact-image publication and update candidate proof bindings","read-only remote verification, honest signing/provenance and live rollout gates"]
+}

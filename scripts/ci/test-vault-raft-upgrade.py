@@ -2,6 +2,7 @@
 """Isolated synthetic Raft upgrade/restore rehearsal; never uses live Vault."""
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -9,7 +10,7 @@ import time
 import uuid
 
 OLD = "sha256:20ff3ed4a4da750d1be0757c82e0a10accc00c26c157bde3a694f2b227300caf"
-NEW = "sha256:5463f9d70fe71b897b165e019dbc1e85aeaa8271130572bd060729dc124ff51f"
+NEW = os.environ.get("VAULT_RAFT_TEST_NEW_IMAGE", "sha256:5463f9d70fe71b897b165e019dbc1e85aeaa8271130572bd060729dc124ff51f")
 
 
 def run(*args, allowed=(0,), stdin=None):
@@ -21,6 +22,8 @@ def run(*args, allowed=(0,), stdin=None):
 
 
 def main():
+    if not re.fullmatch(r"sha256:[a-f0-9]{64}", NEW):
+        raise ValueError("VAULT_RAFT_TEST_NEW_IMAGE must be an immutable local image ID")
     owner = "hoodi-raft-test-" + uuid.uuid4().hex[:12]
     volume = None
     containers = []
