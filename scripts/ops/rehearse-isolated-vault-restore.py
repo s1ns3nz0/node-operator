@@ -62,7 +62,8 @@ class LocalVault:
         try:
             payload = body if isinstance(body, bytes) else (json.dumps(body).encode() if body is not None else None)
             conn.request(method, path, payload, headers)
-            response, data = conn.getresponse(), conn.getresponse().read()
+            response = conn.getresponse()
+            data = response.read()
             if response.status not in (200, 204): raise CeremonyError("local Vault request failed: HTTP %s" % response.status)
             return data if binary else (json.loads(data or b"{}"))
         finally: conn.close()
@@ -202,7 +203,7 @@ seal "awskms" {
 
 
 class Ceremony:
-    def __init__(self): self.owner = "isolated-vault-rehearsal-" + os.urandom(6).hex(); self.container = None; self.scratch = None; self.root = None; self.generated = None; self.ceremony_started = False; self.egress = None
+    def __init__(self): self.owner = "isolated-vault-rehearsal-" + os.urandom(6).hex(); self.container = None; self.scratch = None; self.root = None; self.generated = None; self.ceremony_started = False; self.egress = None; self.stage = "preflight"; self.cleanup_state = "not_started"
     def docker(self, *args, input=None): return command("docker", *args, input=input)
     def start(self, image):
         if self.container: raise CeremonyError("refusing to adopt an existing container")
@@ -286,24 +287,29 @@ class Ceremony:
         audit = None
         result = None
         try:
+            self.stage = "local_setup"
             for name in ("data",):
                 p = self.scratch / name; p.mkdir(); os.chown(p, VAULT_UID, VAULT_GID)
             (self.scratch / "config.hcl").write_text(config_text()); os.chown(self.scratch / "config.hcl", VAULT_UID, VAULT_GID); os.chmod(self.scratch / "config.hcl", 0o400)
             audit = AuditSink(self.scratch / "audit"); audit.start()
             # ECR password is passed solely on stdin; private config is removed in cleanup.
             with tempfile.TemporaryDirectory(prefix="vault-docker-", dir="/var/tmp") as cfg:
+                self.stage = "image_pull"
                 os.chmod(cfg, 0o700); password = command("aws", "--endpoint-url", "https://api.ecr.%s.amazonaws.com" % REGION, "ecr", "get-login-password", "--region", REGION)
                 subprocess.run(["docker", "login", "--username", "AWS", "--password-stdin", "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com"], input=password, text=True, env=controlled_env(cfg), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
                 for image in (OLD, NEW): subprocess.run(["docker", "pull", image], env=controlled_env(cfg), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)
+            self.stage = "snapshot_download"
             snap = self.download()
             # The host-networked container is fenced by a UID-specific,
             # independently tested firewall module before it can start.
+            self.stage = "egress_install"
             egress_path = Path(__file__).with_name("lib") / "isolated-recovery-egress.py"
             spec = importlib.util.spec_from_file_location("isolated_recovery_egress", egress_path)
             if not spec or not spec.loader: raise CeremonyError("egress guard module could not be loaded")
             module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
             self.egress = module.EgressGuard(require_root=True)
             self.egress.install()
+            self.stage = "old_start"
             self.start(OLD)
             # A fresh server is deliberately uninitialized; reaching its health
             # endpoint is sufficient before sys/init, not an unsealed assertion.
@@ -314,17 +320,20 @@ class Ceremony:
                 except OSError: time.sleep(1)
             else: raise CeremonyError("fresh Vault did not become reachable")
             prior_cluster = None
+            self.stage = "initialize"
             init = api.request("PUT", "/v1/sys/init", body={"recovery_shares": 1, "recovery_threshold": 1}); self.root = init.pop("root_token")
             # The fresh recovery keys are never displayed or persisted.
             init.clear()
             fresh = self.wait(api); prior_cluster = fresh.get("cluster_id")
             require_version(fresh, "1.20.4")
             if not isinstance(prior_cluster, str) or not prior_cluster: raise CeremonyError("fresh Vault supplied no cluster identity")
+            self.stage = "snapshot_restore"
             api.request("POST", "/v1/sys/storage/raft/snapshot-force", self.root, snap.read_bytes(), binary=True)
             restored = self.wait(api, prior_cluster)
             self.root = None
             # On the legacy server this ceremony endpoint is intentionally
             # unauthenticated; never reuse the now-invalid ephemeral root.
+            self.stage = "recovery_quorum"
             initial = api.request("POST", "/v1/sys/generate-root/attempt", body={})
             otp = initial["otp"]
             required = initial.get("required")
@@ -339,6 +348,7 @@ class Ceremony:
             self.generated = generated
             self.ceremony_started = False
             # Metadata checks only; no mounts' contents or audit records are read.
+            self.stage = "restored_verification"
             audited_configuration(api.request("GET", "/v1/sys/audit", generated))
             raft_metadata = api.request("GET", "/v1/sys/storage/raft/configuration", generated)
             raft_evidence = raft_fingerprint(raft_metadata)
@@ -351,6 +361,7 @@ class Ceremony:
             if not audit.count or (self.scratch / "audit" / "validator-audit.json").stat().st_size <= 0:
                 raise CeremonyError("restored audit devices received no authenticated delivery")
             old_audit_count = audit.count
+            self.stage = "candidate_upgrade"
             self.stop(); self.start(NEW); upgraded = self.wait(api)
             require_version(upgraded, "2.1.0")
             if upgraded.get("cluster_id") != restored.get("cluster_id"): raise CeremonyError("candidate cluster identity mismatch")
@@ -363,6 +374,7 @@ class Ceremony:
             time.sleep(1)
             if audit.count <= old_audit_count or (self.scratch / "audit" / "validator-audit.json").stat().st_size <= 0:
                 raise CeremonyError("candidate audit devices received no authenticated delivery")
+            self.stage = "token_revoke"
             api.request("POST", "/v1/auth/token/revoke-self", generated)
             try: api.request("GET", "/v1/auth/token/lookup-self", generated)
             except CeremonyError as exc:
@@ -373,11 +385,33 @@ class Ceremony:
         finally:
             try:
                 # Keep the local sink alive through revocation and stop.
+                self.cleanup_state = "running"
                 self.cleanup()
+                self.cleanup_state = "passed"
+            except Exception:
+                self.cleanup_state = "failed"
+                raise
             finally:
-                if audit: audit.close()
-                for sig, handler in old_handlers.items(): signal.signal(sig, handler)
+                try:
+                    if audit: audit.close()
+                except Exception:
+                    self.cleanup_state = "failed"
+                    raise
+                finally:
+                    for sig, handler in old_handlers.items(): signal.signal(sig, handler)
         print(json.dumps(result, sort_keys=True))
+
+
+def failure_summary(ceremony, error):
+    # Only static labels are reportable. Never interpolate exception messages,
+    # subprocess arguments/responses, tokens, paths, or server JSON.
+    stages = {"preflight", "local_setup", "image_pull", "snapshot_download", "egress_install", "old_start", "initialize", "snapshot_restore", "recovery_quorum", "restored_verification", "candidate_upgrade", "token_revoke"}
+    stage = ceremony.stage if ceremony.stage in stages else "unknown"
+    cleanup = ceremony.cleanup_state if ceremony.cleanup_state in {"not_started", "running", "passed", "failed"} else "unknown"
+    kind = type(error).__name__
+    if kind not in {"CeremonyError", "ResponseNotReady", "TimeoutExpired", "PermissionError", "FileNotFoundError", "OSError", "CalledProcessError", "EgressError"}:
+        kind = "UnexpectedError"
+    return "FAILED: stage=%s error=%s cleanup=%s; details withheld" % (stage, kind, cleanup)
 
 
 def main(argv=None):
@@ -385,7 +419,13 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if not args.execute:
         print(json.dumps({"result":"plan", "writes":False, "approved_host":INSTANCE, "deadline":DEADLINE.isoformat(), "images":"pinned digests"}, sort_keys=True)); return 0
-    Ceremony().execute(); return 0
+    ceremony = Ceremony()
+    try:
+        ceremony.execute()
+        return 0
+    except Exception as exc:
+        print(failure_summary(ceremony, exc), file=sys.stderr)
+        return 1
 
 if __name__ == "__main__":
     try: raise SystemExit(main())
