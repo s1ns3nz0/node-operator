@@ -78,6 +78,9 @@ trap on_exit EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
+# shellcheck source=scripts/ops/lib/vault-recovery-auth.sh
+source "$dir/lib/vault-recovery-auth.sh"
+vault_recovery_auth_preflight
 status="$(vault operator generate-root -status -format=json)"
 [ "$(jq -r '.started' <<<"$status")" = false ] || { printf '%s\n' 'root-token ceremony already in progress' >&2; exit 75; }
 init="$(vault operator generate-root -init -format=json)"; started=true

@@ -30,8 +30,22 @@ pre-snapshot ceremony token becomes valid again and revokes it again. The
 post-snapshot generated root remains absent. All task-owned containers and the
 synthetic volume are removed. This is not a live HA/KMS recovery-key test.
 
-Before upgrading the real server, establish and test the operator's renewable
-authentication path while the old server is still available. Existing
-recovery-share-only wrappers are not ready for 2.1; a one-off expiring token
-does not solve future recovery access. Do not enable unauthenticated endpoint
+Before upgrading the real server, establish and test the operator's repeatable
+authentication path while the old server is still available. Recovery wrappers
+now run `scripts/ops/lib/vault-recovery-auth.sh` before requesting shares. They
+check that the server is initialized and unsealed, reject unsupported versions,
+and verify read-only access to the ceremony endpoint. On 1.x the legacy flow is
+retained. On 2.x, an existing process `VAULT_TOKEN` is used; otherwise a silent
+terminal prompt requests a valid ceremony token. Recovery shares are still
+requested separately. The token is not saved through `vault login` or written
+to a token-helper file. An invalid existing token fails without starting a
+ceremony; clear it in the terminal and retry with the correct credential.
+
+The prompt is not authentication provisioning: a one-off expiring token does
+not solve future recovery access. A reviewed identity-authentication method
+must issue fresh short-lived tokens to the authorized human operator. Its
+policy needs only the exact ceremony endpoints and self-revocation shown in
+the synthetic fixture, not KV access or token creation. Test the real login,
+permissions, expiry and cancellation before any server upgrade. This operator
+authentication setup is still pending. Do not enable unauthenticated endpoint
 access or retain a long-lived root token to avoid this migration prerequisite.

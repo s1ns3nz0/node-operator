@@ -69,6 +69,9 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+# shellcheck source=scripts/ops/lib/vault-recovery-auth.sh
+source "$dir/lib/vault-recovery-auth.sh"
+vault_recovery_auth_preflight
 status="$(vault operator generate-root -status -format=json)"
 [ "$(jq -r .started <<<"$status")" = false ] || { printf '%s\n' 'root-token ceremony already in progress' >&2; exit 75; }
 # Verify the local Vault v1.20 root-token decoder before a ceremony can start.

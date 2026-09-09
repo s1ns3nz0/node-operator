@@ -20,6 +20,20 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+Transition all seven current recovery ceremonies through a shared read-only
+authentication preflight. Vault1 retains its supported share-only flow; Vault2
+requires an existing process token or a silent terminal prompt before shares.
+Reject sealed, uninitialized, malformed or unsupported status and invalid
+authentication without creating a ceremony. Do not store tokens or consume
+the share-input stream. Terra owns only the new helper and mocked CLI tests;
+root owns wrapper integration, documentation and security decisions using
+nearest available tier. Existing production authentication provisioning is
+still separate; this change does not mint or configure any live credential.
+Root also runs this exact helper through a local CLI bridge to the synthetic
+Docker Raft servers, covering real1.x legacy success and real2.x missing,
+invalid and scoped-token paths. Keep these actual-server checks distinct from
+the fast mocked preflight tests wired into CI Quality.
+
 Root extends the synthetic retained-Raft rehearsal to test the Vault2.1
 generate-root authentication transition. On the old synthetic server create
 an expiring, non-root, exact-endpoint ceremony token, then verify its survival

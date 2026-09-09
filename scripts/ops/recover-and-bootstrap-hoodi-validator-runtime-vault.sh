@@ -11,6 +11,9 @@ for x in vault jq; do command -v "$x" >/dev/null || { printf 'missing command: %
 started=false; complete=false; root_token=''
 cleanup() { set +e; [ -z "$root_token" ] || VAULT_TOKEN="$root_token" vault token revoke -self >/dev/null 2>&1; [ "$started" = true ] && [ "$complete" != true ] && vault operator generate-root -cancel >/dev/null 2>&1; unset VAULT_TOKEN root_token; }
 trap cleanup EXIT INT TERM
+# shellcheck source=scripts/ops/lib/vault-recovery-auth.sh
+source "$dir/lib/vault-recovery-auth.sh"
+vault_recovery_auth_preflight
 status="$(vault operator generate-root -status -format=json)"
 [ "$(jq -r '.started' <<<"$status")" = false ] || { printf 'root-token ceremony already in progress\n' >&2; exit 75; }
 init="$(vault operator generate-root -init -format=json)"; started=true

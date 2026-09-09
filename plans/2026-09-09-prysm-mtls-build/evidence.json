@@ -1,4 +1,17 @@
 {
+  "recovery_wrapper_auth_transition_20260909": {
+    "status": "implemented and locally verified; real operator authentication provisioning pending",
+    "wrappers": 7,
+    "helper": "scripts/ops/lib/vault-recovery-auth.sh",
+    "mock_checks": "11 fake-CLI cases passed, including detached no-TTY, invalid token, malformed/unsupported status and no-write call allowlist; added to CI Quality",
+    "actual_server_artifact": "/private/tmp/hoodi-vault-real-preflight-20260909.json",
+    "sha256": "38fa8292817495bfcb20a23e732a01a7a055786d14fb39f521d6b093d68298a6",
+    "actual_server_checks": "Same sourced helper through docker exec to frozen synthetic Vault1.20.4/2.1: legacy no-token success, v2 no-token and invalid-token denial, v2 scoped-token success; full retained-Raft, root revocation and snapshot-token restoration tests also passed",
+    "static_checks": "ShellCheck0.11.0 all affected wrappers/helper/tests and all CI shell scripts, harness:check, scanner evidence contract and diff check passed",
+    "routing": "Terra helper/test implementation, root integration/security as nearest available tier; root reviewed implementation and requested fixes before test; Terra independently reviewed all7 wrappers, CI and real-server bridge: passed",
+    "production_mutated": false,
+    "limitations": "No real operator login issued/configured; interactive positive TTY path not exercised by actual-server fixture; KMS/HA and recovery-share authentication remain separate live prerequisites"
+  },
   "vault_server_full_suppressed_scan_20260909": {
     "image": "sha256:5463f9d70fe71b897b165e019dbc1e85aeaa8271130572bd060729dc124ff51f",
     "scan": "/private/tmp/hoodi-vault-server-full-grype-20260909.json",

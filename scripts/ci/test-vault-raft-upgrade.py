@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Isolated synthetic Raft upgrade/restore rehearsal; never uses live Vault."""
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -74,6 +75,29 @@ storage "raft" {
             raise RuntimeError("synthetic Vault did not become reachable; "
                                + diagnostics + "; logs withheld")
 
+        def recovery_preflight(credential="", expected=0):
+            # Use the real helper and the actual server CLI, not a simulated
+            # authorization response. No host port or secret file is needed.
+            library = Path(__file__).resolve().parents[1] / "ops/lib/vault-recovery-auth.sh"
+            result = subprocess.run(
+                ["bash", "-c", '''
+set -euo pipefail
+vault() {
+  docker exec -i -e VAULT_ADDR=http://127.0.0.1:8200 -e VAULT_TOKEN \
+    "$VAULT_TEST_CONTAINER" /bin/vault "$@"
+}
+source "$1"
+vault_recovery_auth_preflight
+''', "fixture", str(library)],
+                env={**os.environ, "VAULT_TOKEN": credential,
+                     "VAULT_TEST_CONTAINER": current},
+                stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                start_new_session=True, timeout=30)
+            if result.returncode != expected:
+                raise RuntimeError("actual-server recovery preflight failed; output withheld")
+            if credential and credential in result.stdout + result.stderr:
+                raise RuntimeError("recovery preflight exposed a synthetic credential; output withheld")
+
         try:
             for image in (OLD, NEW):
                 assert run("docker", "image", "inspect", image,
@@ -91,6 +115,7 @@ storage "raft" {
             token = initialized["root_token"]
             share = initialized["unseal_keys_b64"][0]
             cli("operator", "unseal", share)
+            recovery_preflight()
             cli("secrets", "enable", "-path=synthetic", "kv-v2")
             cli("kv", "put", "synthetic/checkpoint", "value=before-upgrade")
             cli("policy", "write", "synthetic-ceremony", "-", stdin='''
@@ -106,6 +131,9 @@ path "auth/token/revoke-self" { capabilities = ["update"] }
             assert start(NEW)["initialized"] is True
             cli("operator", "unseal", share)
             assert cli("kv", "get", "-field=value", "synthetic/checkpoint").strip() == "before-upgrade"
+            recovery_preflight(expected=1)
+            recovery_preflight("invalid-synthetic-token", expected=1)
+            recovery_preflight(ceremony_token)
             # Do not opt out of Vault2.x endpoint authentication. All material
             # is synthetic and remains in captured subprocess input/output.
             cli("operator", "generate-root", "-status", authenticated=False, allowed=(2,))
@@ -156,6 +184,7 @@ path "auth/token/revoke-self" { capabilities = ["update"] }
                                          "old snapshot restores pre-mutation KV",
                                          "snapshot restores scoped token; re-revocation verified",
                                          "post-snapshot generated root remains absent after restore"],
+                              "wrapper_preflight": "Actual helper against both server versions: legacy success, v2 missing/invalid denial and scoped-token success",
                               "scope": "synthetic single-node Shamir compatibility, not live HA, KMS recovery keys or production operator authentication"}))
         finally:
             for container in reversed(containers):
