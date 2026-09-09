@@ -13,15 +13,63 @@ for command in vault jq; do command -v "$command" >/dev/null 2>&1 || { printf 'm
 started=false
 complete=false
 root_token=''
-cleanup() {
-  set +e
-  [ -n "$root_token" ] && VAULT_TOKEN="$root_token" vault token revoke -self >/dev/null 2>&1 || true
-  [ "$started" = true ] && [ "$complete" != true ] && vault operator generate-root -cancel >/dev/null 2>&1 || true
-  unset VAULT_TOKEN root_token
-}
-trap cleanup EXIT INT TERM
+revoke_root_token() {
+  local revoke_status=0
 
-# shellcheck source=scripts/ops/lib/vault-recovery-auth.sh
+  # Deliberately do not include the token in diagnostics or command arguments.
+  if VAULT_TOKEN="$root_token" vault token revoke -self >/dev/null 2>&1; then
+    :
+  else
+    revoke_status=$?
+    printf 'failed to revoke the generated root token\n' >&2
+    return "$revoke_status"
+  fi
+  root_token=''
+  unset VAULT_TOKEN
+  return 0
+}
+cleanup() {
+  local original_status=$?
+  local revoke_status=0
+  local cancel_status=0
+
+  # Signal handlers exit first, then this EXIT handler preserves their status.
+  trap - EXIT INT TERM
+  set +e
+  if [ -n "$root_token" ]; then
+    if revoke_root_token; then
+      :
+    else
+      revoke_status=$?
+    fi
+  fi
+  if [ "$started" = true ] && [ "$complete" != true ]; then
+    if vault operator generate-root -cancel >/dev/null 2>&1; then
+      :
+    else
+      cancel_status=$?
+      printf 'failed to cancel the incomplete root-token generation ceremony\n' >&2
+    fi
+  fi
+  unset VAULT_TOKEN root_token
+
+  # Do not mask the reason the ceremony or snapshot failed.  On an otherwise
+  # successful path, cleanup failures are fatal so success cannot be reported.
+  if [ "$original_status" -ne 0 ]; then
+    exit "$original_status"
+  fi
+  if [ "$revoke_status" -ne 0 ]; then
+    exit "$revoke_status"
+  fi
+  if [ "$cancel_status" -ne 0 ]; then
+    exit "$cancel_status"
+  fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# shellcheck source=lib/vault-recovery-auth.sh
 source "$dir/lib/vault-recovery-auth.sh"
 vault_recovery_auth_preflight
 status="$(vault operator generate-root -status -format=json)"
@@ -44,6 +92,8 @@ for number in $(seq 1 "$required"); do
 done
 [ "$complete" = true ] || { printf 'recovery quorum was not reached\n' >&2; exit 77; }
 root_token="$(vault operator generate-root -decode="$encoded" -otp="$otp")"
+[ -n "$root_token" ] || { printf 'root-token decode returned an empty value\n' >&2; exit 78; }
 unset encoded otp nonce init submitted status
 VAULT_TOKEN="$root_token" "$dir/save-private-vault-raft-snapshot.sh" "${bucket_args[@]}"
+revoke_root_token
 printf 'PASS: generated root token was revoked after the snapshot ceremony.\n'
