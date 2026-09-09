@@ -1,0 +1,14 @@
+{
+  "status":"snapshot_integrity_fix_and_preflight",
+  "live_mutated":false,"fresh_snapshot_created":false,"uc_all_passed":false,
+  "vault_observed_at":"2026-09-09T10:12:29Z",
+  "vault":{"helm_revision":11,"version":"1.20.4","healthy_unsealed_servers":3,"leader":"vault-1","bound_preserved_pvcs":6,"live_owned_resources":17,"raft_config_equal_ignoring_comments_and_whitespace":true},
+  "client":{"replicas":0,"fence_replicas":0,"signer_ready":1,"slashing_db_ready":1},
+  "uc3":{"observed_at":"2026-09-09T10:14:17Z","index":"1559065","status":"active_ongoing","is_syncing":false,"is_optimistic":false,"el_offline":false,"slashed":false,"signed_duty_proven":false},
+  "audit_stream_last_event":"2026-09-09T10:01:06.282Z",
+  "latest_snapshot":{"key":"raft-migration/20260907T103552Z.snap","size":32837,"sha256_header_present":false,"fresh":false},
+  "gitops_inventory_fix":{"pr":58,"merge_revision":"a28a16309e1e4d782e17c0c89304baf6a07c364d","independent_review":"Terra passed","ci":"passed before normal squash merge","hosted_run":"34339697889","hosted_status":"success"},
+  "snapshot_code":{"upload_mock_tests":15,"recovery_mock_tests":9,"independent_review":"snapshot_integrity_review: Terra final accept","syntax_quality_harness_diff":"passed","precision_note":"Configured retention >=90 days; one-second tolerance only for whole-second S3 LastModified versus fractional retention metadata"},
+  "source_ci_followup":{"initial_run":"34339899176","finding":"Legacy hardcoded /private/tmp missing on Ubuntu","fix":"Use TMPDIR or /tmp; mock suite uses isolated temp root and asserts snapshot cleanup","local_tests":"15 passed","hosted_recheck":"pending"},
+  "blocked_before_vault_mutation":["Fresh verified snapshot requires user-only recovery ceremony","Complete snapshot upload fix CI/review/merge","Recheck signed render and full rollout readiness"]
+}
