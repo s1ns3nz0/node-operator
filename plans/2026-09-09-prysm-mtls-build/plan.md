@@ -20,6 +20,21 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+CI Quality34303773988 exposed a Linux pipefail regression in the mock operator
+recovery test: fake Vault returned without consuming piped capabilities JSON.
+Consume stdin in both fake request endpoints instead of suppressing pipefail;
+also remove a test-only chmod of the real script so tests run with a read-only
+source mount. Real user ceremony files stay unchanged. Verify repeated Linux
+Docker execution before publishing the fix.
+
+Prepare separate opt-in Vault server/Agent/Injector ECR repositories using the
+existing reviewed source-runtime KMS boundary. Keep upstream-only mirrors,
+GitHub permissions, Vault credentials and live workloads unchanged. Require
+immutable tags, scan-on-push, enabled key dependency and no automatic deletion.
+Root owns IaC and saved-plan execution; Terra independently reviews the exact
+three-create delta before any apply. Candidate publication remains separate
+from trusted CI promotion and from actual deployment. No graph/debrief.
+
 While the human-held operator ceremony is pending, do not edit or run its
 scripts. Close the remaining incomplete scanner evidence for the frozen Agent
 and Injector candidates: explicitly include suppressed findings in fresh

@@ -28,7 +28,7 @@ case "$*" in
   'status -format=json') printf '%s\n' '{"initialized":true,"sealed":false,"version":"1.20.4"}' ;;
   'operator generate-root -status -format=json') printf '%s\n' '{"started":false}' ;;
   'operator generate-root -init -format=json') printf '%s\n' '{"nonce":"mock-nonce","otp":"mock-otp","required":1}' ;;
-  'operator generate-root -nonce=mock-nonce -format=json -') printf '%s\n' '{"complete":true,"encoded_token":"mock-encoded"}' ;;
+  'operator generate-root -nonce=mock-nonce -format=json -') cat >/dev/null; printf '%s\n' '{"complete":true,"encoded_token":"mock-encoded"}' ;;
   'operator generate-root -decode=mock-encoded -otp=mock-otp') printf '%s\n' root-token ;;
   'auth list -format=json') printf '%s\n' '{}' ;;
   'policy list -format=json') printf '%s\n' '[]' ;;
@@ -40,7 +40,7 @@ case "$*" in
     [ "${MODE:-ok}" = login-fail ] && exit 1
     printf '%s\n' '{"auth":{"client_token":"operator-token","policies":["operator-recovery"],"lease_duration":300}}'
     ;;
-  'write -format=json sys/capabilities -') printf '%s\n' '{"data":{"auth/token/create":["deny"],"sys/policies/acl/operator-recovery":["deny"]}}' ;;
+  'write -format=json sys/capabilities -') cat >/dev/null; printf '%s\n' '{"data":{"auth/token/create":["deny"],"sys/policies/acl/operator-recovery":["deny"]}}' ;;
   'token revoke -self')
     case "${VAULT_TOKEN:-}" in
       operator-token) printf '%s\n' revoke-operator >> "$TRACE" ;;

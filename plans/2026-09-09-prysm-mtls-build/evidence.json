@@ -1,4 +1,17 @@
 {
+  "vault_repository_and_ci_checkpoint_20260909": {
+    "repository_source": "infra/terraform/vault-runtime-ecr.tf",
+    "repository_scope": "Opt-in only, three separate server/agent/injector repositories; immutable tags, KMS direct existing-key dependency, scan-on-push, force_delete=false; no publisher IAM or live deployment",
+    "offline_plan": "/private/tmp/hoodi-vault-ecr-reviewed.MCn2G5/plan.json",
+    "offline_plan_sha256": "a769f20067eef040a4ec9cac1cd9686f5396d53711a899291ff0d59a90b62cd6",
+    "repository_review": "Terra requested direct KMS reference; fixed and independently re-reviewed passed; pinned offline Docker enabled plan verifies three repositories. No live plan/apply yet",
+    "ci_failure": "Quality34303773988: fake Vault capabilities command did not consume jq stdin, causing Linux Broken pipe under pipefail",
+    "ci_fix": "Only fake CLI request endpoints now drain stdin; no pipefail suppression. Removed test chmod of real script for read-only source compatibility. Real recovery scripts unchanged",
+    "linux_regression": "/private/tmp/hoodi-operator-auth-linux-reviewed-20260909.log",
+    "linux_regression_sha256": "7dfd821e2884c2258de78f7ea16635b08853ab6e3ee61fb892aa3dc93f3a19ac",
+    "verification": "Ten lifecycle repetitions plus configuration cases passed in pinned Linux container, networknone and read-only source; ShellCheck and harness/diff checks passed",
+    "limitation": "Initial repeated run passed lifecycle10x but exposed test chmod incompatibility; only final reviewed log records complete success. Live operator ceremony remains user-pending"
+  },
   "agent_injector_full_scan_checkpoint_20260909": {
     "injector": {
       "image": "sha256:2937fbc5d368430d089b9b94f82b44baab71524d166358bb8ea48f7b395152d4",

@@ -44,7 +44,7 @@ case "$*" in
   *) exit 64 ;;
 esac
 EOF
-chmod 0755 "$tools/vault" "$script"
+chmod 0755 "$tools/vault"
 principal='arn:aws:iam::106760547719:user/operator.recovery'
 run() { local name="$1" expect="$2"; shift 2; local out rc; set +e; out="$(PATH="$tools:$PATH" TRACE="$scratch/$name.trace" POLICY="$policy" PRINCIPAL="$principal" VAULT_TOKEN=synthetic-admin "$@" 2>&1)"; rc=$?; set -e; if [ "$expect" = ok ]; then [ "$rc" -eq 0 ] || { printf 'unexpected %s: %s\n' "$name" "$out" >&2; exit 1; }; else [ "$rc" -ne 0 ] || { printf 'unexpected %s: %s\n' "$name" "$out" >&2; exit 1; }; fi; ! grep -Fq synthetic-admin <<<"$out" || { printf 'token leak\n' >&2; exit 1; }; }
 run ok ok "$script" --principal-arn "$principal"
