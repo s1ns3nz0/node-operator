@@ -1,0 +1,5 @@
+check-for-app-update: false
+ignore: []
+exclude: []
+only-fixed: false
+only-notfixed: false

@@ -1,0 +1,33 @@
+{
+  "date": "2026-09-08",
+  "scope": "Offline expired Lease release helper; not live recovery evidence",
+  "root_checks": {
+    "behavioral_contract": "pass",
+    "shellcheck": "pass",
+    "diff_check": "pass"
+  },
+  "behavioral_coverage": [
+    "dry-run makes no Lease patch",
+    "exact six-operation identity and resourceVersion CAS",
+    "live/future/malformed/normalized-invalid time rejected",
+    "invalid duration and Lease UID/resourceVersion/holder mismatch rejected",
+    "client/fence/signer desired replicas and legacy controller rejected",
+    "initial and second-read Pod presence rejected",
+    "retained PVC UID mismatch or unbound phase rejected",
+    "API failure and CAS race rejected without forced retry",
+    "post-mutation readback failure returns critical exit 70"
+  ],
+  "test_isolation": "PRIVATE_EKS_SESSION=1; mock kubectl; AWS deny stub; synthetic identities only",
+  "independent_review": {
+    "owner": "/root/credential_validator_integration",
+    "result": "no material blocker found",
+    "checks": ["behavioral contract", "ShellCheck", "bash -n", "diff check"]
+  },
+  "limitations": [
+    "exclusive maintenance and GitOps pause are operator attestations, not an atomic lock",
+    "Lease CAS cannot atomically prevent another controller mutation",
+    "live release, signer recovery and post-recovery duty not executed",
+    "full UC5 remains incomplete"
+  ],
+  "production_mutations": false
+}

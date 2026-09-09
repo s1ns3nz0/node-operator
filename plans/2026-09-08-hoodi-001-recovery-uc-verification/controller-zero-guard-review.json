@@ -1,0 +1,26 @@
+{
+  "validator_set": "hoodi-001",
+  "scope": "TLS rotation and UC-5 role-revocation preflight",
+  "finding": "Deployment-only desired-replica checks missed the newly introduced StatefulSet client while its Pods were absent.",
+  "remediation": "Check both legacy Deployment and StatefulSet desired replicas, preserve the Pod-absence check, and fail closed on StatefulSet API errors.",
+  "verification": {
+    "nonzero_statefulset_with_zero_pods": "rejected before Vault ceremony in both mocked helpers",
+    "statefulset_api_failure": "rejected before Vault ceremony in both mocked helpers",
+    "tls_rotation_contract": "PASS",
+    "role_revocation_contract": "PASS",
+    "shellcheck_four_changed_scripts": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "signer_recovery_followup": {
+    "staged_client_required": true,
+    "legacy_deployment_and_statefulset_checked": true,
+    "client_signer_and_proxy_pod_absence_required": true,
+    "negative_mock_cases": 11,
+    "dry_run_and_exact_signer_only_scale": "PASS",
+    "shellcheck_and_diff_check": "PASS",
+    "uc5_completion_claimed": false,
+    "remaining_gate": "An existing nonempty Lease holder still requires a separately verified handover; this helper does not clear or replace it."
+  },
+  "runtime_mutated": false,
+  "limits": ["These are offline tests, not live UC-5 completion.", "Client controller checks do not substitute for continuously enforced signing authority."]
+}

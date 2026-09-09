@@ -1,23 +1,29 @@
 # Rendered client starts at zero replicas. It cannot sign until the activation
-# gate has verified the exact signed image, private Beacon health, signer TLS,
+# gate has verified the exact approved image, private Beacon health, signer TLS,
 # active validator state, and fence ownership.
 apiVersion: v1
-kind: ConfigMap
+kind: Service
 metadata:
-  name: validator-REPLACE_WITH_VALIDATOR_SET-signer-ca
+  name: validator-REPLACE_WITH_VALIDATOR_SET-client-headless
   namespace: validator-operations
-immutable: true
-binaryData:
-  ca.crt: REPLACE_WITH_SIGNER_CA_BASE64
+spec:
+  clusterIP: None
+  selector: {app.kubernetes.io/component: validator-client, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}
+  ports: [{name: placeholder, port: 1, targetPort: 1}]
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: validator-REPLACE_WITH_VALIDATOR_SET-client
   namespace: validator-operations
+  labels:
+    app.kubernetes.io/component: validator-client
+    node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET
 spec:
   replicas: 0
-  strategy: {type: Recreate}
+  serviceName: validator-REPLACE_WITH_VALIDATOR_SET-client-headless
+  podManagementPolicy: OrderedReady
+  updateStrategy: {type: RollingUpdate}
   selector:
     matchLabels:
       app.kubernetes.io/component: validator-client
@@ -30,27 +36,39 @@ spec:
     spec:
       serviceAccountName: validator-client
       automountServiceAccountToken: false
-      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, fsGroupChangePolicy: OnRootMismatch, seccompProfile: {type: RuntimeDefault}}
       containers:
         - name: validator
           image: REPLACE_WITH_PRYSM_VALIDATOR_IMAGE
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {cpu: "2", memory: 2Gi}
           args:
-            - validator
             - --accept-terms-of-use
             - --hoodi
+            - --datadir=/data
             - --beacon-rest-api-provider=http://prysm-beacon.node-operator.svc:3500
             - --validators-external-signer-url=https://validator-REPLACE_WITH_VALIDATOR_SET-remote-signer.validator-operations.svc:9000
             - --validators-external-signer-public-keys=REPLACE_WITH_VALIDATOR_PUBLIC_KEY
-            - --remote-signer-ca-crt-path=/etc/remote-signer/ca.crt
-          env: [{name: TMPDIR, value: /tmp}]
+            - --validators-external-signer-http-client-cert=/etc/remote-signer/tls.crt
+            - --validators-external-signer-http-client-key=/etc/remote-signer/tls.key
+            - --validators-external-signer-http-ca-cert=/etc/remote-signer/ca.crt
+          env:
+            - {name: TMPDIR, value: /tmp}
           volumeMounts:
-            - {name: signer-ca, mountPath: /etc/remote-signer, readOnly: true}
+            - {name: client-tls, mountPath: /etc/remote-signer, readOnly: true}
             - {name: tmp, mountPath: /tmp}
             - {name: data, mountPath: /data}
           securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}, readOnlyRootFilesystem: true, runAsNonRoot: true, runAsUser: 1000}
       volumes:
-        - name: signer-ca
-          configMap: {name: validator-REPLACE_WITH_VALIDATOR_SET-signer-ca}
+        - name: client-tls
+          secret:
+            secretName: validator-REPLACE_WITH_VALIDATOR_SET-client-tls
+            defaultMode: 0440
+            items:
+              - {key: tls.crt, path: tls.crt}
+              - {key: tls.key, path: tls.key}
+              - {key: ca.crt, path: ca.crt}
         - {name: tmp, emptyDir: {medium: Memory, sizeLimit: 256Mi}}
         - {name: data, emptyDir: {}}
 ---
@@ -67,3 +85,5 @@ spec:
       ports: [{protocol: TCP, port: 3500}]
     - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}}]
       ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to: [{podSelector: {matchLabels: {app.kubernetes.io/component: validator-signing-fence, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}}}]
+      ports: [{protocol: TCP, port: 9001}]

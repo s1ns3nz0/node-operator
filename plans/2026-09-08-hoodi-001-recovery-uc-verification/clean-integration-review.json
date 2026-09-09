@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-08",
+  "scope": "Local continuous signing fence integration; not runtime or UC completion proof",
+  "base_commit": "4ca826ad981b25d3143800d0922e8a05cbfc60eb",
+  "implementation_commit": "74c6b06",
+  "source_commit": "8680639",
+  "tree_reconciliation": "Source tree preserved with additional PR138 scanner review evidence; no unresolved conflicts",
+  "root_checks": {
+    "activation_contract": "pass",
+    "authenticated_release_collector_contract": "pass",
+    "fence_image_contract": "pass",
+    "go_test_race_fence": "pass",
+    "go_vet_fence": "pass",
+    "script_quality": "pass",
+    "diff_check": "pass",
+    "isolated_single_branch_full_history_gitleaks": {
+      "result": "pass",
+      "commits_scanned": 308,
+      "findings": 0,
+      "configuration": "scripts/ci/trusted-scanner/gitleaks.toml"
+    }
+  },
+  "independent_review": {
+    "owner": "/root/credential_validator_integration",
+    "result": "pass",
+    "scope": "client, activation, proxy, image, release collector, TLS rotation, recovery, UC5 probe, runtime, Go race/vet, script quality"
+  },
+  "external_changes": "none: no push, merge, image publication, Vault mutation, deployment or signing activation",
+  "remaining_live_gates": [
+    "PR138 fresh human approval and reviewed delivery",
+    "real image publication and authenticated exact-digest release verification",
+    "reviewed network enforcement and lease handover/recovery validation",
+    "user-operated signer SAN certificate rotation",
+    "chain activation, exact singleton startup and actual duty evidence",
+    "full UC1-5 recovery and correlated archive evidence"
+  ],
+  "graph_or_debrief_changes": false
+}

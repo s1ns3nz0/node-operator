@@ -51,6 +51,20 @@ resource "aws_ecr_repository" "validator_client" {
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-validator-prysm", Purpose = "private-prysm-validator-image" })
 }
 
+resource "aws_ecr_repository" "validator_signing_fence" {
+  count                = var.enable_validator_client_ecr_mirror ? 1 : 0
+  name                 = "${local.name_prefix}-validator-fence"
+  image_tag_mutability = "IMMUTABLE"
+  encryption_configuration {
+    encryption_type = "KMS"
+    kms_key         = aws_kms_key.validator_client_ecr[0].arn
+  }
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-validator-fence", Purpose = "validator-signing-fence-image" })
+}
+
 data "aws_iam_policy_document" "github_validator_client_mirror_assume_role" {
   count = var.enable_validator_client_ecr_mirror ? 1 : 0
   statement {
@@ -87,7 +101,7 @@ data "aws_iam_policy_document" "github_validator_client_mirror" {
   }
   statement {
     actions   = ["ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:CompleteLayerUpload", "ecr:DescribeImages", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart"]
-    resources = [aws_ecr_repository.validator_client[0].arn]
+    resources = [aws_ecr_repository.validator_client[0].arn, aws_ecr_repository.validator_signing_fence[0].arn]
   }
 }
 

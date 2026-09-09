@@ -1,0 +1,33 @@
+{
+  "automation_id": "23272590-8be5-46fd-a1d1-f9395723ec54",
+  "name": "Hoodi-001 readiness watch",
+  "provider": "codex",
+  "workspace": "/Users/s1ns3nz0/orca/projects/node-operator",
+  "new_worktrees_created": false,
+  "rrule": "FREQ=HOURLY;BYMINUTE=0;UNTIL=20260909T130000Z",
+  "timezone": "Asia/Seoul",
+  "enabled_at_configuration": true,
+  "scope": "Public Beacon read-only filtered metadata; no repository edits, deployment, signing, secrets, IAM, push, merge, goal creation, graphs or debriefs",
+  "stop_condition": "Disable this exact automation after active_ongoing observation or expiry; scheduler UNTIL also bounds recurrence",
+  "manual_validation_run": {
+    "id": "ddd5a07e-076d-4e17-976f-bd75d0893d97",
+    "status": "completed",
+    "error": null,
+    "observed_at_utc": "2026-09-08T13:14:11Z",
+    "validator_http_status": 404,
+    "pending_http_status": 200,
+    "pending_count": 1136,
+    "reported_ordinal_position": 905
+  },
+  "first_scheduled_run": {
+    "run_number": 2,
+    "status": "completed",
+    "error": null,
+    "observed_at_utc": "2026-09-08T14:00:52Z",
+    "validator_http_status": 404,
+    "pending_http_status": 200,
+    "pending_count": 1027,
+    "reported_ordinal_position": 793
+  },
+  "limits": ["Requires the local Orca scheduling runtime to remain available", "Public corroboration never authorizes signing", "This watch does not replace active recovery implementation or private Beacon gates"]
+}

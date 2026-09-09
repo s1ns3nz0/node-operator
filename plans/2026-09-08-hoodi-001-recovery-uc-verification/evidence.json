@@ -15,6 +15,8 @@
     "The private duty observer now uses standards-shaped current/next-epoch requests, fails closed on HTTP and response-shape errors, and explicitly distinguishes assignments from signed outcomes.",
     "The private-EKS wrapper now captures and terminates only its exact owned SSM SessionId and preserves stdin, signals, and child exit status; focused cleanup tests pass.",
     "The bounded Firehose adapter accepted the exact double-gzip live sample (186 batches, 636 events) without persisting or printing raw logs. A separate locked UC-5 archive sample contains 97 Vault audit records and four role delete/create request-response pairs with request IDs; this corroborates the limited revocation exercise but not a live validator duty.",
+    "A non-deployed continuous-fence prototype now demonstrates exact Pod-UID/resourceVersion CAS renewal and dedicated per-set Lease RBAC, with offline failure tests. Its security model explicitly leaves activation blocked until a lease-checking signer proxy, direct-signer egress denial, projected-token isolation, and reliable PID supervision are integrated and reviewed.",
+    "The existing public signer certificate has no DNS SAN and fails Go x509 hostname verification, so an OpenSSL/curl success cannot prove Prysm compatibility. A TLS-only recovery helper now generates the exact service SANs, uses Vault KV CAS on only signer-tls, keeps PKCS12 passwords out of argv, requires client zero, preserves the previous public CA, and revokes generated tokens; offline Go verification passes.",
     "Prior sanitized inspection found a synced private Prysm head but HTTP 404 for the queried validator public key.",
     "No validator-client Deployment or Pod was observed; the operational signer and database were Running and the retained PVC was Bound.",
     "The bounded UC-5 role revocation failed closed, restored signer readiness, and kept the client fenced, but did not prove a post-recovery duty.",
@@ -22,7 +24,8 @@
   ],
   "pending": [
     "Wait for the already-valid deposit to leave pending_deposits and obtain a fresh active_ongoing record; do not submit another deposit.",
-    "Implement and independently review a continuously renewed fence controller or equivalent fail-closed client enforcement. A one-time manual Lease renewal is not an acceptable activation control.",
+    "Complete the independently reviewed continuous-fence integration: add a lease-checking signer proxy, deny direct client-to-signer egress, isolate the bound service-account token to the fence, and implement reliable supervisor/PID termination. A one-time Lease renewal or the prototype alone is not an activation control.",
+    "Run the signer TLS-only recovery ceremony with human recovery shares, restart only the signer, verify its SAN through the same Go/Prysm TLS path, and update the public CA ConfigMap before any client activation. Do not rerun onboarding or rewrite BLS/slashing records.",
     "Publish the reviewed local changes through a human-gated PR, mirror the approved client image from main, then render and review exactly one zero-replica client.",
     "Scale the single client from zero to one only after every fresh activation gate passes, then correlate an actual assignment, signer request, client outcome, and canonical archive record.",
     "Re-run UC-2 through UC-5 against the live client; the existing UC-5 exercise and archive correlation remain limited because they do not prove a post-recovery duty or cached-key revocation behavior."
