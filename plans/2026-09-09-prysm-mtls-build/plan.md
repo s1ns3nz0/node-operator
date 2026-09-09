@@ -20,6 +20,15 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+Assess Agent GO-2026-5932 without changing the frozen runtime image. Add an
+optional evidence-only BuildKit target deriving from the unchanged builder:
+same source, module locks, Go version, platform and minimal tag. Export the
+complete go-list package closure and built-binary hash without network in that
+step, then require binary hash equality to the frozen runtime before treating
+the closure as applicable. Retain the scan finding; absent affected packages
+are applicability evidence, not a scanner exclusion or live rollout approval.
+Root owns implementation/integration; Terra independently reviews the proof.
+
 The saved three-repository plan is independently reviewed and applied at
 backend serial223. Publish only the already full-scanned frozen server and
 Injector candidates, with explicit local OCI-index descriptor identity and

@@ -1,4 +1,20 @@
 {
+  "vault_agent_applicability_20260909": {
+    "image": "sha256:33458e87c790b140717f2f4c688d31327292f67677ba004d32838deed8b8f30a",
+    "export_directory": "/private/tmp/hoodi-agent-dependency-evidence.U2l35x",
+    "binary_sha256": "ce1ea8a97b2a565cc9cbd65004b21300d6beee9b1fdcf758c4adc76f068a2647",
+    "runtime_and_export_binary_equal": true,
+    "dependency_count": 1973,
+    "dependency_sha256": "386770b26b88aa34397b273497a955a6ecb782fc5d66f32f5302072dd13f9d63",
+    "affected_openpgp_subtree_present": false,
+    "finding": "GO-2026-5932 retained as Unknown; exact-target non-applicability, not a module waiver",
+    "scan_sha256": "cbe6c51221624eab14dbb268c0daa2624c4c97c512db1c312f75a57db23d97ff",
+    "verification": "bash scripts/ci/verify-vault-agent-candidate.sh /private/tmp/hoodi-agent-full-grype-20260909.json /private/tmp/hoodi-agent-dependency-evidence.U2l35x",
+    "result": "PASS; shellcheck passed",
+    "independent_review": "Terra independently ran the exact verifier and reviewed actual closure/binary/advisory scope: PASS, no gaps; no module waiver or deployment approval",
+    "live_deployment": false,
+    "ci_attestation": false
+  },
   "vault_candidate_registry_delivery_20260909": {
     "result": "server and Injector candidates published; exact index identities and full registry scans passed",
     "directory": "/private/tmp/hoodi-vault-candidate-publication.ppK53E",

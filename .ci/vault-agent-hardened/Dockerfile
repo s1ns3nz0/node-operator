@@ -37,6 +37,23 @@ RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
       -o /out/vault ./agent-main.go \
     && test "$(go version -m /out/vault | awk '$1 == "build" && $2 == "CGO_ENABLED=0" {print $2}')" = CGO_ENABLED=0
 
+# Optional evidence export only. The normal runtime target and its binary are
+# unchanged. Bind this closure to a frozen runtime by comparing binary hashes.
+FROM build AS dependency-evidence-build
+RUN --network=none --mount=type=cache,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
+    mkdir /evidence \
+    && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOTOOLCHAIN=local GOPROXY=off \
+      go list -mod=readonly -tags=minimal -deps ./agent-main.go > /evidence/dependencies.txt \
+    && test "$(wc -l < /evidence/dependencies.txt)" -gt 100 \
+    && ! grep -Eq '^golang.org/x/crypto/openpgp(/|$)' /evidence/dependencies.txt \
+    && go version -m /out/vault > /evidence/buildinfo.txt \
+    && sha256sum /out/vault > /evidence/binary.sha256 \
+    && cp go.mod go.sum agent-main.go /evidence/
+
+FROM scratch AS dependency-evidence
+COPY --from=dependency-evidence-build /evidence/ /
+
 FROM golang@sha256:1a9c10cf505a9e6b1e96ea77ebdbfe79a0f10380181faf88bc3b51d7e4315fae AS mock-build
 WORKDIR /src
 COPY test-mock-vault.go /src/test-mock-vault.go

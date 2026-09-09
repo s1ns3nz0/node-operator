@@ -115,6 +115,33 @@ unchanged generic CI gates. Report accepted findings as
 
 ## Other runtime findings and upgrade boundary
 
+### Agent exact-target applicability checkpoint, 2026-09-09
+
+The frozen Agent OCI index
+`sha256:33458e87c790b140717f2f4c688d31327292f67677ba004d32838deed8b8f30a`
+has binary SHA-256
+`ce1ea8a97b2a565cc9cbd65004b21300d6beee9b1fdcf758c4adc76f068a2647`.
+An optional evidence-only Docker target reproduced that exact binary with the
+same pinned source, Go1.26.6, Linux/amd64, CGO disabled, module locks and minimal
+build tag. Its network-disabled dependency export contains 1,973 packages;
+closure SHA-256 is
+`386770b26b88aa34397b273497a955a6ecb782fc5d66f32f5302072dd13f9d63`.
+The [GO-2026-5932 advisory](https://vuln.go.dev/ID/GO-2026-5932.json)
+identifies `golang.org/x/crypto/openpgp` and its subpackages. None occurs in
+this closure; the separately named ProtonMail OpenPGP implementation does.
+This supports non-applicability to this exact executable, not a module-wide
+waiver or a claim that all OpenPGP implementations are vulnerability-free.
+
+The complete retained scan has Critical0/High0/Medium3/Unknown1, ignored0,
+with SHA-256
+`cbe6c51221624eab14dbb268c0daa2624c4c97c512db1c312f75a57db23d97ff`.
+`scripts/ci/verify-vault-agent-candidate.sh` binds that scan, module/entrypoint
+hashes, closure and exported binary to the actual frozen runtime binary.
+The optional build target leaves the default runtime unchanged. The Unknown
+finding remains visible and no Critical/High exception is accepted. Any input,
+digest or advisory-scope change requires reassessment. This proof does not
+establish live Agent admission, HA/KMS compatibility or trusted CI provenance.
+
 The complete running-image inventory found additional findings in Nethermind,
 Beacon, audit relay, Vault injector and ZAP-based health proxies. See the
 latest runtime checkpoint in `evidence.json` for artifact-specific counts.
