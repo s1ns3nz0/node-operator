@@ -22,6 +22,14 @@ build export is retained once in
 and the runtime binary SHA-256 match the previously reviewed evidence export.
 No private Vault state, token, key, or runtime secret is part of this inventory.
 
+The Server/Agent candidates now use the gRPC 1.83.2 patch from PR144.
+Their binary hashes changed and were re-bound to new exact OCI subjects;
+their complete package-name inventories did not change. Old gRPC 1.83.1
+candidates are not eligible under the current manifest. The new build and
+publication evidence is in `plans/2026-09-09-vault-grpc-security-patch/`
+and `plans/2026-09-09-vault-grpc-candidate-publication/`. Injector is unchanged.
+The assessment scope and expiry were not widened for the new candidates.
+
 ## Controls and limitations
 
 - Bind registry subject, runtime identity, SBOM, raw scan, binary hash and the

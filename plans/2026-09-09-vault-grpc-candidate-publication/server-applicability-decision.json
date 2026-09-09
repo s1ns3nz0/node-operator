@@ -1,0 +1,39 @@
+{
+  "advisory_id": "GO-2026-5932",
+  "advisory_sha256": "10f20872fdf96e411dc7cc075492a02a85ec39e4a1d2623030bb9328cd043852",
+  "artifact_digest": "sha256:8fbe048a50769523a577be1fd41fe7f476e1bda4a345cf25874da6426ac25e49",
+  "build_provenance": "not_established_by_this_assessment",
+  "component": "server",
+  "deployment_authorized": false,
+  "expires_at": "2026-10-09T00:00:00Z",
+  "not_affected": [
+    {
+      "advisory_id": "GO-2026-5932",
+      "artifact": {
+        "name": "golang.org/x/crypto",
+        "version": "v0.56.0"
+      },
+      "decision": "not_affected",
+      "reason": "affected import prefix absent from reviewed dependency closure"
+    }
+  ],
+  "proof": {
+    "binary_path": "/bin/vault",
+    "binary_sha256": "b81dd1d983442df3e55d7b7ffa23daae178928d5ad1213be5680fb98c3507153",
+    "dependency_count": 2635,
+    "dependency_sha256": "6e810e887ea958c6e1d711696afe9de28a5c1c0b9b0c26d9be1626ae5ae59029"
+  },
+  "raw_findings": {
+    "critical": 0,
+    "high": 0,
+    "low": 0,
+    "medium": 3,
+    "unknown": 1
+  },
+  "raw_scan_status": "blocked",
+  "raw_sha256": "7ec1d714d1e845bfaf5d837e7e275d40a8ab00ab1e60c0c44562bf6b726f1f7c",
+  "sbom_sha256": "bd040a19266920643a4961ab50ee5d83523d43d64f6d6c0c96ac2ad33523582b",
+  "schema_version": "v1",
+  "status": "passed",
+  "unresolved_unknown": 0
+}

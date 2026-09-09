@@ -7,17 +7,17 @@
   "expires_at":"2026-10-09T00:00:00Z",
   "candidates":{
     "server":{
-      "digest":"sha256:5463f9d70fe71b897b165e019dbc1e85aeaa8271130572bd060729dc124ff51f",
+      "digest":"sha256:8fbe048a50769523a577be1fd41fe7f476e1bda4a345cf25874da6426ac25e49",
       "binary_path":"/bin/vault",
-      "binary_sha256":"57d43d61fc309b72aafcff45fa9c2bbfb8d12e6443391d63dc9925d224ad7124",
+      "binary_sha256":"b81dd1d983442df3e55d7b7ffa23daae178928d5ad1213be5680fb98c3507153",
       "dependency_path":"/usr/share/vault/dependencies.txt",
       "dependency_sha256":"6e810e887ea958c6e1d711696afe9de28a5c1c0b9b0c26d9be1626ae5ae59029",
       "dependency_count":2635
     },
     "agent":{
-      "digest":"sha256:33458e87c790b140717f2f4c688d31327292f67677ba004d32838deed8b8f30a",
+      "digest":"sha256:dc2c7c7b9a5b312605458422749a399420ad1ac60af5b7fb25b14e299cceaf23",
       "binary_path":"/usr/local/bin/vault",
-      "binary_sha256":"ce1ea8a97b2a565cc9cbd65004b21300d6beee9b1fdcf758c4adc76f068a2647",
+      "binary_sha256":"ac711ff251eeef7e15af586cc7c00d86348a9c3460dc71b0ecd0b2afd9de5fa1",
       "dependency_path":null,
       "dependency_sha256":"386770b26b88aa34397b273497a955a6ecb782fc5d66f32f5302072dd13f9d63",
       "dependency_count":1973

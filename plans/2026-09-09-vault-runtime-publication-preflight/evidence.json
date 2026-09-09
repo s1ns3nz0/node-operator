@@ -1,0 +1,15 @@
+{
+  "status":"local_preflight_passed",
+  "source_revision":"9cd8d84fe177235db33d6761b3ac570d7ab846d7",
+  "build_evidence_directory":"/private/tmp/hoodi-vault-grpc-build.WSyrpd",
+  "server_local_image_id":"sha256:8fbe048a50769523a577be1fd41fe7f476e1bda4a345cf25874da6426ac25e49",
+  "agent_local_image_id":"sha256:dc2c7c7b9a5b312605458422749a399420ad1ac60af5b7fb25b14e299cceaf23",
+  "checks":{"local_id_binary_configuration_scan_hashes":"passed for both images","harness":"passed","grpc_contract":"passed","diff_check":"passed"},
+  "retained_scan_each":{"critical":0,"high":0,"medium":3,"unknown":1,"database_built":"2026-09-09T06:31:00Z","fresh_remote_scan_required":true},
+  "publication_targets":["node-operator-baseline-vault-runtime-server","node-operator-baseline-vault-runtime-agent"],
+  "proposed_tag":"manual-grpc-1.83.2-9cd8d84fe177",
+  "existing_publisher_path":"Prior bounded manual publication used operator IAM user; no runtime publisher workflow exists. Existing CI verifier IAM role is read-only and must stay read-only.",
+  "independent_review":"Terra passed actual success and negative iid/scan/SBOM tampering cases; optional empty binary output guard incorporated",
+  "published":false,"deployed":false,"ci_build_attested":false,
+  "next_gate":"Explicit exact-two-image candidate publication authorization; no IAM or running workload changes"
+}
