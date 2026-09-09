@@ -1,4 +1,20 @@
 {
+  "signer_proxy_image_staging_20260909": {
+    "live_readback": "Vault StatefulSet 3/3, Injector 1/1; signer proxy still old ZAP 781a2bda; signing fence replicas=0",
+    "manifest": "deploy/dast/service-and-network-policies.yaml",
+    "candidate": "sha256:fb305627ba331d70f8cc82509a4fae4be858422fd257e170543fbbefcefb9588",
+    "scope": "Signer proxy image-only staging; no live mutation and no change to credentials, routes, mounts or NetworkPolicies",
+    "checks": [
+      "Existing test-private-dast-access-contract.sh passed; Kyverno CLI portion explicitly skipped",
+      "Same embedded signer Python handler and its existing synthetic test block passed on exact candidate Docker image with network none, readonly root, capabilities dropped",
+      "Docker fixture checked GET200, denied routes/methods, unavailable503 and no Python/Server response headers; not actual upstream mTLS",
+      "Terra independently reviewed semantic image-only diff: PASS"
+    ],
+    "live_health_contract_resolved": false,
+    "deployed": false,
+    "remaining": "Resolve and verify safe health path through current mTLS/fence boundary before live proxy rollout",
+    "pr_gate_at_027fda0": "General CI5 passed; trusted CI Evidence Decision block=0 require_approval=1"
+  },
   "vault_agent_registry_delivery_20260909": {
     "subject": "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-vault-runtime-agent@sha256:33458e87c790b140717f2f4c688d31327292f67677ba004d32838deed8b8f30a",
     "directory": "/private/tmp/hoodi-agent-publication.X0RmN7",

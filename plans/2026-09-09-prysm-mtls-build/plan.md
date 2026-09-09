@@ -20,6 +20,15 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+Fresh live readback confirms signer upcheck still uses the old ZAP runtime,
+while Nethermind already uses frozen Python fb305627. Stage an image-only
+replacement for the signer proxy and exercise the unchanged embedded Python
+handler in that frozen Docker runtime. Preserve all routes, TLS validation,
+CA-only mounts and NetworkPolicies. This reduces runtime findings but does not
+repair the unresolved signer mTLS/fence health contract. No signing credential
+is added and no live patch is included in this source change. Root owns this
+bounded manifest change; Terra independently reviews image-only scope.
+
 After Terra's actual Agent proof review passed, publish only frozen Agent index
 33458e87 to its existing private repository. Revalidate the exact candidate,
 account, immutable/KMS repository and existing tag before writing; require
