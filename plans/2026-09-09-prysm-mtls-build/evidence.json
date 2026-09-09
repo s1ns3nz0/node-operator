@@ -1,5 +1,26 @@
 {
   "vault_server_hardened_candidate_20260909": {
+    "isolated_raft_rehearsal": {
+      "result": "passed",
+      "script": "scripts/ci/test-vault-raft-upgrade.py",
+      "log": "/private/tmp/hoodi-vault-raft-upgrade-reviewed-20260909.log",
+      "sha256": "69de663cce28942d237959ee1f6bf1da331a7a7ac6d7013d7d46ddcafbeb0b2c",
+      "checks": ["fresh synthetic1.20.4 Raft initialization and KV snapshot", "old container stopped before frozen2.1 candidate opened same volume", "retained KV after unseal", "mutated KV reverted by old snapshot restore", "successful process exit and no test-labelled containers or volumes remain"],
+      "isolation": "network none, no published host ports, read-only roots; only task-owned synthetic volume; generated fixture root token and unseal share never printed",
+      "initial_attempt": "fixture omitted raft subdirectory; failed before initialization, cleaned up; fixed directory provisioning and reran successfully",
+      "independent_review": {"agent": "/root/vault_raft_review", "tier": "terra", "fallback": "none", "result": "passed after fixes", "findings_resolved": ["bind input scan and dependency closure to recorded SHA256 and require retained Unknown match", "withhold startup logs; only status/exit code diagnostics"], "revalidation": "exact-image verifier passed; altered scan rejected; post-review Raft rehearsal passed exit0; harness:verify passed"},
+      "limits": "Single-node synthetic Shamir test only; not live KMS auto-unseal, HA rolling upgrade, audit socket or recovery-token transition proof"
+    },
+    "unknown_assessment": {
+      "id": "GO-2026-5932",
+      "advisory": "https://vuln.go.dev/ID/GO-2026-5932.json",
+      "affected_scope": "golang.org/x/crypto/openpgp and listed subpackages, not every package in the module",
+      "result": "affected package absent from this exact server build closure; retained module-level scanner match",
+      "dependency_closure_sha256": "6e810e887ea958c6e1d711696afe9de28a5c1c0b9b0c26d9be1626ae5ae59029",
+      "reproducer": "scripts/ci/verify-vault-server-candidate.sh EXISTING_EXACT_IMAGE_GRYPE_JSON",
+      "verification": "passed exact scan hash and retained Unknown match, frozen image identity, module and closure hashes, populated package closure, affected-path absence and separate ProtonMail package presence; altered scan rejected",
+      "limits": "Not an exemption, not a blanket crypto security claim, not evidence for Agent or other image; reassess each changed build"
+    },
     "image": "sha256:5463f9d70fe71b897b165e019dbc1e85aeaa8271130572bd060729dc124ff51f",
     "version": "2.1.0",
     "source": "cb6a54face072e372480d7cc2e64a3110b84756f",
@@ -9,7 +30,7 @@
     "critical": 0, "high": 0, "medium": 3, "unknown": 1, "ignored": 0,
     "checks": ["upstream generate-root and snapshot-inspection command tests passed", "full server binary built without minimal feature tags", "exact digest version command with no network, read-only filesystem, dropped capabilities, UID100:1000", "valid scanner DB and no excludes/fixed-only filtering"],
     "published": false, "deployed": false,
-    "remaining": "Unknown GO-2026-5932 reachability assessment; isolated Raft backup/restore and auth/audit compatibility; recovery-token transition ceremony; independent review and trusted delivery"
+    "remaining": "Isolated Raft backup/restore and auth/audit compatibility; recovery-token transition ceremony; independent review and trusted delivery"
   },
   "ci_evidence_format_remediation_20260909": {
     "failed_head": "a00fff53c2a26311936e8be1035b1dc8655e4ec1",

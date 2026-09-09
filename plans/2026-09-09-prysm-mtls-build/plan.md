@@ -20,6 +20,14 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+Root owns an isolated Docker Raft rehearsal: fresh synthetic Vault1.20.4
+storage, one test unseal share, KV value and snapshot; stop old process before
+starting the frozen2.1 candidate on that same task-owned volume. Verify unseal,
+retained data and snapshot restoration after a synthetic mutation. No host
+ports, live snapshots, credentials or production volumes are allowed. Remove
+only returned container/volume IDs on exit. This is compatibility evidence,
+not authorization or proof of live HA migration and recovery-token transition.
+
 Root owns live GET-only UC2 TLS-negative verification with the already reviewed
 identity-probe image. Fresh zero-client/fence, empty Lease and ready signer
 checks are mandatory because probe labels match fence Service selectors. Use
