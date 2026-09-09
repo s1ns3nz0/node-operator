@@ -1,4 +1,21 @@
 {
+  "vault_agent_registry_delivery_20260909": {
+    "subject": "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-vault-runtime-agent@sha256:33458e87c790b140717f2f4c688d31327292f67677ba004d32838deed8b8f30a",
+    "directory": "/private/tmp/hoodi-agent-publication.X0RmN7",
+    "scan_sha256": "701cfb64acaedf6c415a648ac0db1a083e4aba177da1dee58feb7a78d8494294",
+    "matches": 4,
+    "ignored_matches": 0,
+    "critical": 0,
+    "high": 0,
+    "medium": 3,
+    "unknown": 1,
+    "registry_digest_equals_reviewed_local_index": true,
+    "review": "Terra reviewed publication script; root documented intentional equal-digest resume with no push and rejection of differing tags. Repository observed empty before publication",
+    "credentials": "Task-only private Docker auth; successful process exit ran cleanup",
+    "ci_attested": false,
+    "deployed": false,
+    "remaining": "Actual operator auth ceremony, live canaries and Vault HA/KMS/audit rollout; trusted CI promotion"
+  },
   "vault_agent_applicability_20260909": {
     "image": "sha256:33458e87c790b140717f2f4c688d31327292f67677ba004d32838deed8b8f30a",
     "export_directory": "/private/tmp/hoodi-agent-dependency-evidence.U2l35x",

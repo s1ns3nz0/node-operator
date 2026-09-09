@@ -20,6 +20,18 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+After Terra's actual Agent proof review passed, publish only frozen Agent index
+33458e87 to its existing private repository. Revalidate the exact candidate,
+account, immutable/KMS repository and existing tag before writing; require
+registry digest equality and a complete registry rescan afterward. Preserve
+the raw Unknown and Medium findings. No rebuild, runtime rollout, Vault token
+or trusted CI attestation is included. Root integrates with nearest-tier
+fallback; Terra reviews the bounded publication script. No graph/debrief.
+An existing equal digest intentionally resumes verification without pushing;
+an existing differing digest is refused before authentication. Terra flagged
+the distinction from blanket tag refusal; root retains this documented
+verified-resume contract to avoid republishing after interrupted observation.
+
 Assess Agent GO-2026-5932 without changing the frozen runtime image. Add an
 optional evidence-only BuildKit target deriving from the unchanged builder:
 same source, module locks, Go version, platform and minimal tag. Export the
