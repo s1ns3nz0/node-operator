@@ -99,7 +99,7 @@ if ! run_helper "$scratch/previous-ca" "$scratch/new-ca" >"$scratch/helper.out" 
   sed -n '1,30p' "$scratch/vault.trace" >&2
   fail 'mocked TLS-only rotation did not complete'
 fi
-test -s "$scratch/previous-ca" && test -s "$scratch/new-ca" || fail 'public CA recovery artifacts were not preserved'
+if ! test -s "$scratch/previous-ca" || ! test -s "$scratch/new-ca"; then fail 'public CA recovery artifacts were not preserved'; fi
 for action in 'policy write hoodi-hoodi-001-tls-rotation-' 'kv metadata get -format=json kv/validators/hoodi/hoodi-001/runtime/signer-tls' 'kv put -cas=4 kv/validators/hoodi/hoodi-001/runtime/signer-tls' 'token revoke -accessor child-accessor' 'policy delete hoodi-hoodi-001-tls-rotation-' 'token revoke -self'; do
   grep -Fq "$action" "$scratch/vault.trace" || fail "missing lifecycle action: $action"
 done
@@ -107,7 +107,7 @@ if grep -Eq 'keystore|slashing-db-password|runtime/password' "$scratch/vault.tra
 
 : > "$scratch/vault.trace"
 if MOCK_CAS_FAIL=true run_helper "$scratch/cas-old" "$scratch/cas-new" >/dev/null 2>&1; then fail 'CAS failure unexpectedly passed'; fi
-test -s "$scratch/cas-old" && test -s "$scratch/cas-new" || fail 'CAS failure lacked durable public recovery artifacts'
+if ! test -s "$scratch/cas-old" || ! test -s "$scratch/cas-new"; then fail 'CAS failure lacked durable public recovery artifacts'; fi
 grep -Fq 'token revoke -self' "$scratch/vault.trace" || fail 'CAS failure did not revoke root token'
 
 : > "$scratch/vault.trace"

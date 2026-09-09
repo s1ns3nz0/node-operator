@@ -5,10 +5,10 @@ set -euo pipefail
 # Linux release artifact, live TLS identity, or validator duty execution.
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 usage() { printf 'Usage: %s --output-dir <new-absolute-directory>\n' "${0##*/}" >&2; exit 64; }
-[ "$#" -eq 2 ] && [ "$1" = --output-dir ] || usage
+if [ "$#" -ne 2 ] || [ "$1" != --output-dir ]; then usage; fi
 output="$2"
 case "$output" in /*) ;; *) usage ;; esac
-[ ! -e "$output" ] && [ ! -L "$output" ] || { printf '%s\n' 'Output must not already exist.' >&2; exit 65; }
+if [ -e "$output" ] || [ -L "$output" ]; then printf '%s\n' 'Output must not already exist.' >&2; exit 65; fi
 for command in git go jq shasum mkdir awk grep; do command -v "$command" >/dev/null || exit 69; done
 lock="$root/.ci/prysm-mtls/source.lock.json"
 revision="$(jq -er '.commit | select(test("^[a-f0-9]{40}$"))' "$lock")"

@@ -1,4 +1,15 @@
 {
+  "draft_publication_checkpoint": {
+    "pr": "https://github.com/s1ns3nz0/node-operator/pull/139",
+    "branch": "codex/hoodi-runtime-security-release",
+    "primary_worktree": "/private/tmp/node-operator-hoodi-runtime-security-release",
+    "original_integration_history_preserved": true,
+    "gitleaks": "publication HEAD ancestry: 308 commits, zero findings; no scanner exclusions added",
+    "initial_head": "c6fd9da920fe781b0fa9a07cad33d99e34928ca2",
+    "initial_ci": "Policy and Security passed; Terraform still running at observation; Quality and Foundation failed SC2015 at six conditional expressions",
+    "fix": "Explicit if statements preserve failure behavior; local script quality, fence contract and TLS rotation contract passed",
+    "scope": "draft only; runtime completion, trusted release and remaining UC gates not claimed"
+  },
   "activation_checkpoint_20260909T001434Z": {
     "evidence": "/private/tmp/hoodi-001-private-observation-20260909/uc-3-private-beacon-20260909T001434Z.json",
     "sha256": "008785641795fd9b3a8044f22f13d886ef0e6d415f21385b5e60abad359d5405",

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [ "$#" -ne 1 ]; then printf 'usage: %s INSTALL_DIRECTORY\n' "$0" >&2; exit 64; fi
-[ "$(uname -s)" = Linux ] && [ "$(uname -m)" = x86_64 ] || { printf 'only reviewed linux/amd64 tools are supported\n' >&2; exit 65; }
+if [ "$(uname -s)" != Linux ] || [ "$(uname -m)" != x86_64 ]; then printf 'only reviewed linux/amd64 tools are supported\n' >&2; exit 65; fi
 install_directory="$1"; mkdir -p "$install_directory"
 scratch="$(mktemp -d)"; trap 'rm -rf "$scratch"' EXIT
 download() {

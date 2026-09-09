@@ -5,7 +5,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 manifest="$root/deploy/validator/client-lease-fence-template.yaml"
 model="$root/deploy/validator/client-lease-fence-security-model.md"
 fail(){ printf 'FAIL validator signing fence contract: %s\n' "$*" >&2; exit 1; }
-test -f "$manifest" && test -f "$model" || fail 'fence manifest/model missing'
+if ! test -f "$manifest" || ! test -f "$model"; then fail 'fence manifest/model missing'; fi
 ruby -ryaml -e '
 docs=YAML.load_stream(File.read(ARGV[0])).select{|d| d.is_a?(Hash)}
 role=docs.find{|d| d["kind"]=="Role"} or abort "Role missing"
