@@ -1,4 +1,15 @@
+locals {
+  use_foundation_network = var.network_source == "foundation"
+  network_vpc_id         = local.use_foundation_network ? var.foundation_network.vpc_id : aws_vpc.private[0].id
+  network_vpc_cidr       = local.use_foundation_network ? var.foundation_network.vpc_cidr : var.vpc_cidr
+  system_subnet_ids      = local.use_foundation_network ? var.foundation_network.system_subnet_ids : aws_subnet.private[*].id
+  hoodi_subnet_ids       = local.use_foundation_network ? var.foundation_network.hoodi_subnet_ids : aws_subnet.private[*].id
+  system_route_table_id  = local.use_foundation_network ? var.foundation_network.system_route_table_id : aws_route_table.private[0].id
+  hoodi_nat_gateway_id   = local.use_foundation_network ? var.foundation_network.hoodi_nat_gateway_id : var.hoodi_nat_gateway_id
+}
+
 resource "aws_vpc" "private" {
+  count                = local.use_foundation_network ? 0 : 1
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -6,6 +17,13 @@ resource "aws_vpc" "private" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc"
   })
+
+  # A foundation-mode configuration uses a distinct, empty state created by
+  # the release orchestrator.  If this existing baseline state is mistakenly
+  # switched to foundation mode, refuse the resulting legacy-VPC deletion.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 data "aws_prefix_list" "s3" {
@@ -18,8 +36,8 @@ data "aws_prefix_list" "s3" {
 # egress exception cannot be enabled against a missing gateway. The route is
 # deliberately not managed here because it predates this module's state.
 data "aws_nat_gateway" "hoodi_egress" {
-  count = var.hoodi_nat_gateway_id == null ? 0 : 1
-  id    = var.hoodi_nat_gateway_id
+  count = local.hoodi_nat_gateway_id == null ? 0 : 1
+  id    = local.hoodi_nat_gateway_id
 }
 
 moved {
@@ -30,7 +48,7 @@ moved {
 # The default security group cannot be removed. Explicitly manage it as deny-all
 # so resources must opt into the dedicated security groups declared below.
 resource "aws_default_security_group" "private" {
-  vpc_id = aws_vpc.private.id
+  vpc_id = local.network_vpc_id
 
   ingress = []
   egress  = []
@@ -38,6 +56,13 @@ resource "aws_default_security_group" "private" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-default-deny"
   })
+
+  lifecycle {
+    precondition {
+      condition     = !local.use_foundation_network || var.foundation_network != null
+      error_message = "network_source=foundation requires the reviewed foundation_network output."
+    }
+  }
 }
 
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
@@ -85,7 +110,7 @@ resource "aws_flow_log" "private" {
   log_destination      = aws_cloudwatch_log_group.vpc_flow_logs.arn
   log_destination_type = "cloud-watch-logs"
   traffic_type         = "ALL"
-  vpc_id               = aws_vpc.private.id
+  vpc_id               = local.network_vpc_id
 
   depends_on = [aws_iam_role_policy.vpc_flow_logs]
 
@@ -93,9 +118,9 @@ resource "aws_flow_log" "private" {
 }
 
 resource "aws_subnet" "private" {
-  count = length(var.availability_zones)
+  count = local.use_foundation_network ? 0 : length(var.availability_zones)
 
-  vpc_id                  = aws_vpc.private.id
+  vpc_id                  = aws_vpc.private[0].id
   availability_zone       = var.availability_zones[count.index]
   cidr_block              = var.private_subnet_cidrs[count.index]
   map_public_ip_on_launch = false
@@ -105,37 +130,46 @@ resource "aws_subnet" "private" {
     "kubernetes.io/role/internal-elb"   = "1"
     "kubernetes.io/cluster/${var.name}" = "shared"
   })
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # The baseline creates no Internet gateway, NAT gateway, or public route. The
 # approved private NAT route used by the disposable runner is external to this
 # module and is the only path used by the dedicated Hoodi node group below.
 resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.private.id
+  count  = local.use_foundation_network ? 0 : 1
+  vpc_id = aws_vpc.private[0].id
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private"
   })
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_route_table_association" "private" {
-  count = length(aws_subnet.private)
+  count = local.use_foundation_network ? 0 : length(aws_subnet.private)
 
   subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private.id
+  route_table_id = aws_route_table.private[0].id
 }
 
 resource "aws_security_group" "cluster" {
   name_prefix = "${local.name_prefix}-cluster-"
   description = "Private EKS control-plane access only from baseline nodes."
-  vpc_id      = aws_vpc.private.id
+  vpc_id      = local.network_vpc_id
 
   egress {
     description = "Control-plane traffic within the private VPC"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = [var.vpc_cidr]
+    cidr_blocks = [local.network_vpc_cidr]
   }
 
   tags = merge(local.common_tags, {
@@ -146,14 +180,14 @@ resource "aws_security_group" "cluster" {
 resource "aws_security_group" "nodes" {
   name_prefix = "${local.name_prefix}-nodes-"
   description = "Private managed-node communication; no internet ingress."
-  vpc_id      = aws_vpc.private.id
+  vpc_id      = local.network_vpc_id
 
   egress {
     description = "Private VPC service traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = [var.vpc_cidr]
+    cidr_blocks = [local.network_vpc_cidr]
   }
 
   # ECR image layers are fetched from S3 through the gateway endpoint. Security
@@ -181,14 +215,14 @@ resource "aws_security_group" "nodes" {
 resource "aws_security_group" "hoodi_nodes" {
   name_prefix = "${local.name_prefix}-hoodi-nodes-"
   description = "Private Hoodi nodes with port-restricted NAT egress."
-  vpc_id      = aws_vpc.private.id
+  vpc_id      = local.network_vpc_id
 
   egress {
     description = "Private VPC service traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = [var.vpc_cidr]
+    cidr_blocks = [local.network_vpc_cidr]
   }
 
   egress {

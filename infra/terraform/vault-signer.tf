@@ -46,12 +46,12 @@ resource "aws_security_group" "release_signer" {
   count       = var.enable_release_signer ? 1 : 0
   name_prefix = "${local.name_prefix}-signer-"
   description = "Private release signer egress to approved VPC services only."
-  vpc_id      = aws_vpc.private.id
+  vpc_id      = local.network_vpc_id
   egress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
+    cidr_blocks = [local.network_vpc_cidr]
     description = "HTTPS to private AWS and service endpoints"
   }
 
@@ -61,7 +61,7 @@ resource "aws_security_group" "release_signer" {
     from_port   = 8200
     to_port     = 8200
     protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
+    cidr_blocks = [local.network_vpc_cidr]
     description = "Vault Transit HTTPS to the private internal NLB"
   }
   tags = local.common_tags
@@ -1120,7 +1120,7 @@ resource "aws_codebuild_project" "release_signer" {
     }
   }
   vpc_config {
-    vpc_id             = aws_vpc.private.id
+    vpc_id             = local.network_vpc_id
     subnets            = var.release_signer_subnet_ids
     security_group_ids = [aws_security_group.release_signer[0].id]
   }

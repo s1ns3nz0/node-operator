@@ -52,6 +52,45 @@ variable "vpc_cidr" {
   }
 }
 
+variable "network_source" {
+  description = "Network ownership mode. legacy preserves the existing baseline-owned VPC; foundation consumes the separately managed zero-resource foundation output."
+  type        = string
+  default     = "legacy"
+
+  validation {
+    condition     = contains(["legacy", "foundation"], var.network_source)
+    error_message = "network_source must be either legacy or foundation."
+  }
+}
+
+variable "foundation_network" {
+  description = "Non-secret output of the foundation-network root when network_source is foundation."
+  type = object({
+    vpc_id                = string
+    vpc_cidr              = string
+    system_subnet_ids     = list(string)
+    system_route_table_id = string
+    hoodi_subnet_ids      = list(string)
+    hoodi_route_table_id  = string
+    hoodi_nat_gateway_id  = string
+  })
+  default  = null
+  nullable = true
+
+  validation {
+    condition = var.foundation_network == null ? true : (
+      can(regex("^vpc-[0-9a-f]+$", var.foundation_network.vpc_id)) &&
+      can(cidrnetmask(var.foundation_network.vpc_cidr)) &&
+      length(var.foundation_network.system_subnet_ids) >= 2 &&
+      length(var.foundation_network.hoodi_subnet_ids) >= 1 &&
+      can(regex("^rtb-[0-9a-f]+$", var.foundation_network.system_route_table_id)) &&
+      can(regex("^rtb-[0-9a-f]+$", var.foundation_network.hoodi_route_table_id)) &&
+      can(regex("^nat-[0-9a-f]+$", var.foundation_network.hoodi_nat_gateway_id))
+    )
+    error_message = "foundation_network must contain reviewed VPC, subnet, route-table, and NAT identifiers."
+  }
+}
+
 variable "availability_zones" {
   description = "Exactly two approved Seoul availability zones for private worker subnets."
   type        = list(string)

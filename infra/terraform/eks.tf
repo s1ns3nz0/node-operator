@@ -32,7 +32,7 @@ resource "aws_eks_cluster" "private" {
   # the dedicated EBS and audit keys below.
 
   vpc_config {
-    subnet_ids              = aws_subnet.private[*].id
+    subnet_ids              = local.system_subnet_ids
     security_group_ids      = [aws_security_group.cluster.id]
     endpoint_private_access = true
     endpoint_public_access  = false
@@ -148,7 +148,7 @@ resource "aws_eks_node_group" "private" {
   cluster_name    = aws_eks_cluster.private.name
   node_group_name = "${var.name}-managed"
   node_role_arn   = aws_iam_role.nodes.arn
-  subnet_ids      = aws_subnet.private[*].id
+  subnet_ids      = local.system_subnet_ids
 
   ami_type       = "AL2023_x86_64_STANDARD"
   capacity_type  = "ON_DEMAND"
@@ -196,7 +196,7 @@ resource "aws_eks_node_group" "consensus" {
   cluster_name    = aws_eks_cluster.private.name
   node_group_name = "${var.name}-consensus"
   node_role_arn   = aws_iam_role.nodes.arn
-  subnet_ids      = aws_subnet.private[*].id
+  subnet_ids      = local.hoodi_subnet_ids
 
   ami_type       = "AL2023_x86_64_STANDARD"
   capacity_type  = "ON_DEMAND"
@@ -246,7 +246,7 @@ resource "aws_eks_node_group" "execution" {
   cluster_name    = aws_eks_cluster.private.name
   node_group_name = "${var.name}-execution"
   node_role_arn   = aws_iam_role.nodes.arn
-  subnet_ids      = aws_subnet.private[*].id
+  subnet_ids      = local.hoodi_subnet_ids
 
   ami_type       = "AL2023_x86_64_STANDARD"
   capacity_type  = "ON_DEMAND"

@@ -28,7 +28,7 @@ locals {
 resource "aws_security_group" "endpoints" {
   name_prefix = "${local.name_prefix}-endpoints-"
   description = "HTTPS access to required VPC interface endpoints from managed nodes only."
-  vpc_id      = aws_vpc.private.id
+  vpc_id      = local.network_vpc_id
 
   # Security groups are stateful: response traffic for allowed node requests
   # does not need a separate outbound rule. An explicit empty value removes
@@ -101,11 +101,11 @@ resource "aws_vpc_security_group_ingress_rule" "endpoints_https_from_temporary_s
 resource "aws_vpc_endpoint" "required_interface" {
   for_each = local.required_interface_endpoint_services
 
-  vpc_id              = aws_vpc.private.id
+  vpc_id              = local.network_vpc_id
   service_name        = "com.amazonaws.${var.aws_region}.${each.value}"
   vpc_endpoint_type   = "Interface"
   private_dns_enabled = true
-  subnet_ids          = aws_subnet.private[*].id
+  subnet_ids          = local.system_subnet_ids
   security_group_ids  = [aws_security_group.endpoints.id]
 
   tags = merge(local.common_tags, {
@@ -114,10 +114,10 @@ resource "aws_vpc_endpoint" "required_interface" {
 }
 
 resource "aws_vpc_endpoint" "s3" {
-  vpc_id            = aws_vpc.private.id
+  vpc_id            = local.network_vpc_id
   service_name      = "com.amazonaws.${var.aws_region}.s3"
   vpc_endpoint_type = "Gateway"
-  route_table_ids   = [aws_route_table.private.id]
+  route_table_ids   = [local.system_route_table_id]
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-s3-endpoint"
