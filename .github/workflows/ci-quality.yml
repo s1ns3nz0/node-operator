@@ -27,6 +27,8 @@ jobs:
         run: scripts/ci/test-script-quality.sh
       - name: Test recovery authentication preflight (mock CLI)
         run: bash scripts/ci/test-vault-recovery-auth.sh
+      - name: Test snapshot recovery cleanup lifecycle (mock CLI)
+        run: python3 scripts/ci/test-vault-snapshot-recovery-cleanup.py
       - name: Test operator authentication configuration and recovery lifecycle (mock CLI)
         run: |
           bash scripts/ci/test-vault-operator-auth-config.sh
