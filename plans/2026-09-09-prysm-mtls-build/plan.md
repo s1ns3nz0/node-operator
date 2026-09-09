@@ -20,6 +20,14 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+Provision a separate `aws_ecr_repository.upcheck_runtime[0]` under the existing
+node-runtime KMS boundary, with a reviewed one-create targeted plan. Publish
+the already scanned Python candidate by digest. Before any Nethermind proxy
+rollout, revalidate exact Deployment UID/image/replica state and manager/Argo
+ownership, preserve the current Python code and NetworkPolicies, then require
+rollout readiness and actual GET/denied-route tests. Do not apply this image-only
+rollout to the signer proxy with its unresolved mTLS health contract.
+
 Root owns `.ci/upcheck-python-runtime/` as a runtime-only replacement candidate
 for the full ZAP image currently used to execute Python health proxies. Preserve
 Python stdlib functionality and verify exact Python/SSL versions, nonroot

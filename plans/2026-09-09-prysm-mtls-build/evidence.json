@@ -1,4 +1,21 @@
 {
+  "nethermind_upcheck_runtime_rollout_20260909": {
+    "terraform": {
+      "directory": "/private/tmp/hoodi-upcheck-repository.iGmU1N",
+      "plan_sha256": "533d6fd05984b06caf5d77159ab80e486ab72252b6f22bcf1f5eecd60399df39",
+      "applied": "one immutable KMS ECR repository create only; existing key, no IAM/trust change",
+      "state_serial": 221, "temporary_credentials_removed": true
+    },
+    "image": "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-node-runtime-upcheck-python@sha256:fb305627ba331d70f8cc82509a4fae4be858422fd257e170543fbbefcefb9588",
+    "registry_scan": "/private/tmp/hoodi-upcheck-registry-grype-20260909.json",
+    "registry_scan_sha256": "7988d1bfa5ebd6255c3114c941caf695d7edc427f2c59c67aa193676019f9a85",
+    "critical": 0, "high": 0,
+    "deployment_uid": "890ad117-8d76-407e-bf34-a0db02451217",
+    "result": "/private/tmp/hoodi-nethermind-upcheck-rollout.CEuXRY/result.json",
+    "result_sha256": "aef8dc9becf0d00ff43d8377192f03e7c9d7b28658f5f8e85081395dbe364b03",
+    "checks": ["fresh UID/RV/old-image CAS and no owner/Argo markers", "image-only spec equality and successful singleton rollout", "actual upcheck200, forbidden path404, POST405, no runtime header disclosure", "existing proxy source executed on candidate Python in network-none container; fixed TCP target, no application bytes, outage503, denied paths/methods", "private DAST contract passed; standalone Kyverno fixture skipped because CLI unavailable"],
+    "limitations": "API port-forward functional proof, not DAST-network reachability or validator duty proof; signer proxy unchanged; manual reviewed candidate is not CI-attested"
+  },
   "upcheck_python_candidate_20260909": {
     "image": "sha256:fb305627ba331d70f8cc82509a4fae4be858422fd257e170543fbbefcefb9588",
     "base_amd64_manifest": "sha256:5e0ede45886712ce95b0e66232f743cc3d69ff6c2f62cc0d63778e1e894f8bd4",
