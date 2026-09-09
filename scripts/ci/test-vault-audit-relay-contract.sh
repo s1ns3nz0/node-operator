@@ -2,6 +2,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+python3 "$root/scripts/ci/test-vault-relay-publisher-policy.py"
 for file in \
   "$root/cmd/vault-audit-relay/main.go" \
   "$root/cmd/vault-audit-relay/main_test.go" \

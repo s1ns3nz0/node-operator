@@ -43,6 +43,8 @@ jobs:
         run: scripts/ci/test-toolchain-image-release.sh
       - name: Test image publisher isolation
         run: scripts/ci/test-image-publisher-isolation.sh
+      - name: Test audit relay publisher repository scope
+        run: python3 scripts/ci/test-vault-relay-publisher-policy.py
       - name: Test private DAST mirror boundary
         run: scripts/ci/test-private-dast-mirror-contract.sh
       - name: Test private DAST target access boundary
