@@ -1,4 +1,45 @@
 {
+  "vault_candidate_registry_delivery_20260909": {
+    "result": "server and Injector candidates published; exact index identities and full registry scans passed",
+    "directory": "/private/tmp/hoodi-vault-candidate-publication.ppK53E",
+    "server": {
+      "subject": "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-vault-runtime-server@sha256:5463f9d70fe71b897b165e019dbc1e85aeaa8271130572bd060729dc124ff51f",
+      "scan_sha256": "49ae871437fd0931bbfbfd222b9276e88b0c98646135ffa90087412ce3ec22e2",
+      "matches": 4,
+      "ignored_matches": 0,
+      "high_or_critical": 0
+    },
+    "injector": {
+      "subject": "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-vault-runtime-injector@sha256:2937fbc5d368430d089b9b94f82b44baab71524d166358bb8ea48f7b395152d4",
+      "scan_sha256": "6fc29f8c22895137c8f558b4f30d1abdca11d05f86c534abd2e438e9c7876d89",
+      "matches": 4,
+      "ignored_matches": 0,
+      "high_or_critical": 0
+    },
+    "identity_review": "Terra verified actual containerd metadata: frozen local ID and Descriptor.digest identify OCI indexes, not legacy config IDs. Publication explicitly requires index mediaType/digest and exact ECR equality",
+    "credentials": "Private auth JSON without Docker credential helper; task cleanup completed on successful process exit",
+    "agent": "Dedicated repository created but candidate not published in this step; separate Unknown applicability assessment remains",
+    "ci_attested": false,
+    "deployed": false,
+    "remaining": "Operator human ceremony result, HA/KMS/audit verification, Injector admission canary, Agent delivery, trusted CI promotion and actual live rollout"
+  },
+  "vault_repositories_live_20260909": {
+    "result": "three repositories created and read back; no IAM/KMS/workload mutation",
+    "saved_plan_sha256": "f81fd6498bb8e967f93a9379eb18b0ea36b8d6a4f24d2c7859d2f089c402da98",
+    "review_artifact": "/private/tmp/hoodi-vault-repositories-live.85bVpk/review.json",
+    "review_sha256": "9d292af148e55b37b5de4deb56b5f21daad442fbd0abecb6a53a4e92e5e8c7c9",
+    "review": "Terra independently verified exactly three creates and existing KMS binding; root applied same saved hash",
+    "state_before": 222,
+    "state_after": 223,
+    "state_readback": "/private/tmp/hoodi-vault-repositories-live.85bVpk/state-after.json",
+    "state_sha256": "d797f46b1fa6a664165783b28280307fc0983360242302fd5c21105b7bbe9d0f",
+    "aws_readback": "/private/tmp/hoodi-vault-repositories-live.85bVpk/aws-readback.json",
+    "aws_sha256": "900ed0f6bc3ba3802673a5d62e9ac50a84c30c83a8a2a802b7932b96c3cc3a10",
+    "source": "infra/terraform/vault-runtime-ecr.tf",
+    "next_inputs": "Keep enable_node_runtime_ecr=true and enable_vault_runtime_ecr=true in subsequent reviewed live Terraform inputs",
+    "credentials": "Task-owned aws.env removed and absence checked",
+    "ci_regression": "Quality34304140937 succeeded after the Linux mock stdin fix; CI Evidence Decision still requires approval, not all gates green"
+  },
   "vault_repository_and_ci_checkpoint_20260909": {
     "repository_source": "infra/terraform/vault-runtime-ecr.tf",
     "repository_scope": "Opt-in only, three separate server/agent/injector repositories; immutable tags, KMS direct existing-key dependency, scan-on-push, force_delete=false; no publisher IAM or live deployment",

@@ -24,3 +24,8 @@ Before live rollout, verify generated admission patches against existing Vault
 Agent image/CA/auth/volume settings and observe a non-sensitive scoped canary.
 Do not change the Vault server, credentials or existing custody policies as
 part of an injector-only rollout. No publication/deployment is performed here.
+
+Candidate delivery checkpoint2026-09-09: the reviewed frozen index is published
+at `106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-vault-runtime-injector@sha256:2937fbc5d368430d089b9b94f82b44baab71524d166358bb8ea48f7b395152d4`.
+Exact registry identity and full C/H=0 scan passed. This is manual candidate
+delivery only; CI attestation, admission canary and live rollout remain open.

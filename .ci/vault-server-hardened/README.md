@@ -11,6 +11,13 @@ scanned Critical=0, High=0, Medium=3 and Unknown=1 with no ignored findings.
 See the task evidence for the raw scan hash and build log. This is not a
 trusted release, and no live Vault server has been changed.
 
+The same frozen candidate is now available in private ECR as
+`106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-vault-runtime-server@sha256:5463f9d70fe71b897b165e019dbc1e85aeaa8271130572bd060729dc124ff51f`.
+Registry digest equality and a fresh full C/H=0 scan passed on2026-09-09.
+This is manually reviewed candidate delivery, not CI-attested promotion or
+deployment approval. Keep `enable_node_runtime_ecr=true` and
+`enable_vault_runtime_ecr=true` in subsequent reviewed infrastructure inputs.
+
 Before rollout, require isolated Raft backup/restore and auth/audit tests,
 assessment of GO-2026-5932, and a reviewed recovery ceremony transition.
 Vault 2.x generate-root/rekey authentication requirements differ from the

@@ -20,6 +20,16 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+The saved three-repository plan is independently reviewed and applied at
+backend serial223. Publish only the already full-scanned frozen server and
+Injector candidates, with explicit local OCI-index descriptor identity and
+exact registry digest equality plus fresh full registry SCA. Use private
+task-owned Docker auth without credential helpers, and remove it on exit.
+Do not rebuild, overwrite a differing immutable tag, or claim trusted CI
+attestation/live deployment. Agent publication remains separate while its
+Unknown applicability assessment is unfinished. Keep the two ECR enablement
+flags in subsequent reviewed live inputs; do not full-apply reconstructed vars.
+
 CI Quality34303773988 exposed a Linux pipefail regression in the mock operator
 recovery test: fake Vault returned without consuming piped capabilities JSON.
 Consume stdin in both fake request endpoints instead of suppressing pipefail;
