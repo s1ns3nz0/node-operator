@@ -1,4 +1,20 @@
 {
+  "operator_aws_auth_preparation_20260909": {
+    "status": "prepared and tested locally; no live configuration or IAM change",
+    "current_aws_identity": "arn:aws:iam::106760547719:user/jsyang",
+    "iam_simulation": "node-operator-baseline-vault role iam:GetUser on that exact user: implicitDeny; checked before any recovery-share ceremony",
+    "configuration": "Dedicated operator-aws mount and operator-recovery policy/role; exact user plus immutable unique-ID binding, signed server-ID and regional STS; TTL300s hardmax600s, no default policy",
+    "implementation_review": "Root found and corrected malformed-list fail-open and STS endpoint omissions through Terra; readback singular bound_iam_principal_id/arn fields checked against pinned Vault2.1 source tests",
+    "wrapper_review": "Terra independently reviewed root recovery wrapper: captured no-store login, exact policy/TTL and capability checks, generated-token revocations; cleanup failure is fatal",
+    "mock_tests": "Configuration guards and recovery lifecycle success/login failure/root-revocation failure passed; these are not real AWS authentication proof",
+    "canonical_policy_runtime": "/private/tmp/hoodi-vault-operator-policy-runtime-20260909.json",
+    "canonical_policy_runtime_sha256": "38fa8292817495bfcb20a23e732a01a7a055786d14fb39f521d6b093d68298a6",
+    "canonical_policy_scope": "Exact policy tested on real synthetic Docker Vault1.20.4->2.1 with generate-root, denied KV/token creation and revocation/restoration checks",
+    "terraform_offline_plan": "/private/tmp/hoodi-operator-auth-tf.L6YDJh/plan.json",
+    "terraform_offline_plan_sha256": "1d5f89aad969badd796e3e2e46ce1334c1170ad0fa8e4e6a3c96f992bfd3aed4",
+    "terraform_scope": "Pinned Docker toolchain networknone; enabled synthetic-account plan exact single GetUser/user policy asserted; cross-account input rejected. Not a live targeted plan or apply",
+    "remaining": "Review/apply exact-user IAM prerequisite, verify Vault Pod Identity/network and perform user-held recovery ceremony plus real fresh AWS login; no live upgrade authorized by these local results"
+  },
   "recovery_wrapper_auth_transition_20260909": {
     "status": "implemented and locally verified; real operator authentication provisioning pending",
     "wrappers": 7,

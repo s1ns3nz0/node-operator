@@ -118,11 +118,9 @@ vault_recovery_auth_preflight
             recovery_preflight()
             cli("secrets", "enable", "-path=synthetic", "kv-v2")
             cli("kv", "put", "synthetic/checkpoint", "value=before-upgrade")
-            cli("policy", "write", "synthetic-ceremony", "-", stdin='''
-path "sys/generate-root/attempt" { capabilities = ["read", "update", "delete"] }
-path "sys/generate-root/update" { capabilities = ["update"] }
-path "auth/token/revoke-self" { capabilities = ["update"] }
-''')
+            ceremony_policy = (Path(__file__).resolve().parents[2]
+                               / "deploy/vault/operator-recovery-policy.hcl").read_text()
+            cli("policy", "write", "synthetic-ceremony", "-", stdin=ceremony_policy)
             ceremony_token = json.loads(cli(
                 "token", "create", "-policy=synthetic-ceremony", "-no-default-policy",
                 "-ttl=10m", "-explicit-max-ttl=10m", "-format=json"))["auth"]["client_token"]

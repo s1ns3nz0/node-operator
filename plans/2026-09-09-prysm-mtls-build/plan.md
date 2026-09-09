@@ -20,6 +20,25 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+Prepare operator-only AWS IAM authentication under a separate operator-aws
+mount, exact explicitly supplied principal ARN, server-ID replay boundary and
+short-lived no-default-policy tokens limited to root-ceremony endpoints. Do
+not change the release-signer mount, AWS IAM permissions or live secrets.
+Current read-only AWS identity is account106760547719 user/jsyang; do not infer
+that this is configured in Vault. User-held recovery shares are required for
+the first real configuration. AWS IAM login alone does not establish MFA.
+Root owns user-run recovery wrapper and integration; Terra owns only the
+configuration helper and its mocked tests. Root remains nearest-tier security
+integration owner. No graph/debrief; real login proof is a separate live gate.
+Read-only IAM simulation confirms exact-user GetUser is currently denied.
+Prepare, but do not apply, an opt-in Terraform policy on the existing Vault
+role: one GetUser action and one same-account user ARN. Offline Docker plans
+must reject cross-account inputs and verify the enabled policy exactly. The
+user-run wrapper checks this prerequisite before asking for recovery shares.
+Validate the canonical policy in the retained-Raft real-server fixture and
+test wrapper token cleanup using mocks, keeping AWS login as unproven until
+the human-held recovery ceremony actually runs.
+
 Transition all seven current recovery ceremonies through a shared read-only
 authentication preflight. Vault1 retains its supported share-only flow; Vault2
 requires an existing process token or a silent terminal prompt before shares.
