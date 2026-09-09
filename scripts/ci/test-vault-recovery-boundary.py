@@ -89,12 +89,26 @@ def check(document):
         assert rule["from_port"] == 443 and rule["to_port"] == 443 and rule["ip_protocol"] == "tcp"
         assert "cidr_ipv4" not in rule and "cidr_ipv6" not in rule
     data = blocks(document, "data")
-    for statement in data["aws_iam_policy_document", "s3_endpoint"]["statement"]:
+    s3_statements = data["aws_iam_policy_document", "s3_endpoint"]["statement"]
+    assert len(s3_statements) == 2
+    assert {s["sid"] for s in s3_statements} == {"ReadEcrLayerObjectsOnly", "ReadOnlyExactSnapshotVersion"}
+    for statement in s3_statements:
+        assert statement["effect"] == "Allow"
+        assert statement["principals"] == [{"type": "AWS", "identifiers": ["*"]}]
         if statement["sid"] == "ReadEcrLayerObjectsOnly":
             assert statement["actions"] == ["s3:GetObject"]
             assert statement["resources"] == ["${local.starport_object_arn}"]
         else:
-            assert statement["principals"][0]["identifiers"] == ["${aws_iam_role.host.arn}"]
+            assert statement["actions"] == ["s3:GetObjectVersion"]
+            assert statement["resources"] == ["${local.snapshot_object_arn}"]
+            assert len(statement["condition"]) == 2
+            conditions = {c["variable"]: c for c in statement["condition"]}
+            assert conditions == {
+                "aws:PrincipalArn": {"test": "StringEquals", "variable": "aws:PrincipalArn",
+                                     "values": ["${aws_iam_role.host.arn}"]},
+                "s3:VersionId": {"test": "StringEquals", "variable": "s3:VersionId",
+                                 "values": ["${var.snapshot_version_id}"]},
+            }
     assert data["aws_ami", "ecs_al2023"]["owners"] == ["591542846629"]
     policy = data["aws_iam_policy_document", "host"]["statement"]
     approved_actions = {"ssm:UpdateInstanceInformation", "ssmmessages:CreateControlChannel",
@@ -153,6 +167,25 @@ class BoundaryTests(unittest.TestCase):
             with self.subTest(index=index):
                 modified = copy.deepcopy(self.document)
                 mutation(modified)
+                with self.assertRaises(AssertionError):
+                    check(modified)
+
+    def test_gateway_snapshot_mutations_rejected(self):
+        mutations = [
+            lambda s: s.update(principals=[{"type": "AWS", "identifiers": ["${aws_iam_role.host.arn}"]}]),
+            lambda s: s.update(condition=[]),
+            lambda s: s["condition"][0].update(values=["*"]),
+            lambda s: s["condition"][0].update(test="StringEqualsIfExists"),
+            lambda s: s["condition"][1].update(values=["*"]),
+            lambda s: s.update(resources=["*"]),
+            lambda s: s.update(actions=["s3:GetObject"]),
+        ]
+        for index, mutation in enumerate(mutations):
+            with self.subTest(index=index):
+                modified = copy.deepcopy(self.document)
+                statements = blocks(modified, "data")["aws_iam_policy_document", "s3_endpoint"]["statement"]
+                snapshot = next(s for s in statements if s["sid"] == "ReadOnlyExactSnapshotVersion")
+                mutation(snapshot)
                 with self.assertRaises(AssertionError):
                     check(modified)
 
