@@ -36,6 +36,9 @@ GRYPE_CHECK_FOR_APP_UPDATE=false grype "sbom:$evidence/sbom.json" \
   --config "$root/.ci/vault-server-hardened/grype.yaml" --output json --file "$evidence/grype.json"
 python3 "$root/scripts/ci/summarize-vault-runtime-scan.py" \
   "$evidence/sbom.json" "$evidence/grype.json" "$digest" > "$evidence/scan-summary.json"
-# Keep all raw findings. This is only a scan gate, not a signing/rollout approval.
-jq -e '.status == "passed"' "$evidence/scan-summary.json" >/dev/null
-printf 'PASS: frozen %s identity and fresh scan; build provenance and deployment still require separate gates.\n' "$component"
+# Preserve the raw blocked summary. A separate, expiring exact-candidate
+# assessment may establish package non-applicability, never deployment approval.
+bash "$root/scripts/ci/collect-vault-runtime-applicability.sh" "$component" "$subject" "$evidence"
+python3 "$root/scripts/ci/assess-vault-runtime-applicability.py" "$component" "$evidence" > "$evidence/applicability-decision.json"
+jq -e '.status == "passed"' "$evidence/applicability-decision.json" >/dev/null
+printf 'PASS: frozen %s scan/applicability verification; build provenance and deployment still require separate gates.\n' "$component"

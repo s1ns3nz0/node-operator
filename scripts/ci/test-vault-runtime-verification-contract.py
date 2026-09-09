@@ -17,6 +17,9 @@ def validate(script, workflow):
                      "jq -e '.status == \"passed\"'", "unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN",
                      "unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL"):
         assert required in script, required
+    assert '"$evidence/applicability-decision.json"' in script
+    assert '"$evidence/scan-summary.json" >/dev/null' not in script
+    assert "collect-vault-runtime-applicability.sh" in script and "assess-vault-runtime-applicability.py" in script
     assert script.index("aws ecr describe-images") < script.index("unset AWS_ACCESS_KEY_ID") < script.index("docker pull")
     assert not re.search(r"^\s*environment:", workflow, re.M), "environment invalidates exact-ref OIDC subject"
     assert "workflow_dispatch:" in workflow and "if: github.ref == 'refs/heads/main'" in workflow
@@ -34,6 +37,7 @@ for bad_script, bad_workflow in (
     (script.replace("--read-only", ""), workflow),
     (script.replace("unset AWS_ACCESS_KEY_ID", "# missing AWS_ACCESS_KEY_ID"), workflow),
     (script.replace(".status == \"passed\"", "true"), workflow),
+    (script.replace('"$evidence/applicability-decision.json"', '"$evidence/scan-summary.json"'), workflow),
     (script + "\ndocker push changed\n", workflow),
     (script, workflow + "\n    environment: unsafe\n"),
     (script, workflow.replace("if: github.ref == 'refs/heads/main'", "if: true")),
@@ -48,4 +52,27 @@ assert set(allowlist["candidates"]) == {"server", "agent", "injector"}
 for component, candidate in allowlist["candidates"].items():
     assert candidate["repository"] == f"node-operator-baseline-vault-runtime-{component}"
     assert re.fullmatch(r"sha256:[a-f0-9]{64}", candidate["digest"])
-print("PASS: frozen runtime wrapper/workflow contract and seven unsafe mutations rejected")
+
+
+def validate_collector(collector):
+    for required in ("test \"$subject\" = \"$expected\"", "--pull never", "--network none", "--read-only",
+                     "--cap-drop ALL", "--security-opt no-new-privileges", "timeout 60 docker run",
+                     "unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN",
+                     "--connect-timeout 10 --max-time 30", "https://vuln.go.dev/ID/GO-2026-5932.json",
+                     "agent-dependencies.txt", '"$evidence/binary.sha256"', '"$evidence/dependencies.txt"'):
+        assert required in collector, required
+    assert not re.search(r"docker\s+(build|push|tag)\b|--privileged|--mount|\s-v\s|\s-e\s", collector)
+
+
+collector = (ROOT / "scripts/ci/collect-vault-runtime-applicability.sh").read_text()
+validate_collector(collector)
+for bad in (collector.replace("--network none", "--network host"),
+            collector.replace("--pull never", "--pull always"),
+            collector.replace('test "$subject" = "$expected"', "true")):
+    try:
+        validate_collector(bad)
+    except AssertionError:
+        continue
+    raise AssertionError("unsafe collector mutation accepted")
+print("PASS: frozen runtime wrapper/workflow contract and eight unsafe mutations rejected")
+print("PASS: exact-subject metadata collector and three unsafe mutations rejected")

@@ -65,6 +65,10 @@ jobs:
           else
             echo 'Verification incomplete; not eligible for release.' >> "$GITHUB_STEP_SUMMARY"
           fi
+          if test -s "$RUNNER_TEMP/vault-runtime-evidence/applicability-decision.json"; then
+            echo 'Separate exact-candidate applicability decision (raw scan above is unchanged):' >> "$GITHUB_STEP_SUMMARY"
+            cat "$RUNNER_TEMP/vault-runtime-evidence/applicability-decision.json" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Retain non-sensitive verification evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -73,5 +77,7 @@ jobs:
           path: |
             ${{ runner.temp }}/vault-runtime-evidence/*.json
             ${{ runner.temp }}/vault-runtime-evidence/version.txt
+            ${{ runner.temp }}/vault-runtime-evidence/binary.sha256
+            ${{ runner.temp }}/vault-runtime-evidence/dependencies.txt
           if-no-files-found: warn
           retention-days: 30
