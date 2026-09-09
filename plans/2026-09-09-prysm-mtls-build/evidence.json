@@ -1,4 +1,17 @@
 {
+  "upcheck_python_candidate_20260909": {
+    "image": "sha256:fb305627ba331d70f8cc82509a4fae4be858422fd257e170543fbbefcefb9588",
+    "base_amd64_manifest": "sha256:5e0ede45886712ce95b0e66232f743cc3d69ff6c2f62cc0d63778e1e894f8bd4",
+    "python": "3.14.7", "openssl": "3.5.8",
+    "scan": "/private/tmp/hoodi-upcheck-python-final-grype-20260909.json",
+    "scan_sha256": "a38204119ee4d75a743046206af0c6d2cf4f2c32a7d84992b6cbd3b8359e04cd",
+    "sbom": "/private/tmp/hoodi-upcheck-python-final-sbom-20260909.json",
+    "critical": 0, "high": 0, "medium": 8, "low": 1, "ignored": 0,
+    "runtime_checks": "exact frozen image, nonroot UID1000, read-only, network none, stdlib imports, exact Python/SSL version, strict CA and hostname verification defaults",
+    "scope": "runtime candidate only, not end-to-end proxy behavior",
+    "published": false, "deployed": false,
+    "signer_proxy_gap": "Web3Signer Runner.applyClientAuthentication sets ClientAuth.REQUIRED; existing no-client-certificate Python proxy and changed public fence Service need separate contract repair"
+  },
   "injector_hardened_candidate_20260909": {
     "image": "sha256:2937fbc5d368430d089b9b94f82b44baab71524d166358bb8ea48f7b395152d4",
     "source": "fbc5b1f0cd4d1c7dd5a8830e32c8ed636d7318d7",

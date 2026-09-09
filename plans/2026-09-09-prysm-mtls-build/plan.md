@@ -20,6 +20,14 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+Root owns `.ci/upcheck-python-runtime/` as a runtime-only replacement candidate
+for the full ZAP image currently used to execute Python health proxies. Preserve
+Python stdlib functionality and verify exact Python/SSL versions, nonroot
+read-only execution and image scan. Do not call this end-to-end proxy repair:
+the signer proxy's stale hostname/mTLS/fence route is a separate live contract
+that must be resolved before rollout, without handing signing credentials to
+DAST. The scanner job's ZAP image remains separately scoped.
+
 Root owns `.ci/vault-server-hardened/` as a candidate-only full Vault2.1 source
 build. Reuse verified Agent source/toolchain/module checksums but build the full
 upstream CLI/server (no minimal feature tag). Exercise generate-root and Raft
