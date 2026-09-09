@@ -29,6 +29,8 @@ jobs:
         run: bash scripts/ci/test-vault-recovery-auth.sh
       - name: Test snapshot recovery cleanup lifecycle (mock CLI)
         run: python3 scripts/ci/test-vault-snapshot-recovery-cleanup.py
+      - name: Test isolated recovery grant lifecycle (mock AWS only)
+        run: python3 scripts/ci/test-isolated-vault-recovery-grant.py
       - name: Test snapshot upload full-object integrity boundary (mock CLI)
         run: python3 scripts/ci/test-vault-snapshot-upload-integrity.py
       - name: Test operator authentication configuration and recovery lifecycle (mock CLI)
