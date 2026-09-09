@@ -1,4 +1,24 @@
 {
+  "ci_evidence_format_remediation_20260909": {
+    "failed_head": "a00fff53c2a26311936e8be1035b1dc8655e4ec1",
+    "gate_run": 34296776903,
+    "cause": "git diff --check flags seven whitespace-only unified-patch context lines; separate sensitive-path approval is also required",
+    "fix": "Represent blank context as equivalent blank removal/addition pairs; retain all hunk context and application checks. No scanner or formatting exclusions.",
+    "patch_sha256": "a90f4a526417d3185b22ee3dce1bf21b1ab90e903fe2c2e564834594153b2062",
+    "verification": "Both original and revised patches apply with git apply --check to pristine upstream versions.gradle; resulting files compare byte-identical; full branch diff --check passes",
+    "resulting_versions_gradle_sha256": "5e23b1e68c1dfdd9f2ab330e0024a553108ca2afef9e80e310cc6517042e6911",
+    "proof_directory": "/private/tmp/hoodi-patch-equivalence.imhbfY",
+    "limits": "Existing deployed candidate retains original patch metadata; no image rebuild or new release attestation claimed. Remote gate rerun and designated reviewer approval pending."
+  },
+  "uc2_tls_negative_live_20260909": {
+    "result": "passed",
+    "evidence": "/private/tmp/hoodi-signer-tls-evidence.xpESip/result.json",
+    "sha256": "661675d3f65aa8b00e943b19d5da15a4e86b3e8f7b686120745d829b51c682ef",
+    "checks": ["zero client/fence and empty Lease before probes", "valid mTLS singleton identity before and after", "bad server CA rejected", "untrusted client certificate rejected", "NetworkPolicies unchanged", "four owned Pods and synthetic Secret removed by UID"],
+    "real_credentials": "Secret references projected into Pods only; not read locally",
+    "scope": "GET-only transport rejection, not actual validator duty or complete UC2",
+    "runner_review": "Durable runner prepared; ShellCheck passed; final independent review pending"
+  },
   "nethermind_upcheck_runtime_rollout_20260909": {
     "terraform": {
       "directory": "/private/tmp/hoodi-upcheck-repository.iGmU1N",

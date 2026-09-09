@@ -5,7 +5,7 @@ RUN git init . && git remote add origin https://github.com/Consensys/web3signer.
     git fetch --depth=1 origin tag 26.4.2 && git checkout --detach 26.4.2 && \
     test "$(git rev-parse HEAD)" = 221996a5ddf6ab7648a8102ee029d9723762c116
 COPY .ci/web3signer-hardened/patches/0001-security-dependencies.patch /tmp/security.patch
-RUN echo 'c3f587fa950e8c1c1e09e7a786ae7548f651f8440211d8dff49877897bb59864  /tmp/security.patch' | sha256sum -c - && \
+RUN echo 'a90f4a526417d3185b22ee3dce1bf21b1ab90e903fe2c2e564834594153b2062  /tmp/security.patch' | sha256sum -c - && \
     git apply --check /tmp/security.patch && git apply /tmp/security.patch && git diff --check
 RUN useradd --uid 10001 --create-home --home-dir /build-home builder && chown -R 10001:10001 /src
 USER 10001:10001
@@ -17,7 +17,7 @@ RUN --mount=type=cache,id=web3signer-gradle-nonroot,target=/build-home/.gradle,u
 FROM eclipse-temurin:25-jre-noble@sha256:b4c93a50fc67612798db73d68ca3b0ee4ebdd51736e59cca370e689b9797037e
 LABEL org.opencontainers.image.source="https://github.com/Consensys/web3signer" \
       org.opencontainers.image.revision="221996a5ddf6ab7648a8102ee029d9723762c116" \
-      io.node-operator.web3signer-security-patch-sha256="c3f587fa950e8c1c1e09e7a786ae7548f651f8440211d8dff49877897bb59864"
+      io.node-operator.web3signer-security-patch-sha256="a90f4a526417d3185b22ee3dce1bf21b1ab90e903fe2c2e564834594153b2062"
 ENV WEB3SIGNER_HTTP_LISTEN_HOST=0.0.0.0 WEB3SIGNER_METRICS_HOST=0.0.0.0
 COPY --from=build --chown=999:999 /src/build/install/web3signer /opt/web3signer
 USER 999:999
