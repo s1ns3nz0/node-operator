@@ -1,0 +1,1 @@
+{"status":"implementation","cause":"release run 34365661762 built and pushed but SBOM registry read denied ecr:GetDownloadUrlForLayer","approved_scope":"node-operator-baseline-validator-fence only","deployed":false}

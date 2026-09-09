@@ -103,6 +103,12 @@ data "aws_iam_policy_document" "github_validator_client_mirror" {
     actions   = ["ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:CompleteLayerUpload", "ecr:DescribeImages", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart"]
     resources = [aws_ecr_repository.validator_client[0].arn, aws_ecr_repository.validator_signing_fence[0].arn]
   }
+  # Registry-backed SBOM and signature verification must read the fence layers.
+  # Do not extend this permission to the validator client repository.
+  statement {
+    actions   = ["ecr:GetDownloadUrlForLayer"]
+    resources = [aws_ecr_repository.validator_signing_fence[0].arn]
+  }
 }
 
 resource "aws_iam_role_policy" "github_validator_client_mirror" {
