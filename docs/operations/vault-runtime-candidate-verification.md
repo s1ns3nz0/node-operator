@@ -1,0 +1,45 @@
+# Frozen Vault runtime verification
+
+This manual CI job verifies the three reviewed immutable ECR subjects in
+`.ci/vault-runtime-candidates.json`. It never builds, pushes, signs, deploys,
+reads Vault data or runs Terraform. A passing scan is **not** a trusted build
+provenance statement or a live deployment authorization.
+
+## One-time setup after the change is merged
+
+1. Keep existing node/runtime ECR inputs enabled. Set
+   `enable_vault_runtime_ci_verifier=true` in the complete reviewed Terraform
+   inputs. Inspect a saved plan: only the verifier role and its inline policy
+   should be added for this setup. Do not apply incomplete state-reconciliation
+   inputs or a broad plan as a shortcut.
+2. Set repository variable `VAULT_RUNTIME_VERIFIER_ROLE_ARN` to the Terraform
+   output `github_vault_runtime_ci_verifier_role_arn`. This job intentionally
+   has no GitHub environment: the IAM subject binds directly to
+   `${github_oidc_subject_prefix}:ref:refs/heads/main`, including the existing
+   immutable owner/repository IDs. This needs no paid environment protection.
+   Adding an environment changes the token subject and must fail authentication.
+   Other workflows on main with OIDC permission can assume this read-only role;
+   it is branch-bound, not an exact-workflow identity or code-review guarantee.
+3. Dispatch `Vault Runtime Candidate Verification` from `main`. The workflow
+   itself also rejects every other branch. Its role can pull only these three
+   repositories; it cannot publish images, access EKS or read secrets.
+
+## Evidence and blocked outcomes
+
+Each component retains runtime image identity, version output, CycloneDX SBOM,
+unfiltered raw Grype JSON and a digest-bound summary for 30 days. Images run
+only for a bounded version probe, without network, credentials, mounts or
+privileges. The workflow does not claim an auth, Raft, admission or duty test.
+
+Critical, High and Unknown findings block the scan gate. Existing
+GO-2026-5932 package-closure evidence is retained separately; it is not a
+global exclusion and is not automatically converted into a pass here. A
+blocked result is evidence requiring a specific applicability assessment or
+fix, not permission to rebuild repeatedly or weaken Vault/OS gates.
+
+Only after this observation step and exact-candidate assessments may a
+separately reviewed signing/promotion step establish its own honest provenance
+(verification of an existing candidate, not a fictitious GitHub build).
+Server HA/KMS recovery, Agent live authentication, Injector admission and
+GitOps rollout gates remain separate. Existing validator identities and PVCs
+must be preserved.

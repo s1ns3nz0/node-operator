@@ -45,6 +45,11 @@ jobs:
         run: scripts/ci/test-image-publisher-isolation.sh
       - name: Test audit relay publisher repository scope
         run: python3 scripts/ci/test-vault-relay-publisher-policy.py
+      - name: Test frozen Vault runtime verification boundary
+        run: |
+          python3 scripts/ci/test-vault-runtime-verifier-policy.py
+          python3 scripts/ci/test-vault-runtime-scan.py
+          python3 scripts/ci/test-vault-runtime-verification-contract.py
       - name: Test release scan attestation content contract
         run: |
           bash scripts/ci/test-release-scan-attestation.sh
