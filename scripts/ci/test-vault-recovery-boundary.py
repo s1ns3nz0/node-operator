@@ -50,11 +50,22 @@ def check(document):
     allowed_types = {"aws_vpc", "aws_subnet", "aws_route_table", "aws_route_table_association",
                      "aws_security_group", "aws_vpc_security_group_ingress_rule",
                      "aws_vpc_security_group_egress_rule", "aws_vpc_endpoint", "aws_iam_role",
-                     "aws_iam_role_policy", "aws_iam_instance_profile", "aws_instance"}
+                     "aws_iam_role_policy", "aws_iam_instance_profile", "aws_instance",
+                     "aws_default_security_group", "aws_flow_log", "aws_cloudwatch_log_group", "aws_kms_key"}
     assert all(kind in allowed_types for kind, _ in resources), "unexpected infrastructure ownership"
     assert resources["aws_vpc", "recovery"]["cidr_block"] == "10.91.0.0/24"
     assert resources["aws_subnet", "recovery"]["map_public_ip_on_launch"] is False
     assert "route" not in resources["aws_route_table", "recovery"], "unexpected route"
+    default_sg = resources["aws_default_security_group", "recovery"]
+    assert default_sg["vpc_id"] == "${aws_vpc.recovery.id}"
+    assert default_sg["ingress"] == [] and default_sg["egress"] == []
+    assert resources["aws_flow_log", "recovery"]["traffic_type"] == "ALL"
+    assert resources["aws_flow_log", "recovery"]["vpc_id"] == "${aws_vpc.recovery.id}"
+    log_group = resources["aws_cloudwatch_log_group", "flow_logs"]
+    assert log_group["retention_in_days"] == 365
+    assert log_group["kms_key_id"] == "${aws_kms_key.flow_logs.arn}"
+    assert [name for kind, name in resources if kind == "aws_kms_key"] == ["flow_logs"]
+    assert resources["aws_kms_key", "flow_logs"]["enable_key_rotation"] is True
     host = resources["aws_instance", "host"]
     assert host["associate_public_ip_address"] is False
     assert host["monitoring"] is False
@@ -74,6 +85,12 @@ def check(document):
         assert rule["from_port"] == 443 and rule["to_port"] == 443 and rule["ip_protocol"] == "tcp"
         assert "cidr_ipv4" not in rule and "cidr_ipv6" not in rule
     data = blocks(document, "data")
+    for statement in data["aws_iam_policy_document", "s3_endpoint"]["statement"]:
+        if statement["sid"] == "ReadEcrLayerObjectsOnly":
+            assert statement["actions"] == ["s3:GetObject"]
+            assert statement["resources"] == ["${local.starport_object_arn}"]
+        else:
+            assert statement["principals"][0]["identifiers"] == ["${aws_iam_role.host.arn}"]
     assert data["aws_ami", "ecs_al2023"]["owners"] == ["591542846629"]
     policy = data["aws_iam_policy_document", "host"]["statement"]
     approved_actions = {"ssm:UpdateInstanceInformation", "ssmmessages:CreateControlChannel",
@@ -122,6 +139,9 @@ class BoundaryTests(unittest.TestCase):
             lambda d: blocks(d, "data")["aws_iam_policy_document", "host"]["statement"].append({"sid": "Unsafe", "effect": "Allow", "actions": ["kms:CreateGrant"], "resources": ["*"]}),
             lambda d: blocks(d, "data")["aws_iam_policy_document", "host"]["statement"].append({"sid": "Unsafe", "effect": "Allow", "actions": ["ssm:GetParameter"], "resources": ["*"]}),
             lambda d: blocks(d, "data")["aws_ami", "ecs_al2023"].update(owners=["amazon"]),
+            lambda d: blocks(d, "resource")["aws_default_security_group", "recovery"].update(egress=[{}]),
+            lambda d: blocks(d, "resource")["aws_flow_log", "recovery"].update(traffic_type="REJECT"),
+            lambda d: blocks(d, "resource")["aws_cloudwatch_log_group", "flow_logs"].update(retention_in_days=30),
         ]
         for index, mutation in enumerate(mutations):
             with self.subTest(index=index):

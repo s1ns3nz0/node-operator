@@ -67,6 +67,8 @@ locals {
   ]
   snapshot_object_arn = "arn:aws:s3:::${var.snapshot_bucket}/${var.snapshot_key}"
   starport_object_arn = "arn:aws:s3:::prod-${var.aws_region}-starport-layer-bucket/*"
+  flow_log_group_name = "/aws/vpc/${local.name_prefix}/flow-logs"
+  flow_log_group_arn  = "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:${local.flow_log_group_name}"
 }
 
 resource "aws_vpc" "recovery" {
@@ -74,6 +76,100 @@ resource "aws_vpc" "recovery" {
   enable_dns_hostnames = true
   enable_dns_support   = true
   tags                 = merge(local.tags, { Name = local.name_prefix })
+}
+
+# This resource adopts only the default group created alongside this new VPC;
+# it has no relationship to any live or pre-existing default security group.
+resource "aws_default_security_group" "recovery" {
+  vpc_id  = aws_vpc.recovery.id
+  ingress = []
+  egress  = []
+  tags    = merge(local.tags, { Name = "${local.name_prefix}-default-deny" })
+}
+
+resource "aws_kms_key" "flow_logs" {
+  description             = "Isolated Vault recovery VPC flow log encryption"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "EnableAccountIamAdministration"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${var.aws_account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      },
+      {
+        Sid       = "EncryptOnlyRecoveryFlowLogs"
+        Effect    = "Allow"
+        Principal = { Service = "logs.${var.aws_region}.amazonaws.com" }
+        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"]
+        Resource  = "*"
+        Condition = { ArnEquals = { "kms:EncryptionContext:aws:logs:arn" = local.flow_log_group_arn } }
+      },
+    ]
+  })
+  tags = merge(local.tags, { Name = "${local.name_prefix}-flow-logs" })
+}
+
+resource "aws_cloudwatch_log_group" "flow_logs" {
+  name              = local.flow_log_group_name
+  retention_in_days = 365
+  kms_key_id        = aws_kms_key.flow_logs.arn
+  tags              = local.tags
+}
+
+data "aws_iam_policy_document" "flow_logs_assume_role" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["vpc-flow-logs.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [var.aws_account_id]
+    }
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values   = ["arn:aws:ec2:${var.aws_region}:${var.aws_account_id}:vpc-flow-log/*"]
+    }
+  }
+}
+
+resource "aws_iam_role" "flow_logs" {
+  name               = "${local.name_prefix}-flow-logs"
+  assume_role_policy = data.aws_iam_policy_document.flow_logs_assume_role.json
+  tags               = local.tags
+}
+
+data "aws_iam_policy_document" "flow_logs" {
+  statement {
+    effect    = "Allow"
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    resources = ["${aws_cloudwatch_log_group.flow_logs.arn}:*"]
+  }
+}
+
+resource "aws_iam_role_policy" "flow_logs" {
+  name   = "${local.name_prefix}-flow-logs"
+  role   = aws_iam_role.flow_logs.id
+  policy = data.aws_iam_policy_document.flow_logs.json
+}
+
+resource "aws_flow_log" "recovery" {
+  vpc_id               = aws_vpc.recovery.id
+  traffic_type         = "ALL"
+  log_destination_type = "cloud-watch-logs"
+  log_destination      = aws_cloudwatch_log_group.flow_logs.arn
+  iam_role_arn         = aws_iam_role.flow_logs.arn
+  depends_on           = [aws_iam_role_policy.flow_logs]
+  tags                 = local.tags
 }
 
 resource "aws_subnet" "recovery" {
@@ -150,7 +246,12 @@ data "aws_iam_policy_document" "ssm_endpoint" {
       identifiers = [aws_iam_role.host.arn]
     }
     actions   = ["ssm:UpdateInstanceInformation"]
-    resources = ["*"]
+    resources = ["arn:aws:ec2:${var.aws_region}:${var.aws_account_id}:instance/*", "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:instance/*", "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:managed-instance/mi-*"]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceVpc"
+      values   = [aws_vpc.recovery.id]
+    }
   }
 }
 
@@ -328,10 +429,21 @@ data "aws_iam_policy_document" "host" {
   # the managed-instance registration and channel/update operations needed by
   # the SSM agent, with no Parameter Store or secret-read permissions.
   statement {
-    sid       = "SsmManagedInstanceChannelAndUpdate"
+    sid       = "SsmManagedInstanceChannels"
     effect    = "Allow"
-    actions   = ["ssm:UpdateInstanceInformation", "ssmmessages:CreateControlChannel", "ssmmessages:CreateDataChannel", "ssmmessages:OpenControlChannel", "ssmmessages:OpenDataChannel", "ec2messages:AcknowledgeMessage", "ec2messages:DeleteMessage", "ec2messages:FailMessage", "ec2messages:GetEndpoint", "ec2messages:GetMessages", "ec2messages:SendReply"]
+    actions   = ["ssmmessages:CreateControlChannel", "ssmmessages:CreateDataChannel", "ssmmessages:OpenControlChannel", "ssmmessages:OpenDataChannel", "ec2messages:AcknowledgeMessage", "ec2messages:DeleteMessage", "ec2messages:FailMessage", "ec2messages:GetEndpoint", "ec2messages:GetMessages", "ec2messages:SendReply"]
     resources = ["*"]
+  }
+  statement {
+    sid       = "SsmUpdateOnlyFromRecoveryVpc"
+    effect    = "Allow"
+    actions   = ["ssm:UpdateInstanceInformation"]
+    resources = ["arn:aws:ec2:${var.aws_region}:${var.aws_account_id}:instance/*", "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:instance/*", "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:managed-instance/mi-*"]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceVpc"
+      values   = [aws_vpc.recovery.id]
+    }
   }
   statement {
     sid       = "ReadExactSnapshotVersion"

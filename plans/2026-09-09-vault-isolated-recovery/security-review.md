@@ -27,3 +27,12 @@ or credentials. A refresh-backed saved plan must still be reviewed before apply.
 
 No actual snapshot data, recovery keys or credentials were accessed. No
 existing live resource is declared under this Terraform root.
+
+Hosted OPA run34346259906 identified eight new IaC findings. The subsequent
+reviewed revision fixes default-SG isolation, adds ALL flow logging encrypted
+with a new recovery-only KMS key (365-day retention), and scopes SSM update
+permission by instance ARN and source VPC. The original 20-create saved plan is
+superseded and must not be applied. A new saved plan and review are required.
+Only user-selected basic monitoring and AWS-documented regional ECR layer
+endpoint access require the separate exact-path disposition change. Neither
+disposition is active merely because PR149 proposes infrastructure needing it.

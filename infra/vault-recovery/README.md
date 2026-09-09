@@ -11,6 +11,18 @@ regional S3 managed prefix list and HTTPS interface endpoints for SSM,
 SSM Messages, EC2 Messages, KMS, and ECR. The S3 gateway endpoint and host
 role restrict access to the exact snapshot object version and regional ECR
 layer bucket; endpoint policies additionally constrain the host principal.
+The sole exception is the exact regional ECR starport layer-bucket resource:
+ECR retrieves layers using presigned S3 URLs, so its gateway endpoint policy
+permits that read principal while the host IAM policy remains read-only and
+resource-scoped.
+
+The new VPC's default security group is adopted and emptied. VPC Flow Logs
+record `ALL` traffic metadata to a dedicated CloudWatch Logs group encrypted
+by a new recovery-only KMS key. Logs retain for 365 days and contain no Vault
+payload. The KMS key has a 30-day deletion window; neither retention nor the
+expiry authorization deny automatically deletes resources. Before explicitly
+deleting the log group or key during approved cleanup, retain or export any
+required evidence because retention does not survive resource deletion.
 
 The EC2 role is custom and intentionally does not attach
 `AmazonSSMManagedInstanceCore`: it contains only the SSM agent channel/update
