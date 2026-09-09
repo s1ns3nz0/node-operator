@@ -248,7 +248,9 @@ class Ceremony:
         verify_snapshot(target)
         return target
     def prompt_share(self):
-        with open("/dev/tty", "r+", encoding="utf-8", errors="strict") as tty:
+        # Buffered r+ requires seeking, which terminals do not support.
+        # This stream is prompt output only; getpass opens its own secure input.
+        with open("/dev/tty", "w", encoding="utf-8", errors="strict") as tty:
             if not tty.isatty(): raise CeremonyError("recovery share input is not an interactive terminal")
             with warnings.catch_warnings():
                 warnings.simplefilter("error", getpass.GetPassWarning)

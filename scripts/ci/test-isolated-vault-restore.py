@@ -11,6 +11,7 @@ import base64
 import tempfile
 import http.server
 import threading
+import subprocess
 from types import SimpleNamespace
 
 sys.dont_write_bytecode = True
@@ -19,6 +20,34 @@ SCRIPT = Path(__file__).parents[1] / "ops" / "rehearse-isolated-vault-restore.py
 spec = importlib.util.spec_from_file_location("restore", SCRIPT); restore = importlib.util.module_from_spec(spec); spec.loader.exec_module(restore)
 
 class RestoreTests(unittest.TestCase):
+    def test_prompt_uses_real_nonseekable_terminal(self):
+        # Isolate PTY terminal ownership/SIGHUP behavior from the test runner.
+        code = '''import os, signal, importlib.util
+from unittest.mock import patch
+signal.signal(signal.SIGHUP, signal.SIG_IGN)
+s=importlib.util.spec_from_file_location("restore", SCRIPT)
+m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+master,slave=os.openpty()
+real_open=open
+try:
+ def terminal(path, mode, **kwargs):
+  assert path=="/dev/tty" and mode=="w"
+  return real_open(os.ttyname(slave), mode, **kwargs)
+ with patch("builtins.open", side_effect=terminal), patch.object(m.getpass,"getpass",return_value="synthetic"):
+  assert m.Ceremony().prompt_share()=="synthetic"
+finally:
+ os.close(slave);os.close(master)
+'''.replace("SCRIPT", repr(str(SCRIPT)))
+        result = subprocess.run([sys.executable, "-B", "-c", code], capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_prompt_refuses_echo_fallback(self):
+        stream = unittest.mock.MagicMock()
+        stream.__enter__.return_value.isatty.return_value = True
+        with patch("builtins.open", return_value=stream), patch.object(restore.getpass, "getpass", side_effect=restore.getpass.GetPassWarning("synthetic")):
+            with self.assertRaisesRegex(restore.CeremonyError, "echo fallback"):
+                restore.Ceremony().prompt_share()
+
     def test_raft_path_exists_with_private_mode_and_vault_ownership(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(restore.os, "chown") as chown:
             scratch = Path(directory)
