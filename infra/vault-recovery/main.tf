@@ -351,12 +351,19 @@ data "aws_iam_policy_document" "s3_endpoint" {
   statement {
     sid    = "ReadOnlyExactSnapshotVersion"
     effect = "Allow"
+    # Gateway endpoints require a wildcard Principal. The mandatory exact ARN
+    # condition below retains the recovery-role boundary for assumed sessions.
     principals {
       type        = "AWS"
-      identifiers = [aws_iam_role.host.arn]
+      identifiers = ["*"]
     }
     actions   = ["s3:GetObjectVersion"]
     resources = [local.snapshot_object_arn]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:PrincipalArn"
+      values   = [aws_iam_role.host.arn]
+    }
     condition {
       test     = "StringEquals"
       variable = "s3:VersionId"
