@@ -1,4 +1,28 @@
 {
+  "operator_iam_live_prerequisite_20260909": {
+    "result": "applied and read back",
+    "saved_plan_sha256": "20bdb23450278daf08e7f03efc1096549dafca9e83d83536b86df2d3e43f54e6",
+    "review": "Terra independently approved sole managed create, exact role/user/GetUser only; root applied the same saved hash without re-planning",
+    "review_artifact": "/private/tmp/hoodi-operator-iam-live.j33kDS/review.json",
+    "review_sha256": "130e923109b78298dcb0e32ecaa172b3dd5f846f7f28b413ab1f9aae896019ab",
+    "role_id_rechecked": "AROARRW3MVWD7SGRHTUHG",
+    "user_id_rechecked": "AIDARRW3MVWDXK4XIGJS3",
+    "state_serial_before": 221,
+    "state_serial_after": 222,
+    "state_readback": "/private/tmp/hoodi-operator-iam-live.j33kDS/state-after.json",
+    "state_sha256": "66199519edd81ae9293c7fcf040d5f401c277d95b45af341089442615e05748e",
+    "iam_readback": "/private/tmp/hoodi-operator-iam-live.j33kDS/iam-readback.json",
+    "iam_sha256": "62d371832145a182a7a193cb2a769f27898e40c659856ac7d00c05f4dc268123",
+    "simulation": "/private/tmp/hoodi-operator-iam-live.j33kDS/simulation-per-resource.json",
+    "simulation_sha256": "abac61b232d9d112698372f8e78783c0dc53a5f962b006ab28af902e7b9b4bcd",
+    "verification": "Exact-user GetUser allowed; second user lookup and CreateAccessKey on both users denied; wrapper single-resource simulation also allowed",
+    "verification_correction": "Initial post-apply check misread aggregated multi-resource simulation. Apply had succeeded; did not rerun apply. Read-only per-resource verification corrected and passed",
+    "credential_cleanup": "Task-owned aws.env removed and absence verified",
+    "vault_preflight": "/private/tmp/hoodi-vault-before-operator-ceremony-20260909.json",
+    "vault_preflight_sha256": "c9ba7059ffe8b16bede3ba5ad1450d3a34a6e0fa08bfcc4e339775e33ac408e1",
+    "vault_preflight_result": "Private SSM/TLS path succeeded; initialized and unsealed Vault1.20.4, Raft, HA enabled; no token used",
+    "remaining": "Human-held recovery ceremony to configure Vault operator-aws and prove actual fresh AWS login; no Vault or workload mutation performed"
+  },
   "operator_aws_auth_preparation_20260909": {
     "status": "prepared and tested locally; no live configuration or IAM change",
     "current_aws_identity": "arn:aws:iam::106760547719:user/jsyang",

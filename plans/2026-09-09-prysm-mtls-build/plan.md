@@ -20,6 +20,17 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+Next scoped live step: generate a saved targeted Terraform plan for the
+operator identity lookup policy, using the canonical backend and current
+committed sources in a private temporary directory. Require exactly one
+create, no other managed changes, exact Vault role and exact-user GetUser
+statement; independently review before applying that saved plan. No Vault
+token, root ceremony or workload change is included. Credential env files
+must be task-owned0600 and removed on every exit. Read back IAM and backend
+metadata and require an allowed exact-user simulation afterward. Root owns
+integration/application under the six-stage task authority; Terra reviews the
+non-sensitive plan summary only. No graph or debrief.
+
 Prepare operator-only AWS IAM authentication under a separate operator-aws
 mount, exact explicitly supplied principal ARN, server-ID replay boundary and
 short-lived no-default-policy tokens limited to root-ceremony endpoints. Do

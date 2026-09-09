@@ -1,7 +1,14 @@
 # Operator recovery authentication
 
-Status: prepared implementation, not configured in the live Vault. Complete
-the permission, runtime and login checks below before upgrading Vault2.x.
+Status: exact-user IAM prerequisite applied on2026-09-09; the operator auth
+mount is not yet configured in the live Vault. Complete the runtime and user
+login checks below before upgrading Vault2.x.
+
+For this existing deployment, retain
+`vault_operator_user_arn=arn:aws:iam::106760547719:user/jsyang` in subsequent
+reviewed Terraform inputs. Omitting it selects the disabled default and may
+plan removal of the lookup policy. This is not permission to full-apply
+incomplete reconstructed inputs.
 
 Use a separate `operator-aws` auth mount, not the release-signing mount. The
 `operator-recovery` role accepts only one explicitly supplied IAM user in this
