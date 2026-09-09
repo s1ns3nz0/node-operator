@@ -20,6 +20,12 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+Root extends the existing isolated Agent compatibility fixture to allow only
+the two exact approved server digests (old1.20.4 or candidate2.1), with cached
+mock reuse. Exercise actual Kubernetes auth, least-privilege KV rendering and
+file-audit HMAC behavior against2.1 without live tokens. This proves neither
+production TLS/KMS nor socket relay behavior; preserve these separate gates.
+
 Root owns an isolated Docker Raft rehearsal: fresh synthetic Vault1.20.4
 storage, one test unseal share, KV value and snapshot; stop old process before
 starting the frozen2.1 candidate on that same task-owned volume. Verify unseal,

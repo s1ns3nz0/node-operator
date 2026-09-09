@@ -124,10 +124,17 @@ config_container=""
 # mock implements only the two synthetic Vault API responses and has no host
 # port or external network path.
 mock_tag="${VAULT_AGENT_MOCK_IMAGE:-node-operator-vault-agent-mock:test}"
-docker buildx build --load --platform linux/amd64 --progress=plain \
-  --target mock-vault --tag "$mock_tag" --file "$context/Dockerfile" "$context"
+if [[ "${VAULT_AGENT_MOCK_SKIP_BUILD:-false}" != true ]]; then
+  docker buildx build --load --platform linux/amd64 --progress=plain \
+    --target mock-vault --tag "$mock_tag" --file "$context/Dockerfile" "$context"
+fi
 mock_id="$(docker image inspect --format '{{.Id}}' "$mock_tag")"
 [[ "$mock_id" =~ ^sha256:[a-f0-9]{64}$ ]] || { printf 'invalid mock image id\n' >&2; exit 1; }
+if [[ "${VAULT_AGENT_MOCK_SKIP_BUILD:-false}" == true ]]; then
+  [[ "$mock_id" == sha256:a62f85f70e3479663b579f8e6ffdc6a0e6f15025dbf82723d22883480aebb68f ]] || {
+    printf 'cached mock is not the reviewed fixture image\n' >&2; exit 1;
+  }
+fi
 test_network="vault-agent-test-$$"
 mock_container="vault-agent-mock-$$"
 # Syntactically valid but deliberately non-cryptographic fixture. The real
@@ -196,7 +203,12 @@ signal_container=""
 # TokenReview endpoint, policy, role, JWT, token, and secret are all ephemeral
 # synthetic fixtures on this internal network; no host port or live service is
 # reachable.
-vault_server_image='hashicorp/vault@sha256:20ff3ed4a4da750d1be0757c82e0a10accc00c26c157bde3a694f2b227300caf'
+vault_server_image="${VAULT_AGENT_TEST_SERVER_IMAGE:-hashicorp/vault@sha256:20ff3ed4a4da750d1be0757c82e0a10accc00c26c157bde3a694f2b227300caf}"
+case "$vault_server_image" in
+  hashicorp/vault@sha256:20ff3ed4a4da750d1be0757c82e0a10accc00c26c157bde3a694f2b227300caf) server_version='1.20.4' ;;
+  sha256:5463f9d70fe71b897b165e019dbc1e85aeaa8271130572bd060729dc124ff51f) server_version='2.1.0' ;;
+  *) printf 'unreviewed compatibility server image\n' >&2; exit 64 ;;
+esac
 vault_server_container="vault-server-1204-test-$$"
 docker run --detach --name "$vault_server_container" --network "$test_network" \
   --network-alias vault-server-1204 --platform linux/amd64 --user 100:1000 \
@@ -217,8 +229,9 @@ for _ in $(seq 1 30); do
   if docker exec "$vault_server_container" vault status >/dev/null 2>&1; then server_ready=true; break; fi
   sleep 1
 done
-[[ "$server_ready" == true ]] || { printf 'Vault 1.20.4 test server did not become ready\n' >&2; exit 1; }
-docker exec "$vault_server_container" vault version | grep -Fq 'Vault v1.20.4'
+[[ "$server_ready" == true ]] || { printf 'Vault compatibility server did not become ready\n' >&2; exit 1; }
+docker exec "$vault_server_container" vault version | grep -Fq "Vault v$server_version"
+docker exec "$vault_server_container" vault audit enable file file_path=/vault/logs/audit.json log_raw=false >/dev/null
 docker exec "$vault_server_container" vault auth enable kubernetes >/dev/null
 docker exec "$vault_server_container" vault write auth/kubernetes/config \
   kubernetes_host=http://vault-agent-mock:8200 \
@@ -275,6 +288,17 @@ if grep -Fq "$synthetic_jwt" <<<"$compat_logs" || grep -Eq 'synthetic-(jwt-not-a
   printf 'Vault 1.20.4 compatibility test logged synthetic authentication material\n' >&2
   exit 1
 fi
+# Retain the real API fixture's audit records only in this process. The test
+# must observe both login and KV requests, without raw credentials or values.
+audit_records="$(docker exec "$vault_server_container" cat /vault/logs/audit.json)"
+jq -se 'any(.[]; .type=="request" and .request.path=="auth/kubernetes/login") and
+ any(.[]; .type=="request" and .request.path=="kv/data/synthetic") and
+ any(.[]; .type=="response" and .request.path=="kv/data/synthetic" and
+   ((.response.data.data.value // "")|startswith("hmac-sha256:")))' <<<"$audit_records" >/dev/null
+if grep -Fq "$synthetic_jwt" <<<"$audit_records" || grep -Eq 'synthetic-(reviewer-token|root-token)|rendered-1204' <<<"$audit_records"; then
+  printf 'file audit leaked synthetic authentication material or KV value\n' >&2; exit 1
+fi
+printf 'PASS: Agent Kubernetes auth, KV template and non-raw file audit against Vault %s\n' "$server_version"
 docker rm "$compat_container" >/dev/null
 compat_container=""
 docker rm -f "$vault_server_container" >/dev/null

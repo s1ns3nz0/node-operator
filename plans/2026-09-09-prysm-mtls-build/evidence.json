@@ -1,4 +1,29 @@
 {
+  "vault_agent_server210_auth_audit_20260909": {
+    "result": "passed",
+    "server_image": "sha256:5463f9d70fe71b897b165e019dbc1e85aeaa8271130572bd060729dc124ff51f",
+    "agent_image": "sha256:33458e87c790b140717f2f4c688d31327292f67677ba004d32838deed8b8f30a",
+    "mock_image": "sha256:a62f85f70e3479663b579f8e6ffdc6a0e6f15025dbf82723d22883480aebb68f",
+    "mock_build_log": "/private/tmp/hoodi-agent-mock-identity-20260909.log",
+    "test_log": "/private/tmp/hoodi-agent-server210-audit-reviewed-20260909.log",
+    "test_sha256": "d78038df1e24764d7ccf55dcc9009cdf9572ab40edc3ee252539b190ffa8e3d0",
+    "scan": "/private/tmp/hoodi-agent-server210-audit-reviewed-grype-20260909.json",
+    "scan_sha256": "885d158da7683d47ac468a74f92544b28054980bc6dd61331ba4c5d7d4cbef96",
+    "checks": ["real2.1 Kubernetes auth plugin against synthetic TokenReview", "Agent sink, KV template and exit_after_auth", "file audit login and KV request records", "KV response value HMAC; no raw fixture JWT/root/reviewer token/value", "Agent C/H=0 scan"],
+    "review": {"agent": "/root/vault_raft_review", "tier": "terra", "fallback": "none", "result": "passed after binding cached mock to exact source-built image ID"},
+    "attempts": "Initial audit assertion assumed every KV response had value; corrected null handling, retaining mandatory HMAC-positive assertion. Re-ran after independent mock identity fix; exit0.",
+    "scope": "Synthetic isolated dev-server auth and file audit only; not production TLS, KMS/HA, socket relay, token transition or live deployment"
+  },
+  "node_gitops_delivery_readback_20260909": {
+    "inventory": "/private/tmp/hoodi-node-rollout-inventory-20260909.json",
+    "application": "/private/tmp/hoodi-node-argocd-source-20260909.json",
+    "owner": "ArgoCD node-operator-client",
+    "chart_version": "0.1.28", "health": "Healthy", "sync": "OutOfSync",
+    "live_images_changed": false,
+    "delivery_worktree": "/private/tmp/hoodi-gitops-runtime-delivery.xkq2Lv",
+    "delivery_branch": "codex/hoodi-reviewed-runtime-images",
+    "remaining": "Determine existing chart drift; update GitOps values and allowlist through reviewed signed chart delivery. Existing chart-only SCA uses only-fixed and does not prove runtime image C/H clearance; preserve separate full-image scans and repair gate before claiming full CD coverage."
+  },
   "vault_server_hardened_candidate_20260909": {
     "isolated_raft_rehearsal": {
       "result": "passed",
