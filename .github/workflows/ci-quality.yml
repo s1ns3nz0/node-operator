@@ -52,6 +52,12 @@ jobs:
           python3 scripts/ci/test-vault-runtime-verification-contract.py
           python3 scripts/ci/test-vault-runtime-applicability.py
           python3 scripts/ci/test-vault-grpc-patch-contract.py
+          python3 scripts/ci/test-vault-runtime-verification-statement.py
+          python3 scripts/ci/test-vault-runtime-signing-contract.py
+      - name: Test pinned Cosign detached blob tamper rejection (synthetic keys only)
+        run: |
+          scripts/ci/install-validator-signing-fence-release-tools.sh "$RUNNER_TEMP/vault-blob-test-tools"
+          COSIGN_BIN="$RUNNER_TEMP/vault-blob-test-tools/cosign" bash scripts/ci/test-vault-runtime-blob-roundtrip.sh
       - name: Test release scan attestation content contract
         run: |
           bash scripts/ci/test-release-scan-attestation.sh

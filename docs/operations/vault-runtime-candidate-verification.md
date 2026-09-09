@@ -5,6 +5,11 @@ This manual CI job verifies the three reviewed immutable ECR subjects in
 reads Vault data or runs Terraform. A passing scan is **not** a trusted build
 provenance statement or a live deployment authorization.
 
+The optional `sign_evidence=true` input adds a separate job that signs a
+digest-bound verification statement after all three checks pass. The default
+is still read-only verification without signing. See
+[signed evidence and consumer verification](vault-runtime-signed-evidence.md).
+
 ## One-time setup after the change is merged
 
 1. Keep existing node/runtime ECR inputs enabled. Set

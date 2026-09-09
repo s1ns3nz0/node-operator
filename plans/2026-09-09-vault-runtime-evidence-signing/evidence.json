@@ -1,0 +1,13 @@
+{
+  "status":"implementation_locally_verified_pending_PR_and_hosted_signing",
+  "baseline_verification_run":34330457626,
+  "baseline_revision":"f175327fa62a5b1924093207f19d7b9b266453c2",
+  "design":"Opt-in detached signature of three digest-bound verification evidence sets; no OCI registry signature or SLSA build claim",
+  "real_evidence_replay_directory":"/private/tmp/hoodi-vault-signing-replay.DmzNPU",
+  "replay_limit":"Copied actual hosted artifacts were supplemented with synthetic new-format verification-run context solely for local testing; original hosted artifacts remain unchanged and this is not hosted signing evidence",
+  "checks":{"statement_content_and_negative_cases":"passed","signing_contract_nine_mutations_and_crypto_before_semantics":"passed","readonly_verification_contract":"passed","source_eligibility_contract":"passed","shellcheck":"passed","harness_verify":"passed including expected negative fixture rejections","real_evidence_build_and_verify":"passed","cosign_3_1_2_offline_blob_roundtrip_and_tamper":"passed in pinned Docker toolbox with network none; expected TUF network warning; synthetic key only","diff_check":"passed"},
+  "independent_review":"Terra approved final opt-in job, exact identity/revision/run binding, raw evidence/applicability/policy replay, freshness, claims and CI-wired synthetic Cosign test",
+  "skill":"devsecops-redteam used for scoped signing audit; remaining build provenance, GitOps enforcement and archival boundaries recorded in redteam.md",
+  "signed_in_hosted_ci":false,"iam_changed":false,"ecr_changed":false,"deployed":false,
+  "remaining":["PR checks/review and merge","Explicit sign_evidence=true hosted run and bundle verification","GitOps consumer enforcement plus independently authorized rollout"]
+}
