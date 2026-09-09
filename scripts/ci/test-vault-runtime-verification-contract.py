@@ -8,8 +8,10 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def validate(script, workflow):
-    for forbidden in (r"docker\s+(build|push|tag)\b", r"cosign\s+(sign|attest)\b", r"\bkubectl\b", r"terraform\s+apply"):
+    for forbidden in (r"docker\s+(build|push|tag)\b", r"cosign\s+(sign|attest)(?:\s|$)", r"\bkubectl\b", r"terraform\s+apply"):
         assert not re.search(forbidden, script + workflow), "unexpected mutation"
+    readonly_job = workflow.split("\n  sign-evidence:")[0]
+    assert not re.search(r"cosign\s+(sign|attest)", script + readonly_job), "verification job must not sign"
     for required in ("--network none", "--read-only", "--cap-drop ALL", "--security-opt no-new-privileges",
                      "--pids-limit 64", "--memory 512m", "timeout 60 docker run",
                      "--platform linux/amd64", ".RepoDigests | index($subject) != null",

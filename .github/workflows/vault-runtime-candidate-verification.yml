@@ -2,6 +2,12 @@ name: Vault Runtime Candidate Verification
 
 on:
   workflow_dispatch:
+    inputs:
+      sign_evidence:
+        description: Sign the verified digest/evidence statement (not build provenance or deployment)
+        type: boolean
+        default: false
+        required: true
 
 permissions:
   contents: read
@@ -56,6 +62,10 @@ jobs:
           registry="$(jq -er .registry .ci/vault-runtime-candidates.json)"
           aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$registry"
           bash scripts/ci/verify-vault-runtime-candidate.sh "$COMPONENT" "$RUNNER_TEMP/vault-runtime-evidence"
+          jq -n --arg repository "$GITHUB_REPOSITORY" --arg revision "$GITHUB_SHA" \
+            --arg run_id "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg component "$COMPONENT" \
+            '{repository:$repository,source_revision:$revision,run_id:$run_id,run_attempt:$attempt,component:$component,ref:"refs/heads/main"}' \
+            > "$RUNNER_TEMP/vault-runtime-evidence/verification-run.json"
       - name: Report scan-only outcome
         if: always()
         run: |
@@ -80,4 +90,51 @@ jobs:
             ${{ runner.temp }}/vault-runtime-evidence/binary.sha256
             ${{ runner.temp }}/vault-runtime-evidence/dependencies.txt
           if-no-files-found: warn
+          retention-days: 30
+
+  sign-evidence:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && inputs.sign_evidence && needs.verify.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false, fetch-depth: 0}
+      - name: Download only this run's completed verification artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bash scripts/ci/verify-release-source-eligibility.sh "$GITHUB_SHA"
+          for component in server agent injector; do
+            gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "vault-runtime-$component-verification" \
+              --dir "$RUNNER_TEMP/vault-signed-evidence/vault-runtime-$component-verification"
+          done
+      - name: Revalidate and keyless-sign the exact verification statement
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$GITHUB_REF" = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          scripts/ci/install-validator-signing-fence-release-tools.sh "$RUNNER_TEMP/vault-sign-tools"
+          export PATH="$RUNNER_TEMP/vault-sign-tools:$PATH"
+          unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE AWS_DEFAULT_PROFILE GH_TOKEN GITHUB_TOKEN
+          evidence="$RUNNER_TEMP/vault-signed-evidence"
+          python3 scripts/ci/vault-runtime-verification-statement.py build "$evidence" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$evidence/verification-statement.json"
+          cosign sign-blob --yes --bundle "$evidence/verification-statement.sigstore.json" "$evidence/verification-statement.json"
+          bash scripts/ci/verify-vault-runtime-signed-evidence.sh "$evidence" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+          echo 'PASS: signed digest-bound verification evidence; not CI build provenance, image registry signature, or deployment authorization.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain the verified signature bundle and complete public evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vault-runtime-signed-evidence-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/vault-signed-evidence/
+          if-no-files-found: error
           retention-days: 30
