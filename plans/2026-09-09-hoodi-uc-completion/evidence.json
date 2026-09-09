@@ -9,5 +9,6 @@
   "latest_snapshot":{"key":"raft-migration/20260907T103552Z.snap","size":32837,"sha256_header_present":false,"fresh":false},
   "gitops_inventory_fix":{"pr":58,"merge_revision":"a28a16309e1e4d782e17c0c89304baf6a07c364d","independent_review":"Terra passed","ci":"passed before normal squash merge","hosted_run":"34339697889","hosted_status":"success"},
   "snapshot_code":{"upload_mock_tests":15,"recovery_mock_tests":9,"independent_review":"snapshot_integrity_review: Terra final accept","syntax_quality_harness_diff":"passed","precision_note":"Configured retention >=90 days; one-second tolerance only for whole-second S3 LastModified versus fractional retention metadata"},
+  "source_ci_followup":{"initial_run":"34339899176","finding":"Legacy hardcoded /private/tmp missing on Ubuntu","fix":"Use TMPDIR or /tmp; mock suite uses isolated temp root and asserts snapshot cleanup","local_tests":"15 passed","hosted_recheck":"pending"},
   "blocked_before_vault_mutation":["Fresh verified snapshot requires user-only recovery ceremony","Complete snapshot upload fix CI/review/merge","Recheck signed render and full rollout readiness"]
 }

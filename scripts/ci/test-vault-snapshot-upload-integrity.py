@@ -116,15 +116,18 @@ esac
                 "VAULT_TOKEN": "test-token-not-a-real-secret",
                 "MOCK_CASE": case,
                 "MOCK_CHECKSUM": str(temporary_root / "checksum"),
+                "TMPDIR": str(temporary_root),
                 "MOCK_METADATA": str(temporary_root / "metadata.json"),
             }
-            return subprocess.run(
+            result = subprocess.run(
                 [str(ops / UPLOADER.name), "--bucket", "test-bucket"],
                 text=True,
                 capture_output=True,
                 env=environment,
                 check=False,
             )
+            self.assertEqual(list(temporary_root.glob("node-operator-vault-raft.*")), [])
+            return result
 
     def test_success_requires_remote_full_object_checksum(self) -> None:
         result = self.run_uploader("success")

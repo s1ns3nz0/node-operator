@@ -33,7 +33,7 @@ expected_kms_key_arn="$(aws kms describe-key --key-id "$kms_key" --region "$regi
 encryption="$(aws s3api get-bucket-encryption --bucket "$bucket" --region "$region" --output json)"
 jq -e --arg kms_key "$expected_kms_key_arn" '.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault | .SSEAlgorithm == "aws:kms" and .KMSMasterKeyID == $kms_key' <<<"$encryption" >/dev/null || { printf 'snapshot bucket does not enforce the required SSE-KMS key\n' >&2; exit 65; }
 
-snapshot_file="$(mktemp /private/tmp/node-operator-vault-raft.XXXXXX)"
+snapshot_file="$(mktemp "${TMPDIR:-/tmp}/node-operator-vault-raft.XXXXXX")"
 chmod 600 "$snapshot_file"
 cleanup() {
   unset VAULT_TOKEN
