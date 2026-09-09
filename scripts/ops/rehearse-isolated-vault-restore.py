@@ -202,6 +202,15 @@ seal "awskms" {
 '''
 
 
+def prepare_raft_directories(scratch):
+    # Raft opens its Bolt file inside the configured path; it does not create
+    # this missing parent for us. Both directories stay private to Vault.
+    for name in ("data", "data/raft"):
+        directory = scratch / name
+        directory.mkdir(mode=0o700)
+        os.chown(directory, VAULT_UID, VAULT_GID)
+
+
 class Ceremony:
     def __init__(self): self.owner = "isolated-vault-rehearsal-" + os.urandom(6).hex(); self.container = None; self.scratch = None; self.root = None; self.generated = None; self.ceremony_started = False; self.egress = None; self.stage = "preflight"; self.cleanup_state = "not_started"
     def docker(self, *args, input=None): return command("docker", *args, input=input)
@@ -288,8 +297,7 @@ class Ceremony:
         result = None
         try:
             self.stage = "local_setup"
-            for name in ("data",):
-                p = self.scratch / name; p.mkdir(); os.chown(p, VAULT_UID, VAULT_GID)
+            prepare_raft_directories(self.scratch)
             (self.scratch / "config.hcl").write_text(config_text()); os.chown(self.scratch / "config.hcl", VAULT_UID, VAULT_GID); os.chmod(self.scratch / "config.hcl", 0o400)
             audit = AuditSink(self.scratch / "audit"); audit.start()
             # ECR password is passed solely on stdin; private config is removed in cleanup.
