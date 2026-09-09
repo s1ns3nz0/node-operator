@@ -1,4 +1,26 @@
 {
+  "gitops_chart_retention_prevention_20260909": {
+    "repository": "node-operator-baseline-gitops-client/node-operator-client",
+    "missing_deployed_tag": "0.1.28",
+    "old_policy": "tagStatus any, imageCountMoreThan10 includes release/signature/provenance artifacts",
+    "cause_assessment": "Policy plausibly explains historical expiration; no CloudTrail attribution obtained",
+    "new_policy_source": "infra/terraform/gitops-client-chart-retention.json",
+    "applied": "exact repository policy only; expire only explicitly disposable-* artifacts beyond10",
+    "preflight": "No existing tag matched disposable-*",
+    "readback": "/private/tmp/hoodi-chart-retention-readback-20260909.json",
+    "readback_sha256": "ec23010985c642bce4d795919bed298a05aaad1b6d26883f16605f50743bde5b",
+    "postcheck": "Before/after repository digest sets exactly equal; no image deletion performed",
+    "validation": "Pinned Docker Terraform fmt check and dedicated ECR publisher contract passed; independent Terra policy review passed",
+    "limits": "Preventive scoped AWS policy update matches canonical IaC file. Terraform backend refresh still pending. Missing chart and Argo sync are not restored."
+  },
+  "gitops_namespace_drift_reconciliation_20260909": {
+    "resource": "Namespace/node-operator-dast",
+    "action": "UID/RV-tested restoration of app.kubernetes.io/part-of=node-operator only",
+    "evidence": "/private/tmp/hoodi-dast-namespace-label-reconciliation-20260909.json",
+    "sha256": "ce26d6c8f61991c30eb0192dbb39726626b8d0bd4361bda31504af37aed749a2",
+    "checks": "Exact expected label-only change; existing restricted PSA/version labels preserved",
+    "remaining": "Argo normal refresh still OutOfSync for namespace; chart0.1.28 unavailable from ECR. No broad sync or prune attempted."
+  },
   "vault_agent_server210_auth_audit_20260909": {
     "result": "passed",
     "server_image": "sha256:5463f9d70fe71b897b165e019dbc1e85aeaa8271130572bd060729dc124ff51f",

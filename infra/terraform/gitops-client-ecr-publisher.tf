@@ -97,18 +97,9 @@ resource "aws_ecr_lifecycle_policy" "gitops_client_chart" {
   count      = var.enable_gitops_client_ecr_publisher ? 1 : 0
   repository = aws_ecr_repository.gitops_client_chart[0].name
 
-  policy = jsonencode({
-    rules = [{
-      rulePriority = 1
-      description  = "Retain the latest 10 immutable GitOps client charts"
-      selection = {
-        tagStatus   = "any"
-        countType   = "imageCountMoreThan"
-        countNumber = 10
-      }
-      action = { type = "expire" }
-    }]
-  })
+  # Running Argo revisions and their signature/provenance tags must not expire
+  # merely because another release adds three OCI artifacts to the repository.
+  policy = file("${path.module}/gitops-client-chart-retention.json")
 }
 
 data "aws_iam_policy_document" "github_gitops_client_ecr_publisher_assume_role" {

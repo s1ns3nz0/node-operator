@@ -20,6 +20,21 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+Live readback found Argo revision0.1.28 absent from ECR. Chart retention counts
+all OCI artifacts together (including legacy Cosign tags), allowing deployed
+releases to expire. Root owns the exact chart repository lifecycle correction:
+one canonical IaC JSON policy expiring only explicit disposable-* tags, after
+checking no existing tag matches. No chart/image deletion or recreation. Record
+AWS policy readback separately from Terraform backend refresh; do not claim the
+missing artifact or Argo sync has been restored by this preventive correction.
+
+GitOps delivery worktree is `/private/tmp/hoodi-gitops-runtime-delivery.xkq2Lv`.
+Terra `/root/vault_raft_review` owns only its private-CD chart scanner and
+behavioral fixture: remove fixed-only filtering and require valid, unfiltered
+evidence, including suppressed matches. Root owns publication workflow, drift
+reconciliation and integration. No runtime-image coverage is inferred from
+chart SCA. Keep production chart/version unchanged until reviewed delivery.
+
 Root extends the existing isolated Agent compatibility fixture to allow only
 the two exact approved server digests (old1.20.4 or candidate2.1), with cached
 mock reuse. Exercise actual Kubernetes auth, least-privilege KV rendering and
