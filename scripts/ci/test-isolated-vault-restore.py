@@ -9,6 +9,8 @@ import unittest
 from unittest.mock import patch
 import base64
 import tempfile
+import http.server
+import threading
 from types import SimpleNamespace
 
 sys.dont_write_bytecode = True
@@ -17,6 +19,36 @@ SCRIPT = Path(__file__).parents[1] / "ops" / "rehearse-isolated-vault-restore.py
 spec = importlib.util.spec_from_file_location("restore", SCRIPT); restore = importlib.util.module_from_spec(spec); spec.loader.exec_module(restore)
 
 class RestoreTests(unittest.TestCase):
+    def test_real_http_response_is_consumed_once(self):
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(403 if self.path.endswith("denied") else 200)
+                self.end_headers()
+                self.wfile.write(b'{"initialized":false}')
+            def log_message(self, *args): pass
+        server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            api = restore.LocalVault(server.server_port)
+            self.assertEqual(api.request("GET", "/v1/sys/health"), {"initialized": False})
+            with self.assertRaisesRegex(restore.CeremonyError, "HTTP 403"):
+                api.request("GET", "/v1/denied")
+        finally:
+            server.shutdown(); server.server_close(); thread.join(timeout=2)
+
+    def test_failure_diagnostics_never_expose_dynamic_content(self):
+        c = restore.Ceremony()
+        c.stage = "initialize"
+        c.cleanup_state = "passed"
+        error = restore.CeremonyError("token=synthetic-sensitive-material")
+        self.assertEqual(restore.failure_summary(c, error), "FAILED: stage=initialize error=CeremonyError cleanup=passed; details withheld")
+        c.stage = "synthetic-sensitive-material"
+        c.cleanup_state = "synthetic-sensitive-material"
+        self.assertNotIn("synthetic-sensitive-material", restore.failure_summary(c, error))
+        with patch.object(restore.Ceremony, "execute", side_effect=error), patch("sys.stderr", new_callable=io.StringIO) as err:
+            self.assertEqual(restore.main(["--execute"]), 1)
+        self.assertNotIn("synthetic-sensitive-material", err.getvalue())
     def test_default_is_a_no_write_plan(self):
         with patch.object(restore, "command", side_effect=AssertionError("write attempted")), patch("sys.stdout", new_callable=io.StringIO) as out:
             self.assertEqual(restore.main([]), 0)
