@@ -1,4 +1,16 @@
 {
+  "vault_server_hardened_candidate_20260909": {
+    "image": "sha256:5463f9d70fe71b897b165e019dbc1e85aeaa8271130572bd060729dc124ff51f",
+    "version": "2.1.0",
+    "source": "cb6a54face072e372480d7cc2e64a3110b84756f",
+    "build_log": "/private/tmp/hoodi-vault-server-hardened-build-20260909.log",
+    "scan": "/private/tmp/hoodi-vault-server-hardened-grype-20260909.json",
+    "scan_sha256": "01661a6a25836637e6d45b2f88bc7f7078fcd710fbe14614f9cfa67a59e98fe1",
+    "critical": 0, "high": 0, "medium": 3, "unknown": 1, "ignored": 0,
+    "checks": ["upstream generate-root and snapshot-inspection command tests passed", "full server binary built without minimal feature tags", "exact digest version command with no network, read-only filesystem, dropped capabilities, UID100:1000", "valid scanner DB and no excludes/fixed-only filtering"],
+    "published": false, "deployed": false,
+    "remaining": "Unknown GO-2026-5932 reachability assessment; isolated Raft backup/restore and auth/audit compatibility; recovery-token transition ceremony; independent review and trusted delivery"
+  },
   "ci_evidence_format_remediation_20260909": {
     "failed_head": "a00fff53c2a26311936e8be1035b1dc8655e4ec1",
     "gate_run": 34296776903,
@@ -8,7 +20,8 @@
     "verification": "Both original and revised patches apply with git apply --check to pristine upstream versions.gradle; resulting files compare byte-identical; full branch diff --check passes",
     "resulting_versions_gradle_sha256": "5e23b1e68c1dfdd9f2ab330e0024a553108ca2afef9e80e310cc6517042e6911",
     "proof_directory": "/private/tmp/hoodi-patch-equivalence.imhbfY",
-    "limits": "Existing deployed candidate retains original patch metadata; no image rebuild or new release attestation claimed. Remote gate rerun and designated reviewer approval pending."
+    "remote_verification": "Head503eb1bf76f32862208be2ae1c6c2fb048129ac6: five CI jobs passed; trusted gate34297841866 reports block=0 and require_approval=1",
+    "limits": "Existing deployed candidate retains original patch metadata; no image rebuild or new release attestation claimed. Designated reviewer approval pending."
   },
   "uc2_tls_negative_live_20260909": {
     "result": "passed",
@@ -17,7 +30,7 @@
     "checks": ["zero client/fence and empty Lease before probes", "valid mTLS singleton identity before and after", "bad server CA rejected", "untrusted client certificate rejected", "NetworkPolicies unchanged", "four owned Pods and synthetic Secret removed by UID"],
     "real_credentials": "Secret references projected into Pods only; not read locally",
     "scope": "GET-only transport rejection, not actual validator duty or complete UC2",
-    "runner_review": "Durable runner prepared; ShellCheck passed; final independent review pending"
+    "runner_review": "Durable runner and renderer prepared; ShellCheck and two offline contract tests in exact reviewed Python container passed (read-only, network none, dropped capabilities); final independent review pending"
   },
   "nethermind_upcheck_runtime_rollout_20260909": {
     "terraform": {

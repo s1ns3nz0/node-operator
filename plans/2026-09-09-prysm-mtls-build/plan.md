@@ -20,6 +20,16 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+Root owns live GET-only UC2 TLS-negative verification with the already reviewed
+identity-probe image. Fresh zero-client/fence, empty Lease and ready signer
+checks are mandatory because probe labels match fence Service selectors. Use
+one new synthetic self-signed TLS Secret; project real credentials by Secret
+reference only, never read them locally. Exercise good control, bad server CA,
+untrusted client certificate, and good post-control with identical networking.
+Remove only task-owned Pods/Secret using UID preconditions, verify absence and
+unchanged NetworkPolicies. This proves transport denial, not actual duty or
+completion of the still-vulnerable full runtime inventory.
+
 Provision a separate `aws_ecr_repository.upcheck_runtime[0]` under the existing
 node-runtime KMS boundary, with a reviewed one-create targeted plan. Publish
 the already scanned Python candidate by digest. Before any Nethermind proxy
