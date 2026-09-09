@@ -20,6 +20,13 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+Root now stages the exact registry-verified Nethermind/Beacon candidates in
+GitOps values and its allowlist, with manual-candidate provenance clearly
+separate from trusted chart publication. Require before/after render equality
+apart from the two image strings, independent review and CI. Both StatefulSets
+remain OnDelete with Retain PVCs; no automatic Pod deletion or live application
+revision change is part of this staging change.
+
 Live readback found Argo revision0.1.28 absent from ECR. Chart retention counts
 all OCI artifacts together (including legacy Cosign tags), allowing deployed
 releases to expire. Root owns the exact chart repository lifecycle correction:

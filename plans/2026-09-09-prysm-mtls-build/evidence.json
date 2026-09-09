@@ -1,4 +1,60 @@
 {
+  "node_runtime_rollout_completed_20260909": {
+    "chart": {
+      "version": "0.1.32",
+      "digest": "sha256:0c860bfae8de61495fd6e5b93ea1cace32889da8af1190a694753a8edec59b0e",
+      "publication_run": 34300028978,
+      "publication_result": "success",
+      "verification": "/private/tmp/hoodi-chart032-verification.JYcnTZ/result.json",
+      "verification_sha256": "7ac1b152bdcc2e723fc265208fd4d97f232495bcaee4ac107fb2b7f77ee0b13f",
+      "checks": "Cosign2.6.1 checksum-pinned binary in isolated container; exact main workflow identity/issuer, SLSA source7f1bfa5de7bff71d402d8d6078ac331cbc897c81, OCI digest, chart layer and semantic reviewed render all verified",
+      "promotion": "/private/tmp/hoodi-chart032-promotion.Yk2nKm/result.json",
+      "promotion_sha256": "2147db929d21f4cc24b237932a4dc3a2f097467381fd0f24a7c6540910a871dd",
+      "promotion_result": "Argo0.1.32 Synced Healthy; UID/RV-tested targetRevision change only",
+      "canonical_pins": "Application, Terraform bootstrap, release contract/verifier, docs and tests updated0.1.32; independent Terra review and both contract tests passed"
+    },
+    "nethermind": {
+      "result": "/private/tmp/hoodi-nethermind-execution-restart.YOIUq6/result.json",
+      "sha256": "c391c2649a18b647ec83ac294e4b507b87b0b07dc15d0fbb4e1a2771b7a59d3f",
+      "new_pod_uid": "ee76a625-bdd4-4f6b-b457-c9d3a7277315",
+      "ready": true,
+      "activity": "Post-restart log tail shows blocks3586719 through3586722 processed and chain head advanced",
+      "pvc_uid_retained": "0e8d9f3b-a2b9-499f-a573-da76e4be0c03"
+    },
+    "beacon": {
+      "result": "/private/tmp/hoodi-prysm-beacon-restart.q9US0R/result.json",
+      "sha256": "f1c4c86a03a7a6a9da032f725cafdc3c55432e5395221ba6ddbd1a5507aa5179",
+      "new_pod_uid": "0104db33-09a0-4852-b2e8-545ed01deb25",
+      "ready": true,
+      "pvc_uid_retained": "253b9a4e-cf9d-4d5f-816f-956051bcb042"
+    },
+    "restart_safety": "Fresh client/fence0 and no Pods, empty Lease, exact StatefulSet/PVC UIDs, OnDelete/Retain; one-at-a-time UID-precondition Pod deletion with600s graceful termination; actual replacement imageIDs match reviewed digests; no PVC deletion",
+    "post_rollout_beacon": {
+      "evidence": "/private/tmp/hoodi-node-post-rollout-observation-20260909/uc-3-private-beacon-20260909T015236Z.json",
+      "sha256": "9fc1d1d82579fc3892c677476fb60b0341865d01c490e354ab00f20c376d94ae",
+      "head_slot": "3892112", "is_syncing": false, "is_optimistic": false, "el_offline": false,
+      "validator_index": "1559065", "validator_status": "active_ongoing", "slashed": false
+    },
+    "limits": "Node rollout complete; runtime images are manually reviewed candidates, not CI-attested images. Vault stack remediation, singleton validator/fence startup, actual duties, remaining UC verification and complete CD runtime scanning still outstanding."
+  },
+  "gitops_node_candidate_staging_20260909": {
+    "pr": "https://github.com/s1ns3nz0/node-operator-gitops/pull/54",
+    "reviewed_head": "97c67df38121da374ad9a3f911f1a56250bc5c0f",
+    "merge_commit": "7f1bfa5de7bff71d402d8d6078ac331cbc897c81",
+    "ci_run_passed": 34299970972,
+    "publication_run": 34300028978,
+    "nethermind_full_scan": "/private/tmp/hoodi-nethermind-registry-full-20260909.json",
+    "nethermind_scan_sha256": "f8e2953ceb0a2c60c68a97a6458106140b7fafded6519b4def7e228b5ef65224",
+    "beacon_full_scan": "/private/tmp/hoodi-beacon-registry-full-20260909.json",
+    "beacon_scan_sha256": "ef324682563d7c9dab61395896392734d591db8bd08f544108b9d265aa1f7f7f",
+    "scan_checks": "Exact ECR digest/source binding; show-suppressed true; shared SCA gate passed both images with C/H0 and ignored0. Supersedes earlier reports without show-suppressed.",
+    "render_checks": "Semantic before/after comparison proves exactly two image changes; OnDelete and Retain unchanged",
+    "preflight": "/private/tmp/hoodi-node-prepromotion-resources-20260909.json",
+    "pvc_uids": {"nethermind": "0e8d9f3b-a2b9-499f-a573-da76e4be0c03", "beacon": "253b9a4e-cf9d-4d5f-816f-956051bcb042"},
+    "independent_review": "Terra vault_raft_review: identity, scan, storage and manual-candidate scope passed; stale report hashes corrected before commit",
+    "live_restart": false,
+    "remaining": "Finish chart publication; verify actual signature and source binding; promote exact Argo revision and perform controlled one-at-a-time retained-volume restarts. Runtime candidates remain manually reviewed, not CI-attested images."
+  },
   "gitops_chart_retention_prevention_20260909": {
     "repository": "node-operator-baseline-gitops-client/node-operator-client",
     "missing_deployed_tag": "0.1.28",

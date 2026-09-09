@@ -265,7 +265,7 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
                 source:
                   repoURL: ${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/node-operator-baseline-gitops-client
                   chart: node-operator-client
-                  targetRevision: 0.1.28
+                  targetRevision: 0.1.32
                 destination:
                   server: https://kubernetes.default.svc
                   namespace: node-operator
