@@ -19,6 +19,17 @@ SCRIPT = Path(__file__).parents[1] / "ops" / "rehearse-isolated-vault-restore.py
 spec = importlib.util.spec_from_file_location("restore", SCRIPT); restore = importlib.util.module_from_spec(spec); spec.loader.exec_module(restore)
 
 class RestoreTests(unittest.TestCase):
+    def test_raft_path_exists_with_private_mode_and_vault_ownership(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(restore.os, "chown") as chown:
+            scratch = Path(directory)
+            restore.prepare_raft_directories(scratch)
+            for name in ("data", "data/raft"):
+                self.assertTrue((scratch / name).is_dir())
+                self.assertEqual((scratch / name).stat().st_mode & 0o777, 0o700)
+            self.assertEqual(chown.call_count, 2)
+            chown.assert_any_call(scratch / "data", 65000, 65000)
+            chown.assert_any_call(scratch / "data/raft", 65000, 65000)
+
     def test_real_http_response_is_consumed_once(self):
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
