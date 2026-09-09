@@ -28,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$SOURCE_IMAGE" =~ ^offchainlabs/prysm-validator@sha256:[a-f0-9]{64}$ ]] || { echo 'source must be an immutable reviewed Prysm validator digest' >&2; exit 1; }
-          jq -e --arg source "$SOURCE_IMAGE" '.schema_version == 1 and (.images[] | select(.source == $source and .approved == true))' .ci/validator/approved-client-images.json >/dev/null || {
+          jq -e --arg source "$SOURCE_IMAGE" '.schema_version == 2 and (.images[] | select(.source == $source and .mirror_eligible == true and .release_channel == "upstream-mirror" and .provenance_status == "upstream-release-mirror"))' .ci/validator/approved-client-images.json >/dev/null || {
             echo 'source is not in the reviewed Prysm validator allowlist' >&2
             exit 1
           }

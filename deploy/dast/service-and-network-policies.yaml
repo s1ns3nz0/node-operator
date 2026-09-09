@@ -77,7 +77,7 @@ spec:
       securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
       containers:
         - name: proxy
-          image: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-dast-zap-baseline@sha256:781a2bdaea47324e7bab583e2263f21d257b0aee61ed51521a5be45f5f5081ef
+          image: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-node-runtime-upcheck-python@sha256:fb305627ba331d70f8cc82509a4fae4be858422fd257e170543fbbefcefb9588
           command: [python3, -c]
           args:
             - |
@@ -183,9 +183,9 @@ spec:
       securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
       containers:
         - name: proxy
-          # This approved immutable image is also used by the disposable DAST
-          # scanner. Its only configured route is the upstream GET /upcheck.
-          image: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-dast-zap-baseline@sha256:781a2bdaea47324e7bab583e2263f21d257b0aee61ed51521a5be45f5f5081ef
+          # Python-only runtime; the disposable DAST scanner stays separate.
+          # Image remediation does not prove the mTLS/fence health path works.
+          image: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-node-runtime-upcheck-python@sha256:fb305627ba331d70f8cc82509a4fae4be858422fd257e170543fbbefcefb9588
           command: [python3, -c]
           args:
             - |

@@ -46,6 +46,11 @@ step-down ceremony before replacing the active Pod. A socket listener that is
 not ready is a hard stop: enable the durable file device only after the relay
 rollout, then enable the socket device and run the verifier.
 
+Vault2.x recovery ceremonies also require an authenticated operator token,
+separately from recovery shares. The scripts check this before starting a
+ceremony and prompt silently when needed. Establish a repeatable operator
+login before upgrading; see the [server migration prerequisites](../../.ci/vault-server-hardened/README.md).
+
 Run `verify-vault-validator-audit.sh` through the private Vault connection
 afterward. A missing per-Pod audit PVC or mount, missing device, raw logging
 enabled, missing list-response elision, or altered path is fail-closed for

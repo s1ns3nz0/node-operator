@@ -108,7 +108,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: validator-REPLACE_WITH_VALIDATOR_SET-remote-signer
+  name: validator-REPLACE_WITH_VALIDATOR_SET-remote-signer-direct
   namespace: validator-operations
 spec:
   type: ClusterIP
@@ -152,12 +152,6 @@ spec:
         vault.hashicorp.com/agent-inject-secret-slashing-db.properties: kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/slashing-db-password
         vault.hashicorp.com/agent-inject-template-slashing-db.properties: |
           {{- with secret "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/slashing-db-password" -}}password={{ .Data.data.password }}{{- end }}
-        vault.hashicorp.com/agent-inject-secret-tls.p12: kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/signer-tls
-        vault.hashicorp.com/agent-inject-template-tls.p12: |
-          {{- with secret "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/signer-tls" -}}{{ .Data.data.pkcs12_b64 | base64Decode }}{{- end }}
-        vault.hashicorp.com/agent-inject-secret-tls-password.txt: kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/signer-tls
-        vault.hashicorp.com/agent-inject-template-tls-password.txt: |
-          {{- with secret "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/signer-tls" -}}{{ .Data.data.password }}{{- end }}
     spec:
       serviceAccountName: validator-remote-signer
       automountServiceAccountToken: false
@@ -169,6 +163,18 @@ spec:
               - serviceAccountToken: {audience: vault, expirationSeconds: 600, path: token}
         - {name: signer-data, emptyDir: {}}
         - {name: signer-tmp, emptyDir: {}}
+        - name: signer-tls
+          secret:
+            secretName: validator-REPLACE_WITH_VALIDATOR_SET-signer-tls
+            defaultMode: 0440
+            items:
+              - {key: tls.p12, path: tls.p12}
+              - {key: tls-password.txt, path: tls-password.txt}
+        - name: known-clients
+          configMap:
+            name: validator-REPLACE_WITH_VALIDATOR_SET-known-clients
+            defaultMode: 0444
+            items: [{key: known-clients, path: known-clients.txt}]
       containers:
         - name: web3signer
           image: REPLACE_WITH_WEB3SIGNER_IMAGE
@@ -176,12 +182,12 @@ spec:
             - --http-listen-host=0.0.0.0
             - --http-listen-port=9000
             - --http-host-allowlist=validator-REPLACE_WITH_VALIDATOR_SET-remote-signer.validator-operations.svc,localhost,127.0.0.1
-            - --tls-keystore-file=/vault/secrets/tls.p12
-            - --tls-keystore-password-file=/vault/secrets/tls-password.txt
-            # Prysm verifies the signer CA but does not supply a client
-            # certificate. Inbound access remains constrained to the
-            # set-scoped validator-client NetworkPolicy below.
-            - --tls-allow-any-client=true
+            - --tls-keystore-file=/etc/web3signer-tls/tls.p12
+            - --tls-keystore-password-file=/etc/web3signer-tls/tls-password.txt
+            # The file contains only the reviewed Prysm client certificate
+            # fingerprint. It is provisioned separately from Vault-held server
+            # TLS and BLS material. Never replace this with allow-any-client.
+            - --tls-known-clients-file=/etc/web3signer-known-clients/known-clients.txt
             - --data-path=/data
             - eth2
             - --network=hoodi
@@ -199,6 +205,8 @@ spec:
             - {name: vault-auth, mountPath: /var/run/secrets/vault.hashicorp.com/serviceaccount, readOnly: true}
             - {name: signer-data, mountPath: /data}
             - {name: signer-tmp, mountPath: /tmp}
+            - {name: signer-tls, mountPath: /etc/web3signer-tls, readOnly: true}
+            - {name: known-clients, mountPath: /etc/web3signer-known-clients, readOnly: true}
           resources:
             requests: {cpu: 500m, memory: 1Gi}
             limits: {cpu: "2", memory: 2Gi}
@@ -252,7 +260,7 @@ spec:
   podSelector: {matchLabels: {app.kubernetes.io/component: validator-remote-signer, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}}
   policyTypes: [Ingress]
   ingress:
-    - from: [{podSelector: {matchLabels: {app.kubernetes.io/component: validator-client, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}}}]
+    - from: [{podSelector: {matchLabels: {app.kubernetes.io/component: validator-signing-fence, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}}}]
       ports: [{protocol: TCP, port: 9000}]
 ---
 apiVersion: networking.k8s.io/v1

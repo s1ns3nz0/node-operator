@@ -33,6 +33,9 @@ for pod in vault-0 vault-1 vault-2; do
   }
 done
 
+# shellcheck source=scripts/ops/lib/vault-recovery-auth.sh
+source "$dir/lib/vault-recovery-auth.sh"
+vault_recovery_auth_preflight
 status="$(vault operator generate-root -status -format=json)"
 [ "$(jq -r '.started' <<<"$status")" = false ] || { printf '%s\n' 'a root-token generation ceremony is already in progress' >&2; exit 75; }
 init="$(vault operator generate-root -init -format=json)"; started=true

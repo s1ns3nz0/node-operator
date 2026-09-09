@@ -1,0 +1,16 @@
+{
+  "network": "hoodi",
+  "validator_set": "hoodi-001",
+  "source": "local public signer certificate; Go crypto/x509 VerifyHostname",
+  "certificate_sha256": "4894b777285d1bdeb66290a734615f914a9a5ec1bab97f8b18e5d6d123192344",
+  "not_before_utc": "2026-09-07T22:57:17Z",
+  "not_after_utc": "2026-10-07T22:57:17Z",
+  "go_version": "go1.26.5",
+  "hostname": "validator-hoodi-001-remote-signer",
+  "dns_sans": [],
+  "hostname_verification_passed": false,
+  "error": "x509: certificate relies on legacy Common Name field, use SANs instead",
+  "private_key_accessed": false,
+  "runtime_mutated": false,
+  "required_remediation": "TLS-only SAN certificate rotation and strict Go TLS retest; preserve BLS keystore, validator identity and slashing protection."
+}

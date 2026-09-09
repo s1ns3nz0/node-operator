@@ -1,0 +1,3 @@
+# Unified patch context requires a leading space before tabs and blank lines.
+# The applied upstream source is separately checked with git diff --check.
+.ci/prysm-mtls/patches/*.patch whitespace=-blank-at-eol,-space-before-tab

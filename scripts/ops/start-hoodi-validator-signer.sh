@@ -19,14 +19,7 @@ replicas="$(kubectl -n "$namespace" get deployment "$signer" -o jsonpath='{.spec
 holder="$(kubectl -n "$namespace" get lease "$lease" -o jsonpath='{.spec.holderIdentity}')"
 [ -z "$holder" ] || { printf '%s\n' 'fence lease already has a holder; refuse signer start' >&2; exit 65; }
 if [ "$dry_run" = true ]; then printf '%s\n' 'PASS: signer start gate passed; no lease or workload changed.'; exit 0; fi
-# coordination.k8s.io Lease uses MicroTime for acquire/renew timestamps.
-# Kubernetes rejects a whole-second RFC3339 value even in a JSON Patch, so
-# emit the required six fractional digits deterministically on BSD and GNU date.
-now="$(date -u +%Y-%m-%dT%H:%M:%S.000000Z)"
-holder="${signer}-$(date -u +%Y%m%d%H%M%S)"
-# JSON Patch test makes the empty-lease claim atomic; a concurrent claimant
-# fails rather than replacing an existing holder.
-patch="$(jq -cn --arg holder "$holder" --arg now "$now" '[{op:"test",path:"/spec/holderIdentity",value:""},{op:"replace",path:"/spec/holderIdentity",value:$holder},{op:"add",path:"/spec/acquireTime",value:$now},{op:"add",path:"/spec/renewTime",value:$now}]')"
-kubectl -n "$namespace" patch lease "$lease" --type=json -p "$patch"
+# The signer has no direct client ingress. Leave the empty Lease for the
+# dedicated signing fence to acquire atomically after it binds the fixed Pod.
 kubectl -n "$namespace" scale deployment "$signer" --replicas=1
-printf '%s\n' 'PASS: signer fence lease acquired and scale request submitted. Start the client only through activate-hoodi-validator-client.sh.'
+printf '%s\n' 'PASS: isolated signer scale request submitted with an empty Lease. Start the client only through activate-hoodi-validator-client.sh.'

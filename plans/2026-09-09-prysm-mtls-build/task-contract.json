@@ -1,0 +1,9 @@
+{
+  "task_id": "2026-09-09-prysm-mtls-build",
+  "objective": "Build pinned Prysm with native Web3Signer HTTP mutual TLS support, retaining the existing validator identity and no authentication sidecar",
+  "authorization": "User authorized direct Prysm build and in-scope publication/deployment for UC1-5. Default Critical=0 High=0; subsequent authorization permits unavoidable Prysm library findings only after attempted remediation and scoped risk assessment with compensating controls and PR evidence. No blanket scanner bypass.",
+  "upstream_revision": "51b5a75ebbadf05af22bd2601b5baf7a9e99b66d",
+  "integration_owner": {"agent": "/root/credential_validator_integration", "tier": "sol", "fallback": "none"},
+  "boundaries": ["No BLS or withdrawal key disclosure, new deposit or slashing reset", "Publish/deploy only exact tested and scanned images, preserve one validator", "Transport credential provisioning may use approved narrow private paths; recovery shares remain user-held", "No graph or debrief", "Do not fabricate review approvals or weaken fencing/slashing protections"],
+  "acceptance": ["Exact upstream commit and checked patch", "Native HTTP client certificate and explicit CA support", "Partial TLS configuration fails closed", "Server hostname verification remains enabled", "Synthetic mutual TLS positive and negative tests", "Build and release evidence distinguish real execution from mocks"]
+}

@@ -18,6 +18,9 @@ cleanup() {
   unset VAULT_TOKEN root_token
 }
 trap cleanup EXIT INT TERM
+# shellcheck source=scripts/ops/lib/vault-recovery-auth.sh
+source "$dir/lib/vault-recovery-auth.sh"
+vault_recovery_auth_preflight
 status="$(vault operator generate-root -status -format=json)"
 [ "$(jq -r '.started' <<<"$status")" = false ] || { printf 'a root-token generation ceremony is already in progress\n' >&2; exit 75; }
 init="$(vault operator generate-root -init -format=json)"; started=true

@@ -13,8 +13,14 @@ grep -Fq 'name: PGDATA, value: /var/lib/postgresql/data/pgdata' "$tmp/runtime.ya
 grep -Fq 'validator-hoodi-test-001-db-dependencies' "$tmp/runtime.yaml"
 grep -Fq 'readOnlyRootFilesystem: true' "$tmp/runtime.yaml"
 grep -Fq 'limits: {cpu: "2", memory: 4Gi}' "$tmp/runtime.yaml"
-grep -Fq -- '--tls-keystore-file=/vault/secrets/tls.p12' "$tmp/runtime.yaml"
-grep -Fq -- '--tls-allow-any-client=true' "$tmp/runtime.yaml"
+grep -Fq -- '--tls-keystore-file=/etc/web3signer-tls/tls.p12' "$tmp/runtime.yaml"
+grep -Fq -- '--tls-keystore-password-file=/etc/web3signer-tls/tls-password.txt' "$tmp/runtime.yaml"
+grep -Fq 'secretName: validator-hoodi-test-001-signer-tls' "$tmp/runtime.yaml"
+grep -Fq 'defaultMode: 0440' "$tmp/runtime.yaml"
+grep -Fq -- '--tls-known-clients-file=/etc/web3signer-known-clients/known-clients.txt' "$tmp/runtime.yaml"
+grep -Fq 'name: validator-hoodi-test-001-known-clients' "$tmp/runtime.yaml"
+if grep -Fq -- '--tls-allow-any-client' "$tmp/runtime.yaml"; then printf '%s\n' 'allow-any TLS client mode found' >&2; exit 1; fi
+if grep -Eq 'agent-inject-(secret|template)-tls\.(p12|password)' "$tmp/runtime.yaml"; then printf '%s\n' 'signer transport TLS still sourced from Vault' >&2; exit 1; fi
 grep -Fq -- '--slashing-protection-pruning-db-pool-configuration-file=/vault/secrets/slashing-db.properties' "$tmp/runtime.yaml"
 grep -Fq 'vault.hashicorp.com/agent-inject-secret-keystore.json' "$tmp/runtime.yaml"
 grep -Fq 'validator-hoodi-test-001-remote-signer' "$tmp/runtime.yaml"

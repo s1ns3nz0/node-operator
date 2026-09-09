@@ -1,10 +1,16 @@
-FROM golang:1.24.6-alpine@sha256:c8c5f95d64aa79b6547f3b626eb84b16a7ce18a139e3e9ca19a8c078b85ba80d AS build
+FROM golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83 AS build
 
 ARG RELAY_INPUT_SHA
+ENV GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 WORKDIR /src
 COPY go.mod ./
-COPY cmd/vault-audit-relay/main.go ./cmd/vault-audit-relay/main.go
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false -ldflags='-s -w' -o /out/vault-audit-relay ./cmd/vault-audit-relay
+COPY cmd/vault-audit-relay/ ./cmd/vault-audit-relay/
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    go test ./cmd/vault-audit-relay
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    go build -trimpath -buildvcs=false -ldflags='-s -w' -o /out/vault-audit-relay ./cmd/vault-audit-relay
 
 FROM scratch
 ARG RELAY_INPUT_SHA

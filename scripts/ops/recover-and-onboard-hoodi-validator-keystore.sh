@@ -13,6 +13,9 @@ tmp="$(mktemp -d /private/tmp/node-operator-hoodi-onboard.XXXXXX)"; chmod 700 "$
 started=false; complete=false; root=''; child=''
 cleanup(){ set +e; [ -z "$child" ] || VAULT_TOKEN="$root" vault token revoke "$child" >/dev/null 2>&1; [ -z "$root" ] || VAULT_TOKEN="$root" vault token revoke -self >/dev/null 2>&1; [ "$started" = true ] && [ "$complete" != true ] && vault operator generate-root -cancel >/dev/null 2>&1; find "$tmp" -type f -exec unlink {} \; 2>/dev/null; rmdir "$tmp" 2>/dev/null; unset root child VAULT_TOKEN; }
 trap cleanup EXIT INT TERM
+# shellcheck source=scripts/ops/lib/vault-recovery-auth.sh
+source "$dir/lib/vault-recovery-auth.sh"
+vault_recovery_auth_preflight
 status="$(vault operator generate-root -status -format=json)"; [ "$(jq -r .started <<<"$status")" = false ] || { printf 'root-token ceremony already in progress\n' >&2; exit 75; }
 init="$(vault operator generate-root -init -format=json)"; started=true; nonce="$(jq -er .nonce <<<"$init")"; otp="$(jq -er .otp <<<"$init")"; required="$(jq -er .required <<<"$init")"
 for n in $(seq 1 "$required"); do printf 'Recovery key share %s of %s: ' "$n" "$required" >&2; IFS= read -r -s share; printf '\n' >&2; reply="$(printf %s "$share" | vault operator generate-root -nonce="$nonce" -format=json -)"; unset share; if [ "$(jq -r .complete <<<"$reply")" = true ]; then complete=true; encoded="$(jq -er .encoded_token <<<"$reply")"; break; fi; done
