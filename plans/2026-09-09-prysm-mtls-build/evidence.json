@@ -1,4 +1,37 @@
 {
+  "injector_live_canary_preparation_20260909": {
+    "helper": "scripts/ops/test-private-vault-injector-canary.py",
+    "preflight": "Required create permissions allowed; three amd64 nodes Ready; global Injector webhook is Helm-managed with Ignore policy and automatic TLS",
+    "scope": "Explicit execute flag, unique namespace and scoped Fail webhook, synthetic TLS, minimal read-only RBAC, exact images, server dry-run Pods only, UID-bound cleanup",
+    "review": "Root corrected exclusion labels, readiness, context validation, immutable app, explicit denial evidence and cleanup ordering; Terra final review passed",
+    "checks": "No-write CLI and denial/drift guard tests passed; CI Quality wiring added",
+    "live_execution": false,
+    "reason_deferred": "Trusted gate for c136a15 reported a secret-detection block; redacted local reproduction located a prose false positive in the earlier session description. Reworded without scanner exclusions; same local rules now report zero findings. Remote verification pending"
+  },
+  "injector_admission_fixture_20260909": {
+    "script": "scripts/ci/test-vault-injector-runtime.py",
+    "artifact": "/private/tmp/hoodi-injector-admission-fixture-20260909.json",
+    "artifact_sha256": "b58d4dfe14a7c92ab5aebde54e5b67b5de8a92e2d289dfaa008ffd1bde084341",
+    "image": "sha256:2937fbc5d368430d089b9b94f82b44baab71524d166358bb8ea48f7b395152d4",
+    "result": "PASS: actual TLS admission response leaves unannotated Pod unchanged; annotated Pod patch contains exact Agent image, Kubernetes auth role/address, TLS verification and nonroot init/sidecar; invalid annotation denied",
+    "scope": "Frozen binaries, synthetic TLS and dummy service account, empty mock webhook list/watch, network-none with shared loopback only, no host ports",
+    "fixture_diagnosis": "Upstream Injector always waits for webhook informer sync before serving its disk TLS certificate; mock now supplies initial-events-end bookmark, not a real Kubernetes connection",
+    "review": "Terra found no live access or weakened assertions; cleanup issue fixed with nested finally so Injector removal runs even when mock removal fails",
+    "live_admission_verified": false,
+    "vault_authentication_verified": false,
+    "remaining": "Real EKS admission registration/canary, projected Agent startup and live TLS/KMS/HA rollout"
+  },
+  "repeatable_operator_session_20260909": {
+    "wrapper": "scripts/ops/with-private-vault-operator.sh",
+    "scope": "Verify the exact AWS caller. Check allowed policies and integer expiry. Use a short-lived session without storage, read status, run a trusted child, then revoke the session.",
+    "tests": "Eight mocked lifecycle cases plus private tunnel re-entry/quoted-argument and pre-tunnel usage rejection passed on host; shellcheck and diff check passed",
+    "integration_fix": "Root caught missing -- on tunnel re-entry and added regression coverage",
+    "review": "Terra implemented wrapper and independently reviewed root lifecycle tests; root security integration review completed",
+    "limitations": "Signals not exercised; actual AWS/Vault login remains unproven. Attempted readonly Linux Docker test image lacked jq, so no Linux test pass is claimed for that run",
+    "ci": "Mock session suite added to CI Quality",
+    "live_credentials_accessed": false,
+    "existing_user_ceremony_scripts_changed": false
+  },
   "signer_health_boundary_observation_20260909": {
     "recorded_at": "2026-09-09T03:05:49Z",
     "namespace": "validator-operations",

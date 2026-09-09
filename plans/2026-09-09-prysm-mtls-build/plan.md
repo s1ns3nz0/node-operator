@@ -20,6 +20,37 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+Live Injector readback is Helm-managed, automatic TLS, one replica, global
+failurePolicy Ignore. Do not image-patch that global webhook blindly. Prepare
+an isolated EKS canary: unique task namespace/resources, synthetic disk TLS,
+read-only webhook-list/watch RBAC, exact frozen Injector/Agent digests, and a
+Fail webhook scoped to both that namespace and a test-only Pod label. Mark
+test Pods app.kubernetes.io/name=vault-agent-injector so the existing global
+webhook's NotIn selector excludes them; prove this precondition from readback.
+Use server-dry-run Pod requests only, never run an injected Agent or read Vault
+data. UID-precondition cleanup must remove only created objects and preserve
+the existing webhook digest. Terra owns the new canary helper; root owns
+review/integration and subsequent explicitly bounded execution. No graph/debrief.
+
+Exercise the frozen Injector HTTP admission endpoint in isolated Docker before
+live canary work. Use only synthetic TLS and Pod admission documents, no host
+ports, cluster credentials or real Vault data. Pin both Injector and Python
+probe images; put the Injector in network-none and share only its loopback
+namespace with the probe. Verify unannotated Pod handling and generated Agent
+image/configuration on annotated Pods, plus malformed-input rejection.
+Root owns fixture and integration with nearest-tier fallback; Terra reviews
+actual evidence and cleanup boundaries. This is not Kubernetes admission/TLS
+registration proof or a live Agent login test. No graph/debrief.
+
+Prepare repeatable operator AWS login without editing the pending user ceremony.
+Add with-private-vault-operator.sh: exact operator identity, existing private
+tunnel, no-store AWS login, strict policy/TTL check, read-only generate-root
+status, trusted child command, and mandatory self-revocation preserving child
+failure. No token output/storage, no root generation or mount mutation by this
+wrapper. Root owns tests/documentation/integration (nearest-tier fallback);
+Terra owns only the new wrapper. Live repeatability remains unproven until
+the human completes the initial configuration. No graph/debrief.
+
 Fresh live readback confirms signer upcheck still uses the old ZAP runtime,
 while Nethermind already uses frozen Python fb305627. Stage an image-only
 replacement for the signer proxy and exercise the unchanged embedded Python

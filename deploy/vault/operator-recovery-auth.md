@@ -57,5 +57,22 @@ The signed server-ID header is
 credentials. Unique-ID binding must not be disabled to work around missing
 `iam:GetUser` permission.
 
+After initial configuration succeeds, test a fresh login without printing or
+storing its token:
+
+```sh
+bash scripts/ops/with-private-vault-operator.sh -- \
+  vault operator generate-root -status -format=json
+```
+
+The wrapper opens the private tunnel, verifies the exact reviewed AWS user,
+obtains a no-store token, checks policy and TTL, runs the supplied trusted
+command, and revokes the token. A failed child retains its failure status;
+revocation failure is always fatal. The token has ceremony-only authority,
+not general administrator access, and recovery shares are still required.
+Run only trusted commands: the child receives the token in its environment
+and must never print it. This command neither configures authentication nor
+upgrades Vault. Its mocked tests are not proof of a successful live AWS login.
+
 References: [AWS authentication](https://developer.hashicorp.com/vault/docs/auth/aws)
 and [AWS auth API](https://developer.hashicorp.com/vault/api-docs/auth/aws).
