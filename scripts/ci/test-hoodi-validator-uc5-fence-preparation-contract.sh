@@ -6,6 +6,7 @@ script="$root/scripts/ops/prepare-hoodi-validator-uc5-fence.sh"
 fail() { printf 'FAIL UC-5 fence preparation: %s\n' "$*" >&2; exit 1; }
 test -x "$script" || fail 'preparation script is not executable'
 bash -n "$script"
+# shellcheck disable=SC2016 # Literal source-contract assertions below.
 for required in \
   'scale deployment "$fence" --replicas=0' \
   'scale statefulset "$client" --replicas=0' \
