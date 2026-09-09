@@ -1,4 +1,35 @@
 {
+  "vault_server_full_suppressed_scan_20260909": {
+    "image": "sha256:5463f9d70fe71b897b165e019dbc1e85aeaa8271130572bd060729dc124ff51f",
+    "scan": "/private/tmp/hoodi-vault-server-full-grype-20260909.json",
+    "sha256": "49f7409358311427b2b1193af70fc37ce87d893581e79a6c875ee7d3f8b44e33",
+    "configuration": ".ci/vault-server-hardened/grype.yaml",
+    "checks": "Valid DB, show-suppressed=true, no excludes or fixed-only filtering; full GitOps SCA verifier passed",
+    "matches": 4,
+    "ignored_matches": 0,
+    "high_or_critical": 0,
+    "verification": "Exact-image module and affected-package closure verifier passed; prior report rejected; Terra independent review passed",
+    "static_checks": "bash -n, host ShellCheck0.11.0, harness:check and git diff --check passed; worktree .ci-tools/bin/shellcheck absent so host tool used",
+    "supersedes": "Earlier server scan remains historical; fresh full scan is now bound by the exact-candidate verifier",
+    "scope": "Local frozen candidate, not published or deployed"
+  },
+  "vault_raft_auth_transition_20260909": {
+    "result": "passed",
+    "artifact": "/private/tmp/hoodi-vault-raft-auth-transition-reviewed-20260909.json",
+    "sha256": "667e3f694ee679663d389c3242b15c77cef11721cba99548ca5b338cc1f49d5b",
+    "fixture": "scripts/ci/test-vault-raft-upgrade.py",
+    "execution": "Frozen old1.20.4 and new2.1 images; isolated Docker, synthetic single-node Raft and Shamir share, no production credentials or data",
+    "checks": [
+      "Pre-upgrade expiring exact-endpoint token survives upgrade",
+      "Missing and invalid tokens denied; scoped token cannot read KV or create tokens",
+      "Scoped token plus share completes root generation; generated root and scoped token revoked with rejection verified",
+      "Snapshot restores KV and pre-snapshot scoped token; scoped token re-revoked with rejection verified",
+      "Post-snapshot generated root remains absent after restore"
+    ],
+    "review": "Terra identified snapshot token resurrection; fixed, complete rehearsal rerun passed, independent re-review passed with artifact hash verified",
+    "fallback": "Root handles integration as nearest available tier; Terra independent bounded review",
+    "remaining": "Real operator renewable authentication path, recovery-wrapper transition, KMS auto-unseal, HA rolling and socket audit verification; no live server upgrade performed"
+  },
   "node_runtime_rollout_completed_20260909": {
     "chart": {
       "version": "0.1.32",

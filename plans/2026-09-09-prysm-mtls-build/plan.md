@@ -20,6 +20,22 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+Root extends the synthetic retained-Raft rehearsal to test the Vault2.1
+generate-root authentication transition. On the old synthetic server create
+an expiring, non-root, exact-endpoint ceremony token, then verify its survival
+after upgrade: missing/invalid tokens fail, the scoped token cannot read KV or
+mint tokens, and token plus synthetic share can generate and revoke a root.
+No production policy, token or recovery share is accessed. This is a migration
+prerequisite, not proof that the user already has a renewable production
+authentication path. Root performs integration as the nearest available tier;
+Terra reviews the bounded fixture. No graph or debrief.
+
+Rescan the unchanged frozen server with explicit show-suppressed=true, valid
+DB, no excludes or fixed-only filtering. Bind the candidate verifier to this
+fresh complete report and preserve earlier scans as historical evidence. This
+does not imply runtime publication, live HA compatibility or a vulnerability
+waiver; the affected-package closure guard remains required.
+
 Root now stages the exact registry-verified Nethermind/Beacon candidates in
 GitOps values and its allowlist, with manual-candidate provenance clearly
 separate from trusted chart publication. Require before/after render equality

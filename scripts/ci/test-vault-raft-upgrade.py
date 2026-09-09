@@ -11,8 +11,8 @@ OLD = "sha256:20ff3ed4a4da750d1be0757c82e0a10accc00c26c157bde3a694f2b227300caf"
 NEW = "sha256:5463f9d70fe71b897b165e019dbc1e85aeaa8271130572bd060729dc124ff51f"
 
 
-def run(*args, allowed=(0,)):
-    result = subprocess.run(args, capture_output=True, text=True, timeout=120)
+def run(*args, allowed=(0,), stdin=None):
+    result = subprocess.run(args, input=stdin, capture_output=True, text=True, timeout=120)
     if result.returncode not in allowed:
         # CLI arguments/responses can contain synthetic root/unseal material.
         raise RuntimeError(f"fixture command failed (exit {result.returncode}); output withheld")
@@ -41,12 +41,13 @@ storage "raft" {
 ''')
         config.chmod(0o444)
 
-        def cli(*args, allowed=(0,), authenticated=True):
+        def cli(*args, allowed=(0,), authenticated=True, auth_token=None, stdin=None):
             env = ["-e", "VAULT_ADDR=http://127.0.0.1:8200"]
-            if authenticated and token:
-                env += ["-e", "VAULT_TOKEN=" + token]
-            return run("docker", "exec", *env, current, "/bin/vault", *args,
-                       allowed=allowed)
+            effective_token = token if auth_token is None else auth_token
+            if authenticated and effective_token:
+                env += ["-e", "VAULT_TOKEN=" + effective_token]
+            return run("docker", "exec", "-i", *env, current, "/bin/vault", *args,
+                       allowed=allowed, stdin=stdin)
 
         def start(image):
             nonlocal current
@@ -92,11 +93,41 @@ storage "raft" {
             cli("operator", "unseal", share)
             cli("secrets", "enable", "-path=synthetic", "kv-v2")
             cli("kv", "put", "synthetic/checkpoint", "value=before-upgrade")
+            cli("policy", "write", "synthetic-ceremony", "-", stdin='''
+path "sys/generate-root/attempt" { capabilities = ["read", "update", "delete"] }
+path "sys/generate-root/update" { capabilities = ["update"] }
+path "auth/token/revoke-self" { capabilities = ["update"] }
+''')
+            ceremony_token = json.loads(cli(
+                "token", "create", "-policy=synthetic-ceremony", "-no-default-policy",
+                "-ttl=10m", "-explicit-max-ttl=10m", "-format=json"))["auth"]["client_token"]
             cli("operator", "raft", "snapshot", "save", "/data/before.snap")
             run("docker", "stop", "--time", "30", current)
             assert start(NEW)["initialized"] is True
             cli("operator", "unseal", share)
             assert cli("kv", "get", "-field=value", "synthetic/checkpoint").strip() == "before-upgrade"
+            # Do not opt out of Vault2.x endpoint authentication. All material
+            # is synthetic and remains in captured subprocess input/output.
+            cli("operator", "generate-root", "-status", authenticated=False, allowed=(2,))
+            cli("operator", "generate-root", "-status", auth_token="invalid-synthetic-token",
+                allowed=(2,))
+            cli("kv", "get", "synthetic/checkpoint", auth_token=ceremony_token, allowed=(2,))
+            cli("token", "create", auth_token=ceremony_token, allowed=(2,))
+            ceremony = json.loads(cli("operator", "generate-root", "-init", "-format=json",
+                                      auth_token=ceremony_token))
+            generated = json.loads(cli("operator", "generate-root", "-format=json",
+                                       "-nonce=" + ceremony["nonce"], "-",
+                                       auth_token=ceremony_token, stdin=share + "\n"))
+            assert generated["complete"] is True
+            recovered = cli("operator", "generate-root", "-decode=" + generated["encoded_token"],
+                            "-otp=" + ceremony["otp"], auth_token=ceremony_token).strip()
+            assert json.loads(cli("token", "lookup", "-format=json",
+                                  auth_token=recovered))["data"]["policies"] == ["root"]
+            cli("token", "revoke", "-self", auth_token=recovered)
+            cli("token", "lookup", auth_token=recovered, allowed=(2,))
+            cli("token", "revoke", "-self", auth_token=ceremony_token)
+            cli("operator", "generate-root", "-status", auth_token=ceremony_token, allowed=(2,))
+            del ceremony, generated
             cli("kv", "put", "synthetic/checkpoint", "value=after-upgrade")
             cli("operator", "raft", "snapshot", "restore", "/data/before.snap")
             for _ in range(40):
@@ -108,10 +139,24 @@ storage "raft" {
                 time.sleep(1)
             else:
                 raise RuntimeError("restored synthetic value was not observed")
+            # A Raft restore also restores token state captured in the backup.
+            # Prove that boundary and revoke the restored scoped credential;
+            # the post-snapshot generated root must remain absent.
+            cli("operator", "generate-root", "-status", auth_token=ceremony_token)
+            cli("token", "lookup", auth_token=recovered, allowed=(2,))
+            cli("token", "revoke", "-self", auth_token=ceremony_token)
+            cli("operator", "generate-root", "-status", auth_token=ceremony_token, allowed=(2,))
+            del ceremony_token, recovered
             print(json.dumps({"result": "passed", "old_image": OLD, "new_image": NEW,
                               "checks": ["fresh Raft initialization", "old-process stopped before new start",
-                                         "retained KV after upgrade", "old snapshot restores pre-mutation KV"],
-                              "scope": "synthetic single-node compatibility, not live HA migration or recovery-key ceremony"}))
+                                         "retained KV after upgrade", "missing and invalid ceremony tokens denied",
+                                         "scoped ceremony token denies KV and token creation",
+                                         "pre-upgrade scoped token plus share generates root after upgrade",
+                                         "generated root and scoped token revoked",
+                                         "old snapshot restores pre-mutation KV",
+                                         "snapshot restores scoped token; re-revocation verified",
+                                         "post-snapshot generated root remains absent after restore"],
+                              "scope": "synthetic single-node Shamir compatibility, not live HA, KMS recovery keys or production operator authentication"}))
         finally:
             for container in reversed(containers):
                 run("docker", "rm", "-f", container)

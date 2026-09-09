@@ -3,12 +3,14 @@ set -euo pipefail
 image='sha256:5463f9d70fe71b897b165e019dbc1e85aeaa8271130572bd060729dc124ff51f'
 scan="${1:?Usage: verify-vault-server-candidate.sh EXISTING_EXACT_IMAGE_GRYPE_JSON}"
 test "$#" = 1
-test "$(shasum -a 256 "$scan" | awk '{print $1}')" = '01661a6a25836637e6d45b2f88bc7f7078fcd710fbe14614f9cfa67a59e98fe1'
+test "$(shasum -a 256 "$scan" | awk '{print $1}')" = '49f7409358311427b2b1193af70fc37ce87d893581e79a6c875ee7d3f8b44e33'
 test "$(docker image inspect --format '{{.Id}}' "$image")" = "$image"
 jq -e --arg image "$image" '
  .source.target.userInput==$image and .descriptor.name=="grype" and
  .descriptor.db.status.valid==true and .descriptor.configuration.exclude==[] and
  .descriptor.configuration["only-fixed"]==false and .descriptor.configuration["only-notfixed"]==false and
+ .descriptor.configuration["show-suppressed"]==true and
+ (.matches|type)=="array" and
  (.ignoredMatches|length)==0 and
  ([.matches[]|select(.vulnerability.id=="GO-2026-5932" and
  .vulnerability.severity=="Unknown" and .artifact.name=="golang.org/x/crypto" and
