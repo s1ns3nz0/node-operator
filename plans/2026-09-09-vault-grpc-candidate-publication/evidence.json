@@ -1,0 +1,20 @@
+{
+  "status":"published_and_registry_verified",
+  "source_patch_revision":"9cd8d84fe177235db33d6761b3ac570d7ab846d7",
+  "evidence_directory":"/private/tmp/hoodi-vault-grpc-publication.AcCyFd",
+  "initial_failure_directory":"/private/tmp/hoodi-vault-grpc-publication.TC8X3W",
+  "retry":"Initial Server publication succeeded but Linux scanner could not use Docker Desktop keychain helper. Replaced login with stdin-only portable temporary registry auth. Retry skipped Server push, then scanned both and published Agent. No rebuild or image deletion.",
+  "tag":"manual-grpc-1.83.2-9cd8d84fe177",
+  "server_digest":"sha256:8fbe048a50769523a577be1fd41fe7f476e1bda4a345cf25874da6426ac25e49",
+  "agent_digest":"sha256:dc2c7c7b9a5b312605458422749a399420ad1ac60af5b7fb25b14e299cceaf23",
+  "server_published_at":"2026-09-09T08:31:06.347Z",
+  "agent_published_at":"2026-09-09T08:33:14.897Z",
+  "registry_tag_readbacks":"both match exact local OCI index descriptors",
+  "registry_scanner":{"version":"0.118.0","database_built":"2026-09-09T06:31:00Z","each":{"critical":0,"high":0,"medium":3,"unknown":1}},
+  "applicability":"both separately passed exact GO-2026-5932 non-applicability; raw summaries remain blocked with Unknown1; expiry and affected scope unchanged",
+  "checks":{"publisher_bash_syntax":"passed","shellcheck":"passed","harness_check":"passed","harness_verify":"passed including expected insecure-fixture rejections","grpc_contract":"passed","scan_tests":"7 passed","applicability_tests":"9 passed","wrapper_collector_contract":"passed with eight and three negative mutations","explicit_argument_guard":"missing flag rejected exit64"},
+  "independent_review":"Terra approved publisher and portable auth retry, then replayed both real assessments byte-for-byte, verified raw/SBOM hashes and bundle copies, confirmed no gRPC advisory matches and no remaining auth directories; approved PR evidence integration only",
+  "temporary_auth_cleanup":"No task auth directories remain after exit",
+  "published":true,"rebuilt":false,"ci_build_attested":false,"deployed":false,"iam_changed":false,
+  "remaining":["PR review/CI and merge of new candidate bindings","Hosted read-only verification from main","Honest candidate signing/verification and separately authorized live rollout"]
+}
