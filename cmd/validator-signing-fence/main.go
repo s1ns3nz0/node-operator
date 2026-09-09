@@ -255,7 +255,9 @@ func (c *leaseClient) acquireOrRenew(ctx context.Context) (leaseAuthority, error
 		// Bootstrap only an empty Lease or a demonstrably expired prior holder.
 		patch = append(patch, map[string]string{"op": "replace", "path": "/spec/holderIdentity", "value": c.holder})
 	}
-	patch = append(patch, map[string]string{"op": "add", "path": "/spec/renewTime", "value": nowUTC.Format(time.RFC3339Nano)})
+	// MicroTime requires exactly six fractional digits, even when they end in
+	// zero. RFC3339Nano trims zeroes and intermittently causes API HTTP 422.
+	patch = append(patch, map[string]string{"op": "add", "path": "/spec/renewTime", "value": nowUTC.Format("2006-01-02T15:04:05.000000Z07:00")})
 	body, err := json.Marshal(patch)
 	if err != nil {
 		return leaseAuthority{}, err

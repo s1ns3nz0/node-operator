@@ -102,6 +102,15 @@ func (f *fakeLeaseAPI) serveHTTP(writer http.ResponseWriter, request *http.Reque
 			}
 		}
 		f.patches = append(f.patches, patch)
+		// Match Kubernetes MicroTime decoding, not permissive RFC3339Nano.
+		for _, operation := range patch {
+			if operation["path"] == "/spec/renewTime" {
+				if _, err := time.Parse("2006-01-02T15:04:05.000000Z07:00", operation["value"]); err != nil {
+					writer.WriteHeader(http.StatusUnprocessableEntity)
+					return
+				}
+			}
+		}
 		for _, operation := range patch {
 			switch operation["path"] {
 			case "/spec/holderIdentity":
@@ -146,6 +155,23 @@ func TestEmptyLeaseBootstrapsWithCAS(t *testing.T) {
 	}
 	if got := fake.lease.Spec.RenewTime; got != "2026-09-08T05:00:00.123456Z" {
 		t.Fatalf("renewTime is not canonical Kubernetes MicroTime: %q", got)
+	}
+}
+
+func TestRenewTimePreservesAllTrailingMicrosecondZeroes(t *testing.T) {
+	for _, nanos := range []int{0, 100000000, 120000000, 123000000, 123400000, 123450000, 101150000, 123456000, 123456789} {
+		now := time.Date(2026, 9, 9, 14, 26, 33, nanos, time.UTC)
+		fake := &fakeLeaseAPI{lease: testLease("pod-uid-1", now)}
+		server := httptest.NewServer(http.HandlerFunc(fake.serveHTTP))
+		_, err := newTestClient(server, now).acquireOrRenew(context.Background())
+		server.Close()
+		if err != nil {
+			t.Fatalf("nanos=%d renewal rejected: %v", nanos, err)
+		}
+		want := now.UTC().Truncate(time.Microsecond).Format("2006-01-02T15:04:05.000000Z07:00")
+		if fake.lease.Spec.RenewTime != want {
+			t.Fatalf("nanos=%d expected %s got %s", nanos, want, fake.lease.Spec.RenewTime)
+		}
 	}
 }
 
