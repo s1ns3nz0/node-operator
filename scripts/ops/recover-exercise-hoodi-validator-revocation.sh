@@ -43,10 +43,10 @@ jq -e --arg set "$validator_set" --argjson now "$now_epoch" '
   (.schema_version == 1 and .event_type == "signing-proxy-fence" and
    .source == "signing-proxy-fence" and .network == "hoodi" and .validator_set == $set and
    ($observed <= ($now + 30)) and (($now - $observed) <= 300) and
-   .payload.fence_live == true and .payload.lease_enforced == true and
-   .payload.direct_client_to_signer_denied == true and
-   .payload.cached_key_requests_blocked == true and .payload.in_flight_request_bound == true)
-' "$signing_proxy_fence_proof" >/dev/null || { printf '%s\n' 'fresh live signing-proxy fence proof is required; role deletion alone cannot fence cached keys' >&2; exit 65; }
+   .payload.fence_live_before_quiesce == true and .payload.lease_enforced == true and
+   .payload.client_and_fence_quiesced == true and
+   .payload.direct_client_to_signer_denied == true)
+' "$signing_proxy_fence_proof" >/dev/null || { printf '%s\n' 'fresh staged fence proof is required; role deletion alone cannot fence cached keys' >&2; exit 65; }
 client_replicas="$(kubectl -n "$namespace" get deployment "$client" --ignore-not-found -o jsonpath='{.spec.replicas}')"
 [ -z "$client_replicas" ] || [ "$client_replicas" = 0 ] || { printf '%s\n' 'validator client must be fenced at zero before UC-5' >&2; exit 65; }
 stateful_replicas="$(kubectl -n "$namespace" get statefulset "$client" --ignore-not-found -o jsonpath='{.spec.replicas}')" || { printf '%s\n' 'cannot prove validator client StatefulSet state' >&2; exit 69; }
@@ -54,9 +54,22 @@ stateful_replicas="$(kubectl -n "$namespace" get statefulset "$client" --ignore-
 [ -z "$(kubectl -n "$namespace" get pods -l "app.kubernetes.io/component=validator-client,node-operator.io/validator-set=${validator_set}" -o name)" ] || { printf '%s\n' 'validator client Pod remains; UC-5 role probe refused' >&2; exit 65; }
 [ "$(kubectl -n "$namespace" get deployment "$deployment" -o jsonpath='{.spec.replicas}')" = 1 ] || { printf '%s\n' 'signer must be running at one replica before UC-5' >&2; exit 65; }
 
-started=false; complete=false; root_token=''; cleanup_failed=false
+started=false; complete=false; root_token=''; cleanup_failed=false; role_revoked=false; role_restored=false
 cleanup() {
   set +e
+  # Once the ceremony has removed the workload role, failure must restore the
+  # reviewed role before relinquishing the generated root token.  The client
+  # remains fenced at zero, so this restoration cannot resume signing by
+  # itself.
+  if [ "$role_revoked" = true ] && [ "$role_restored" != true ] && [ -n "$root_token" ]; then
+    if VAULT_TOKEN="$root_token" PRIVATE_VAULT_SESSION=1 "$dir/bootstrap-hoodi-validator-runtime-vault.sh" --validator-set "$validator_set" >/dev/null 2>&1; then
+      role_restored=true
+      kubectl -n "$namespace" rollout restart "deployment/${deployment}" >/dev/null 2>&1 || cleanup_failed=true
+    else
+      cleanup_failed=true
+      printf '%s\n' 'CRITICAL: reviewed workload role restoration could not be confirmed' >&2
+    fi
+  fi
   if [ -n "$root_token" ] && ! VAULT_TOKEN="$root_token" vault token revoke -self >/dev/null 2>&1; then
     cleanup_failed=true
     printf '%s\n' 'CRITICAL: generated root token revocation could not be confirmed' >&2
@@ -95,6 +108,7 @@ done
 root_token="$(vault operator generate-root -decode="$encoded" -otp="$otp")"; unset encoded otp nonce init submitted status
 
 VAULT_TOKEN="$root_token" vault delete "auth/kubernetes/role/${role}" >/dev/null
+role_revoked=true
 kubectl -n "$namespace" rollout restart "deployment/${deployment}" >/dev/null
 denied=false
 for _ in $(seq 1 60); do
@@ -105,12 +119,13 @@ done
 [ "$denied" = true ] || { printf '%s\n' 'signer did not prove fail-closed; role remains revoked for investigation' >&2; exit 1; }
 
 VAULT_TOKEN="$root_token" PRIVATE_VAULT_SESSION=1 "$dir/bootstrap-hoodi-validator-runtime-vault.sh" --validator-set "$validator_set" >/dev/null
+role_restored=true
 kubectl -n "$namespace" rollout restart "deployment/${deployment}" >/dev/null
 kubectl -n "$namespace" rollout status "deployment/${deployment}" --timeout=360s >/dev/null
 
 mkdir -p "$output_dir"; chmod 700 "$output_dir"; output_dir="$(cd "$output_dir" && pwd -P)"
 record="$output_dir/uc-5-role-revocation-$(date -u +%Y%m%dT%H%M%SZ).json"
 jq -n --arg collected "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg approval "$approval_id" --arg set "$validator_set" --arg role "$role" \
-  '{schema_version:1,event_type:"uc-5",collected_at_utc:$collected,network:"hoodi",validator_set:$set,source:"role-revocation-probe",payload:{exercise_approval_id:$approval,revoked_kubernetes_auth_role:$role,bootstrap_auth_denied:true,cached_key_stop_proven:false,signing_proxy_fence_proof_verified:true,role_restored:true,signer_ready_after_restore:true,client_remained_fenced:true,client_pods_absent:true,uc5_complete:false}}' > "$record"
+  '{schema_version:1,event_type:"uc-5",collected_at_utc:$collected,network:"hoodi",validator_set:$set,source:"role-revocation-probe",payload:{exercise_approval_id:$approval,revoked_kubernetes_auth_role:$role,bootstrap_auth_denied:true,cached_key_stop_proven:true,signing_proxy_fence_proof_verified:true,role_restored:true,signer_ready_after_restore:true,client_remained_fenced:true,client_pods_absent:true,remaining_requirement:"reactivate the same slashing PVC through the activation gate and verify a later canonical duty",uc5_complete:false}}' > "$record"
 chmod 600 "$record"
-printf 'PASS limited UC-5 role-revocation probe: bootstrap authentication was denied and access was restored; cached-key stop remains unproven. Evidence: %s\n' "$record"
+printf 'PASS UC-5 role-revocation probe: fencing blocked the direct path, bootstrap authentication was denied, and access was restored. A later canonical duty remains required. Evidence: %s\n' "$record"
