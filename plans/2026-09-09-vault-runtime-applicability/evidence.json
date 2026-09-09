@@ -1,0 +1,19 @@
+{
+  "status":"reviewed_local_verification_complete",
+  "source":"https://vuln.go.dev/ID/GO-2026-5932.json",
+  "advisory_modified":"2026-07-07T22:15:29Z",
+  "pinned_advisory_matches_current_official_json":true,
+  "expires_at":"2026-10-09T00:00:00Z",
+  "hosted_input_run":34314957185,
+  "actual_replay_directory":"/private/tmp/hoodi-vault-applicability-check.v2ebd5",
+  "actual_replays":{"server":"passed","agent":"passed","injector":"passed"},
+  "each_raw_scan":{"status":"blocked","critical":0,"high":0,"medium":3,"unknown":1},
+  "raw_scan_and_summary_preserved_byte_for_byte":true,
+  "checks":["nine portable synthetic assessor tests including negative mutations","eight wrapper mutations and three collector mutations rejected","wrong-subject collector invocation rejected before extraction/network","actual three frozen-image metadata extraction without rebuild","three hosted artifact replays using current UTC and official advisory","repository-wide ShellCheck","existing raw scan and IAM policy tests","workflow YAML parse","harness structural check","git diff --check"],
+  "review":{"agent":"/root/vault_verification_review","tier":"Terra","outcome":"approved after root/independent review corrections"},
+  "review_corrections":["align separate decision status and wrapper gate","allow Medium/Low cofindings while rejecting new/nonstandard Unknown","regenerate negative-fixture summaries so risk gates are actually tested"],
+  "local_test_note":"Metadata collector used a local standard-library timeout adapter on macOS; hosted workflow uses Ubuntu coreutils timeout. Synthetic CI tests have no local-path fixture dependency.",
+  "live_changes":false,
+  "build_provenance_established":false,
+  "remaining":["PR CI/review and merge","rerun read-only hosted verification from merged main","separate signing/provenance and live rollout gates"]
+}

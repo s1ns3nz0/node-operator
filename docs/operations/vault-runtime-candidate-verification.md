@@ -31,11 +31,20 @@ unfiltered raw Grype JSON and a digest-bound summary for 30 days. Images run
 only for a bounded version probe, without network, credentials, mounts or
 privileges. The workflow does not claim an auth, Raft, admission or duty test.
 
-Critical, High and Unknown findings block the scan gate. Existing
-GO-2026-5932 package-closure evidence is retained separately; it is not a
-global exclusion and is not automatically converted into a pass here. A
-blocked result is evidence requiring a specific applicability assessment or
-fix, not permission to rebuild repeatedly or weaken Vault/OS gates.
+The raw scan summary still blocks on Critical, High and Unknown findings and
+is never rewritten. A **separate applicability decision** can recognize only
+GO-2026-5932 on `golang.org/x/crypto v0.56.0` as `not_affected` for the three
+exact reviewed candidates. CI then gates on that separate decision, retains
+the raw Unknown count, and uploads both documents. No Grype exclusion or
+generic release scan-attestation behavior is changed.
+
+The decision requires every binary and dependency-list SHA-256 in
+`.ci/vault-runtime-applicability.json` to match, exact raw/SBOM/runtime subject
+binding, no affected `golang.org/x/crypto/openpgp` package or subpackage, and
+the current official advisory to match the pinned reviewed record. The
+assessment expires at **2026-10-09 00:00 UTC**. New Unknown findings, a raised
+Critical/High severity, changed images/metadata/advisory, missing proof or an
+expired review fail closed. See [the assessment](vault-runtime-applicability.md).
 
 Only after this observation step and exact-candidate assessments may a
 separately reviewed signing/promotion step establish its own honest provenance
