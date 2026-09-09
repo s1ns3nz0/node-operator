@@ -181,6 +181,9 @@ spec:
           args:
             - --http-listen-host=0.0.0.0
             - --http-listen-port=9000
+            # Emit Web3Signer HTTP access metadata only.  Request bodies,
+            # credentials, and BLS signatures stay out of stdout evidence.
+            - --access-logs-enabled
             - --http-host-allowlist=validator-REPLACE_WITH_VALIDATOR_SET-remote-signer.validator-operations.svc,localhost,127.0.0.1
             - --tls-keystore-file=/etc/web3signer-tls/tls.p12
             - --tls-keystore-password-file=/etc/web3signer-tls/tls-password.txt
