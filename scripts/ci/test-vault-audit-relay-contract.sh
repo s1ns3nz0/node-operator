@@ -46,6 +46,9 @@ for required in \
   'reproducibility_input_sha256' \
   'GITHUB_RUN_ATTEMPT' \
   '.subject|any(.digest.sha256' \
+  'https://github.com/s1ns3nz0/node-operator/attestations/scan-summary/v1' \
+  'verify-release-scan-attestation.sh' \
+  'test-release-scan-cosign-roundtrip.sh' \
   'retention-days: 30' \
   'if: always()'; do
   grep -Fq "$required" "$workflow" || { printf 'missing audit relay release gate: %s\n' "$required" >&2; exit 1; }

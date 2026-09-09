@@ -45,6 +45,10 @@ jobs:
         run: scripts/ci/test-image-publisher-isolation.sh
       - name: Test audit relay publisher repository scope
         run: python3 scripts/ci/test-vault-relay-publisher-policy.py
+      - name: Test release scan attestation content contract
+        run: |
+          bash scripts/ci/test-release-scan-attestation.sh
+          bash scripts/ci/test-validator-signing-fence-release-evidence.sh
       - name: Test private DAST mirror boundary
         run: scripts/ci/test-private-dast-mirror-contract.sh
       - name: Test private DAST target access boundary
