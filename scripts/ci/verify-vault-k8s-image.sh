@@ -29,6 +29,7 @@ run=(docker run --rm --platform linux/amd64 --network none --read-only --cap-dro
 GRYPE_CHECK_FOR_APP_UPDATE=false grype --config "$root/.ci/prysm-beacon-runtime/grype.yaml" "docker:$image" --platform linux/amd64 -o json > "$scan"
 jq -e --arg image "$image" '.source.target.userInput==$image and .descriptor.name=="grype" and .descriptor.db.status.valid==true
  and .descriptor.configuration.exclude==[] and .descriptor.configuration["only-fixed"]==false and .descriptor.configuration["only-notfixed"]==false
+ and .descriptor.configuration["show-suppressed"]==true
  and (.matches|type)=="array" and (.ignoredMatches|length)==0
  and all(.matches[]; (.vulnerability.severity|type)=="string" and (.vulnerability.severity|ascii_downcase|IN("critical","high")|not))' "$scan" >/dev/null
 printf 'PASS: immutable injector runtime checks and C/H=0 scan: %s\nUnknown findings still need separate assessment.\n' "$image"

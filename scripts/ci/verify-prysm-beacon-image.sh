@@ -27,6 +27,7 @@ jq -e --arg image "$image_id" '.source.target.userInput==$image
   and .descriptor.name=="grype" and .descriptor.db.status.valid==true
   and .descriptor.configuration["only-fixed"]==false
   and .descriptor.configuration["only-notfixed"]==false
+  and .descriptor.configuration["show-suppressed"]==true
   and .descriptor.configuration.exclude==[]
   and (.matches|type)=="array"
   and (.ignoredMatches|length)==0

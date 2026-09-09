@@ -3,3 +3,4 @@ ignore: []
 exclude: []
 only-fixed: false
 only-notfixed: false
+show-suppressed: true

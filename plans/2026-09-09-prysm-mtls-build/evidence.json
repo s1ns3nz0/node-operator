@@ -1,4 +1,24 @@
 {
+  "agent_injector_full_scan_checkpoint_20260909": {
+    "injector": {
+      "image": "sha256:2937fbc5d368430d089b9b94f82b44baab71524d166358bb8ea48f7b395152d4",
+      "scan": "/private/tmp/hoodi-injector-full-grype-20260909.json",
+      "sha256": "12ce62c3f9de49ebce08265875ee75b0f26452db4bd79a3c2af04f1eb8ee2e43",
+      "checks": "Actual version/help/nonroot/root-owned binary/module hashes and affected OpenPGP package absence guard passed; full SCA helper matches4 ignored0 C/H0"
+    },
+    "agent": {
+      "image": "sha256:33458e87c790b140717f2f4c688d31327292f67677ba004d32838deed8b8f30a",
+      "scan": "/private/tmp/hoodi-agent-full-grype-20260909.json",
+      "scan_sha256": "cbe6c51221624eab14dbb268c0daa2624c4c97c512db1c312f75a57db23d97ff",
+      "runtime_log": "/private/tmp/hoodi-agent-full-runtime-20260909.log",
+      "runtime_sha256": "ad5d915faa594838e285e81a90e76ce0a325a15c5aea7d2af141b704658d3820",
+      "checks": "Cached frozen images reused; isolated actual Vault2.1 Kubernetes-auth/KV-template/nonraw-audit fixture passed; full SCA helper matches4 ignored0 C/H0",
+      "unknown": "GO-2026-5932 retained, no waiver or suppression; Agent-specific applicability assessment remains separate"
+    },
+    "guard_changes": "Require show-suppressed=true in candidate verifiers and configs; Agent additionally explicitly configures and checks no fixed-only or exclude filtering",
+    "review": "Terra independent review found no weakened gate; ShellCheck, harness:check and diff check passed",
+    "scope": "Local candidates only; no image rebuild/publication, ceremony script edit, actual AWS auth, admission canary or live rollout"
+  },
   "operator_iam_live_prerequisite_20260909": {
     "result": "applied and read back",
     "saved_plan_sha256": "20bdb23450278daf08e7f03efc1096549dafca9e83d83536b86df2d3e43f54e6",

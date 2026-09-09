@@ -308,6 +308,8 @@ cat > "$config_dir/grype.yaml" <<'EOF'
 ignore: []
 exclude: []
 show-suppressed: true
+only-fixed: false
+only-notfixed: false
 db:
   validate-age: true
   validate-by-hash-on-start: true
@@ -316,6 +318,10 @@ GRYPE_CONFIG="$config_dir/grype.yaml" grype --config "$config_dir/grype.yaml" \
   --show-suppressed "$image_id" -o json > "$scan_output"
 jq -e '.descriptor.name == "grype"
   and .descriptor.db.status.valid == true
+  and .descriptor.configuration.exclude == []
+  and .descriptor.configuration["only-fixed"] == false
+  and .descriptor.configuration["only-notfixed"] == false
+  and .descriptor.configuration["show-suppressed"] == true
   and (.matches | type == "array")
   and ((.ignoredMatches // []) | type == "array")
   and all((.matches + [.ignoredMatches[]?.match])[];

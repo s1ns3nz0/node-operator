@@ -20,6 +20,14 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+While the human-held operator ceremony is pending, do not edit or run its
+scripts. Close the remaining incomplete scanner evidence for the frozen Agent
+and Injector candidates: explicitly include suppressed findings in fresh
+reports and require that scanner configuration in their verifiers. Update
+the shared Beacon scan config and Nethermind counterpart consistently, without
+weakening any finding gate. No new image builds, live credentials or workloads
+are needed for this check. Root integrates; Terra reviews the bounded diff.
+
 Next scoped live step: generate a saved targeted Terraform plan for the
 operator identity lookup policy, using the canonical backend and current
 committed sources in a private temporary directory. Require exactly one
