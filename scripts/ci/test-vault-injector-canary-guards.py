@@ -7,6 +7,7 @@ import io
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 from unittest.mock import patch
 
 sys.dont_write_bytecode = True
@@ -38,6 +39,37 @@ for status, error in ((0, ""), (1, "timeout"), (1, f'failed calling webhook "{na
     result = subprocess.CompletedProcess([], status, "", error)
     refused(lambda: canary.require_annotation_denial(result, name))
 canary.require_annotation_denial(subprocess.CompletedProcess([], 1, "", f'admission webhook "{name}" denied the request: invalid syntax'), name)
+
+actual_arn = "arn:aws:eks:ap-northeast-2:106760547719:cluster/node-operator"
+def identity_command(*args, **kwargs):
+    if args[:3] == ("aws", "sts", "get-caller-identity"): return "106760547719\n"
+    if args[:3] == ("aws", "eks", "describe-cluster"): return actual_arn + "\n"
+    if args == ("kubectl", "config", "current-context"): return actual_arn + "\n"
+    raise AssertionError("unexpected external operation")
+
+with patch.dict(canary.os.environ, {"PRIVATE_EKS_SESSION": "1", "EKS_CLUSTER_NAME": "node-operator"}), \
+     patch.object(sys, "argv", [str(path), "--execute"]), \
+     patch.object(canary, "shutil_which", return_value="mock"), \
+     patch.object(canary, "command", side_effect=identity_command), \
+     patch.object(canary, "expect_global_webhook", side_effect=RuntimeError("identity passed without writes")):
+    try:
+        canary.main()
+    except RuntimeError as error:
+        assert str(error) == "identity passed without writes"
+    else:
+        raise AssertionError("missing identity guard stop")
+
+# Real OpenSSL: service FQDN can exceed the X.509 CN length limit. Identity is
+# in SAN; the short display CN must not prevent synthetic certificate creation.
+with tempfile.TemporaryDirectory(prefix="injector-cert-guard-") as directory:
+    certificate = str(Path(directory) / "cert.pem")
+    key = str(Path(directory) / "key.pem")
+    service = "vault-injector-canary-12345678.hoodi-injector-canary-12345678.svc"
+    canary.command("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+                   "-subj", "/CN=vault-injector-canary", "-addext", f"subjectAltName=DNS:{service}",
+                   "-keyout", key, "-out", certificate)
+    san = canary.command("openssl", "x509", "-in", certificate, "-noout", "-ext", "subjectAltName")
+    assert service in san
 
 baseline = {"metadata": {"uid": canary.GLOBAL_WEBHOOK_UID}, "webhooks": [{"failurePolicy": "Ignore", "objectSelector": {
     "matchExpressions": [{"key": "app.kubernetes.io/name", "operator": "NotIn", "values": ["vault-agent-injector"]}]}}]}

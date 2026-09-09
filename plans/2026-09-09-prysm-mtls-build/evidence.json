@@ -1,4 +1,17 @@
 {
+  "injector_live_canary_20260909": {
+    "artifact": "/private/tmp/hoodi-injector-live-canary-20260909.json",
+    "artifact_sha256": "71994496121a6ae060d38e1fd7cedf64def83a280661f225036ca960a3c03781",
+    "namespace": "hoodi-injector-canary-988d12d5",
+    "result": "PASS: actual EKS candidate deployment/TLS admission; unannotated unchanged, exact Agent configuration on annotated dry-run Pod, named webhook rejects malformed annotation",
+    "global_webhook_unchanged": true,
+    "cleanup_confirmed": true,
+    "test_pods_created": false,
+    "vault_login_tested": false,
+    "fixture_fixes": "Correct EKS ARN cluster/name delimiter and use short certificate CN with exact long service SAN; regression checks passed. Earlier failed attempt resources were verified absent before retry",
+    "ci_at_a92468d": "General CI5 passed; trusted evidence run34307806797 block=0, require_approval=1",
+    "remaining": "Helm-managed global Injector rollout, actual Agent login/canary, operator ceremony and Vault server HA/KMS/audit migration"
+  },
   "injector_live_canary_preparation_20260909": {
     "helper": "scripts/ops/test-private-vault-injector-canary.py",
     "preflight": "Required create permissions allowed; three amd64 nodes Ready; global Injector webhook is Helm-managed with Ignore policy and automatic TLS",

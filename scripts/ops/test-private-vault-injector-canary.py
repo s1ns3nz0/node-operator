@@ -87,7 +87,7 @@ def main():
         fail("AWS account does not match the reviewed canary account")
     arn = command("aws", "eks", "describe-cluster", "--name", CLUSTER, "--region", "ap-northeast-2",
                   "--query", "cluster.arn", "--output", "text").strip()
-    if arn != f"arn:aws:eks:ap-northeast-2:{ACCOUNT}:cluster:{CLUSTER}":
+    if arn != f"arn:aws:eks:ap-northeast-2:{ACCOUNT}:cluster/{CLUSTER}":
         fail("EKS cluster identity does not match the reviewed canary cluster")
     if kubectl("config", "current-context").strip() != arn:
         fail("active Kubernetes context is not the reviewed EKS cluster")
@@ -136,7 +136,7 @@ def main():
             temp = Path(temporary)
             cert, key = temp / "tls.crt", temp / "tls.key"
             service = f"{name}.{namespace}.svc"
-            command("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", f"/CN={service}",
+            command("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=vault-injector-canary",
                     "-addext", f"subjectAltName=DNS:{service}", "-keyout", str(key), "-out", str(cert))
             key.chmod(0o600)
             secret = kubectl_json("-n", namespace, "create", "secret", "generic", name,
