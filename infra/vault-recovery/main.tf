@@ -196,18 +196,18 @@ resource "aws_security_group" "host" {
   name_prefix = "${local.name_prefix}-host-"
   description = "No-ingress recovery host; egress only to approved private endpoints and S3 prefix list."
   vpc_id      = aws_vpc.recovery.id
-  ingress     = []
-  egress      = []
-  tags        = merge(local.tags, { Name = "${local.name_prefix}-host" })
+  # This direction is explicitly denied inline; standalone rules exclusively own host egress.
+  ingress = []
+  tags    = merge(local.tags, { Name = "${local.name_prefix}-host" })
 }
 
 resource "aws_security_group" "endpoints" {
   name_prefix = "${local.name_prefix}-endpoints-"
   description = "Private AWS endpoint ingress only from the isolated recovery host."
   vpc_id      = aws_vpc.recovery.id
-  ingress     = []
-  egress      = []
-  tags        = merge(local.tags, { Name = "${local.name_prefix}-endpoints" })
+  # This direction is explicitly denied inline; standalone rules exclusively own endpoint ingress.
+  egress = []
+  tags   = merge(local.tags, { Name = "${local.name_prefix}-endpoints" })
 }
 
 resource "aws_vpc_security_group_ingress_rule" "endpoint_https_from_host" {

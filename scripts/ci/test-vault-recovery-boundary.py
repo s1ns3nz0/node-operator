@@ -73,8 +73,12 @@ def check(document):
     assert host["metadata_options"][0]["http_put_response_hop_limit"] == 1
     assert host["root_block_device"][0]["encrypted"] is True
     assert "key_name" not in host
-    for key in (("aws_security_group", "host"), ("aws_security_group", "endpoints")):
-        assert resources[key]["ingress"] == [] and resources[key]["egress"] == []
+    host_sg = resources["aws_security_group", "host"]
+    assert host_sg["ingress"] == []
+    assert "egress" not in host_sg, "standalone rules exclusively own host egress"
+    endpoint_sg = resources["aws_security_group", "endpoints"]
+    assert endpoint_sg["egress"] == []
+    assert "ingress" not in endpoint_sg, "standalone rules exclusively own endpoint ingress"
     ingress = [value for (kind, _), value in resources.items() if kind == "aws_vpc_security_group_ingress_rule"]
     assert len(ingress) == 1
     assert ingress[0]["referenced_security_group_id"] == "${aws_security_group.host.id}"
@@ -140,6 +144,8 @@ class BoundaryTests(unittest.TestCase):
             lambda d: blocks(d, "data")["aws_iam_policy_document", "host"]["statement"].append({"sid": "Unsafe", "effect": "Allow", "actions": ["ssm:GetParameter"], "resources": ["*"]}),
             lambda d: blocks(d, "data")["aws_ami", "ecs_al2023"].update(owners=["amazon"]),
             lambda d: blocks(d, "resource")["aws_default_security_group", "recovery"].update(egress=[{}]),
+            lambda d: blocks(d, "resource")["aws_security_group", "host"].update(egress=[]),
+            lambda d: blocks(d, "resource")["aws_security_group", "endpoints"].update(ingress=[]),
             lambda d: blocks(d, "resource")["aws_flow_log", "recovery"].update(traffic_type="REJECT"),
             lambda d: blocks(d, "resource")["aws_cloudwatch_log_group", "flow_logs"].update(retention_in_days=30),
         ]
