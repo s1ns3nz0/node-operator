@@ -6,6 +6,9 @@ script="$root/scripts/ops/activate-hoodi-validator-client.sh"
 activation_script="$script"
 fail() { printf 'FAIL validator activation gate: %s\n' "$*" >&2; exit 1; }
 test -f "$script" || fail 'missing activation script'
+# Inventory queries select Deployment metadata, not the Pod template labels.
+sed -n '/^  name: validator-REPLACE_WITH_VALIDATOR_SET-signing-fence$/,/^spec:$/p' "$root/deploy/validator/client-lease-fence-template.yaml" |
+  grep -Fq 'labels: {app.kubernetes.io/component: validator-signing-fence, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}' || fail 'fence Deployment is invisible to activation inventory'
 bash -n "$script"
 command -v jq >/dev/null 2>&1 || fail 'jq is required for offline activation-gate tests'
 

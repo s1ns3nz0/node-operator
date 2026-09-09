@@ -44,4 +44,15 @@ grep -Fq 'defaultMode: 0440' "$tmp/client.yaml"
 grep -Fq 'httpGet: {path: /healthz, port: health}' "$tmp/client.yaml"
 ruby -ryaml -e 'documents=YAML.load_stream(File.read(ARGV[0])); client=documents.find{|d| d.is_a?(Hash) && d["kind"]=="StatefulSet" && d.dig("metadata","name")=="validator-hoodi-test-001-client"}; abort "client missing" unless client; abort "client identity is not stable" unless client.dig("spec","serviceName")=="validator-hoodi-test-001-client-headless"; mounts=client.dig("spec","template","spec","containers").flat_map{|c| c["volumeMounts"] || []}; abort "client received fence token" if mounts.any?{|m| m["name"]=="api-token"}' "$tmp/client.yaml"
 grep -Fq 'resourceNames: ["validator-hoodi-test-001-client-0"]' "$tmp/client.yaml"
+ruby -ryaml -e '
+  docs=YAML.load_stream(File.read(ARGV[0]))
+  policy=docs.find{|d| d.is_a?(Hash) && d["kind"]=="NetworkPolicy" && d.dig("metadata","name")=="validator-hoodi-test-001-beacon-ingress"}
+  expected={"podSelector"=>{"matchLabels"=>{"app.kubernetes.io/name"=>"prysm-beacon"}},"policyTypes"=>["Ingress"],"ingress"=>[{"from"=>[{"namespaceSelector"=>{"matchLabels"=>{"kubernetes.io/metadata.name"=>"validator-operations"}},"podSelector"=>{"matchLabels"=>{"app.kubernetes.io/component"=>"validator-client","node-operator.io/validator-set"=>"hoodi-test-001"}}}],"ports"=>[{"protocol"=>"TCP","port"=>3500}]}]}
+  valid=->(p){p && p.dig("metadata","namespace")=="node-operator" && p["spec"]==expected}
+  abort "beacon ingress boundary mismatch" unless valid.call(policy)
+  mutated=Marshal.load(Marshal.dump(policy)); mutated["spec"]["ingress"][0]["from"][0].delete("podSelector")
+  abort "unrestricted namespace accepted" if valid.call(mutated)
+  mutated=Marshal.load(Marshal.dump(policy)); mutated["spec"]["ingress"][0]["ports"][0]["port"]=443
+  abort "wrong port accepted" if valid.call(mutated)
+' "$tmp/client.yaml"
 printf '%s\n' 'PASS: validator client uses set-scoped HTTP mTLS files and cannot start before activation.'
