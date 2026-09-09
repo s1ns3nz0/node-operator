@@ -36,6 +36,13 @@ jobs:
         run: |
           echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
           docker pull "$SCANNER_IMAGE"
+      - name: Test isolated Vault recovery boundaries
+        run: >-
+          docker run --rm --network none --read-only
+          --tmpfs /tmp:rw,noexec,nosuid,nodev
+          --volume "$GITHUB_WORKSPACE:/workspace:ro"
+          --entrypoint python3 "$SCANNER_IMAGE"
+          -B /workspace/scripts/ci/test-vault-recovery-boundary.py
       - name: Collect redacted scanner evidence
         run: >-
           docker run --rm

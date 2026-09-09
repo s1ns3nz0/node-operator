@@ -36,7 +36,7 @@ jobs:
             "$TERRAFORM_IMAGE" bash /workspace/scripts/ci/test-validator-runtime-mirror-enabled-plan.sh
       - name: Validate standalone Terraform modules offline
         run: |
-          for module in bootstrap-state foundation-network ops-access; do
+          for module in bootstrap-state foundation-network ops-access vault-recovery; do
             docker run --rm --user "$(id -u):$(id -g)" --network none \
               --volume "$GITHUB_WORKSPACE:/workspace:ro" \
               --volume "$RUNNER_TEMP:/output" \
