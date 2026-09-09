@@ -1,6 +1,26 @@
 {
   "exceptions": [
     {
+      "rule": "iac.checkov",
+      "check_id": "CKV_AWS_126",
+      "subject": "aws_instance.host",
+      "file_path": "infra/vault-recovery/main.tf",
+      "owner": "s1ns3nz0",
+      "rationale": "RECOVERY-BASIC-MONITORING: user-selected basic metrics for temporary isolated recovery host; security logging and isolation remain mandatory",
+      "issue": "docs/security/vault-recovery-dispositions.md",
+      "expires_at": "2026-10-03T00:00:00Z"
+    },
+    {
+      "rule": "iac.checkov",
+      "check_id": "CKV_AWS_283",
+      "subject": "aws_iam_policy_document.s3_endpoint",
+      "file_path": "infra/vault-recovery/main.tf",
+      "owner": "s1ns3nz0",
+      "rationale": "RECOVERY-ECR-LAYERS: AWS-documented Principal wildcard only for regional starport layer GetObject; exact snapshot principal/object/version remains enforced",
+      "issue": "docs/security/vault-recovery-dispositions.md",
+      "expires_at": "2026-10-03T00:00:00Z"
+    },
+    {
       "rule": "workflow.unsafe",
       "check_id": "dangerous-triggers",
       "subject": ".github/workflows/opa-pr-gate.yml",

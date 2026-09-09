@@ -1,0 +1,1 @@
+{"status":"independently_reviewed","source_finding_run":"34346259906","exceptions_requested":2,"other_iac_findings_not_waived":6,"policy_tests":"78/78 passed","independent_review":{"tier":"Terra","agent":"recovery_iac_review","result":"no blocker; exact hosted finding resource/path confirmed"},"live_mutated":false}
