@@ -1,4 +1,43 @@
 {
+  "injector_hardened_candidate_20260909": {
+    "image": "sha256:2937fbc5d368430d089b9b94f82b44baab71524d166358bb8ea48f7b395152d4",
+    "source": "fbc5b1f0cd4d1c7dd5a8830e32c8ed636d7318d7",
+    "build_log": "/private/tmp/hoodi-vault-k8s-hardened-build-openssl-20260909.log",
+    "locked_build_log": "/private/tmp/hoodi-vault-k8s-hardened-build-locked-20260909.log",
+    "scan": "/private/tmp/hoodi-vault-k8s-locked-grype-20260909.json",
+    "scan_sha256": "bbee69c0e340890f585ce5c368ef7baedb544e2c99ae044129732a6d6c3f218d",
+    "sbom": "/private/tmp/hoodi-vault-k8s-locked-sbom-20260909.json",
+    "critical": 0, "high": 0, "medium": 3, "unknown": 1, "ignored": 0,
+    "checks": ["all upstream Go tests passed including certificate generation and injector", "offline nonroot read-only version/help/ownership checks", "final go.mod and go.sum hashes enforced", "module diff reviewed: crypto0.56/text0.41 and tools/mod checksums", "OpenPGP affected package closure absent and build guarded"],
+    "attempts": "Initial module sums incomplete, resolved by tidy with exact final hashes pinned; next run needed builder-only openssl for upstream tests, then passed without excluding tests",
+    "published": false, "deployed": false,
+    "remaining": "independent final review, admission patch/canary, publication and runtime compatibility; Unknown applicability evidence must be attached, not globally suppressed"
+  },
+  "remaining_vault_candidates_20260909": {
+    "ci_verified_head": "7f2f4e3a95bbb249954d888c83cd1aed832bb3d3",
+    "ci_runs_passed": [34294809040, 34294809089, 34294809113, 34294809101, 34294809057],
+    "vault_1214": {
+      "amd64_digest": "sha256:6c77f568e6b6310d5bc68befb5711b9215c574de7da489e7c24332581176888b",
+      "critical": 19, "high": 113,
+      "scan": "/private/tmp/hoodi-vault-1214-official-grype-20260909.json",
+      "sha256": "0a636ee6dde6d1511b4dd79ec3e541e7a8b2df9fd3fe6d4a4d9cb3f87abb05cb"
+    },
+    "vault_210": {
+      "amd64_digest": "sha256:783103ba38c5e3edcaa9bbbcb0ff80fc93c690361f03fd487e89227da6c3efa9",
+      "critical": 4, "high": 17,
+      "scan": "/private/tmp/hoodi-vault-210-official-grype-20260909.json",
+      "sha256": "acc085ddd58c40b131659aeff5e5f9d7e61ac90ca5f0add459cc5462b357d113"
+    },
+    "injector_176": {
+      "source_commit": "fbc5b1f0cd4d1c7dd5a8830e32c8ed636d7318d7",
+      "amd64_digest": "sha256:5d682de816a45d886877d00233cd3416ff3a05b74bc7059d85bc3b169c3ae2c9",
+      "critical": 4, "high": 30,
+      "scan": "/private/tmp/hoodi-vault-k8s-176-official-grype-20260909.json",
+      "sha256": "a3b0a1dc1270a3afb0df5cefe9bca95c7bcff754fe16486b1f66dbb13a5575f2",
+      "remediation": "Pinned source build in progress; Go1.26.6, x/crypto0.56 and OpenSSL3.5.8, upstream tests mandatory"
+    },
+    "decision": "All three official candidates fail C/H threshold; no exceptions, publication or deployment. Server2.1 recovery-ceremony compatibility remains separately gated."
+  },
   "draft_publication_checkpoint": {
     "pr": "https://github.com/s1ns3nz0/node-operator/pull/139",
     "branch": "codex/hoodi-runtime-security-release",

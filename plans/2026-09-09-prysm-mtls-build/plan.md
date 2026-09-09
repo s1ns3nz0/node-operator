@@ -20,6 +20,23 @@ claim remaining runtime gates or trusted release promotion have passed.
 
 ## Source-built node image delivery
 
+Root owns `.ci/vault-server-hardened/` as a candidate-only full Vault2.1 source
+build. Reuse verified Agent source/toolchain/module checksums but build the full
+upstream CLI/server (no minimal feature tag). Exercise generate-root and Raft
+snapshot-inspection command tests, retain complete build/dependency metadata,
+then require final-image scanning and isolated Raft rehearsal. This authorizes
+no automatic live2.1 upgrade: recovery-token transition, backup/restore and
+mixed-version rollout constraints must be resolved first. Keep all live secrets
+and production Raft data out of Docker build/test contexts.
+
+Root also owns `.ci/vault-k8s-hardened/`: official injector1.7.6 still scans
+C4/H30, limited to Go1.26.5, x/crypto0.54 and OpenSSL3.5.7. Pin upstream
+commit fbc5b1f0cd4d1c7dd5a8830e32c8ed636d7318d7, use Go1.26.6 and
+x/crypto0.56, and patched runtime libraries. Execute upstream unit tests in
+Docker, retain final module inventories and license, then scan the exact image.
+Do not publish or apply it merely because the build passes; generated admission
+behavior and live compatibility remain separate gates. No Vault waiver.
+
 Root owns `infra/terraform/node-runtime-ecr.tf`: separately opt-in immutable
 Nethermind/Beacon repositories and a dedicated rotating KMS key. Preserve the
 existing upstream-only mirror and GitHub trust/publisher permissions. First
