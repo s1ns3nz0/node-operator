@@ -10,12 +10,13 @@ bash -n "$script"
 for required in \
   '--signing-proxy-fence-proof' \
   'event_type == "signing-proxy-fence"' \
+  'fence_live_before_quiesce == true' \
+  'client_and_fence_quiesced == true' \
   'direct_client_to_signer_denied == true' \
-  'cached_key_requests_blocked == true' \
-  'in_flight_request_bound == true' \
   'source:"role-revocation-probe"' \
   'bootstrap_auth_denied:true' \
-  'cached_key_stop_proven:false' \
+  'cached_key_stop_proven:true' \
+  'reviewed workload role restoration could not be confirmed' \
   'uc5_complete:false' \
   'CRITICAL: generated root token revocation could not be confirmed' \
   "trap 'exit 130' INT" \
@@ -30,8 +31,8 @@ scratch="$(mktemp -d /private/tmp/node-operator-revocation-probe.XXXXXX)"
 trap 'rm -rf "$scratch"' EXIT
 mkdir -p "$scratch/bin" "$scratch/output"
 now="$(jq -nr 'now | strftime("%Y-%m-%dT%H:%M:%S.123Z")')"
-jq -n --arg collected "$now" '{schema_version:1,event_type:"signing-proxy-fence",source:"signing-proxy-fence",network:"hoodi",validator_set:"hoodi-001",collected_at_utc:$collected,payload:{fence_live:true,lease_enforced:true,direct_client_to_signer_denied:true,cached_key_requests_blocked:true,in_flight_request_bound:true}}' > "$scratch/proof.json"
-jq '.payload.cached_key_requests_blocked = false' "$scratch/proof.json" > "$scratch/bad-proof.json"
+jq -n --arg collected "$now" '{schema_version:1,event_type:"signing-proxy-fence",source:"signing-proxy-fence",network:"hoodi",validator_set:"hoodi-001",collected_at_utc:$collected,payload:{fence_live_before_quiesce:true,lease_enforced:true,direct_client_to_signer_denied:true,client_and_fence_quiesced:true}}' > "$scratch/proof.json"
+jq '.payload.client_and_fence_quiesced = false' "$scratch/proof.json" > "$scratch/bad-proof.json"
 
 cat > "$scratch/bin/kubectl" <<'EOF'
 #!/usr/bin/env bash
@@ -85,4 +86,4 @@ else
 fi
 test "$status" -eq 69 || fail "StatefulSet API failure exited $status instead of 69"
 
-printf '%s\n' 'PASS role-revocation probe requires a fresh proxy fence proof and zero client Pods, records only bootstrap-auth denial, and leaves cached-key stop/UC-5 completion unproven.'
+printf '%s\n' 'PASS role-revocation probe requires a fresh staged fence proof and zero client Pods, restores the role on failure, and leaves post-recovery duty confirmation outstanding.'
