@@ -49,6 +49,12 @@ for required_path in \
   source/infra/baseline/variables.tf \
   source/release/hoodi-release-contract.json \
   source/scripts/release/node-operator-release.sh \
+  source/scripts/release/prepare-hoodi-validator-deployment.sh \
+  source/scripts/ops/render-hoodi-validator-runtime.sh \
+  source/scripts/ops/render-hoodi-validator-client.sh \
+  source/scripts/ops/recover-and-bootstrap-hoodi-validator-runtime-vault.sh \
+  source/scripts/ops/recover-and-onboard-hoodi-validator-keystore.sh \
+  source/.ci/validator/approved-client-images.json \
   source/policy/decision.rego; do
   rg -Fx "$required_path" "$temporary_directory/archive-paths.txt" >/dev/null
 done
