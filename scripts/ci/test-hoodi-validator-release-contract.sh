@@ -64,6 +64,8 @@ mkdir -m 700 "$scratch/plans"
 TRACE="$trace" "$script" ops-access plan --bundle-root "$bundle" --inputs "$inputs/hoodi-zero-release-inputs.json" --ops-inputs "$scratch/ops/ops-access-inputs.json" --plan-file "$scratch/plans/ops.tfplan" --allow-create >/dev/null
 rg -F "ops-access plan --root $bundle/source --inputs $scratch/ops/ops-access-inputs.json --plan-file $scratch/plans/ops.tfplan --allow-create" "$trace" >/dev/null
 rg -F 'deploy apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json' "$script" >/dev/null
+rg -F '"entrypoint": "source/scripts/release/hoodi-validator-release.sh"' "$root/release/hoodi-release-contract.json" >/dev/null
+rg -F '"deploy apply"' "$root/release/hoodi-release-contract.json" >/dev/null
 rg -F 'infrastructure and isolated private-EKS SSM access are deployed' "$script" >/dev/null
 rg -F 'deploy checkpoint contains an invalid ops-access plan digest' "$script" >/dev/null
 deploy_work="$scratch/deploy-work"; deploy_session="$scratch/deploy-session.json"
