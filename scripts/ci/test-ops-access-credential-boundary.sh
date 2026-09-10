@@ -80,4 +80,12 @@ if PATH="$scratch/bin:$PATH" MOCK_TRACE="$scratch/trace" bash "$entrypoint" "${c
   exit 1
 fi
 
+jq -n --arg config "$scratch/config.tfvars" --arg backend "$scratch/backend.hcl" \
+  '{schema_version:1,cluster_name:"node-operator",config:$config,backend_config:$backend}' > "$scratch/ops-access-inputs.json"
+if PATH="$scratch/bin:$PATH" MOCK_TRACE="$scratch/trace" bash "$entrypoint" destroy --root "$root" \
+  --inputs "$scratch/ops-access-inputs.json" --config "$scratch/config.tfvars" --plan-file "$scratch/private/unused-plan" >/dev/null 2>&1; then
+  printf 'mixed direct and generated ops inputs unexpectedly passed\n' >&2
+  exit 1
+fi
+
 printf 'PASS ops-access Terraform backend and provider credentials are separately verified and fail closed.\n'
