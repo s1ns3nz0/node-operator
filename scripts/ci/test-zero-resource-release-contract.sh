@@ -24,6 +24,10 @@ if rg -F '.vpc_id.value' "$entrypoint" >/dev/null; then
   printf 'foundation output is already a direct Terraform output value and must not be dereferenced again\n' >&2
   exit 1
 fi
+if rg -F '$bootstrap[0].bucket.value' "$entrypoint" >/dev/null; then
+  printf 'bootstrap output is already a direct Terraform output value and must not be dereferenced again\n' >&2
+  exit 1
+fi
 rg -F 'gitops-publisher-handoff.json' "$entrypoint" >/dev/null
 rg -F 'ops-access-handoff.json' "$entrypoint" >/dev/null
 rg -F -- '--inputs cannot be combined with individual phase configs' "$entrypoint" >/dev/null

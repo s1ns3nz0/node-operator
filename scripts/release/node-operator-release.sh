@@ -197,7 +197,7 @@ zero_apply() {
     {schema_version:"v1",aws_region:$region,aws_account_id:.deployment_account_id.value,
      cluster_name:.cluster_name.value,
      vpc_id:$foundation[0].vpc_id,subnet_id:$foundation[0].system_subnet_ids[0],
-     backend:{bucket:$bootstrap[0].bucket.value,dynamodb_table:$bootstrap[0].dynamodb_table.value,kms_key_id:$bootstrap[0].kms_key_id.value,region:$bootstrap[0].region.value,
+     backend:{bucket:$bootstrap[0].bucket,dynamodb_table:$bootstrap[0].dynamodb_table,kms_key_id:$bootstrap[0].kms_key_id,region:$bootstrap[0].region,
        key:"node-operator/ops-access/terraform.tfstate"}}
   ' "$baseline_output" > "$ops_handoff"
   chmod 600 "$gitops_handoff" "$ops_handoff"
