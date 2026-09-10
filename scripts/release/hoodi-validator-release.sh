@@ -136,7 +136,16 @@ case "$command_name" in
     fi
     deploy_sha="$(shasum -a 256 "$deploy_plan" | awk '{print $1}')"
     [[ "$deploy_sha" =~ ^[0-9a-f]{64}$ ]] || { printf '%s\n' 'deploy checkpoint contains an invalid ops-access plan digest' >&2; exit 65; }
-    "$0" ops-access apply --bundle-root "$bundle_root" --inputs "$inputs" --ops-inputs "$deploy_ops_inputs" --plan-file "$deploy_plan" --expected-sha "$deploy_sha" --allow-create --private-eks-session-handoff "$session_handoff"
+    if [ -e "$session_handoff" ]; then
+      [ -f "$session_handoff" ] && [ ! -L "$session_handoff" ] || { printf '%s\n' 'deploy checkpoint contains an unsafe private EKS session handoff' >&2; exit 65; }
+      jq -e --arg region "$input_region" '
+        .schema_version == 1 and .aws_region == $region and
+        (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and
+        (.ssm_ops_instance_id | test("^i-[0-9a-f]+$"))
+      ' "$session_handoff" >/dev/null || { printf '%s\n' 'deploy checkpoint has an invalid private EKS session handoff' >&2; exit 65; }
+    else
+      "$0" ops-access apply --bundle-root "$bundle_root" --inputs "$inputs" --ops-inputs "$deploy_ops_inputs" --plan-file "$deploy_plan" --expected-sha "$deploy_sha" --allow-create --private-eks-session-handoff "$session_handoff"
+    fi
     printf 'PASS: infrastructure and isolated private-EKS SSM access are deployed. Continue with the separate Vault, custody, GitOps, and validator activation ceremonies.\n'
     ;;
   ops-inputs)

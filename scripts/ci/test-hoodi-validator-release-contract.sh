@@ -73,6 +73,9 @@ rg -F "ops --handoff $deploy_work/ops-access-handoff.json --output-dir $deploy_w
 rg -F "ops-access plan --root $bundle/source --inputs $deploy_work/ops-access-inputs/ops-access-inputs.json --plan-file $deploy_work/ops-access.tfplan --allow-create" "$trace" >/dev/null
 rg -F "ops-access apply --root $bundle/source --inputs $deploy_work/ops-access-inputs/ops-access-inputs.json --plan-file $deploy_work/ops-access.tfplan" "$trace" >/dev/null
 jq -e '.ssm_ops_instance_id == "i-0123456789abcdef0"' "$deploy_session" >/dev/null
+before_apply_count="$(rg -c '^ops-access apply ' "$trace")"
+TRACE="$trace" "$script" deploy apply --bundle-root "$bundle" --inputs "$inputs/hoodi-zero-release-inputs.json" --work-dir "$deploy_work" --private-eks-session-handoff "$deploy_session" --allow-create >/dev/null
+[ "$(rg -c '^ops-access apply ' "$trace")" = "$before_apply_count" ] || { printf '%s\n' 'deploy resume unexpectedly re-applied ops access' >&2; exit 1; }
 session="$scratch/session.json"; jq -n '{schema_version:1,aws_region:"ap-northeast-2",cluster_name:"node-operator",ssm_ops_instance_id:"i-0123456789abcdef0"}' > "$session"
 if TRACE="$trace" "$script" ops-access apply --bundle-root "$bundle" --inputs "$inputs/hoodi-zero-release-inputs.json" --ops-inputs "$scratch/ops/ops-access-inputs.json" --plan-file "$scratch/plans/ops.tfplan" >/dev/null 2>&1; then
   printf '%s\n' 'ops-access apply unexpectedly accepted without a session handoff' >&2; exit 1
