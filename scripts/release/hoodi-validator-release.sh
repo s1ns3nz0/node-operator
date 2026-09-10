@@ -121,8 +121,9 @@ case "$command_name" in
   deploy)
     [ "$operation" = apply ] && [ -n "$work_dir$session_handoff" ] && [ -z "$output_dir$ops_inputs$plan_file$expected_sha" ] && [ "$allow_create" = true ] || usage
     case "$work_dir:$session_handoff" in /*:/*) ;; *) usage ;; esac
-    # This intentionally stops before Vault, custody, GitOps publication, and
-    # validator activation. Those phases require separate operator ceremonies.
+    # Vault, custody, GitOps publication, deposit, and validator activation
+    # remain separate operator ceremonies. Non-secret workload staging is safe
+    # to continue once private EKS access has been established.
     "$0" infrastructure apply --bundle-root "$bundle_root" --inputs "$inputs" --work-dir "$work_dir"
     deploy_ops_dir="$work_dir/ops-access-inputs"
     deploy_ops_inputs="$deploy_ops_dir/ops-access-inputs.json"
@@ -146,7 +147,8 @@ case "$command_name" in
     else
       "$0" ops-access apply --bundle-root "$bundle_root" --inputs "$inputs" --ops-inputs "$deploy_ops_inputs" --plan-file "$deploy_plan" --expected-sha "$deploy_sha" --allow-create --private-eks-session-handoff "$session_handoff"
     fi
-    printf 'PASS: infrastructure and isolated private-EKS SSM access are deployed. Continue with the separate Vault, custody, GitOps, and validator activation ceremonies.\n'
+    "$0" stage apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session_handoff"
+    printf 'PASS: infrastructure, isolated private-EKS SSM access, and zero-replica validator staging are deployed. Continue with the separate Vault, custody, GitOps, deposit, and validator activation ceremonies.\n'
     ;;
   ops-inputs)
     [ "$operation" = prepare ] && [ -n "$work_dir$output_dir" ] && [ -z "$session_handoff" ] || usage

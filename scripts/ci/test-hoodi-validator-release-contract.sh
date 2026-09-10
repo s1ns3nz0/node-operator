@@ -72,6 +72,7 @@ rg -F "release zero apply --bundle-root $bundle --inputs $inputs/zero-resource/z
 rg -F "ops --handoff $deploy_work/ops-access-handoff.json --output-dir $deploy_work/ops-access-inputs" "$trace" >/dev/null
 rg -F "ops-access plan --root $bundle/source --inputs $deploy_work/ops-access-inputs/ops-access-inputs.json --plan-file $deploy_work/ops-access.tfplan --allow-create" "$trace" >/dev/null
 rg -F "ops-access apply --root $bundle/source --inputs $deploy_work/ops-access-inputs/ops-access-inputs.json --plan-file $deploy_work/ops-access.tfplan" "$trace" >/dev/null
+rg -F "stage apply --handoff $inputs/validator-deployment/validator-deployment-handoff.json --private-eks-session-handoff $deploy_session" "$trace" >/dev/null
 jq -e '.ssm_ops_instance_id == "i-0123456789abcdef0"' "$deploy_session" >/dev/null
 before_apply_count="$(rg -c '^ops-access apply ' "$trace")"
 TRACE="$trace" "$script" deploy apply --bundle-root "$bundle" --inputs "$inputs/hoodi-zero-release-inputs.json" --work-dir "$deploy_work" --private-eks-session-handoff "$deploy_session" --allow-create >/dev/null
