@@ -2,7 +2,10 @@
 set -euo pipefail
 
 [ "$#" -eq 1 ] || { printf 'usage: %s INSTALL_DIRECTORY\n' "$0" >&2; exit 64; }
-[ "$(uname -s)" = Linux ] && [ "$(uname -m)" = x86_64 ] || { printf 'only linux/amd64 is supported\n' >&2; exit 65; }
+if [ "$(uname -s)" != Linux ] || [ "$(uname -m)" != x86_64 ]; then
+  printf 'only linux/amd64 is supported\n' >&2
+  exit 65
+fi
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck disable=SC1091
 source "$root/.ci/fence-security/tools.env"
