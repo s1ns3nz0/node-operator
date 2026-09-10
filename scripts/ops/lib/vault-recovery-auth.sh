@@ -74,10 +74,25 @@ vault_recovery_decode_generated_root() {
   fi
   [ "$#" -eq 2 ] || return 64
   printf '%s\n%s\n' "$1" "$2" | python3 -c '
-import base64, sys
+import base64, re, sys
 encoded, otp = sys.stdin.read().splitlines()
-left = base64.b64decode(encoded, validate=True)
-right = base64.b64decode(otp, validate=True)
+
+def decode_generated_root_part(value):
+    # The Vault generated-root API can omit RFC 4648 trailing padding. Validate
+    # the alphabet and any supplied padding first, then restore only the
+    # deterministic trailing padding needed by the strict decoder.
+    if not re.fullmatch(r"[A-Za-z0-9+/]*={0,2}", value):
+        raise SystemExit("invalid generated-root response")
+    if "=" in value and len(value) % 4:
+        raise SystemExit("invalid generated-root response")
+    if "=" not in value:
+        if len(value) % 4 == 1:
+            raise SystemExit("invalid generated-root response")
+        value += "=" * (-len(value) % 4)
+    return base64.b64decode(value, validate=True)
+
+left = decode_generated_root_part(encoded)
+right = decode_generated_root_part(otp)
 if len(left) != len(right):
     raise SystemExit("invalid generated-root response")
 print(bytes(a ^ b for a, b in zip(left, right)).decode("utf-8"))
