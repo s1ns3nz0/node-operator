@@ -57,7 +57,7 @@ verify_bundle() {
     [ "$actual" = "$expected" ] || { printf 'digest mismatch: %s\n' "$path" >&2; bad=1; }
   done < <(jq -r '.entries[] | [.path, .sha256] | @tsv' "$bundle_root/bundle-manifest.json")
   [ "$bad" -eq 0 ] || fail "bundle verification failed"
-  jq -e '.schema_version == "v1" and .network == "hoodi" and .client_chart.revision == "0.1.32" and (.bootstrap.forbidden_inputs | length > 0)' \
+  jq -e '.schema_version == "v1" and .network == "hoodi" and .client_chart == {name:"node-operator-client",version_pattern:"^0\\.1\\.[0-9]+$",immutable_digest_required:true} and (.bootstrap.forbidden_inputs | length > 0)' \
     "$bundle_root/source/release/hoodi-release-contract.json" >/dev/null || fail "release contract is invalid"
   printf 'PASS release bundle and Hoodi contract verified.\n'
 }
