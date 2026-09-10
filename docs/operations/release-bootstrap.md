@@ -53,6 +53,18 @@ This is infrastructure only. Immutable GitOps artifact publication, private
 Argo bootstrap, optional SSM access, Vault initialize/restore, custody, and
 validator activation stay separate approved operations.
 
+After publishing a chart and preparing the digest-bound Argo input, create a
+reviewed private plan against the same `--work-dir` used by `zero apply`; only
+then apply that exact saved plan:
+
+```sh
+scripts/release/apply-argocd-bootstrap.sh plan \
+  --baseline-work-dir /controlled-state/node-operator-zero-bootstrap \
+  --baseline-config /controlled-input/baseline.tfvars \
+  --bootstrap-input /controlled-state/argocd.tfvars.json \
+  --plan-file /controlled-state/argocd-bootstrap.tfplan
+```
+
 After `zero apply`, configure the GitOps publisher using the generated
 non-secret handoff (it writes only an AWS account ID and restricted OIDC role
 ARN to the protected GitHub environment):
