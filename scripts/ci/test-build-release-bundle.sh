@@ -51,6 +51,7 @@ for required_path in \
   source/scripts/release/node-operator-release.sh \
   source/scripts/release/prepare-zero-resource-inputs.sh \
   source/scripts/release/prepare-hoodi-zero-release-inputs.sh \
+  source/scripts/release/hoodi-validator-release.sh \
   source/scripts/release/prepare-ops-access-inputs.sh \
   source/scripts/release/prepare-hoodi-validator-deployment.sh \
   source/scripts/release/stage-hoodi-validator-deployment.sh \
