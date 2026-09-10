@@ -56,3 +56,46 @@ spec:
       ports:
         - protocol: TCP
           port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prysm-engine-api-ingress
+  namespace: node-operator
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: nethermind
+      app.kubernetes.io/component: execution-client
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prysm-beacon
+      ports:
+        - protocol: TCP
+          port: 8551
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-nethermind-vault-egress
+  namespace: node-operator
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: nethermind
+      app.kubernetes.io/component: execution-client
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: vault
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vault
+      ports:
+        - protocol: TCP
+          port: 8200

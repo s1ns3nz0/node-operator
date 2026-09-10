@@ -28,6 +28,18 @@ spec:
         app.kubernetes.io/part-of: hoodi-node
         app.kubernetes.io/version: v7.1.8
         node-operator.io/network: hoodi
+        node-operator.io/vault-client: "true"
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/agent-service-account-token-volume-name: vault-auth
+        vault.hashicorp.com/tls-secret: vault-agent-ca
+        vault.hashicorp.com/ca-cert: /vault/tls/ca.crt
+        vault.hashicorp.com/tls-server-name: vault.vault.svc
+        vault.hashicorp.com/role: hoodi-engine-prysm
+        vault.hashicorp.com/agent-inject-secret-engine.jwt: kv/data/nodes/hoodi/engine-api-jwt
+        vault.hashicorp.com/agent-inject-template-engine.jwt: |
+          {{- with secret "kv/data/nodes/hoodi/engine-api-jwt" -}}{{ .Data.data.jwt }}{{- end }}
     spec:
       serviceAccountName: prysm-beacon
       automountServiceAccountToken: false
@@ -75,6 +87,8 @@ spec:
             - --http-port=3500
             - --monitoring-host=127.0.0.1
             - --monitoring-port=8080
+            - --execution-endpoint=http://nethermind-execution.node-operator.svc:8551
+            - --jwt-secret=/vault/secrets/engine.jwt
           env:
             - name: POD_IP
               valueFrom:
@@ -128,11 +142,21 @@ spec:
               cpu: "8"
               memory: 24Gi
           volumeMounts:
+            - name: vault-auth
+              mountPath: /var/run/secrets/vault.hashicorp.com/serviceaccount
+              readOnly: true
             - name: prysm-data
               mountPath: /data
             - name: tmp
               mountPath: /tmp
       volumes:
+        - name: vault-auth
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: vault
+                  expirationSeconds: 600
+                  path: token
         - name: tmp
           emptyDir:
             medium: Memory

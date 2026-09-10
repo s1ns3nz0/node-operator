@@ -52,11 +52,16 @@ start() {
     printf 'client StatefulSets are absent; promote the reviewed GitOps client revision before starting capacity.\n' >&2
     exit 65
   }
-  # This checks only object metadata. Do not inspect .data or decode anything.
-  kubectl -n "$namespace" get secret engine-api-jwt -o jsonpath='{.metadata.name}' >/dev/null || {
-    printf 'engine-api-jwt object is absent; complete the external Vault custody delivery first.\n' >&2
-    exit 65
-  }
+  # Inspect only workload metadata.  Engine JWT bytes exist only in Vault and
+  # must never be copied to, or read from, a Kubernetes Secret.
+  for client in nethermind-execution prysm-beacon; do
+    role="$(kubectl -n "$namespace" get statefulset "$client" -o jsonpath='{.spec.template.metadata.annotations.vault\.hashicorp\.com/role}')"
+    injection="$(kubectl -n "$namespace" get statefulset "$client" -o jsonpath='{.spec.template.metadata.annotations.vault\.hashicorp\.com/agent-inject-secret-engine\.jwt}')"
+    [ -n "$role" ] && [ "$injection" = 'kv/data/nodes/hoodi/engine-api-jwt' ] || {
+      printf 'Vault Engine API JWT injection is absent for %s; complete the private Vault bootstrap first.\n' "$client" >&2
+      exit 65
+    }
+  done
   aws eks update-nodegroup-config --region "$aws_region" --cluster-name "$cluster_name" \
     --nodegroup-name "$consensus_group" --scaling-config minSize=0,desiredSize=1,maxSize=1 >/dev/null
   aws eks update-nodegroup-config --region "$aws_region" --cluster-name "$cluster_name" \
