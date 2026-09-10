@@ -50,6 +50,9 @@
     "test:vault-bootstrap-enabled-plan": "bash scripts/ci/test-vault-bootstrap-enabled-plan.sh",
     "test:release-bootstrap-contract": "bash scripts/ci/test-release-bootstrap-contract.sh",
     "test:zero-resource-release-contract": "bash scripts/ci/test-zero-resource-release-contract.sh",
+    "test:configure-gitops-publisher-contract": "bash scripts/ci/test-configure-gitops-publisher-contract.sh",
+    "test:publish-gitops-client-chart-contract": "bash scripts/ci/test-publish-gitops-client-chart-contract.sh",
+    "test:prepare-hoodi-validator-deployment-contract": "bash scripts/ci/test-prepare-hoodi-validator-deployment-contract.sh",
     "test:ops-access-credential-boundary": "bash scripts/ci/test-ops-access-credential-boundary.sh"
   }
 }

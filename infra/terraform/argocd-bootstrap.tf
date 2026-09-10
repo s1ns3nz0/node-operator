@@ -27,6 +27,28 @@ variable "argocd_bootstrap_image" {
   }
 }
 
+variable "gitops_client_chart_version" {
+  description = "Exact immutable GitOps client chart version emitted by the protected publisher."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.gitops_client_chart_version == "" || can(regex("^0\\.1\\.[0-9]+$", var.gitops_client_chart_version))
+    error_message = "gitops_client_chart_version must be empty while disabled or a publisher-issued 0.1.N version."
+  }
+}
+
+variable "gitops_client_chart_oci_digest" {
+  description = "OCI digest that the exact GitOps client chart version must resolve to."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.gitops_client_chart_oci_digest == "" || can(regex("^sha256:[a-f0-9]{64}$", var.gitops_client_chart_oci_digest))
+    error_message = "gitops_client_chart_oci_digest must be empty while disabled or an immutable sha256 digest."
+  }
+}
+
 locals {
   argocd_chart_version = "10.4.0"
 }
@@ -135,7 +157,10 @@ data "aws_iam_policy_document" "argocd_bootstrap" {
     # Keep this existing pull scope independent from unrelated additions to the
     # private GitOps repository map. The repository name is deterministic and
     # already enforced by the private GitOps foundation.
-    resources = ["arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.private_gitops_repositories.argocd}"]
+    resources = [
+      "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.private_gitops_repositories.argocd}",
+      aws_ecr_repository.gitops_client_chart[0].arn,
+    ]
   }
 }
 
@@ -216,6 +241,7 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
             - aws ecr get-login-password --region ${var.aws_region} | helm registry login --username AWS --password-stdin ${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com
             - helm upgrade --install argocd oci://${aws_ecr_repository.private_gitops["argocd"].repository_url} --version ${local.argocd_chart_version} --namespace argocd --create-namespace --values /opt/node-operator/argocd-private-values.yaml --atomic --timeout 10m
             - kubectl wait --namespace argocd --for=condition=Available deployment/argocd-server --timeout=10m
+            - test "$(aws ecr describe-images --region ${var.aws_region} --repository-name ${aws_ecr_repository.gitops_client_chart[0].name} --image-ids imageTag=${var.gitops_client_chart_version} --query 'imageDetails[0].imageDigest' --output text)" = "${var.gitops_client_chart_oci_digest}"
             - |
               cat <<'EOF' | kubectl apply -f -
               apiVersion: rbac.authorization.k8s.io/v1
@@ -265,7 +291,7 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
                 source:
                   repoURL: ${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/node-operator-baseline-gitops-client
                   chart: node-operator-client
-                  targetRevision: 0.1.32
+                  targetRevision: ${var.gitops_client_chart_version}
                 destination:
                   server: https://kubernetes.default.svc
                   namespace: node-operator
@@ -284,6 +310,8 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
       condition = (
         var.enable_private_gitops_foundation &&
         can(regex("^${var.aws_account_id}\\.dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/${local.private_gitops_repositories.argocd}@sha256:[a-f0-9]{64}$", var.argocd_bootstrap_image)) &&
+        can(regex("^0\\.1\\.[0-9]+$", var.gitops_client_chart_version)) &&
+        can(regex("^sha256:[a-f0-9]{64}$", var.gitops_client_chart_oci_digest)) &&
         length(var.argocd_bootstrap_subnet_ids) > 0 &&
         alltrue([for subnet_id in var.argocd_bootstrap_subnet_ids : can(regex("^subnet-[a-z0-9]+$", subnet_id))])
       )

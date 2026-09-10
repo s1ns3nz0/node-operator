@@ -19,9 +19,10 @@ The baseline creates private infrastructure and the GitOps artifact
 foundation; it does not treat an empty registry as a runnable node deployment.
 Before the client Application can reconcile, operators must publish the
 reviewed immutable private GitOps OCI artifacts and run the separately
-approved private Argo CD bootstrap phase. The release contract pins the client
-chart revision to `0.1.32`; promotion must verify that exact immutable artifact
-before changing the Application.
+approved private Argo CD bootstrap phase. The release contract accepts only
+the `0.1.<run>` version format; promotion must verify and carry the exact
+immutable OCI digest before changing the Application. No historical chart
+revision is assumed to exist in a new account.
 
 SSM access, Vault initialization/unseal, Vault writes, validator key custody,
 remote-signer activation, and validator duties are deliberately not bootstrap
@@ -51,3 +52,16 @@ retain it under controlled operator storage.
 This is infrastructure only. Immutable GitOps artifact publication, private
 Argo bootstrap, optional SSM access, Vault initialize/restore, custody, and
 validator activation stay separate approved operations.
+
+After `zero apply`, configure the GitOps publisher using the generated
+non-secret handoff (it writes only an AWS account ID and restricted OIDC role
+ARN to the protected GitHub environment):
+
+```sh
+release/source/scripts/release/configure-gitops-publisher.sh \
+  --handoff /controlled-state/node-operator-zero-bootstrap/gitops-publisher-handoff.json
+```
+
+The protected environment still requires its configured approval before the
+publisher can create an immutable chart. Never put GitHub tokens, Vault
+material, custody keys, or validator secrets in the handoff.

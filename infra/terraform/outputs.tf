@@ -3,6 +3,11 @@ output "cluster_name" {
   value       = aws_eks_cluster.private.name
 }
 
+output "deployment_account_id" {
+  description = "Non-secret AWS account identifier bound to this deployment."
+  value       = var.aws_account_id
+}
+
 output "private_subnet_ids" {
   description = "Private worker subnet identifiers."
   value       = local.system_subnet_ids
