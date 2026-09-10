@@ -39,7 +39,7 @@ resource "aws_security_group" "temporary_ssm_ops_host" {
   count       = var.enable_temporary_ssm_ops_host ? 1 : 0
   name_prefix = "${local.name_prefix}-temporary-ssm-ops-host-"
   description = "No-ingress security group for the temporary SSM tunnel host."
-  vpc_id      = aws_vpc.private.id
+  vpc_id      = local.network_vpc_id
   ingress     = []
   tags        = merge(local.common_tags, { Name = "${local.name_prefix}-temporary-ssm-ops-host", Purpose = "temporary-private-eks-tunnel" })
 }
@@ -75,7 +75,7 @@ resource "aws_instance" "temporary_ssm_ops_host" {
   count                                = var.enable_temporary_ssm_ops_host ? 1 : 0
   ami                                  = data.aws_ssm_parameter.al2023_x86_64[0].value
   instance_type                        = "t3.micro"
-  subnet_id                            = aws_subnet.private[0].id
+  subnet_id                            = local.system_subnet_ids[0]
   associate_public_ip_address          = false
   iam_instance_profile                 = aws_iam_instance_profile.temporary_ssm_ops_host[0].name
   vpc_security_group_ids               = [aws_security_group.temporary_ssm_ops_host[0].id]

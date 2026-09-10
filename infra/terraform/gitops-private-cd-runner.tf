@@ -25,7 +25,7 @@ resource "aws_security_group" "gitops_private_cd_runner" {
   count       = var.enable_gitops_private_cd_runner ? 1 : 0
   name_prefix = "${local.name_prefix}-gitops-private-cd-"
   description = "GitOps private CD runner egress to GitHub through NAT, the private EKS API, and approved VPC endpoints."
-  vpc_id      = aws_vpc.private.id
+  vpc_id      = local.network_vpc_id
 
   egress {
     from_port       = 443
@@ -198,7 +198,7 @@ resource "aws_codebuild_project" "gitops_private_cd_runner" {
   }
 
   vpc_config {
-    vpc_id             = aws_vpc.private.id
+    vpc_id             = local.network_vpc_id
     subnets            = var.gitops_private_cd_runner_subnet_ids
     security_group_ids = [aws_security_group.gitops_private_cd_runner[0].id]
   }

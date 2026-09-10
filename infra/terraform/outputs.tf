@@ -5,7 +5,7 @@ output "cluster_name" {
 
 output "private_subnet_ids" {
   description = "Private worker subnet identifiers."
-  value       = aws_subnet.private[*].id
+  value       = local.system_subnet_ids
 }
 
 output "temporary_ssm_ops_host_instance_id" {

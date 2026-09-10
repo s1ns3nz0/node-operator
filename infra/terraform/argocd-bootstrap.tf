@@ -35,7 +35,7 @@ resource "aws_security_group" "argocd_bootstrap" {
   count       = var.enable_argocd_bootstrap_runner ? 1 : 0
   name_prefix = "${local.name_prefix}-argocd-bootstrap-"
   description = "Private Argo CD bootstrap executor egress to the EKS API and approved VPC endpoints only."
-  vpc_id      = aws_vpc.private.id
+  vpc_id      = local.network_vpc_id
 
   egress {
     from_port       = 443
@@ -197,7 +197,7 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
   }
 
   vpc_config {
-    vpc_id             = aws_vpc.private.id
+    vpc_id             = local.network_vpc_id
     subnets            = var.argocd_bootstrap_subnet_ids
     security_group_ids = [aws_security_group.argocd_bootstrap[0].id]
   }

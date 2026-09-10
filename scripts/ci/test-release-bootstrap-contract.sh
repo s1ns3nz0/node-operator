@@ -24,6 +24,8 @@ rg -Fx 'enable_argocd_bootstrap_cluster_admin = false' "$template" >/dev/null
 rg -Fx 'enable_vault_bootstrap_cluster_admin  = false' "$template" >/dev/null
 rg -F 'SSM operations access belongs to the isolated ops-access command' "$entrypoint" >/dev/null
 rg -F 'temporary cluster-admin bootstrap requires its separately approved phase' "$entrypoint" >/dev/null
+rg -F 'zero apply --bundle-root DIRECTORY' "$entrypoint" >/dev/null
+rg -F 'zero apply derives foundation network inputs' "$entrypoint" >/dev/null
 rg -F 'plan|apply|destroy' "$ops_entrypoint" >/dev/null
 rg -F -- '--backend-config BACKEND_HCL' "$ops_entrypoint" >/dev/null
 rg -F -- '--allow-create' "$ops_entrypoint" >/dev/null

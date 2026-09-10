@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+entrypoint="$root/scripts/release/node-operator-release.sh"
+baseline="$root/infra/terraform"
+foundation="$root/infra/foundation-network"
+
+for file in \
+  "$root/release/zero-resource-bootstrap-state.tfvars.example" \
+  "$root/release/zero-resource-foundation-network.tfvars.example" \
+  "$root/release/zero-resource-baseline.tfvars.example"; do
+  [ -f "$file" ] || { printf 'missing zero-resource example: %s\n' "$file" >&2; exit 1; }
+done
+
+rg -F 'network_source:"foundation"' "$entrypoint" >/dev/null
+rg -F 'init -input=false -migrate-state' "$entrypoint" >/dev/null
+rg -F 'node-operator/foundation-network/terraform.tfstate' "$entrypoint" >/dev/null
+rg -F 'node-operator/baseline/terraform.tfstate' "$entrypoint" >/dev/null
+rg -F 'foundation-network.auto.tfvars.json' "$entrypoint" >/dev/null
+rg -F 'backend "s3" {}' "$baseline/backend.tf" >/dev/null
+rg -F 'vpc_cidr' "$foundation/outputs.tf" >/dev/null
+rg -F 'variable "network_source"' "$baseline/variables.tf" >/dev/null
+rg -F 'variable "foundation_network"' "$baseline/variables.tf" >/dev/null
+rg -F 'prevent_destroy = true' "$baseline/network.tf" >/dev/null
+rg -F 'local.system_subnet_ids' "$baseline/eks.tf" "$baseline/endpoints.tf" >/dev/null
+rg -F 'local.hoodi_subnet_ids' "$baseline/eks.tf" >/dev/null
+if rg -n 'node-operator-tfstate-106760547719-apne2|23528ef1-681c-41c3-a565-d19d3ec98c37' "$baseline/backend.tf"; then
+  printf 'baseline backend remains bound to historical state\n' >&2
+  exit 1
+fi
+printf 'PASS zero-resource release contract preserves state and network ownership boundaries.\n'

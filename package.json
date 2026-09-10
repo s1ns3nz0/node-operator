@@ -49,6 +49,7 @@
     "test:external-hoodi-validator-contract": "bash scripts/ci/test-external-hoodi-validator-contract.sh",
     "test:vault-bootstrap-enabled-plan": "bash scripts/ci/test-vault-bootstrap-enabled-plan.sh",
     "test:release-bootstrap-contract": "bash scripts/ci/test-release-bootstrap-contract.sh",
+    "test:zero-resource-release-contract": "bash scripts/ci/test-zero-resource-release-contract.sh",
     "test:ops-access-credential-boundary": "bash scripts/ci/test-ops-access-credential-boundary.sh"
   }
 }

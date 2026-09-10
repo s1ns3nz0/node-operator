@@ -1,6 +1,7 @@
 output "network" {
   value = {
     vpc_id                = local.vpc_id
+    vpc_cidr              = local.existing_mode ? data.aws_vpc.existing[0].cidr_block : aws_vpc.this[0].cidr_block
     system_subnet_ids     = local.private_subnet_ids
     hoodi_subnet_ids      = local.existing_mode ? [] : [aws_subnet.hoodi[0].id]
     system_route_table_id = local.private_route_table

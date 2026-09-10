@@ -53,7 +53,7 @@ resource "aws_security_group" "vault_bootstrap" {
   count       = var.enable_vault_bootstrap_runner ? 1 : 0
   name_prefix = "${local.name_prefix}-vault-bootstrap-"
   description = "Private Vault bootstrap executor egress only to the EKS API and approved VPC endpoints."
-  vpc_id      = aws_vpc.private.id
+  vpc_id      = local.network_vpc_id
 
   egress {
     from_port       = 443
@@ -191,7 +191,7 @@ resource "aws_codebuild_project" "vault_bootstrap" {
     }
   }
   vpc_config {
-    vpc_id             = aws_vpc.private.id
+    vpc_id             = local.network_vpc_id
     subnets            = var.vault_bootstrap_subnet_ids
     security_group_ids = [aws_security_group.vault_bootstrap[0].id]
   }
