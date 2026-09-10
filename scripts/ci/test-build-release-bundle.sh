@@ -61,6 +61,13 @@ for required_path in \
   source/scripts/ops/render-hoodi-validator-client.sh \
   source/scripts/ops/recover-and-bootstrap-hoodi-validator-runtime-vault.sh \
   source/scripts/ops/recover-and-bootstrap-hoodi-engine-api-vault.sh \
+  source/scripts/ops/recover-and-migrate-hoodi-runtime-secrets-to-vault.sh \
+  source/scripts/ops/preflight-live-vault-cutover.sh \
+  source/scripts/ops/apply-live-engine-vault-cutover.sh \
+  source/scripts/ops/apply-live-validator-vault-cutover.sh \
+  source/scripts/ops/finalize-live-vault-secret-cutover.sh \
+  source/scripts/ops/verify-live-vault-cutover-convergence.sh \
+  source/scripts/ops/collect-hoodi-signer-public-key-evidence.sh \
   source/scripts/ops/recover-and-onboard-hoodi-validator-keystore.sh \
   source/.ci/validator/approved-client-images.json \
   source/policy/decision.rego; do
