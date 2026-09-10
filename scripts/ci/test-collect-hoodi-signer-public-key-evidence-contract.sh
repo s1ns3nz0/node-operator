@@ -8,10 +8,15 @@ for required in \
   'GET of the public signer key' \
   'serviceAccountName:"validator-client"' \
   'app.kubernetes.io/component":"validator-signing-fence"' \
+  'node-operator.io/vault-client":"true"' \
   'agent-inject-secret-tls.crt' \
   'client-tls' \
   'vault-agent-init' \
   'public_key_match == true' \
+  'sanitized Pod status follows' \
+  'waiting_reason' \
+  'terminated_reason' \
+  'exit_code' \
   'preconditions:{uid:$uid}' \
   'no signature, keystore, client key, or Vault response retained'; do
   grep -Fq "$required" "$script" || { printf 'missing signer-public-key evidence boundary: %s\n' "$required" >&2; exit 1; }

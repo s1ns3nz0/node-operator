@@ -7,6 +7,8 @@ umask 077
 # the validator client at zero; UC-3/UC-4 evidence remains the only scale-up
 # authority.
 dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+repository_root="$(cd "$dir/../.." && pwd -P)"
+vault_egress_policy="$repository_root/deploy/validator/vault-runtime-egress-policy.yaml"
 usage() { printf 'Usage: %s --validator-set <hoodi-id> --expected-public-key <0x-key> --runtime-manifest <absolute-yaml> --client-manifest <absolute-yaml> --migration-evidence <absolute-json> --fence-proof <absolute-json> --evidence-output <new-absolute-json> --execute\n' "${0##*/}" >&2; exit 64; }
 validator_set=''; public_key=''; runtime=''; client=''; migration=''; fence=''; evidence=''; execute=false
 while [ "$#" -gt 0 ]; do case "$1" in --validator-set) validator_set="${2:-}"; shift 2;; --expected-public-key) public_key="${2:-}"; shift 2;; --runtime-manifest) runtime="${2:-}"; shift 2;; --client-manifest) client="${2:-}"; shift 2;; --migration-evidence) migration="${2:-}"; shift 2;; --fence-proof) fence="${2:-}"; shift 2;; --evidence-output) evidence="${2:-}"; shift 2;; --execute) execute=true; shift;; *) usage;; esac; done
@@ -18,6 +20,7 @@ for file in "$runtime" "$client" "$migration" "$fence"; do [ -f "$file" ] && [ !
 [ ! -e "$evidence" ] && [ ! -L "$evidence" ] || { printf '%s\n' 'evidence output must be new' >&2; exit 65; }
 if [ "${PRIVATE_EKS_SESSION:-}" != 1 ]; then exec "$dir/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$0" --validator-set "$validator_set" --expected-public-key "$public_key" --runtime-manifest "$runtime" --client-manifest "$client" --migration-evidence "$migration" --fence-proof "$fence" --evidence-output "$evidence" --execute; fi
 for command in kubectl jq grep mkdir date sleep seq tr; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
+[ -f "$vault_egress_policy" ] && [ ! -L "$vault_egress_policy" ] || { printf '%s\n' 'dedicated validator Vault egress policy is missing or unsafe' >&2; exit 66; }
 python3 "$dir/verify-validator-cutover-rendering.py" --runtime "$runtime" --client "$client" --validator-set "$validator_set" --public-key "$public_key" \
   --web3signer-image "$(kubectl -n validator-operations get deployment "validator-$validator_set-remote-signer" -o jsonpath='{.spec.template.spec.containers[0].image}')" \
   --postgres-image "$(kubectl -n validator-operations get statefulset "validator-$validator_set-slashing-db" -o jsonpath='{.spec.template.spec.containers[0].image}')" \
@@ -49,7 +52,9 @@ claim_before="$(kubectl -n validator-operations get pvc "$pvc" -o json | jq -ce 
 # Only canonical workload fields transfer ownership. Existing Lease and claim
 # templates are absent from this payload and must retain their original owners.
 kubectl apply --server-side --force-conflicts --field-manager=node-operator-vault-cutover --dry-run=server -f "$scratch/apply.json" >/dev/null
+kubectl apply --server-side --field-manager=node-operator-vault-cutover-egress --dry-run=server -f "$vault_egress_policy" >/dev/null
 "$dir/assert-hoodi-validator-quiesced.sh" --validator-set "$validator_set" >/dev/null
+kubectl apply --server-side --field-manager=node-operator-vault-cutover-egress -f "$vault_egress_policy" >/dev/null
 kubectl apply --server-side --force-conflicts --field-manager=node-operator-vault-cutover -f "$scratch/apply.json" >/dev/null
 claim_after="$(kubectl -n validator-operations get pvc "$pvc" -o json | jq -ce 'select(.status.phase == "Bound") | {uid:.metadata.uid,volumeName:.spec.volumeName}')"
 [ "$claim_before" = "$claim_after" ] || { printf '%s\n' 'slashing DB PVC identity changed; refusing to start signer' >&2; exit 70; }

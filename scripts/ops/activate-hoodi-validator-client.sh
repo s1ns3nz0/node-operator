@@ -70,7 +70,8 @@ jq -e --arg key "$public_key" --arg set "$validator_set" --argjson now "$now_epo
   (.schema_version == 1 and .event_type == "signer-public-key" and .network == "hoodi" and
    .validator_set == $set and
    .validator_public_key == $key and
-   .source == "web3signer-tls" and
+   (.source == "web3signer-tls" or
+    (.source == "vault-injected-mtls-get-only-probe" and .vault_agent_init_succeeded == true)) and
    .tls_verified == true and .public_key_count == 1 and .public_key_match == true and
    ($observed <= ($now + 30)) and (($now - $observed) <= 300))
 ' "$signer_evidence" >/dev/null || { printf '%s\n' 'fresh TLS-verified signer identity evidence is missing or mismatched' >&2; exit 65; }
