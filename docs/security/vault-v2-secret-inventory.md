@@ -77,6 +77,14 @@ the live workload templates. This migration cannot also upgrade those images;
 an image replacement requires a separate reviewed deployment. The Prysm client
 must additionally remain an exact stage-approved artifact in the repository.
 
+For existing workloads, client-side canonical validation precedes a narrowly
+derived apply payload: the live signing Lease and slashing DB claim templates
+are omitted to preserve their current ownership and state. Desired/live claim
+configuration must match and retention must be `Retain`. Only the remaining
+canonical fields transfer server-side ownership. Server dry-run must pass, and
+the bound slashing PVC UID and backing volume must remain unchanged after apply
+before the signer can start. No StatefulSet/PVC delete-and-recreate is used.
+
 Remaining live acceptance requirements:
 
 - Complete the user-controlled recovery ceremony and confirm root revocation.

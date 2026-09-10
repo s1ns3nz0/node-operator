@@ -29,13 +29,30 @@ if grep -Eq 'secretName:[[:space:]]*(validator-.*-(signer|client)-tls)|name:[[:s
 grep -Fq "node-operator-runtime/data/validators/hoodi/${validator_set}/runtime/signer-tls" "$runtime" || { printf '%s\n' 'runtime manifest lacks isolated Vault signer TLS injection' >&2; exit 65; }
 grep -Fq "node-operator-runtime/data/validators/hoodi/${validator_set}/runtime/client-tls" "$client" || { printf '%s\n' 'client manifest lacks isolated Vault client TLS injection' >&2; exit 65; }
 "$dir/assert-hoodi-validator-quiesced.sh" --validator-set "$validator_set" >/dev/null
-rendered="$(kubectl apply --server-side --field-manager=node-operator-vault-cutover --dry-run=server -f "$runtime" -f "$client" -o json)"
+scratch="$(mktemp -d "${TMPDIR:-/tmp}/node-operator-validator-cutover.XXXXXX")"
+cleanup() { local rc=$?; trap - EXIT; find "$scratch" -type f -exec unlink {} \;; rmdir "$scratch"; exit "$rc"; }
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+kubectl create --dry-run=client --validate=false -f "$runtime" -f "$client" -o json > "$scratch/canonical.json"
+rendered="$(cat "$scratch/canonical.json")"
 jq -ne --arg set "$validator_set" --slurpfile documents /dev/stdin \
   -f "$dir/lib/validator-cutover-manifests.jq" <<<"$rendered" >/dev/null || {
   printf '%s\n' 'cutover manifests must contain only expected resources with signer/client at zero' >&2; exit 65;
 }
+kubectl -n validator-operations get statefulset "validator-$validator_set-slashing-db" -o json |
+  jq '{spec:{volumeClaimTemplates:.spec.volumeClaimTemplates,persistentVolumeClaimRetentionPolicy:.spec.persistentVolumeClaimRetentionPolicy}}' > "$scratch/database.json"
+jq -ne --arg set "$validator_set" --slurpfile documents "$scratch/canonical.json" --slurpfile database "$scratch/database.json" \
+  -f "$dir/lib/preserve-validator-cutover-state.jq" > "$scratch/apply.json"
+pvc="data-validator-$validator_set-slashing-db-0"
+claim_before="$(kubectl -n validator-operations get pvc "$pvc" -o json | jq -ce 'select(.status.phase == "Bound") | {uid:.metadata.uid,volumeName:.spec.volumeName}')"
+# Only canonical workload fields transfer ownership. Existing Lease and claim
+# templates are absent from this payload and must retain their original owners.
+kubectl apply --server-side --force-conflicts --field-manager=node-operator-vault-cutover --dry-run=server -f "$scratch/apply.json" >/dev/null
 "$dir/assert-hoodi-validator-quiesced.sh" --validator-set "$validator_set" >/dev/null
-kubectl apply --server-side --field-manager=node-operator-vault-cutover -f "$runtime" -f "$client" >/dev/null
+kubectl apply --server-side --force-conflicts --field-manager=node-operator-vault-cutover -f "$scratch/apply.json" >/dev/null
+claim_after="$(kubectl -n validator-operations get pvc "$pvc" -o json | jq -ce 'select(.status.phase == "Bound") | {uid:.metadata.uid,volumeName:.spec.volumeName}')"
+[ "$claim_before" = "$claim_after" ] || { printf '%s\n' 'slashing DB PVC identity changed; refusing to start signer' >&2; exit 70; }
 "$dir/assert-hoodi-validator-quiesced.sh" --validator-set "$validator_set" >/dev/null
 
 namespace='validator-operations'; signer="validator-${validator_set}-remote-signer"; fence_deployment="validator-${validator_set}-signing-fence"; client_stateful="validator-${validator_set}-client"

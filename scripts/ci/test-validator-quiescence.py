@@ -11,6 +11,38 @@ SCRIPT = Path(__file__).resolve().parents[1] / "ops/assert-hoodi-validator-quies
 
 
 class Quiescence(unittest.TestCase):
+    def test_cutover_preserves_claim_ownership_and_lease(self):
+        claim = {"metadata": {"name": "data"}, "spec": {"accessModes": ["ReadWriteOnce"],
+                 "storageClassName": "validator-hoodi-gp3-kms", "resources": {"requests": {"storage": "50Gi"}}}}
+        db = {"kind": "StatefulSet", "metadata": {"name": "validator-hoodi-001-slashing-db"},
+              "spec": {"replicas": 1, "volumeClaimTemplates": [claim],
+                       "persistentVolumeClaimRetentionPolicy": {"whenDeleted": "Retain", "whenScaled": "Retain"}}}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            documents = root / "documents.json"
+            database = root / "database.json"
+            documents.write_text(json.dumps({"kind": "List", "items": [db, {"kind": "Lease"}]}))
+
+            def run(live):
+                database.write_text(json.dumps(live))
+                return subprocess.run(["jq", "-ne", "--arg", "set", "hoodi-001", "--slurpfile",
+                                       "documents", str(documents), "--slurpfile", "database", str(database),
+                                       "-f", str(SCRIPT.parent / "lib/preserve-validator-cutover-state.jq")],
+                                      capture_output=True, text=True)
+
+            db["spec"]["volumeClaimTemplates"][0]["spec"]["volumeMode"] = "Filesystem"
+            result = run(db)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            items = json.loads(result.stdout)["items"]
+            self.assertEqual(len(items), 1)
+            self.assertNotIn("volumeClaimTemplates", items[0]["spec"])
+            self.assertEqual(items[0]["spec"]["replicas"], 1)
+            db["spec"]["volumeClaimTemplates"][0]["spec"]["resources"]["requests"]["storage"] = "100Gi"
+            self.assertNotEqual(run(db).returncode, 0)
+            db["spec"]["volumeClaimTemplates"][0]["spec"]["resources"]["requests"]["storage"] = "50Gi"
+            db["spec"]["persistentVolumeClaimRetentionPolicy"]["whenDeleted"] = "Delete"
+            self.assertNotEqual(run(db).returncode, 0)
+
     def test_manifest_allowlist_and_replica_gate(self):
         entries = [
             ("Service", "slashing-db"), ("StatefulSet", "slashing-db"),
