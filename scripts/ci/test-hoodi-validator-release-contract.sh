@@ -5,7 +5,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 script="$root/scripts/release/hoodi-validator-release.sh"
 scratch="$(mktemp -d /private/tmp/node-operator-validator-release.XXXXXX)"
 bundle="$scratch/bundle"; inputs="$scratch/inputs"; trace="$scratch/trace"
-mkdir -p "$bundle/source/scripts/release" "$inputs/zero-resource" "$inputs/validator-deployment"
+mkdir -p "$bundle/source/scripts/release" "$bundle/source/scripts/ops" "$inputs/zero-resource" "$inputs/validator-deployment"
 printf '{}' > "$bundle/bundle-manifest.json"
 cat > "$bundle/source/scripts/release/node-operator-release.sh" <<'SCRIPT'
 #!/usr/bin/env bash
@@ -43,6 +43,13 @@ done
 if [ "$operation" = plan ]; then : > "$plan_file"; fi
 if [ "$operation" = apply ]; then jq -n '{schema_version:1,aws_region:"ap-northeast-2",cluster_name:"hoodi-release-001",ssm_ops_instance_id:"i-0123456789abcdef0"}' > "$session_handoff"; fi
 SCRIPT
+for command in with-private-eks.sh start-hoodi-validator-signer.sh activate-hoodi-validator-client.sh; do
+  cat > "$bundle/source/scripts/ops/$command" <<'SCRIPT'
+#!/usr/bin/env bash
+printf 'activation %s\n' "$*" >> "$TRACE"
+SCRIPT
+  chmod 700 "$bundle/source/scripts/ops/$command"
+done
 chmod 700 "$bundle/source/scripts/release/node-operator-release.sh" "$bundle/source/scripts/release/stage-hoodi-validator-deployment.sh" "$bundle/source/scripts/release/prepare-ops-access-inputs.sh" "$bundle/source/scripts/release/node-operator-ops-access.sh"
 jq -n --arg zero "$inputs/zero-resource/zero-resource-inputs.json" --arg validator "$inputs/validator-deployment/validator-deployment-handoff.json" '{schema_version:1,network:"hoodi",aws_account_id:"106760547719",aws_region:"ap-northeast-2",validator_set:"hoodi-release-001",zero_resource_inputs:$zero,validator_deployment_handoff:$validator,required_checkpoints:[1,2,3,4,5,6]}' > "$inputs/hoodi-zero-release-inputs.json"
 jq -n '{schema_version:1,aws_account_id:"106760547719",aws_region:"ap-northeast-2"}' > "$inputs/zero-resource/zero-resource-inputs.json"
@@ -79,6 +86,10 @@ rg -F "ops-access plan --root $bundle/source --inputs $deploy_work/ops-access-in
 rg -F "ops-access apply --root $bundle/source --inputs $deploy_work/ops-access-inputs/ops-access-inputs.json --plan-file $deploy_work/ops-access.tfplan" "$trace" >/dev/null
 rg -F "stage apply --handoff $inputs/validator-deployment/validator-deployment-handoff.json --private-eks-session-handoff $deploy_session" "$trace" >/dev/null
 jq -e '.ssm_ops_instance_id == "i-0123456789abcdef0"' "$deploy_session" >/dev/null
+for evidence in deposit-attestation public-deposit private-evidence signer-evidence; do printf '{}' > "$scratch/$evidence.json"; done
+TRACE="$trace" "$script" activate apply --bundle-root "$bundle" --inputs "$inputs/hoodi-zero-release-inputs.json" --private-eks-session-handoff "$deploy_session" --deposit-attestation "$scratch/deposit-attestation.json" --public-deposit-verification "$scratch/public-deposit.json" --private-evidence "$scratch/private-evidence.json" --signer-evidence "$scratch/signer-evidence.json" --confirm-public-key 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --confirm-withdrawal-address 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa >/dev/null
+rg -F "activation -- env PRIVATE_EKS_SESSION=1 AWS_REGION=ap-northeast-2 EKS_CLUSTER_NAME=hoodi-release-001 SSM_OPS_INSTANCE_ID=i-0123456789abcdef0 $bundle/source/scripts/ops/start-hoodi-validator-signer.sh --validator-set hoodi-release-001" "$trace" >/dev/null
+rg -F "$bundle/source/scripts/ops/activate-hoodi-validator-client.sh --validator-set hoodi-release-001" "$trace" >/dev/null
 before_apply_count="$(rg -c '^ops-access apply ' "$trace")"
 TRACE="$trace" "$script" deploy apply --bundle-root "$bundle" --inputs "$inputs/hoodi-zero-release-inputs.json" --work-dir "$deploy_work" --private-eks-session-handoff "$deploy_session" --allow-create >/dev/null
 [ "$(rg -c '^ops-access apply ' "$trace")" = "$before_apply_count" ] || { printf '%s\n' 'deploy resume unexpectedly re-applied ops access' >&2; exit 1; }
