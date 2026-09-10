@@ -47,5 +47,6 @@ vault read -format=json node-operator-runtime/data/nodes/hoodi/engine-api-jwt |
 "$dir/bootstrap-hoodi-validator-runtime-vault.sh" --validator-set "$validator_set" >/dev/null
 kubectl -n validator-operations create configmap "validator-$validator_set-known-clients" \
   --from-file="known-clients=$scratch/public/known-clients.txt" --dry-run=client -o json |
-  kubectl -n validator-operations apply --server-side --field-manager=node-operator-vault-cutover -f - >/dev/null
+  jq '{data:{"known-clients":.data["known-clients"]}}' |
+  kubectl -n validator-operations patch configmap "validator-$validator_set-known-clients" --type merge --patch-file /dev/stdin >/dev/null
 printf '%s\n' 'PASS: Vault v2 workload roles installed while validator client/fence were quiesced. Workload cutover and duty verification remain required.'

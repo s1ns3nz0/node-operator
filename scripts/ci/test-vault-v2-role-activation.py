@@ -37,7 +37,7 @@ class Activation(unittest.TestCase):
             vault.write_text('#!/bin/bash\necho \'{"data":{"data":{"jwt":"' + 'a' * 64 + '"}}}\'\n')
             vault.chmod(0o700)
             kubectl = root / "kubectl"
-            kubectl.write_text('#!/bin/bash\ncase "$*" in *"create configmap"*) echo \'{"kind":"ConfigMap"}\';; *) cat >/dev/null;; esac\n')
+            kubectl.write_text('#!/bin/bash\ncase "$*" in *"create configmap"*) echo \'{"kind":"ConfigMap","data":{"known-clients":"public-fingerprint"}}\';; *"patch configmap"*) jq -e \' .data["known-clients"] == "public-fingerprint"\' >/dev/null;; *) exit 64;; esac\n')
             kubectl.chmod(0o700)
             result = subprocess.run(["bash", str(script), "--validator-set", "hoodi-001",
                                      "--preparation-evidence", str(proof)], capture_output=True,
