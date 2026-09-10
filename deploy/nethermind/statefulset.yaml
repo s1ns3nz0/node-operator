@@ -34,6 +34,7 @@ spec:
         node-operator.io/vault-client: "true"
       annotations:
         vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-image: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault@sha256:268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10
         vault.hashicorp.com/agent-pre-populate-only: "true"
         vault.hashicorp.com/agent-service-account-token-volume-name: vault-auth
         vault.hashicorp.com/tls-secret: vault-agent-ca
