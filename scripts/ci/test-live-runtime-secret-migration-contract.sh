@@ -14,9 +14,12 @@ for required in \
   'put_or_match "$engine_path" "$engine_record" engine' \
   'put_or_match "$base/signer-tls" "$signer_record" signer' \
   'put_or_match "$base/client-tls" "$client_record" client' \
-  'vault kv put -cas=0 "$path"' \
+  'vault read -format=json kv/config' \
+  'vault read -format=json "$api_path"' \
+  'vault write "$api_path" @"$payload"' \
+  'kv_v2_path' \
+  'put_v2_record' \
   'try fromjson catch null' \
-  'vault kv put -cas="$existing_version" "$path"' \
   'vault kv enable-versioning kv/' \
   'Vault kv/ v1 compatibility policies require review before conversion' \
   'Vault kv/ must be version 2 for runtime credential injection' \
@@ -29,7 +32,7 @@ for required in \
   'vault token revoke -self'; do
   grep -Fq "$required" "$script" || fail "missing required migration boundary: $required"
 done
-if grep -Eq 'openssl rand|kubectl.*delete secret|create secret generic|generate-root -decode' "$script"; then
+if grep -Eq 'openssl rand|kubectl.*delete secret|create secret generic|generate-root -decode|vault kv get|vault kv put' "$script"; then
   fail 'migration must neither generate nor delete/reprint source secret material'
 fi
 v2_record='{"data":{"data":{"jwt":"fixture"},"metadata":{"version":1}}}'

@@ -134,11 +134,38 @@ if [ "$kv_version" = 1 ]; then
   kv_v1_upgraded=true
 fi
 [ "$kv_version" = 2 ] || { printf '%s\n' 'Vault kv/ must be version 2 for runtime credential injection' >&2; exit 65; }
+# The Vault KV convenience read/write wrapper infers a mount version from
+# metadata. Do not use it for the import: a partially upgraded legacy mount
+# can make that inference disagree with the actual response envelope.
+# The v2 configuration endpoint and explicit `/data/` paths are authoritative.
+kv_v2_config="$(VAULT_TOKEN="$root_token" vault read -format=json kv/config 2>/dev/null)" || {
+  printf '%s\n' 'Vault kv/ does not accept the KV v2 configuration API after versioning' >&2
+  exit 70
+}
+jq -e '.data.max_versions | tonumber? | select(. >= 1)' <<<"$kv_v2_config" >/dev/null || {
+  printf '%s\n' 'Vault kv/ KV v2 configuration response is invalid' >&2
+  exit 70
+}
 
 repaired_records=()
+kv_v2_path() {
+  case "$1" in
+    kv/*) printf 'kv/data/%s' "${1#kv/}" ;;
+    *) printf '%s\n' 'invalid KV source path' >&2; exit 65 ;;
+  esac
+}
+put_v2_record() {
+  local path="$1" incoming="$2" expected_version="$3" record="$4" api_path payload
+  api_path="$(kv_v2_path "$path")"
+  payload="$scratch/$record-write.json"
+  jq -n --argjson data "$incoming" --argjson version "$expected_version" '{options:{cas:$version},data:$data}' > "$payload"
+  VAULT_TOKEN="$root_token" vault write "$api_path" @"$payload" >/dev/null
+  : > "$payload"
+}
 put_or_match() {
-  local path="$1" incoming="$2" record="$3" existing existing_data existing_version decoded
-  if existing="$(VAULT_TOKEN="$root_token" vault kv get -format=json "$path" 2>/dev/null)"; then
+  local path="$1" incoming="$2" record="$3" api_path existing existing_data existing_version decoded
+  api_path="$(kv_v2_path "$path")"
+  if existing="$(VAULT_TOKEN="$root_token" vault read -format=json "$api_path" 2>/dev/null)"; then
     existing_data="$(jq -cer '.data.data' <<<"$existing")"
     existing_version="$(jq -er '.data.metadata.version | select(type == "number" and . >= 1 and floor == .)' <<<"$existing")"
     if [ "$(jq -r 'type' <<<"$existing_data")" = object ]; then
@@ -149,13 +176,11 @@ put_or_match() {
       # same source record; divergent values remain fail-closed.
       decoded="$(jq -cer 'if type == "string" then (try fromjson catch null) else null end' <<<"$existing_data")"
       [ "$(jq -cS . <<<"$decoded")" = "$(jq -cS . <<<"$incoming")" ] || { printf 'Vault record differs: %s\n' "$record" >&2; exit 65; }
-      printf '%s' "$incoming" > "$scratch/$record.json"
-      VAULT_TOKEN="$root_token" vault kv put -cas="$existing_version" "$path" @"$scratch/$record.json" >/dev/null
+      put_v2_record "$path" "$incoming" "$existing_version" "$record"
       repaired_records+=("$record")
     fi
   else
-    printf '%s' "$incoming" > "$scratch/$record.json"
-    VAULT_TOKEN="$root_token" vault kv put -cas=0 "$path" @"$scratch/$record.json" >/dev/null
+    put_v2_record "$path" "$incoming" 0 "$record"
   fi
 }
 
