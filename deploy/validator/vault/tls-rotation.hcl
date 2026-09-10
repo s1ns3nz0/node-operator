@@ -7,6 +7,12 @@ path "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/signer-tls" {
 path "kv/metadata/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/signer-tls" {
   capabilities = ["read"]
 }
+path "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/client-tls" {
+  capabilities = ["update"]
+}
+path "kv/metadata/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/client-tls" {
+  capabilities = ["read"]
+}
 path "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/keystore" { capabilities = ["deny"] }
 path "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/password" { capabilities = ["deny"] }
 path "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/slashing-db-password" { capabilities = ["deny"] }

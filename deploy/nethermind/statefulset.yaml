@@ -31,6 +31,18 @@ spec:
         app.kubernetes.io/part-of: hoodi-node
         app.kubernetes.io/version: 1.39.3-chiseled
         node-operator.io/network: hoodi
+        node-operator.io/vault-client: "true"
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/agent-service-account-token-volume-name: vault-auth
+        vault.hashicorp.com/tls-secret: vault-agent-ca
+        vault.hashicorp.com/ca-cert: /vault/tls/ca.crt
+        vault.hashicorp.com/tls-server-name: vault.vault.svc
+        vault.hashicorp.com/role: hoodi-engine-nethermind
+        vault.hashicorp.com/agent-inject-secret-engine.jwt: kv/data/nodes/hoodi/engine-api-jwt
+        vault.hashicorp.com/agent-inject-template-engine.jwt: |
+          {{- with secret "kv/data/nodes/hoodi/engine-api-jwt" -}}{{ .Data.data.jwt }}{{- end }}
     spec:
       serviceAccountName: nethermind-execution
       automountServiceAccountToken: false
@@ -72,10 +84,16 @@ spec:
             - --Network.P2PPort=30303
             - --Network.DiscoveryPort=30303
             - --JsonRpc.Enabled=false
+            - --JsonRpc.EngineHost=0.0.0.0
+            - --JsonRpc.EnginePort=8551
+            - --JsonRpc.JwtSecretFile=/vault/secrets/engine.jwt
           env:
             - name: TMPDIR
               value: /tmp
           ports:
+            - name: engine-api
+              containerPort: 8551
+              protocol: TCP
             - name: p2p-tcp
               containerPort: 30303
               protocol: TCP
@@ -116,11 +134,21 @@ spec:
               cpu: "16"
               memory: 48Gi
           volumeMounts:
+            - name: vault-auth
+              mountPath: /var/run/secrets/vault.hashicorp.com/serviceaccount
+              readOnly: true
             - name: nethermind-data
               mountPath: /data
             - name: tmp
               mountPath: /tmp
       volumes:
+        - name: vault-auth
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: vault
+                  expirationSeconds: 600
+                  path: token
         - name: tmp
           emptyDir:
             medium: Memory

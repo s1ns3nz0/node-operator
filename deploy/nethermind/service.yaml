@@ -23,3 +23,7 @@ spec:
       port: 30303
       protocol: UDP
       targetPort: p2p-udp
+    - name: engine-api
+      port: 8551
+      protocol: TCP
+      targetPort: engine-api

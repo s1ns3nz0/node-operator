@@ -2,11 +2,11 @@
 set -euo pipefail
 # Recovery-key, one-time custody ceremony. No secret is printed or retained.
 dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-usage(){ printf 'Usage: %s --validator-set <hoodi-id> --keystore-dir <absolute-dir> --signer-ca-output <absolute-pem>\n' "${0##*/}" >&2; exit 64; }
-set_id=''; key_dir=''; ca_out=''
-while [ "$#" -gt 0 ]; do case "$1" in --validator-set) set_id="${2:-}"; shift 2;; --keystore-dir) key_dir="${2:-}"; shift 2;; --signer-ca-output) ca_out="${2:-}"; shift 2;; *) usage;; esac; done
-case "$set_id" in hoodi-[a-z0-9][a-z0-9-]*) ;; *) usage;; esac; case "$key_dir:$ca_out" in /*:/*) ;; *) usage;; esac
-if [ "${PRIVATE_VAULT_SESSION:-}" != 1 ]; then exec "$dir/with-private-vault.sh" -- env PRIVATE_VAULT_SESSION=1 "$0" --validator-set "$set_id" --keystore-dir "$key_dir" --signer-ca-output "$ca_out"; fi
+usage(){ printf 'Usage: %s --validator-set <hoodi-id> --keystore-dir <absolute-dir> --signer-ca-output <absolute-pem> --known-clients-output <absolute-file>\n' "${0##*/}" >&2; exit 64; }
+set_id=''; key_dir=''; ca_out=''; known_out=''
+while [ "$#" -gt 0 ]; do case "$1" in --validator-set) set_id="${2:-}"; shift 2;; --keystore-dir) key_dir="${2:-}"; shift 2;; --signer-ca-output) ca_out="${2:-}"; shift 2;; --known-clients-output) known_out="${2:-}"; shift 2;; *) usage;; esac; done
+case "$set_id" in hoodi-[a-z0-9][a-z0-9-]*) ;; *) usage;; esac; case "$key_dir:$ca_out:$known_out" in /*:/*:/*) ;; *) usage;; esac
+if [ "${PRIVATE_VAULT_SESSION:-}" != 1 ]; then exec "$dir/with-private-vault.sh" -- env PRIVATE_VAULT_SESSION=1 "$0" --validator-set "$set_id" --keystore-dir "$key_dir" --signer-ca-output "$ca_out" --known-clients-output "$known_out"; fi
 for x in vault jq openssl base64 find; do command -v "$x" >/dev/null || { printf 'missing command: %s\n' "$x" >&2; exit 69; }; done
 keys=(); while IFS= read -r key; do keys+=("$key"); done < <(find "$key_dir" -maxdepth 1 -type f -name 'keystore-*.json' -print); [ "${#keys[@]}" = 1 ] || { printf 'expected exactly one keystore JSON\n' >&2; exit 64; }
 tmp="$(mktemp -d /private/tmp/node-operator-hoodi-onboard.XXXXXX)"; chmod 700 "$tmp"
@@ -24,15 +24,24 @@ root="$(vault operator generate-root -decode="$encoded" -otp="$otp")"; unset enc
 child="$(VAULT_TOKEN="$root" vault token create -orphan -no-default-policy -policy="hoodi-$set_id-onboarding" -ttl=10m -field=token)"
 printf 'Keystore password: ' >&2; IFS= read -r -s key_password; printf '\n' >&2
 [ -n "$key_password" ] || { printf 'empty keystore password is not allowed\n' >&2; exit 64; }
-tls_password="$(openssl rand -base64 48 | tr -d '\n')"
-openssl req -x509 -newkey rsa:3072 -nodes -days 30 -subj "/CN=validator-$set_id-remote-signer" -keyout "$tmp/tls.key" -out "$tmp/ca.crt" >/dev/null 2>&1
-openssl pkcs12 -export -out "$tmp/tls.p12" -inkey "$tmp/tls.key" -in "$tmp/ca.crt" -passout "pass:$tls_password" >/dev/null 2>&1
+tls_password="$(openssl rand -base64 48 | tr -d '\n')"; service="validator-$set_id-remote-signer"
+openssl req -x509 -newkey rsa:3072 -nodes -days 30 -subj "/CN=$set_id-transport-ca" -addext 'basicConstraints=critical,CA:TRUE' -keyout "$tmp/ca.key" -out "$tmp/ca.crt" >/dev/null 2>&1
+openssl req -newkey rsa:3072 -nodes -subj "/CN=$service" -keyout "$tmp/tls.key" -out "$tmp/server.csr" >/dev/null 2>&1
+printf 'subjectAltName=DNS:%s,DNS:%s.validator-operations.svc\nextendedKeyUsage=serverAuth\n' "$service" "$service" > "$tmp/server.ext"
+openssl x509 -req -in "$tmp/server.csr" -CA "$tmp/ca.crt" -CAkey "$tmp/ca.key" -CAcreateserial -days 30 -extfile "$tmp/server.ext" -out "$tmp/server.crt" >/dev/null 2>&1
+openssl req -newkey rsa:3072 -nodes -subj "/CN=validator-$set_id-client" -keyout "$tmp/client.key" -out "$tmp/client.csr" >/dev/null 2>&1
+printf 'extendedKeyUsage=clientAuth\n' > "$tmp/client.ext"
+openssl x509 -req -in "$tmp/client.csr" -CA "$tmp/ca.crt" -CAkey "$tmp/ca.key" -CAcreateserial -days 30 -extfile "$tmp/client.ext" -out "$tmp/client.crt" >/dev/null 2>&1
+openssl pkcs12 -export -out "$tmp/tls.p12" -inkey "$tmp/tls.key" -in "$tmp/server.crt" -certfile "$tmp/ca.crt" -passout "pass:$tls_password" >/dev/null 2>&1
 base="kv/validators/hoodi/$set_id/runtime"
 VAULT_TOKEN="$child" vault kv put -cas=0 "$base/keystore" keystore=- < "${keys[0]}" >/dev/null
 printf %s "$key_password" | VAULT_TOKEN="$child" vault kv put -cas=0 "$base/password" password=- >/dev/null
 openssl rand -base64 48 | tr -d '\n' | VAULT_TOKEN="$child" vault kv put -cas=0 "$base/slashing-db-password" password=- >/dev/null
 { printf '{"pkcs12_b64":"'; base64 < "$tmp/tls.p12" | tr -d '\n'; printf '","password":"%s"}\n' "$tls_password"; } > "$tmp/tls.json"
 VAULT_TOKEN="$child" vault kv put -cas=0 "$base/signer-tls" @"$tmp/tls.json" >/dev/null
-install -d -m 700 "$(dirname "$ca_out")"; install -m 644 "$tmp/ca.crt" "$ca_out"
+{ printf '{"tls_crt_b64":"'; base64 < "$tmp/client.crt" | tr -d '\n'; printf '","tls_key_b64":"'; base64 < "$tmp/client.key" | tr -d '\n'; printf '","ca_crt_b64":"'; base64 < "$tmp/ca.crt" | tr -d '\n'; printf '"}\n'; } > "$tmp/client-tls.json"
+VAULT_TOKEN="$child" vault kv put -cas=0 "$base/client-tls" @"$tmp/client-tls.json" >/dev/null
+fingerprint="$(openssl x509 -in "$tmp/client.crt" -noout -fingerprint -sha256)"; fingerprint="${fingerprint#*=}"
+install -d -m 700 "$(dirname "$ca_out")" "$(dirname "$known_out")"; install -m 644 "$tmp/ca.crt" "$ca_out"; printf 'validator-%s-client %s\n' "$set_id" "$fingerprint" > "$known_out"; chmod 644 "$known_out"
 unset key_password tls_password
 printf 'PASS: Hoodi custody records and signer TLS were created for %s; public CA saved to %s.\n' "$set_id" "$ca_out"

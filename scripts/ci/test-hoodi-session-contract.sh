@@ -14,8 +14,8 @@ bash -n "$script"
 for required in \
   'Usage: %s {status|start|stop} [--yes]' \
   'requires --yes because it changes runtime capacity' \
-  'engine-api-jwt object is absent' \
-  'jsonpath='"'"'{.metadata.name}'"'"'' \
+  'Vault Engine API JWT injection is absent' \
+  'vault\.hashicorp\.com/agent-inject-secret-engine\.jwt' \
   'desiredSize=1' \
   'desiredSize=0' \
   'wait --for=condition=Ready pod -l app.kubernetes.io/name=nethermind' \
