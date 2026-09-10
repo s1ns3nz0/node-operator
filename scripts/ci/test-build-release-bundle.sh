@@ -69,6 +69,7 @@ for required_path in \
   source/scripts/ops/preflight-live-vault-cutover.sh \
   source/scripts/ops/apply-live-engine-vault-cutover.sh \
   source/scripts/ops/apply-live-validator-vault-cutover.sh \
+  source/scripts/ops/prune-legacy-validator-tls-mounts.sh \
   source/scripts/ops/finalize-live-vault-secret-cutover.sh \
   source/scripts/ops/verify-live-vault-cutover-convergence.sh \
   source/scripts/ops/collect-hoodi-signer-public-key-evidence.sh \

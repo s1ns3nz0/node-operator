@@ -58,6 +58,7 @@ kubectl apply --server-side --field-manager=node-operator-vault-cutover-egress -
 kubectl apply --server-side --force-conflicts --field-manager=node-operator-vault-cutover -f "$scratch/apply.json" >/dev/null
 claim_after="$(kubectl -n validator-operations get pvc "$pvc" -o json | jq -ce 'select(.status.phase == "Bound") | {uid:.metadata.uid,volumeName:.spec.volumeName}')"
 [ "$claim_before" = "$claim_after" ] || { printf '%s\n' 'slashing DB PVC identity changed; refusing to start signer' >&2; exit 70; }
+"$dir/prune-legacy-validator-tls-mounts.sh" --validator-set "$validator_set" --execute
 "$dir/assert-hoodi-validator-quiesced.sh" --validator-set "$validator_set" >/dev/null
 
 namespace='validator-operations'; signer="validator-${validator_set}-remote-signer"; client_stateful="validator-${validator_set}-client"
