@@ -91,10 +91,24 @@ done
 root_token="$(vault_recovery_decode_generated_root "$encoded" "$otp")"
 unset encoded otp nonce initial reply status
 
+repaired_records=()
 put_or_match() {
-  local path="$1" expected="$2" incoming="$3" record="$4" existing
+  local path="$1" incoming="$2" record="$3" existing existing_data existing_version decoded
   if existing="$(VAULT_TOKEN="$root_token" vault kv get -format=json "$path" 2>/dev/null)"; then
-    [ "$(jq -cer "$expected" <<<"$existing")" = "$(jq -cer "$expected" <<<"$incoming")" ] || { printf 'Vault record differs: %s\n' "$record" >&2; exit 65; }
+    existing_data="$(jq -cer '.data.data' <<<"$existing")"
+    existing_version="$(jq -er '.data.metadata.version | select(type == "number" and . >= 1 and floor == .)' <<<"$existing")"
+    if [ "$(jq -r 'type' <<<"$existing_data")" = object ]; then
+      [ "$(jq -cS . <<<"$existing_data")" = "$(jq -cS . <<<"$incoming")" ] || { printf 'Vault record differs: %s\n' "$record" >&2; exit 65; }
+    else
+      # A prior partial migration stored the JSON document as a KV string.
+      # Repair only when parsing that string proves it is semantically the
+      # same source record; divergent values remain fail-closed.
+      decoded="$(jq -cer 'if type == "string" then (try fromjson catch null) else null end' <<<"$existing_data")"
+      [ "$(jq -cS . <<<"$decoded")" = "$(jq -cS . <<<"$incoming")" ] || { printf 'Vault record differs: %s\n' "$record" >&2; exit 65; }
+      printf '%s' "$incoming" > "$scratch/$record.json"
+      VAULT_TOKEN="$root_token" vault kv put -cas="$existing_version" "$path" @"$scratch/$record.json" >/dev/null
+      repaired_records+=("$record")
+    fi
   else
     printf '%s' "$incoming" > "$scratch/$record.json"
     VAULT_TOKEN="$root_token" vault kv put -cas=0 "$path" @"$scratch/$record.json" >/dev/null
@@ -104,9 +118,9 @@ put_or_match() {
 engine_record="$(jq -cn --arg jwt "$jwt" '{jwt:$jwt}')"
 signer_record="$(jq -cn --arg pkcs12_b64 "$signer_p12_b64" --arg password "$signer_password" '{pkcs12_b64:$pkcs12_b64,password:$password}')"
 client_record="$(jq -cn --arg tls_crt_b64 "$client_crt_b64" --arg tls_key_b64 "$client_key_b64" --arg ca_crt_b64 "$client_ca_b64" '{tls_crt_b64:$tls_crt_b64,tls_key_b64:$tls_key_b64,ca_crt_b64:$ca_crt_b64}')"
-put_or_match "$engine_path" '.data.data | {jwt}' "$engine_record" engine
-put_or_match "$base/signer-tls" '.data.data | {pkcs12_b64,password}' "$signer_record" signer
-put_or_match "$base/client-tls" '.data.data | {tls_crt_b64,tls_key_b64,ca_crt_b64}' "$client_record" client
+put_or_match "$engine_path" "$engine_record" engine
+put_or_match "$base/signer-tls" "$signer_record" signer
+put_or_match "$base/client-tls" "$client_record" client
 
 # Configure roles only after all records are present, so a newly admitted Pod
 # can never observe a missing credential.
@@ -117,8 +131,8 @@ mkdir -p "$(dirname "$evidence")"
 engine_sha="$(printf '%s' "$jwt" | shasum -a 256 | awk '{print $1}')"
 signer_sha="$(printf '%s' "$signer_p12_b64" | shasum -a 256 | awk '{print $1}')"
 client_sha="$(printf '%s' "$client_crt_b64" | shasum -a 256 | awk '{print $1}')"
-jq -n --arg set "$validator_set" --arg engine "$engine_sha" --arg signer "$signer_sha" --arg client "$client_sha" --arg fingerprint "$client_fingerprint" \
-  '{schema_version:1,operation:"live-runtime-secret-migration",validator_set:$set,engine_jwt_sha256:$engine,signer_pkcs12_b64_sha256:$signer,client_certificate_b64_sha256:$client,client_fingerprint_sha256:$fingerprint,secret_values_emitted:false,source_secrets_retained:true}' > "$evidence"
+jq -n --arg set "$validator_set" --arg engine "$engine_sha" --arg signer "$signer_sha" --arg client "$client_sha" --arg fingerprint "$client_fingerprint" --args "${repaired_records[@]}" \
+  '{schema_version:1,operation:"live-runtime-secret-migration",validator_set:$set,engine_jwt_sha256:$engine,signer_pkcs12_b64_sha256:$signer,client_certificate_b64_sha256:$client,client_fingerprint_sha256:$fingerprint,repaired_legacy_vault_records:$ARGS.positional,secret_values_emitted:false,source_secrets_retained:true}' > "$evidence"
 chmod 600 "$evidence"
 unset jwt signer_p12_b64 signer_password client_crt_b64 client_key_b64 client_ca_b64 engine_record signer_record client_record known_clients
 printf 'PASS: existing Engine JWT and validator transport records now match Vault; Kubernetes source Secrets remain for staged cutover. Evidence: %s\n' "$evidence"
