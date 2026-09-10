@@ -36,6 +36,24 @@ digests. The generated signer uses Vault Agent files, `POSTGRES_PASSWORD_FILE`,
 a retained PVC, and Web3Signer TLS PKCS#12 files. It never takes a password or
 keystore through a manifest, command line, environment value, or Git.
 
+For a fresh set, `prepare-hoodi-validator-deployment.sh` performs both safe
+renders in one command and writes a mode-0700 controlled directory containing
+the two zero-replica manifests and a non-secret handoff. It does not apply a
+manifest, contact Vault, accept custody input, or scale the validator:
+
+```sh
+scripts/release/prepare-hoodi-validator-deployment.sh \
+  --validator-set hoodi-001 \
+  --validator-public-key 0x... \
+  --withdrawal-address 0x... \
+  --web3signer-image 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/...@sha256:... \
+  --postgres-image 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/...@sha256:... \
+  --prysm-validator-image 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/...@sha256:... \
+  --signing-fence-image 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-fence@sha256:... \
+  --kubernetes-api-cidr <operator-ip>/32 \
+  --output-dir /controlled-state/hoodi-001-prepared
+```
+
 ## UC-3 — deposit and activation observation
 
 Record UC-3 evidence after the transaction is visible through the locally
