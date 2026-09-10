@@ -87,5 +87,10 @@ if PATH="$scratch/bin:$PATH" MOCK_TRACE="$scratch/trace" bash "$entrypoint" dest
   printf 'mixed direct and generated ops inputs unexpectedly passed\n' >&2
   exit 1
 fi
+if PATH="$scratch/bin:$PATH" MOCK_TRACE="$scratch/trace" bash "$entrypoint" destroy --root "$root" \
+  --inputs "$scratch/ops-access-inputs.json" --plan-file "$scratch/private/unused-plan" --session-handoff "$scratch/session.json" >/dev/null 2>&1; then
+  printf 'session handoff outside generated apply unexpectedly passed\n' >&2
+  exit 1
+fi
 
 printf 'PASS ops-access Terraform backend and provider credentials are separately verified and fail closed.\n'

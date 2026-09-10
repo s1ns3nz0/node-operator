@@ -7,6 +7,7 @@ scratch="$(mktemp -d /private/tmp/node-operator-stage-validator.XXXXXX)"
 tools="$scratch/tools"; mkdir "$tools"
 handoff_dir="$scratch/handoff"; mkdir -m 700 "$handoff_dir"
 runtime="$handoff_dir/runtime.yaml"; client="$handoff_dir/client-and-fence.yaml"; handoff="$handoff_dir/validator-deployment-handoff.json"
+session="$handoff_dir/private-eks-session.json"
 
 printf '%s\n' 'apiVersion: v1
 kind: ConfigMap
@@ -16,6 +17,8 @@ kind: ConfigMap
 metadata: {name: client, namespace: validator-operations}' > "$client"
 jq -n --arg runtime "$runtime" --arg client "$client" '{schema_version:1,network:"hoodi",validator_set:"hoodi-stage-001",aws_account_id:"106760547719",runtime_manifest:$runtime,client_manifest:$client,staged_client_replicas:0,staged_fence_replicas:0,next_steps:["bounded"]}' > "$handoff"
 chmod 600 "$handoff"
+jq -n '{schema_version:1,aws_region:"ap-northeast-2",cluster_name:"node-operator",ssm_ops_instance_id:"i-0123456789abcdef0"}' > "$session"
+chmod 600 "$session"
 
 cat > "$tools/kubectl" <<'EOF'
 #!/usr/bin/env bash
@@ -29,7 +32,7 @@ esac
 EOF
 chmod 700 "$tools/kubectl"
 
-KUBECTL_TRACE="$scratch/kubectl.trace" PATH="$tools:$PATH" PRIVATE_EKS_SESSION=1 "$script" plan --handoff "$handoff" >/dev/null
+KUBECTL_TRACE="$scratch/kubectl.trace" PATH="$tools:$PATH" PRIVATE_EKS_SESSION=1 "$script" plan --handoff "$handoff" --private-eks-session-handoff "$session" >/dev/null
 rg -F -- '--server-side --field-manager=node-operator-release-stage --dry-run=server' "$scratch/kubectl.trace" >/dev/null
 if KUBECTL_TRACE="$scratch/secret.trace" PATH="$tools:$PATH" PRIVATE_EKS_SESSION=1 "$script" plan --handoff /dev/null >/dev/null 2>&1; then
   printf '%s\n' 'unsafe handoff unexpectedly accepted' >&2

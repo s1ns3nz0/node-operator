@@ -2,17 +2,18 @@
 set -euo pipefail
 umask 077
 
-usage() { printf '%s\n' 'usage: node-operator-ops-access.sh verify|plan|apply|destroy --root BUNDLE_ROOT (--inputs OPS_INPUTS_JSON | --config TFVARS --backend-config BACKEND_HCL) --plan-file PRIVATE_SAVED_PLAN [--backend-profile PROFILE --expected-backend-principal-arn IAM_PRINCIPAL_ARN --provider-profile PROFILE --expected-provider-principal-arn IAM_PRINCIPAL_ARN] [--expected-sha SHA256] [--allow-create]'; }
+usage() { printf '%s\n' 'usage: node-operator-ops-access.sh verify|plan|apply|destroy --root BUNDLE_ROOT (--inputs OPS_INPUTS_JSON | --config TFVARS --backend-config BACKEND_HCL) --plan-file PRIVATE_SAVED_PLAN [--session-handoff NEW_ABSOLUTE_JSON] [--backend-profile PROFILE --expected-backend-principal-arn IAM_PRINCIPAL_ARN --provider-profile PROFILE --expected-provider-principal-arn IAM_PRINCIPAL_ARN] [--expected-sha SHA256] [--allow-create]'; }
 operation="${1:-}"
 [ "$operation" = verify ] || [ "$operation" = plan ] || [ "$operation" = apply ] || [ "$operation" = destroy ] || { usage; exit 64; }
 shift
-root=""; config=""; backend_config=""; inputs=""; plan_file=""; expected_sha=""; allow_create=false
+root=""; config=""; backend_config=""; inputs=""; session_handoff=""; plan_file=""; expected_sha=""; allow_create=false
 backend_profile=""; provider_profile=""; expected_backend_principal_arn=""; expected_provider_principal_arn=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --root) root="${2:-}"; shift 2 ;; --config) config="${2:-}"; shift 2 ;;
     --backend-config) backend_config="${2:-}"; shift 2 ;; --plan-file) plan_file="${2:-}"; shift 2 ;;
     --inputs) inputs="${2:-}"; shift 2 ;;
+    --session-handoff) session_handoff="${2:-}"; shift 2 ;;
     --backend-profile) backend_profile="${2:-}"; shift 2 ;;
     --provider-profile) provider_profile="${2:-}"; shift 2 ;;
     --expected-backend-principal-arn) expected_backend_principal_arn="${2:-}"; shift 2 ;;
@@ -123,8 +124,10 @@ if [ -n "$inputs" ]; then
   ' "$inputs" >/dev/null || { printf '%s\n' '--inputs is not a bounded ops-access input contract' >&2; exit 1; }
   config="$expected_config"; backend_config="$expected_backend"
 fi
+[ -z "$session_handoff" ] || case "$session_handoff" in /*) ;; *) printf '%s\n' '--session-handoff must be an absolute path' >&2; exit 64 ;; esac
 [ -f "$config" ] && [ ! -L "$config" ] || { printf 'non-secret tfvars file is required\n' >&2; exit 1; }
 [ -f "$backend_config" ] && [ ! -L "$backend_config" ] || { printf 'an isolated non-secret backend config is required\n' >&2; exit 1; }
+[ -z "$session_handoff" ] || { [ "$operation" = apply ] && [ -n "$inputs" ]; } || { printf '%s\n' '--session-handoff is supported only for apply with --inputs' >&2; exit 64; }
 [ -n "$plan_file" ] || { printf 'a private saved plan path is required\n' >&2; exit 64; }
 private_path "$plan_file" || exit 1
 command -v terraform >/dev/null 2>&1 || { printf 'terraform is required\n' >&2; exit 127; }
@@ -303,6 +306,16 @@ case "$operation" in
     render_json "$plan_json" true; mode="$(classify_plan "$plan_json")"
     actual_sha="$(shasum -a 256 "$plan_file" | awk '{print $1}')"; [ "$actual_sha" = "$expected_sha" ] || { printf 'saved plan changed during validation\n' >&2; exit 1; }
     terraform_scoped -chdir="$module" apply -input=false "$plan_file"
+    if [ -n "$session_handoff" ]; then
+      [ ! -e "$session_handoff" ] && [ ! -L "$session_handoff" ] || { printf '%s\n' 'refusing to overwrite session handoff' >&2; exit 1; }
+      instance_id="$(terraform_scoped -chdir="$module" output -raw instance_id)"
+      [[ "$instance_id" =~ ^i-[0-9a-f]+$ ]] || { printf '%s\n' 'ops-access apply did not return a valid SSM instance ID' >&2; exit 70; }
+      cluster_name="$(jq -er '.cluster_name' "$inputs")"
+      jq -n --arg cluster "$cluster_name" --arg instance "$instance_id" \
+        '{schema_version:1,aws_region:"ap-northeast-2",cluster_name:$cluster,ssm_ops_instance_id:$instance}' > "$session_handoff"
+      chmod 600 "$session_handoff"
+      printf 'PASS private EKS session handoff written to %s.\n' "$session_handoff"
+    fi
     ;;
   destroy)
     printf 'destroy requires a separately reviewed explicit destroy-plan interface; direct destroy is disabled\n' >&2
