@@ -143,7 +143,7 @@ try {
   for (const absolute of files(stage).sort()) {
     const bytes = fs.readFileSync(absolute);
     const name = path.relative(stage, absolute).split(path.sep).join('/');
-    const mode = name.startsWith('source/scripts/release/') || name === 'source/scripts/ci/check-ops-access-ssm-retention-plan.sh' ? 0o755 : 0o644;
+    const mode = name.startsWith('source/scripts/release/') || name.startsWith('source/scripts/ops/') || name === 'source/scripts/ci/check-ops-access-ssm-retention-plan.sh' ? 0o755 : 0o644;
     fs.writeSync(output, header(name, bytes.length, mode));
     fs.writeSync(output, bytes);
     const padding = (512 - (bytes.length % 512)) % 512;
