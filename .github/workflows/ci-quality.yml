@@ -61,7 +61,12 @@ jobs:
           bash scripts/ci/test-vault-operator-session.sh
           python3 scripts/ci/test-vault-injector-canary-guards.py
       - name: Test Vault v2 runtime secret boundary
-        run: bash scripts/ci/test-vault-v2-secret-boundary-contract.sh
+        run: |
+          bash scripts/ci/test-vault-v2-secret-boundary-contract.sh
+          python3 scripts/ci/test-vault-v2-bootstrap-cleanup.py
+          python3 scripts/ci/test-validator-quiescence.py
+          python3 scripts/ci/test-validator-cutover-rendering.py
+          python3 scripts/ci/test-vault-v2-role-activation.py
       - name: Test scanner image release deduplication
         run: scripts/ci/test-scanner-image-release.sh
       - name: Test scanner evidence upload boundary

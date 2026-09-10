@@ -17,7 +17,7 @@ case "$migration:$preflight:$evidence" in /*:/*:/*) ;; *) usage;; esac
 [ -f "$migration" ] && [ ! -L "$migration" ] && [ -f "$preflight" ] && [ ! -L "$preflight" ] && [ ! -e "$evidence" ] && [ ! -L "$evidence" ] || { printf '%s\n' 'invalid evidence paths' >&2; exit 65; }
 if [ "${PRIVATE_EKS_SESSION:-}" != 1 ]; then exec "$dir/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$0" --chart-version "$version" --chart-digest "$digest" --migration-evidence "$migration" --preflight-evidence "$preflight" --evidence-output "$evidence" --execute; fi
 for command in aws kubectl jq date mkdir sleep seq; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
-jq -e '.operation == "live-runtime-secret-migration" and .source_secrets_retained == true and .secret_values_emitted == false' "$migration" >/dev/null
+jq -e -f "$dir/lib/vault-cutover-authorization.jq" "$migration" >/dev/null
 jq -e '.operation == "live-vault-cutover-preflight" and .phase == "baseline" and .engine_pair_ready == true and .vault_injector_ready == true' "$preflight" >/dev/null
 
 app_ns='argocd'; app='node-operator-client'; namespace='node-operator'
@@ -25,7 +25,7 @@ before="$(kubectl -n "$app_ns" get application "$app" -o json)"
 jq -e '.status.sync.status == "Synced" and .status.health.status == "Healthy"' <<<"$before" >/dev/null || { printf '%s\n' 'Argo Application is not healthy before cutover' >&2; exit 65; }
 # The digest is an approval input, not merely an annotation.  Bind it to the
 # exact immutable version in the ECR OCI repository before Argo can consume it.
-repository="$(jq -er '.spec.source.repoURL | capture("^[^/]+/(?<repository>[a-z0-9][a-z0-9._/-]*)$").repository' <<<"$before")"
+repository="$(jq -er '.spec.source as $source | ($source.repoURL | capture("^[^/]+/(?<repository>[a-z0-9][a-z0-9._/-]*)$").repository) + "/" + ($source.chart | select(test("^[a-z0-9][a-z0-9._-]*$")))' <<<"$before")"
 published_digest="$(aws ecr describe-images --region "${AWS_REGION:-ap-northeast-2}" --repository-name "$repository" --image-ids "imageTag=${version}" --query 'imageDetails[0].imageDigest' --output text)"
 [ "$published_digest" = "$digest" ] || { printf '%s\n' 'approved chart digest does not match the requested ECR chart version' >&2; exit 65; }
 kubectl -n "$app_ns" patch application "$app" --type merge -p "{\"metadata\":{\"annotations\":{\"node-operator.io/approved-chart-digest\":\"${digest}\"}},\"spec\":{\"source\":{\"targetRevision\":\"${version}\"}}}" >/dev/null
