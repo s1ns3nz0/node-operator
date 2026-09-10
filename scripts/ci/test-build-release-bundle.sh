@@ -39,6 +39,7 @@ for required_path in \
   source/deploy/argocd/node-operator-client-application.yaml \
   source/deploy/validator/onboarding-contract.yaml \
   source/infra/terraform/eks.tf \
+  source/infra/terraform/gitops-client-chart-retention.json \
   source/infra/bootstrap-state/main.tf \
   source/infra/foundation-network/main.tf \
   source/infra/foundation-network/backend.hcl.example \
