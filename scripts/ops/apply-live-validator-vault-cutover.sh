@@ -23,8 +23,15 @@ jq -e --arg set "$validator_set" --arg key "$(printf '%s' "$public_key" | tr '[:
 if grep -Eq 'secretName:[[:space:]]*(validator-.*-(signer|client)-tls)|name:[[:space:]]*(signer-tls|client-tls)' "$runtime" "$client"; then printf '%s\n' 'rendered validator manifest still mounts legacy TLS Secret material' >&2; exit 65; fi
 grep -Fq "node-operator-runtime/data/validators/hoodi/${validator_set}/runtime/signer-tls" "$runtime" || { printf '%s\n' 'runtime manifest lacks isolated Vault signer TLS injection' >&2; exit 65; }
 grep -Fq "node-operator-runtime/data/validators/hoodi/${validator_set}/runtime/client-tls" "$client" || { printf '%s\n' 'client manifest lacks isolated Vault client TLS injection' >&2; exit 65; }
-kubectl apply --server-side --field-manager=node-operator-vault-cutover --dry-run=server -f "$runtime" -f "$client" >/dev/null
+"$dir/assert-hoodi-validator-quiesced.sh" --validator-set "$validator_set" >/dev/null
+rendered="$(kubectl apply --server-side --field-manager=node-operator-vault-cutover --dry-run=server -f "$runtime" -f "$client" -o json)"
+jq -ne --arg set "$validator_set" --slurpfile documents /dev/stdin \
+  -f "$dir/lib/validator-cutover-manifests.jq" <<<"$rendered" >/dev/null || {
+  printf '%s\n' 'cutover manifests must contain only expected resources with signer/client at zero' >&2; exit 65;
+}
+"$dir/assert-hoodi-validator-quiesced.sh" --validator-set "$validator_set" >/dev/null
 kubectl apply --server-side --field-manager=node-operator-vault-cutover -f "$runtime" -f "$client" >/dev/null
+"$dir/assert-hoodi-validator-quiesced.sh" --validator-set "$validator_set" >/dev/null
 
 namespace='validator-operations'; signer="validator-${validator_set}-remote-signer"; fence_deployment="validator-${validator_set}-signing-fence"; client_stateful="validator-${validator_set}-client"
 kubectl -n "$namespace" scale deployment "$signer" --replicas=1 >/dev/null

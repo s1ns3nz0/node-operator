@@ -6,10 +6,11 @@ set -euo pipefail
 umask 077
 dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 usage() { printf 'Usage: %s --validator-set <hoodi-id> --output-dir <new-absolute-dir>\n' "${0##*/}" >&2; exit 64; }
-validator_set=''; output=''
+validator_set=''; output=''; verify_only=false
 while [ "$#" -gt 0 ]; do case "$1" in
   --validator-set) validator_set="${2:-}"; shift 2 ;;
   --output-dir) output="${2:-}"; shift 2 ;;
+  --verify-only) verify_only=true; shift ;;
   *) usage ;;
 esac; done
 [[ "$validator_set" =~ ^hoodi-[a-z0-9][a-z0-9-]{0,35}$ ]] || usage
@@ -39,7 +40,7 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
-"$dir/bootstrap-node-operator-vault-v2.sh" >/dev/null
+if [ "$verify_only" = false ]; then "$dir/bootstrap-node-operator-vault-v2.sh" >/dev/null; fi
 base="node-operator-runtime/data/validators/hoodi/$validator_set/runtime"
 server="validator-$validator_set-remote-signer.validator-operations.svc"
 client="validator-$validator_set-client.validator-operations.svc"
@@ -50,6 +51,7 @@ for identity in signer client; do
     jq -e '.data.data | select(type == "object")' "$scratch/record" > "$scratch/$identity.json"
     continue
   fi
+  [ "$verify_only" = false ] || { printf '%s\n' 'required transport record is unavailable; refusing authorization cutover' >&2; exit 65; }
   common_name="$client"; [ "$identity" != signer ] || common_name="$server"
   vault write -format=json node-operator-pki/issue/validator-mtls common_name="$common_name" alt_names="$common_name.cluster.local" ttl=720h > "$scratch/issued"
   jq -er '.data.private_key' "$scratch/issued" > "$scratch/key"

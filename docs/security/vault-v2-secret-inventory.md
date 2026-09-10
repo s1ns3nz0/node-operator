@@ -43,6 +43,13 @@ The output contains only public CA/fingerprint material and `preparation.json`.
 The success evidence is written only after generated root revocation succeeds.
 It is preparation evidence, not proof of migration, runtime health, or duty.
 
+`assert-hoodi-validator-quiesced.sh` is a read-only live gate for authorization
+and manifest cutover: both controllers must have observed zero replicas and
+all client/fence Pods, including terminating Pods, must be absent. Historical
+fence evidence is still required by the deployment workflow, but is not a
+substitute for this live check. The manifest cutover also rejects a client
+manifest that would start a replica before runtime verification.
+
 Remaining live acceptance requirements:
 
 - Complete the user-controlled recovery ceremony and confirm root revocation.
