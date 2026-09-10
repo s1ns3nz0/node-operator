@@ -10,7 +10,7 @@
   },
   "bootstrap": {
     "entrypoint": "source/scripts/release/hoodi-validator-release.sh",
-    "supported_commands": ["verify", "interactive prepare", "infrastructure apply", "deploy apply", "ops-inputs prepare", "ops-access plan", "ops-access apply", "stage plan", "stage apply"],
+    "supported_commands": ["verify", "interactive prepare", "infrastructure apply", "deploy apply", "activate apply", "ops-inputs prepare", "ops-access plan", "ops-access apply", "stage plan", "stage apply"],
     "requires": ["AWS credentials for the approved account", "Terraform", "a reviewed non-secret tfvars file"],
     "forbidden_inputs": ["Kubernetes Secret data", "Vault token", "Vault recovery material", "validator private key or keystore", "withdrawal credential"]
   },

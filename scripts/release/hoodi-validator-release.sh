@@ -12,6 +12,7 @@ usage:
   hoodi-validator-release.sh interactive prepare --bundle-root DIRECTORY --output-dir /new-absolute-directory [--aws-region ap-northeast-1|ap-northeast-2]
   hoodi-validator-release.sh infrastructure apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory
   hoodi-validator-release.sh deploy apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory --private-eks-session-handoff /new-absolute/session.json --allow-create
+  hoodi-validator-release.sh activate apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json --deposit-attestation /absolute/file.json --public-deposit-verification /absolute/file.json --private-evidence /absolute/file.json --signer-evidence /absolute/file.json --confirm-public-key 0x... --confirm-withdrawal-address 0x...
   hoodi-validator-release.sh ops-inputs prepare --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --zero-work-dir /absolute/zero-work-dir --output-dir /new-absolute-directory
   hoodi-validator-release.sh ops-access plan|apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --ops-inputs /absolute/ops-access-inputs.json --plan-file /absolute/private.tfplan [--expected-sha SHA256] [--allow-create] [--private-eks-session-handoff /absolute/session.json]
   hoodi-validator-release.sh stage plan|apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json
@@ -21,9 +22,9 @@ USAGE
 
 command_name="${1:-}"; [ -n "$command_name" ] || usage
 shift
-operation=''; bundle_root=''; inputs=''; work_dir=''; session_handoff=''; output_dir=''; ops_inputs=''; plan_file=''; expected_sha=''; aws_region='ap-northeast-2'; allow_create=false
+operation=''; bundle_root=''; inputs=''; work_dir=''; session_handoff=''; output_dir=''; ops_inputs=''; plan_file=''; expected_sha=''; aws_region='ap-northeast-2'; allow_create=false; deposit_attestation=''; public_deposit_verification=''; private_evidence=''; signer_evidence=''; confirm_public_key=''; confirm_withdrawal_address=''
 case "$command_name" in
-  interactive|infrastructure|deploy|ops-inputs|ops-access|stage)
+  interactive|infrastructure|deploy|activate|ops-inputs|ops-access|stage)
     [ "$#" -gt 0 ] || usage
     operation="$1"
     shift
@@ -44,6 +45,12 @@ while [ "$#" -gt 0 ]; do
     --aws-region) aws_region="${2:-}"; shift 2 ;;
     --allow-create) allow_create=true; shift ;;
     --private-eks-session-handoff) session_handoff="${2:-}"; shift 2 ;;
+    --deposit-attestation) deposit_attestation="${2:-}"; shift 2 ;;
+    --public-deposit-verification) public_deposit_verification="${2:-}"; shift 2 ;;
+    --private-evidence) private_evidence="${2:-}"; shift 2 ;;
+    --signer-evidence) signer_evidence="${2:-}"; shift 2 ;;
+    --confirm-public-key) confirm_public_key="${2:-}"; shift 2 ;;
+    --confirm-withdrawal-address) confirm_withdrawal_address="${2:-}"; shift 2 ;;
     *) usage ;;
   esac
 done
@@ -149,6 +156,17 @@ case "$command_name" in
     fi
     "$0" stage apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session_handoff"
     printf 'PASS: infrastructure, isolated private-EKS SSM access, and zero-replica validator staging are deployed. Continue with the separate Vault, custody, GitOps, deposit, and validator activation ceremonies.\n'
+    ;;
+  activate)
+    [ "$operation" = apply ] && [ -n "$session_handoff$deposit_attestation$public_deposit_verification$private_evidence$signer_evidence$confirm_public_key$confirm_withdrawal_address" ] && [ -z "$work_dir$output_dir$ops_inputs$plan_file$expected_sha" ] || usage
+    for evidence in "$session_handoff" "$deposit_attestation" "$public_deposit_verification" "$private_evidence" "$signer_evidence"; do case "$evidence" in /*) ;; *) usage ;; esac; [ -f "$evidence" ] && [ ! -L "$evidence" ] || { printf '%s\n' 'activation input must be a regular file' >&2; exit 65; }; done
+    session_region="$(jq -er '.aws_region' "$session_handoff")"; session_cluster="$(jq -er '.cluster_name' "$session_handoff")"; session_instance="$(jq -er '.ssm_ops_instance_id' "$session_handoff")"
+    [ "$session_region" = "$input_region" ] || { printf '%s\n' 'activation session points to another Region' >&2; exit 65; }
+    validator_set="$(jq -er '.validator_set' "$validator_handoff")"
+    eks_env=(env PRIVATE_EKS_SESSION=1 AWS_REGION="$session_region" EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance")
+    "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$bundle_root/source/scripts/ops/start-hoodi-validator-signer.sh" --validator-set "$validator_set"
+    "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$bundle_root/source/scripts/ops/activate-hoodi-validator-client.sh" --validator-set "$validator_set" --deposit-attestation "$deposit_attestation" --public-deposit-verification "$public_deposit_verification" --private-evidence "$private_evidence" --signer-evidence "$signer_evidence" --confirm-public-key "$confirm_public_key" --confirm-withdrawal-address "$confirm_withdrawal_address"
+    printf 'PASS: validator activation was submitted through the fixed session and guarded evidence path.\n'
     ;;
   ops-inputs)
     [ "$operation" = prepare ] && [ -n "$work_dir$output_dir" ] && [ -z "$session_handoff" ] || usage
