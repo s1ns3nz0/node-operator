@@ -50,6 +50,7 @@ for required_path in \
   source/release/hoodi-release-contract.json \
   source/scripts/release/node-operator-release.sh \
   source/scripts/release/prepare-hoodi-validator-deployment.sh \
+  source/scripts/release/stage-hoodi-validator-deployment.sh \
   source/scripts/ops/render-hoodi-validator-runtime.sh \
   source/scripts/ops/render-hoodi-validator-client.sh \
   source/scripts/ops/recover-and-bootstrap-hoodi-validator-runtime-vault.sh \
