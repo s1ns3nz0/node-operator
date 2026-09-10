@@ -10,15 +10,15 @@ web3signer='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-base
 postgres='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-runtime-postgres@sha256:030da09481c3876b71a7e49738a932e1c18c398201a1e4ccfdbff1e5a541215b'
 prysm='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-prysm@sha256:7fe554adf0efd27c0e5c5a3f80a3bbbec3d3872626208cf0a003b0dee7761f89'
 fence='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-fence@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
-"$script" --validator-set hoodi-test-001 --validator-public-key "$key" --withdrawal-address 0x403ff64383b8ddf994d5563550c8040d89f025ac --web3signer-image "$web3signer" --postgres-image "$postgres" --prysm-validator-image "$prysm" --signing-fence-image "$fence" --kubernetes-api-cidr 10.100.0.1/32 --output-dir "$output" >/dev/null
+"$script" --validator-set hoodi-test-001 --validator-public-key "$key" --withdrawal-address 0x403ff64383b8ddf994d5563550c8040d89f025ac --aws-account-id 106760547719 --web3signer-image "$web3signer" --postgres-image "$postgres" --prysm-validator-image "$prysm" --signing-fence-image "$fence" --kubernetes-api-cidr 10.100.0.1/32 --output-dir "$output" >/dev/null
 [ "$(stat -f '%Lp' "$output")" = 700 ]
 [ "$(stat -f '%Lp' "$output/validator-deployment-handoff.json")" = 600 ]
-jq -e --arg output "$output" --arg key "$key" '.schema_version == 1 and .network == "hoodi" and .validator_set == "hoodi-test-001" and .validator_public_key == $key and .runtime_manifest == ($output + "/runtime.yaml") and .client_manifest == ($output + "/client-and-fence.yaml") and .staged_client_replicas == 0 and .staged_fence_replicas == 0 and (.next_steps | type == "array" and length == 5)' "$output/validator-deployment-handoff.json" >/dev/null
+jq -e --arg output "$output" --arg key "$key" '.schema_version == 1 and .network == "hoodi" and .validator_set == "hoodi-test-001" and .aws_account_id == "106760547719" and .validator_public_key == $key and .runtime_manifest == ($output + "/runtime.yaml") and .client_manifest == ($output + "/client-and-fence.yaml") and .staged_client_replicas == 0 and .staged_fence_replicas == 0 and (.next_steps | type == "array" and length == 5)' "$output/validator-deployment-handoff.json" >/dev/null
 grep -Fq 'replicas: 0' "$output/client-and-fence.yaml"
 jq -e '[paths(scalars)] | all(.[]; map(tostring | ascii_downcase) | all(test("mnemonic|password|recovery|vault_token|keystore"; "i") | not))' "$output/validator-deployment-handoff.json" >/dev/null || {
   printf '%s\n' 'handoff contains a prohibited secret-bearing field' >&2; exit 1
 }
-if "$script" --validator-set hoodi-test-001 --validator-public-key "$key" --withdrawal-address 0x403ff64383b8ddf994d5563550c8040d89f025ac --web3signer-image "$web3signer" --postgres-image "$postgres" --prysm-validator-image "$prysm" --signing-fence-image "$fence" --kubernetes-api-cidr 10.100.0.1/32 --output-dir "$output" >/dev/null 2>&1; then
+if "$script" --validator-set hoodi-test-001 --validator-public-key "$key" --withdrawal-address 0x403ff64383b8ddf994d5563550c8040d89f025ac --aws-account-id 106760547719 --web3signer-image "$web3signer" --postgres-image "$postgres" --prysm-validator-image "$prysm" --signing-fence-image "$fence" --kubernetes-api-cidr 10.100.0.1/32 --output-dir "$output" >/dev/null 2>&1; then
   printf '%s\n' 'existing output directory unexpectedly accepted' >&2; exit 1
 fi
 printf '%s\n' 'PASS: deployment preparation renders non-secret zero-replica manifests and a bounded handoff.'

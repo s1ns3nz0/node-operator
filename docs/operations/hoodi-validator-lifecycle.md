@@ -46,10 +46,11 @@ scripts/release/prepare-hoodi-validator-deployment.sh \
   --validator-set hoodi-001 \
   --validator-public-key 0x... \
   --withdrawal-address 0x... \
-  --web3signer-image 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/...@sha256:... \
-  --postgres-image 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/...@sha256:... \
-  --prysm-validator-image 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/...@sha256:... \
-  --signing-fence-image 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-fence@sha256:... \
+  --aws-account-id <new-aws-account-id> \
+  --web3signer-image <new-aws-account-id>.dkr.ecr.ap-northeast-2.amazonaws.com/...@sha256:... \
+  --postgres-image <new-aws-account-id>.dkr.ecr.ap-northeast-2.amazonaws.com/...@sha256:... \
+  --prysm-validator-image <new-aws-account-id>.dkr.ecr.ap-northeast-2.amazonaws.com/...@sha256:... \
+  --signing-fence-image <new-aws-account-id>.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-fence@sha256:... \
   --kubernetes-api-cidr <operator-ip>/32 \
   --output-dir /controlled-state/hoodi-001-prepared
 ```

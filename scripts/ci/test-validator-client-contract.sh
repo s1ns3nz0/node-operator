@@ -13,12 +13,16 @@ jq -e '.schema_version == 2 and all(.images[]; (.private_image | test("^10676054
 if jq 'del(.images[1].release_channel)' "$allowlist" | jq -e --arg image "$native_image" '.schema_version == 2 and any(.images[]; .private_image == $image and .stage_approved == true and (.release_channel == "upstream-mirror" or .release_channel == "manual-native-mtls"))' >/dev/null; then
   printf '%s\n' 'missing release channel unexpectedly passes stage contract' >&2; exit 1
 fi
-"$renderer" --validator-set hoodi-test-001 --validator-public-key "$key" --prysm-validator-image "$image" --signing-fence-image "$fence_image" --kubernetes-api-cidr 10.100.0.1/32 --output "$tmp/client.yaml" >/dev/null
-"$renderer" --validator-set hoodi-test-001 --validator-public-key "$key" --prysm-validator-image "$native_image" --signing-fence-image "$fence_image" --kubernetes-api-cidr 10.100.0.1/32 --output "$tmp/native-client.yaml" >/dev/null
+"$renderer" --validator-set hoodi-test-001 --validator-public-key "$key" --aws-account-id 106760547719 --prysm-validator-image "$image" --signing-fence-image "$fence_image" --kubernetes-api-cidr 10.100.0.1/32 --output "$tmp/client.yaml" >/dev/null
+"$renderer" --validator-set hoodi-test-001 --validator-public-key "$key" --aws-account-id 106760547719 --prysm-validator-image "$native_image" --signing-fence-image "$fence_image" --kubernetes-api-cidr 10.100.0.1/32 --output "$tmp/native-client.yaml" >/dev/null
+if "$renderer" --validator-set hoodi-test-001 --validator-public-key "$key" --aws-account-id 999999999999 --prysm-validator-image "$image" --signing-fence-image "$fence_image" --kubernetes-api-cidr 10.100.0.1/32 --output "$tmp/wrong-account.yaml" >/dev/null 2>&1; then
+  printf '%s\n' 'client renderer accepted images from another AWS account' >&2
+  exit 1
+fi
 for rejected in \
   "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/other-repository@${native_image##*@}" \
   "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-prysm@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"; do
-  if "$renderer" --validator-set hoodi-test-001 --validator-public-key "$key" --prysm-validator-image "$rejected" --signing-fence-image "$fence_image" --kubernetes-api-cidr 10.100.0.1/32 --output "$tmp/rejected-client.yaml" >/dev/null 2>&1; then
+  if "$renderer" --validator-set hoodi-test-001 --validator-public-key "$key" --aws-account-id 106760547719 --prysm-validator-image "$rejected" --signing-fence-image "$fence_image" --kubernetes-api-cidr 10.100.0.1/32 --output "$tmp/rejected-client.yaml" >/dev/null 2>&1; then
     printf 'unexpectedly rendered unapproved client image: %s\n' "$rejected" >&2; exit 1
   fi
 done
