@@ -92,11 +92,27 @@ root_token="$(vault_recovery_decode_generated_root "$encoded" "$otp")"
 unset encoded otp nonce initial reply status
 
 repaired_records=()
+kv_format=''
 put_or_match() {
-  local path="$1" incoming="$2" record="$3" existing existing_data existing_version decoded
+  local path="$1" incoming="$2" record="$3" existing existing_data existing_version decoded detected_format
   if existing="$(VAULT_TOKEN="$root_token" vault kv get -format=json "$path" 2>/dev/null)"; then
-    existing_data="$(jq -cer '.data.data' <<<"$existing")"
-    existing_version="$(jq -er '.data.metadata.version | select(type == "number" and . >= 1 and floor == .)' <<<"$existing")"
+    # `vault kv get -format=json` uses `.data` for KV v1 and
+    # `.data.data`/`.data.metadata.version` for KV v2. A partial legacy
+    # record may make either payload location a JSON string, so select the
+    # envelope before inspecting the payload type.
+    detected_format="$(jq -er 'if (.data | type) == "object" and (.data | has("data")) and (.data | has("metadata")) then "v2" else "v1" end' <<<"$existing")"
+    if [ -n "$kv_format" ] && [ "$kv_format" != "$detected_format" ]; then
+      printf '%s\n' 'Vault KV mount format differs between migration records' >&2
+      exit 65
+    fi
+    kv_format="$detected_format"
+    if [ "$kv_format" = v2 ]; then
+      existing_data="$(jq -cer '.data.data' <<<"$existing")"
+      existing_version="$(jq -er '.data.metadata.version | select(type == "number" and . >= 1 and floor == .)' <<<"$existing")"
+    else
+      existing_data="$(jq -cer '.data' <<<"$existing")"
+      existing_version=''
+    fi
     if [ "$(jq -r 'type' <<<"$existing_data")" = object ]; then
       [ "$(jq -cS . <<<"$existing_data")" = "$(jq -cS . <<<"$incoming")" ] || { printf 'Vault record differs: %s\n' "$record" >&2; exit 65; }
     else
@@ -106,12 +122,20 @@ put_or_match() {
       decoded="$(jq -cer 'if type == "string" then (try fromjson catch null) else null end' <<<"$existing_data")"
       [ "$(jq -cS . <<<"$decoded")" = "$(jq -cS . <<<"$incoming")" ] || { printf 'Vault record differs: %s\n' "$record" >&2; exit 65; }
       printf '%s' "$incoming" > "$scratch/$record.json"
-      VAULT_TOKEN="$root_token" vault kv put -cas="$existing_version" "$path" @"$scratch/$record.json" >/dev/null
+      if [ "$kv_format" = v2 ]; then
+        VAULT_TOKEN="$root_token" vault kv put -cas="$existing_version" "$path" @"$scratch/$record.json" >/dev/null
+      else
+        VAULT_TOKEN="$root_token" vault kv put "$path" @"$scratch/$record.json" >/dev/null
+      fi
       repaired_records+=("$record")
     fi
   else
     printf '%s' "$incoming" > "$scratch/$record.json"
-    VAULT_TOKEN="$root_token" vault kv put -cas=0 "$path" @"$scratch/$record.json" >/dev/null
+    if [ "$kv_format" = v1 ]; then
+      VAULT_TOKEN="$root_token" vault kv put "$path" @"$scratch/$record.json" >/dev/null
+    else
+      VAULT_TOKEN="$root_token" vault kv put -cas=0 "$path" @"$scratch/$record.json" >/dev/null
+    fi
   fi
 }
 
