@@ -17,6 +17,11 @@ nethermind_role="$root/deploy/vault/auth/hoodi-engine-nethermind-kubernetes-role
 prysm_role="$root/deploy/vault/auth/hoodi-engine-prysm-kubernetes-role.json"
 
 vault read -format=json auth/kubernetes/config >/dev/null
+mounts="$(vault secrets list -format=json)"
+jq -e '."kv/" | select(.type == "kv") | (.options.version // "1") | tostring | select(. == "2")' <<<"$mounts" >/dev/null || {
+  printf '%s\n' 'Vault kv/ must be version 2 because Engine API agents read kv/data paths' >&2
+  exit 65
+}
 vault policy write hoodi-engine-api "$policy" >/dev/null
 vault write auth/kubernetes/role/hoodi-engine-nethermind @"$nethermind_role" >/dev/null
 vault write auth/kubernetes/role/hoodi-engine-prysm @"$prysm_role" >/dev/null

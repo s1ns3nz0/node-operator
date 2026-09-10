@@ -17,8 +17,10 @@ for required in \
   'vault kv put -cas=0 "$path"' \
   'try fromjson catch null' \
   'vault kv put -cas="$existing_version" "$path"' \
-  'kv_format' \
-  'Vault KV mount format differs between migration records' \
+  'vault kv enable-versioning kv/' \
+  'Vault kv/ v1 compatibility policies require review before conversion' \
+  'Vault kv/ must be version 2 for runtime credential injection' \
+  'kv_mount_version:2' \
   'repaired_legacy_vault_records' \
   'bootstrap-hoodi-engine-api-vault.sh' \
   'bootstrap-hoodi-validator-runtime-vault.sh' \
@@ -30,9 +32,6 @@ done
 if grep -Eq 'openssl rand|kubectl.*delete secret|create secret generic|generate-root -decode' "$script"; then
   fail 'migration must neither generate nor delete/reprint source secret material'
 fi
-v1_string='{"data":"{\"jwt\":\"fixture\"}"}'
-v2_string='{"data":{"data":"{\"jwt\":\"fixture\"}","metadata":{"version":1}}}'
-for fixture in "$v1_string" "$v2_string"; do
-  jq -e 'if (.data | type) == "object" and (.data | has("data")) and (.data | has("metadata")) then "v2" else "v1" end | IN("v1", "v2")' <<<"$fixture" >/dev/null
-done
-printf '%s\n' 'PASS: live runtime migration preserves existing JWT/TLS material, writes Vault records with CAS, and retains source Secrets for staged cutover.'
+v2_record='{"data":{"data":{"jwt":"fixture"},"metadata":{"version":1}}}'
+jq -e '.data.data.jwt == "fixture" and .data.metadata.version == 1' <<<"$v2_record" >/dev/null
+printf '%s\n' 'PASS: live runtime migration requires KV v2, fail-closes legacy policy consumers, writes records with CAS, and retains source Secrets for staged cutover.'

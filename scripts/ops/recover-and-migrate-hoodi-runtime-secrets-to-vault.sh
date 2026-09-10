@@ -91,28 +91,56 @@ done
 root_token="$(vault_recovery_decode_generated_root "$encoded" "$otp")"
 unset encoded otp nonce initial reply status
 
+# Every deployed Vault Agent template and every least-privilege policy in this
+# repository uses KV v2's `/data/` API.  Do not paper over a v1 mount while
+# importing credentials: that would make this ceremony appear successful but
+# leave the next workload restart unable to read its injected files.
+#
+# Versioning changes the API for an entire mount.  Before upgrading an older
+# mount, reject any policy which still grants a non-v2 `kv/` path.  This makes
+# an unknown consumer a visible, fail-closed condition rather than silently
+# breaking it during a validator cutover.
+kv_mounts="$(VAULT_TOKEN="$root_token" vault secrets list -format=json)"
+kv_mount="$(jq -cer '."kv/" // empty' <<<"$kv_mounts")" || { printf '%s\n' 'Vault KV mount kv/ is not enabled' >&2; exit 65; }
+jq -e '(.type == "kv") and ((.options.version // "1") | tostring | test("^[12]$"))' <<<"$kv_mount" >/dev/null || {
+  printf '%s\n' 'Vault kv/ mount has an unsupported type or version' >&2
+  exit 65
+}
+kv_version="$(jq -r '(.options.version // "1") | tostring' <<<"$kv_mount")"
+legacy_kv_policies=()
+while IFS= read -r policy_name; do
+  [ -n "$policy_name" ] || continue
+  policy_rules="$(VAULT_TOKEN="$root_token" vault policy read "$policy_name" 2>/dev/null || true)"
+  while IFS= read -r policy_path; do
+    case "$policy_path" in
+      kv/data/*|kv/metadata/*) ;;
+      kv/*) legacy_kv_policies+=("$policy_name"); break ;;
+    esac
+  done < <(sed -nE 's/^[[:space:]]*path[[:space:]]+"([^"]+)".*/\1/p' <<<"$policy_rules")
+done < <(VAULT_TOKEN="$root_token" vault policy list -format=json | jq -er '.[]')
+
+if [ "${#legacy_kv_policies[@]}" -gt 0 ]; then
+  printf 'Vault kv/ v1 compatibility policies require review before conversion: %s\n' "$(IFS=,; printf '%s' "${legacy_kv_policies[*]}")" >&2
+  exit 65
+fi
+kv_v1_upgraded=false
+if [ "$kv_version" = 1 ]; then
+  VAULT_TOKEN="$root_token" vault kv enable-versioning kv/ >/dev/null
+  kv_mounts="$(VAULT_TOKEN="$root_token" vault secrets list -format=json)"
+  kv_version="$(jq -er '."kv/" | select(.type == "kv") | (.options.version // "1") | tostring | select(. == "2")' <<<"$kv_mounts")" || {
+    printf '%s\n' 'Vault kv/ versioning upgrade did not produce KV v2' >&2
+    exit 70
+  }
+  kv_v1_upgraded=true
+fi
+[ "$kv_version" = 2 ] || { printf '%s\n' 'Vault kv/ must be version 2 for runtime credential injection' >&2; exit 65; }
+
 repaired_records=()
-kv_format=''
 put_or_match() {
-  local path="$1" incoming="$2" record="$3" existing existing_data existing_version decoded detected_format
+  local path="$1" incoming="$2" record="$3" existing existing_data existing_version decoded
   if existing="$(VAULT_TOKEN="$root_token" vault kv get -format=json "$path" 2>/dev/null)"; then
-    # `vault kv get -format=json` uses `.data` for KV v1 and
-    # `.data.data`/`.data.metadata.version` for KV v2. A partial legacy
-    # record may make either payload location a JSON string, so select the
-    # envelope before inspecting the payload type.
-    detected_format="$(jq -er 'if (.data | type) == "object" and (.data | has("data")) and (.data | has("metadata")) then "v2" else "v1" end' <<<"$existing")"
-    if [ -n "$kv_format" ] && [ "$kv_format" != "$detected_format" ]; then
-      printf '%s\n' 'Vault KV mount format differs between migration records' >&2
-      exit 65
-    fi
-    kv_format="$detected_format"
-    if [ "$kv_format" = v2 ]; then
-      existing_data="$(jq -cer '.data.data' <<<"$existing")"
-      existing_version="$(jq -er '.data.metadata.version | select(type == "number" and . >= 1 and floor == .)' <<<"$existing")"
-    else
-      existing_data="$(jq -cer '.data' <<<"$existing")"
-      existing_version=''
-    fi
+    existing_data="$(jq -cer '.data.data' <<<"$existing")"
+    existing_version="$(jq -er '.data.metadata.version | select(type == "number" and . >= 1 and floor == .)' <<<"$existing")"
     if [ "$(jq -r 'type' <<<"$existing_data")" = object ]; then
       [ "$(jq -cS . <<<"$existing_data")" = "$(jq -cS . <<<"$incoming")" ] || { printf 'Vault record differs: %s\n' "$record" >&2; exit 65; }
     else
@@ -122,20 +150,12 @@ put_or_match() {
       decoded="$(jq -cer 'if type == "string" then (try fromjson catch null) else null end' <<<"$existing_data")"
       [ "$(jq -cS . <<<"$decoded")" = "$(jq -cS . <<<"$incoming")" ] || { printf 'Vault record differs: %s\n' "$record" >&2; exit 65; }
       printf '%s' "$incoming" > "$scratch/$record.json"
-      if [ "$kv_format" = v2 ]; then
-        VAULT_TOKEN="$root_token" vault kv put -cas="$existing_version" "$path" @"$scratch/$record.json" >/dev/null
-      else
-        VAULT_TOKEN="$root_token" vault kv put "$path" @"$scratch/$record.json" >/dev/null
-      fi
+      VAULT_TOKEN="$root_token" vault kv put -cas="$existing_version" "$path" @"$scratch/$record.json" >/dev/null
       repaired_records+=("$record")
     fi
   else
     printf '%s' "$incoming" > "$scratch/$record.json"
-    if [ "$kv_format" = v1 ]; then
-      VAULT_TOKEN="$root_token" vault kv put "$path" @"$scratch/$record.json" >/dev/null
-    else
-      VAULT_TOKEN="$root_token" vault kv put -cas=0 "$path" @"$scratch/$record.json" >/dev/null
-    fi
+    VAULT_TOKEN="$root_token" vault kv put -cas=0 "$path" @"$scratch/$record.json" >/dev/null
   fi
 }
 
@@ -155,8 +175,8 @@ mkdir -p "$(dirname "$evidence")"
 engine_sha="$(printf '%s' "$jwt" | shasum -a 256 | awk '{print $1}')"
 signer_sha="$(printf '%s' "$signer_p12_b64" | shasum -a 256 | awk '{print $1}')"
 client_sha="$(printf '%s' "$client_crt_b64" | shasum -a 256 | awk '{print $1}')"
-jq -n --arg set "$validator_set" --arg engine "$engine_sha" --arg signer "$signer_sha" --arg client "$client_sha" --arg fingerprint "$client_fingerprint" --args "${repaired_records[@]}" \
-  '{schema_version:1,operation:"live-runtime-secret-migration",validator_set:$set,engine_jwt_sha256:$engine,signer_pkcs12_b64_sha256:$signer,client_certificate_b64_sha256:$client,client_fingerprint_sha256:$fingerprint,repaired_legacy_vault_records:$ARGS.positional,secret_values_emitted:false,source_secrets_retained:true}' > "$evidence"
+jq -n --arg set "$validator_set" --arg engine "$engine_sha" --arg signer "$signer_sha" --arg client "$client_sha" --arg fingerprint "$client_fingerprint" --argjson upgraded "$kv_v1_upgraded" --args "${repaired_records[@]}" \
+  '{schema_version:1,operation:"live-runtime-secret-migration",validator_set:$set,engine_jwt_sha256:$engine,signer_pkcs12_b64_sha256:$signer,client_certificate_b64_sha256:$client,client_fingerprint_sha256:$fingerprint,kv_mount_version:2,kv_v1_upgraded:$upgraded,repaired_legacy_vault_records:$ARGS.positional,secret_values_emitted:false,source_secrets_retained:true}' > "$evidence"
 chmod 600 "$evidence"
 unset jwt signer_p12_b64 signer_password client_crt_b64 client_key_b64 client_ca_b64 engine_record signer_record client_record known_clients
 printf 'PASS: existing Engine JWT and validator transport records now match Vault; Kubernetes source Secrets remain for staged cutover. Evidence: %s\n' "$evidence"
