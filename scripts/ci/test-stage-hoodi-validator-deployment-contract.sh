@@ -35,6 +35,7 @@ chmod 700 "$tools/kubectl"
 
 test -f "$policy"
 grep -Fq 'vault-runtime-egress-policy.yaml' "$script" || { printf '%s\n' 'stage command does not install the dedicated Vault egress policy' >&2; exit 1; }
+# shellcheck disable=SC2016 # literal source contract, not interpolation
 grep -Fq 'field-manager=node-operator-release-stage -f "$vault_egress_policy"' "$script" || { printf '%s\n' 'stage command does not apply Vault egress before workloads' >&2; exit 1; }
 
 KUBECTL_TRACE="$scratch/kubectl.trace" PATH="$tools:$PATH" PRIVATE_EKS_SESSION=1 "$script" plan --handoff "$handoff" --private-eks-session-handoff "$session" >/dev/null

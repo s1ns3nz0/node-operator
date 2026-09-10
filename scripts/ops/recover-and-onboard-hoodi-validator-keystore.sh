@@ -45,6 +45,6 @@ VAULT_TOKEN="$child" vault kv put -cas=0 "$base/signer-tls" @"$tmp/tls.json" >/d
 { printf '{"tls_crt_b64":"'; base64 < "$tmp/client.crt" | tr -d '\n'; printf '","tls_key_b64":"'; base64 < "$tmp/client.key" | tr -d '\n'; printf '","ca_crt_b64":"'; base64 < "$tmp/ca.crt" | tr -d '\n'; printf '"}\n'; } > "$tmp/client-tls.json"
 VAULT_TOKEN="$child" vault kv put -cas=0 "$base/client-tls" @"$tmp/client-tls.json" >/dev/null
 fingerprint="$(openssl x509 -in "$tmp/client.crt" -noout -fingerprint -sha256)"; fingerprint="${fingerprint#*=}"
-install -d -m 700 "$(dirname "$ca_out")" "$(dirname "$known_out")"; install -m 644 "$tmp/ca.crt" "$ca_out"; printf 'validator-%s-client %s\n' "$set_id" "$fingerprint" > "$known_out"; chmod 644 "$known_out"
+install -d -m 700 "$(dirname "$ca_out")" "$(dirname "$known_out")"; install -m 644 "$tmp/ca.crt" "$ca_out"; printf 'validator-%s-client.validator-operations.svc %s\n' "$set_id" "$fingerprint" > "$known_out"; chmod 644 "$known_out"
 unset key_password tls_password
 printf 'PASS: Hoodi custody records and signer TLS were created for %s; public CA saved to %s.\n' "$set_id" "$ca_out"
