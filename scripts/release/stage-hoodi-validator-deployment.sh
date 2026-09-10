@@ -6,17 +6,18 @@ umask 077
 # prepare-hoodi-validator-deployment.sh. It never initializes Vault, accepts
 # custody material, or starts the signer, client, or fence.
 usage() {
-  printf '%s\n' "usage: ${0##*/} plan|apply --handoff /absolute/validator-deployment-handoff.json" >&2
+  printf '%s\n' "usage: ${0##*/} plan|apply --handoff /absolute/validator-deployment-handoff.json [--private-eks-session-handoff /absolute/session.json]" >&2
   exit 64
 }
 
 operation="${1:-}"
 case "$operation" in plan|apply) ;; *) usage ;; esac
 shift
-handoff=''
+handoff=''; private_eks_session_handoff=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --handoff) handoff="${2:-}"; shift 2 ;;
+    --private-eks-session-handoff) private_eks_session_handoff="${2:-}"; shift 2 ;;
     *) usage ;;
   esac
 done
@@ -54,9 +55,19 @@ if rg -n "(^|[[:space:]])kind:[[:space:]]*${secret_kind}([[:space:]]|$)|-----BEG
   exit 65
 fi
 
+if [ -n "$private_eks_session_handoff" ]; then
+  case "$private_eks_session_handoff" in /*) ;; *) printf '%s\n' 'private EKS session handoff must be an absolute path' >&2; exit 65 ;; esac
+  [ -f "$private_eks_session_handoff" ] && [ ! -L "$private_eks_session_handoff" ] || { printf '%s\n' 'private EKS session handoff must be a regular file' >&2; exit 65; }
+  session_cluster="$(jq -er '.schema_version == 1 and .aws_region == "ap-northeast-2" and (.cluster_name | select(test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")))' "$private_eks_session_handoff")" || { printf '%s\n' 'private EKS session handoff is invalid' >&2; exit 65; }
+  session_instance="$(jq -er '.ssm_ops_instance_id | select(test("^i-[0-9a-f]+$"))' "$private_eks_session_handoff")" || { printf '%s\n' 'private EKS session handoff lacks a valid SSM instance' >&2; exit 65; }
+fi
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 self="$script_dir/${BASH_SOURCE[0]##*/}"
 if [ "${PRIVATE_EKS_SESSION:-}" != 1 ]; then
+  if [ -n "$private_eks_session_handoff" ]; then
+    exec "$script_dir/../ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 AWS_REGION=ap-northeast-2 EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance" "$self" "$operation" --handoff "$handoff" --private-eks-session-handoff "$private_eks_session_handoff"
+  fi
   exec "$script_dir/../ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$self" "$operation" --handoff "$handoff"
 fi
 command -v kubectl >/dev/null 2>&1 || { printf '%s\n' 'missing command: kubectl' >&2; exit 69; }

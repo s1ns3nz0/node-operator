@@ -73,7 +73,10 @@ release/source/scripts/release/prepare-ops-access-inputs.sh \
 ```
 
 Pass `ops-access-inputs.json` to `node-operator-ops-access.sh` with a private
-saved-plan location; do not retype its config or backend paths.
+saved-plan location; do not retype its config or backend paths. Its reviewed
+`apply` can write a new mode-0600 `--session-handoff` file. Pass that handoff
+to the validator staging command so the private EKS cluster name and SSM
+instance ID are never copied into shell environment variables by hand.
 
 After publishing a chart and preparing the digest-bound Argo input, create a
 reviewed private plan against the same `--work-dir` used by `zero apply`; only

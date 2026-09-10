@@ -60,7 +60,8 @@ API server-side admission check:
 
 ```sh
 scripts/release/stage-hoodi-validator-deployment.sh plan \
-  --handoff /controlled-state/hoodi-001-prepared/validator-deployment-handoff.json
+  --handoff /controlled-state/hoodi-001-prepared/validator-deployment-handoff.json \
+  --private-eks-session-handoff /controlled-state/private-eks-session.json
 ```
 
 After the private-cluster health and the operator's review are accepted, use
