@@ -9,7 +9,9 @@ case "$handoff:$output" in /*:/*) ;; *) usage;; esac
 [ -f "$handoff" ] && [ ! -L "$handoff" ] || { printf '%s\n' 'handoff must be a regular file' >&2; exit 65; }
 [ ! -e "$output" ] && [ ! -L "$output" ] || { printf '%s\n' 'output must not already exist' >&2; exit 65; }
 for command in jq gh unzip uuidgen tr sleep seq sed wc; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 127; }; done
-github() { env -u GITHUB_TOKEN gh "$@"; }
+# Preserve the caller's GITHUB_TOKEN exactly; gh selects the authenticated
+# operator or CI credential without altering process environment state.
+github() { gh "$@"; }
 repository="$(jq -er '.schema_version == "v1" and .gitops_repository | select(test("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"))' "$handoff")" || exit 65
 account="$(jq -er '.aws_account_id | select(test("^[0-9]{12}$"))' "$handoff")" || exit 65
 
