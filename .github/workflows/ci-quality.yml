@@ -37,6 +37,8 @@ jobs:
         run: bash scripts/ci/test-live-engine-vault-cutover-contract.sh
       - name: Test live validator Vault cutover contract
         run: bash scripts/ci/test-live-validator-vault-cutover-contract.sh
+      - name: Validate legacy TLS mount pruning
+        run: bash scripts/ci/test-prune-legacy-validator-tls-mounts.sh
       - name: Test signer public-key evidence contract
         run: bash scripts/ci/test-collect-hoodi-signer-public-key-evidence-contract.sh
       - name: Test live Vault legacy-secret finalization contract

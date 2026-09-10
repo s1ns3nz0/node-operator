@@ -24,6 +24,7 @@ def usage() -> None:
 def pod(name: str, validator_set: str, public_key: str, component: str,
         role: str, expected: str, selector_warning: str) -> dict:
     labels = {
+        "node-operator.io/vault-client": "true",
         "app.kubernetes.io/component": component,
         "node-operator.io/validator-set": validator_set,
         "node-operator.io/purpose": "signer-network-probe",
