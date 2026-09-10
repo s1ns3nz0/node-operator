@@ -6,6 +6,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 script="$root/scripts/ops/recover-and-migrate-hoodi-runtime-secrets-to-vault.sh"
 fail() { printf 'FAIL live runtime secret migration contract: %s\n' "$*" >&2; exit 1; }
 test -x "$script" || fail 'migration helper missing or not executable'
+test -x "$root/scripts/ci/test-live-runtime-secret-migration-recovery.sh" || fail 'recovery-path regression test missing or not executable'
 bash -n "$script"
 for required in \
   'get secret engine-api-jwt -o json' \
@@ -37,4 +38,8 @@ if grep -Eq 'openssl rand|kubectl.*delete secret|create secret generic|generate-
 fi
 v2_record='{"data":{"data":{"jwt":"fixture"},"metadata":{"version":1}}}'
 jq -e '.data.data.jwt == "fixture" and .data.metadata.version == 1' <<<"$v2_record" >/dev/null
+signer_secret='{"data":{"tls.p12":"fixture","tls-password.txt":"fixture"}}'
+client_secret='{"data":{"tls.crt":"fixture","tls.key":"fixture","ca.crt":"fixture"}}'
+jq -e '(.data["tls.p12"] | type == "string") and (.data["tls-password.txt"] | type == "string")' <<<"$signer_secret" >/dev/null
+jq -e '(.data["tls.crt"] | type == "string") and (.data["tls.key"] | type == "string") and (.data["ca.crt"] | type == "string")' <<<"$client_secret" >/dev/null
 printf '%s\n' 'PASS: live runtime migration requires KV v2, fail-closes legacy policy consumers, writes records with CAS, and retains source Secrets for staged cutover.'

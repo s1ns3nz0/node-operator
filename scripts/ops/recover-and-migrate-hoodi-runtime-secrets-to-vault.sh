@@ -51,8 +51,8 @@ signer_json="$(kubectl -n "$namespace" get secret "validator-${validator_set}-si
 client_json="$(kubectl -n "$namespace" get secret "validator-${validator_set}-client-tls" -o json)"
 known_json="$(kubectl -n "$namespace" get configmap "validator-${validator_set}-known-clients" -o json)"
 jq -e '.data.jwt | type == "string" and test("^[A-Za-z0-9+/=]+$")' <<<"$engine_json" >/dev/null
-jq -e '.data["tls.p12"] | type == "string" and .data["tls-password.txt"] | type == "string"' <<<"$signer_json" >/dev/null
-jq -e '.data["tls.crt"] | type == "string" and .data["tls.key"] | type == "string" and .data["ca.crt"] | type == "string"' <<<"$client_json" >/dev/null
+jq -e '(.data["tls.p12"] | type == "string") and (.data["tls-password.txt"] | type == "string")' <<<"$signer_json" >/dev/null
+jq -e '(.data["tls.crt"] | type == "string") and (.data["tls.key"] | type == "string") and (.data["ca.crt"] | type == "string")' <<<"$client_json" >/dev/null
 jq -e '.data["known-clients"] | type == "string" and length > 0' <<<"$known_json" >/dev/null
 
 jwt="$(jq -r '.data.jwt | @base64d' <<<"$engine_json")"
@@ -200,7 +200,9 @@ mkdir -p "$(dirname "$evidence")"
 engine_sha="$(printf '%s' "$jwt" | shasum -a 256 | awk '{print $1}')"
 signer_sha="$(printf '%s' "$signer_p12_b64" | shasum -a 256 | awk '{print $1}')"
 client_sha="$(printf '%s' "$client_crt_b64" | shasum -a 256 | awk '{print $1}')"
-jq -n --arg set "$validator_set" --arg engine "$engine_sha" --arg signer "$signer_sha" --arg client "$client_sha" --arg fingerprint "$client_fingerprint" --argjson upgraded "$kv_v1_upgraded" --args "${repaired_records[@]}" \
+evidence_args=(--args)
+if [ "${#repaired_records[@]}" -gt 0 ]; then evidence_args+=("${repaired_records[@]}"); fi
+jq -n --arg set "$validator_set" --arg engine "$engine_sha" --arg signer "$signer_sha" --arg client "$client_sha" --arg fingerprint "$client_fingerprint" --argjson upgraded "$kv_v1_upgraded" "${evidence_args[@]}" \
   '{schema_version:1,operation:"live-runtime-secret-migration",validator_set:$set,engine_jwt_sha256:$engine,signer_pkcs12_b64_sha256:$signer,client_certificate_b64_sha256:$client,client_fingerprint_sha256:$fingerprint,kv_mount_version:2,kv_v1_upgraded:$upgraded,repaired_legacy_vault_records:$ARGS.positional,secret_values_emitted:false,source_secrets_retained:true}' > "$evidence"
 chmod 600 "$evidence"
 unset jwt signer_p12_b64 signer_password client_crt_b64 client_key_b64 client_ca_b64 engine_record signer_record client_record known_clients
