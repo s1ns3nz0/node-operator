@@ -12,9 +12,10 @@ server:
     create: true
     name: vault
   image:
-    # Digest-derived immutable tags reference the reviewed private ECR mirror.
+    # The chart renders repository:tag, so retain the reviewed immutable ECR
+    # tag while appending the matching manifest digest.
     repository: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault
-    tag: 268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10
+    tag: "268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10@sha256:268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10"
   ha:
     enabled: true
     replicas: 3
@@ -61,6 +62,22 @@ server:
     enabled: true
     size: 20Gi
     storageClass: gp3-encrypted
+  resources:
+    requests: {cpu: "500m", memory: "1Gi"}
+    limits: {cpu: "2", memory: "2Gi"}
+  statefulSet:
+    securityContext:
+      pod:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      container:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities: {drop: ["ALL"]}
+        runAsNonRoot: true
   # Separate per-Pod encrypted PVC for append-only audit device files. This is
   # intentionally distinct from the Raft data claim. Enabling it alone does
   # not configure an audit device; the post-initialization verification gate
@@ -82,10 +99,16 @@ server:
       secret:
         secretName: vault-tls
         defaultMode: 420
+    - name: tmp
+      emptyDir: {}
   volumeMounts:
     - name: userconfig-vault-tls
       mountPath: /vault/userconfig/vault-tls
       readOnly: true
+    # The chart already provides writable /home/vault. With a read-only root
+    # filesystem, Vault also needs this explicit writable scratch directory.
+    - name: tmp
+      mountPath: /tmp
   # The image must be the immutable digest emitted by the protected
   # vault-audit-relay-ecr-publish workflow. This sidecar is the sole listener
   # for the local Unix audit socket and tails only the separate audit PVC.
@@ -100,6 +123,10 @@ server:
         readOnlyRootFilesystem: true
         capabilities:
           drop: ["ALL"]
+        runAsNonRoot: true
+      resources:
+        requests: {cpu: "100m", memory: "128Mi"}
+        limits: {cpu: "250m", memory: "256Mi"}
       volumeMounts:
         - name: audit
           mountPath: /vault/audit
@@ -114,7 +141,22 @@ injector:
   # private EKS workers intentionally have no Docker Hub egress.
   agentImage:
     repository: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault
-    tag: 268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10
+    tag: "268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10@sha256:268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10"
   image:
     repository: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault
-    tag: 8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f
+    tag: "8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f@sha256:8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f"
+  resources:
+    requests: {cpu: "100m", memory: "128Mi"}
+    limits: {cpu: "500m", memory: "512Mi"}
+  securityContext:
+    pod:
+      runAsNonRoot: true
+      runAsUser: 100
+      runAsGroup: 1000
+      fsGroup: 1000
+      seccompProfile: {type: RuntimeDefault}
+    container:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities: {drop: ["ALL"]}
+      runAsNonRoot: true

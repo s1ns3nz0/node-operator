@@ -1,18 +1,3 @@
-# Deliberately narrow connectivity for the disposable, no-token DAST Job.
-# The selector requires both the dedicated namespace label and scanner label.
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: node-operator-dast
-  labels:
-    node-operator.io/dast-client: "true"
-    pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/enforce-version: v1.35
-    pod-security.kubernetes.io/audit: restricted
-    pod-security.kubernetes.io/audit-version: v1.35
-    pod-security.kubernetes.io/warn: restricted
-    pod-security.kubernetes.io/warn-version: v1.35
----
 apiVersion: v1
 kind: Service
 metadata:
@@ -25,24 +10,6 @@ spec:
     - name: beacon-api
       port: 3500
       targetPort: 3500
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-private-dast-prysm-readonly-ingress
-  namespace: node-operator
-spec:
-  podSelector: {matchLabels: {app.kubernetes.io/name: prysm-beacon}}
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels: {node-operator.io/dast-client: "true"}
-          podSelector:
-            matchLabels: {app.kubernetes.io/component: private-dast-scanner}
-      ports:
-        - {protocol: TCP, port: 3500}
----
 apiVersion: v1
 kind: Service
 metadata:
@@ -133,36 +100,6 @@ spec:
     - to:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
       ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata: {name: nethermind-upcheck-proxy-dast-ingress, namespace: node-operator}
-spec:
-  podSelector: {matchLabels: {app.kubernetes.io/component: nethermind-upcheck-proxy}}
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        - namespaceSelector: {matchLabels: {node-operator.io/dast-client: "true"}}
-          podSelector: {matchLabels: {app.kubernetes.io/component: private-dast-scanner}}
-      ports: [{protocol: TCP, port: 8080}]
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-private-dast-vault-health-ingress
-  namespace: vault
-spec:
-  podSelector:
-    matchLabels: {app.kubernetes.io/name: vault, component: server}
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels: {node-operator.io/dast-client: "true"}
-          podSelector:
-            matchLabels: {app.kubernetes.io/component: private-dast-scanner}
-      ports: [{protocol: TCP, port: 8200}]
----
 apiVersion: v1
 kind: Service
 metadata: {name: validator-signer-upcheck-proxy, namespace: validator-operations}
@@ -253,54 +190,3 @@ spec:
     - to:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
       ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata: {name: signer-upcheck-proxy-dast-ingress, namespace: validator-operations}
-spec:
-  podSelector: {matchLabels: {app.kubernetes.io/component: validator-signer-upcheck-proxy}}
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        - namespaceSelector: {matchLabels: {node-operator.io/dast-client: "true"}}
-          podSelector: {matchLabels: {app.kubernetes.io/component: private-dast-scanner}}
-      ports: [{protocol: TCP, port: 8080}]
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-private-dast-egress
-  namespace: node-operator-dast
-spec:
-  podSelector:
-    matchLabels: {app.kubernetes.io/component: private-dast-scanner}
-  policyTypes: [Egress]
-  egress:
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: kube-system}
-      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: node-operator}
-          podSelector:
-            matchLabels: {app.kubernetes.io/name: prysm-beacon}
-      ports: [{protocol: TCP, port: 3500}]
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: node-operator}
-          podSelector:
-            matchLabels: {app.kubernetes.io/component: nethermind-upcheck-proxy}
-      ports: [{protocol: TCP, port: 8080}]
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: vault}
-          podSelector:
-            matchLabels: {app.kubernetes.io/name: vault, component: server}
-      ports: [{protocol: TCP, port: 8200}]
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: validator-operations}
-          podSelector:
-            matchLabels: {app.kubernetes.io/component: validator-signer-upcheck-proxy}
-      ports: [{protocol: TCP, port: 8080}]
