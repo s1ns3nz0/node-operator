@@ -34,8 +34,9 @@ client="$parent/client-and-fence.yaml"
 }
 
 validator_set="$(jq -er '
-  .schema_version == 1 and .network == "hoodi" and
-  (.validator_set | select(test("^hoodi-[a-z0-9][a-z0-9-]*$")))
+  if .schema_version == 1 and .network == "hoodi" and
+     (.validator_set | type == "string" and test("^hoodi-[a-z0-9][a-z0-9-]*$"))
+  then .validator_set else error("invalid validator set") end
 ' "$handoff")" || { printf '%s\n' 'handoff is not a Hoodi validator deployment contract' >&2; exit 65; }
 jq -e --arg parent "$parent" --arg runtime "$runtime" --arg client "$client" '
   (.aws_account_id | test("^[0-9]{12}$")) and
@@ -72,16 +73,9 @@ if [ "${PRIVATE_EKS_SESSION:-}" != 1 ]; then
 fi
 command -v kubectl >/dev/null 2>&1 || { printf '%s\n' 'missing command: kubectl' >&2; exit 69; }
 
-# The server-side dry run proves admission, RBAC, and schema compatibility
-# before an apply. It is run for both operations so apply has the same guard.
-kubectl apply --server-side --field-manager=node-operator-release-stage --dry-run=server -f "$runtime" -f "$client" >/dev/null
-if [ "$operation" = plan ]; then
-  printf 'PASS: private EKS accepted non-secret staged manifests for %s; no resources were created.\n' "$validator_set"
-  exit 0
-fi
-
-# Fresh-set staging must never overwrite an existing controller or lease. A
-# rotation or repair follows its own guarded continuity procedure instead.
+# Fresh-set staging must never adopt an existing controller or lease. Check
+# before server-side dry-run too: otherwise Kubernetes reports low-level field
+# manager conflicts that conceal the actionable recovery/rotation boundary.
 namespace='validator-operations'
 for target in \
   "statefulset/validator-${validator_set}-slashing-db" \
@@ -90,10 +84,18 @@ for target in \
   "deployment/validator-${validator_set}-signing-fence" \
   "lease/validator-${validator_set}-primary"; do
   if kubectl -n "$namespace" get "$target" >/dev/null 2>&1; then
-    printf 'refusing to overwrite existing fresh-set target: %s\n' "$target" >&2
+    printf 'validator set %s already has %s; fresh staging will not adopt it. Use the guarded repair or rotation procedure.\n' "$validator_set" "$target" >&2
     exit 65
   fi
 done
+
+# The server-side dry run proves admission, RBAC, and schema compatibility
+# before an apply. It is run for both operations so apply has the same guard.
+kubectl apply --server-side --field-manager=node-operator-release-stage --dry-run=server -f "$runtime" -f "$client" >/dev/null
+if [ "$operation" = plan ]; then
+  printf 'PASS: private EKS accepted non-secret staged manifests for %s; no resources were created.\n' "$validator_set"
+  exit 0
+fi
 
 kubectl apply --server-side --field-manager=node-operator-release-stage -f "$runtime" -f "$client" >/dev/null
 
