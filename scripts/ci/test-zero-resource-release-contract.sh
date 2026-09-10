@@ -18,10 +18,18 @@ rg -F 'init -input=false -migrate-state' "$entrypoint" >/dev/null
 rg -F 'node-operator/foundation-network/terraform.tfstate' "$entrypoint" >/dev/null
 rg -F 'node-operator/baseline/terraform.tfstate' "$entrypoint" >/dev/null
 rg -F 'foundation-network.auto.tfvars.json' "$entrypoint" >/dev/null
+rg -F '(.vpc_id | test("^vpc-[0-9a-f]+$"))' "$entrypoint" >/dev/null
+rg -F 'vpc_id:.vpc_id' "$entrypoint" >/dev/null
+if rg -F '.vpc_id.value' "$entrypoint" >/dev/null; then
+  printf 'foundation output is already a direct Terraform output value and must not be dereferenced again\n' >&2
+  exit 1
+fi
 rg -F 'gitops-publisher-handoff.json' "$entrypoint" >/dev/null
 rg -F 'ops-access-handoff.json' "$entrypoint" >/dev/null
 rg -F -- '--inputs cannot be combined with individual phase configs' "$entrypoint" >/dev/null
 rg -F 'zero apply requires --inputs or all three phase configs' "$entrypoint" >/dev/null
+rg -F 'incomplete bootstrap checkpoint; use a new work directory' "$entrypoint" >/dev/null
+rg -F 'incomplete foundation checkpoint; use a new work directory' "$entrypoint" >/dev/null
 rg -F 'bootstrap-state.tfvars.json' "$entrypoint" >/dev/null
 rg -F 'github_gitops_client_ecr_publisher_role_arn' "$entrypoint" >/dev/null
 rg -F 'backend "s3" {}' "$baseline/backend.tf" >/dev/null

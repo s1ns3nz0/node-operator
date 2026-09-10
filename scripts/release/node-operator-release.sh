@@ -127,8 +127,13 @@ zero_apply() {
     bootstrap_config="$expected_bootstrap"; foundation_config="$expected_foundation"; baseline_config="$expected_baseline"
   fi
   [ -n "$bootstrap_config" ] && [ -n "$foundation_config" ] && [ -n "$baseline_config" ] || fail "zero apply requires --inputs or all three phase configs"
-  case "$work_dir" in /*) ;; *) fail "--work-dir must be an absolute empty directory" ;; esac
-  [ ! -e "$work_dir" ] || fail "--work-dir must not already exist"
+  case "$work_dir" in /*) ;; *) fail "--work-dir must be an absolute directory" ;; esac
+  [ ! -L "$work_dir" ] || fail "--work-dir must not be a symlink"
+  if [ -e "$work_dir" ]; then
+    [ -d "$work_dir" ] || fail "--work-dir must be a directory"
+  else
+    mkdir -p "$work_dir"; chmod 700 "$work_dir"
+  fi
   require_command terraform
   require_nonsecret_file "$bootstrap_config"; require_nonsecret_file "$foundation_config"; require_nonsecret_file "$baseline_config"
   reject_privileged_baseline_inputs "$baseline_config"
@@ -136,27 +141,34 @@ zero_apply() {
     fail "zero apply derives foundation network inputs; remove network_source, foundation_network, and hoodi_nat_gateway_id from --baseline-config"
   fi
 
-  mkdir -p "$work_dir"; chmod 700 "$work_dir"
   local bootstrap_module="$work_dir/bootstrap-state" foundation_module="$work_dir/foundation-network" baseline_module="$work_dir/baseline"
   local bootstrap_backend="$work_dir/bootstrap.backend.hcl" foundation_backend="$work_dir/foundation.backend.hcl" baseline_backend="$work_dir/baseline.backend.hcl"
   local bootstrap_output="$work_dir/bootstrap-output.json" foundation_output="$work_dir/foundation-output.json" foundation_input="$work_dir/foundation-network.auto.tfvars.json" baseline_output="$work_dir/baseline-output.json" gitops_handoff="$work_dir/gitops-publisher-handoff.json" ops_handoff="$work_dir/ops-access-handoff.json"
 
-  copy_module infra/bootstrap-state "$bootstrap_module"
-  terraform -chdir="$bootstrap_module" init -input=false -backend=false
-  terraform -chdir="$bootstrap_module" plan -input=false -var-file="$bootstrap_config" -out="$work_dir/bootstrap.tfplan"
-  terraform -chdir="$bootstrap_module" apply -input=false "$work_dir/bootstrap.tfplan"
-  terraform -chdir="$bootstrap_module" output -json backend > "$bootstrap_output"
+  if [ ! -f "$bootstrap_output" ]; then
+    [ ! -e "$bootstrap_module" ] || fail "incomplete bootstrap checkpoint; use a new work directory"
+    copy_module infra/bootstrap-state "$bootstrap_module"
+    terraform -chdir="$bootstrap_module" init -input=false -backend=false
+    terraform -chdir="$bootstrap_module" plan -input=false -var-file="$bootstrap_config" -out="$work_dir/bootstrap.tfplan"
+    terraform -chdir="$bootstrap_module" apply -input=false "$work_dir/bootstrap.tfplan"
+    terraform -chdir="$bootstrap_module" output -json backend > "$bootstrap_output"
+  fi
   write_backend_config "$bootstrap_output" "node-operator/bootstrap-state/terraform.tfstate" "$bootstrap_backend"
-  # Bootstrap begins in local state because the remote backend is being made.
-  # Migration is explicit and never uses force-copy.
-  terraform -chdir="$bootstrap_module" init -input=false -migrate-state -backend-config="$bootstrap_backend"
+  if [ -d "$bootstrap_module" ] && [ ! -d "$bootstrap_module/.terraform" ]; then
+    # Bootstrap begins in local state because the remote backend is being made.
+    # Migration is explicit and never uses force-copy.
+    terraform -chdir="$bootstrap_module" init -input=false -migrate-state -backend-config="$bootstrap_backend"
+  fi
 
-  copy_module infra/foundation-network "$foundation_module"
   write_backend_config "$bootstrap_output" "node-operator/foundation-network/terraform.tfstate" "$foundation_backend"
-  apply_phase "$foundation_module" "$foundation_config" "$foundation_backend" "$work_dir/foundation.tfplan"
-  terraform -chdir="$foundation_module" output -json network > "$foundation_output"
-  jq -e 'type == "object" and (.vpc_id.value | test("^vpc-[0-9a-f]+$")) and (.vpc_cidr.value | type == "string") and (.system_subnet_ids.value | type == "array" and length >= 2) and (.hoodi_subnet_ids.value | type == "array" and length >= 1) and (.system_route_table_id.value | test("^rtb-[0-9a-f]+$")) and (.hoodi_route_table_id.value | test("^rtb-[0-9a-f]+$")) and (.hoodi_nat_gateway_id.value | test("^nat-[0-9a-f]+$"))' "$foundation_output" >/dev/null || fail "foundation output is not a usable zero-resource network contract"
-  jq '{network_source:"foundation", foundation_network:{vpc_id:.vpc_id.value, vpc_cidr:.vpc_cidr.value, system_subnet_ids:.system_subnet_ids.value, hoodi_subnet_ids:.hoodi_subnet_ids.value, system_route_table_id:.system_route_table_id.value, hoodi_route_table_id:.hoodi_route_table_id.value, hoodi_nat_gateway_id:.hoodi_nat_gateway_id.value}}' "$foundation_output" > "$foundation_input"
+  if [ ! -f "$foundation_output" ]; then
+    [ ! -e "$foundation_module" ] || fail "incomplete foundation checkpoint; use a new work directory"
+    copy_module infra/foundation-network "$foundation_module"
+    apply_phase "$foundation_module" "$foundation_config" "$foundation_backend" "$work_dir/foundation.tfplan"
+    terraform -chdir="$foundation_module" output -json network > "$foundation_output"
+  fi
+  jq -e 'type == "object" and (.vpc_id | test("^vpc-[0-9a-f]+$")) and (.vpc_cidr | type == "string") and (.system_subnet_ids | type == "array" and length >= 2) and (.hoodi_subnet_ids | type == "array" and length >= 1) and (.system_route_table_id | test("^rtb-[0-9a-f]+$")) and (.hoodi_route_table_id | test("^rtb-[0-9a-f]+$")) and (.hoodi_nat_gateway_id | test("^nat-[0-9a-f]+$"))' "$foundation_output" >/dev/null || fail "foundation output is not a usable zero-resource network contract"
+  jq '{network_source:"foundation", foundation_network:{vpc_id:.vpc_id, vpc_cidr:.vpc_cidr, system_subnet_ids:.system_subnet_ids, hoodi_subnet_ids:.hoodi_subnet_ids, system_route_table_id:.system_route_table_id, hoodi_route_table_id:.hoodi_route_table_id, hoodi_nat_gateway_id:.hoodi_nat_gateway_id}}' "$foundation_output" > "$foundation_input"
   chmod 600 "$foundation_input"
 
   copy_module infra/terraform "$baseline_module"
@@ -175,7 +187,7 @@ zero_apply() {
   jq --arg region "$deployment_region" --slurpfile foundation "$foundation_output" --slurpfile bootstrap "$bootstrap_output" '
     {schema_version:"v1",aws_region:$region,aws_account_id:.deployment_account_id.value,
      cluster_name:.cluster_name.value,
-     vpc_id:$foundation[0].vpc_id.value,subnet_id:$foundation[0].system_subnet_ids.value[0],
+     vpc_id:$foundation[0].vpc_id,subnet_id:$foundation[0].system_subnet_ids[0],
      backend:{bucket:$bootstrap[0].bucket.value,dynamodb_table:$bootstrap[0].dynamodb_table.value,kms_key_id:$bootstrap[0].kms_key_id.value,region:$bootstrap[0].region.value,
        key:"node-operator/ops-access/terraform.tfstate"}}
   ' "$baseline_output" > "$ops_handoff"
