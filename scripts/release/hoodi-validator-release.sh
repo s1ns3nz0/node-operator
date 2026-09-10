@@ -11,21 +11,25 @@ usage:
   hoodi-validator-release.sh verify --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json
   hoodi-validator-release.sh interactive prepare --bundle-root DIRECTORY --output-dir /new-absolute-directory [--aws-region ap-northeast-1|ap-northeast-2]
   hoodi-validator-release.sh interactive deploy --bundle-root DIRECTORY --output-dir /new-absolute-directory [--aws-region ap-northeast-1|ap-northeast-2]
+  hoodi-validator-release.sh interactive custody --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json --custody-dir /new-absolute/local-custody-directory
   hoodi-validator-release.sh infrastructure apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory
   hoodi-validator-release.sh deploy apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory --private-eks-session-handoff /new-absolute/session.json --allow-create
+  hoodi-validator-release.sh custody apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json --keystore-dir /absolute/local-custody-directory --ceremony-dir /new-absolute/local-ceremony-directory
+  hoodi-validator-release.sh evidence signer --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json --output-dir /absolute/nonsecret-evidence-directory
+  hoodi-validator-release.sh evidence beacon --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json --output-dir /absolute/nonsecret-evidence-directory
   hoodi-validator-release.sh activate apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json --deposit-attestation /absolute/file.json --public-deposit-verification /absolute/file.json --private-evidence /absolute/file.json --signer-evidence /absolute/file.json --confirm-public-key 0x... --confirm-withdrawal-address 0x...
   hoodi-validator-release.sh ops-inputs prepare --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --zero-work-dir /absolute/zero-work-dir --output-dir /new-absolute-directory
   hoodi-validator-release.sh ops-access plan|apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --ops-inputs /absolute/ops-access-inputs.json --plan-file /absolute/private.tfplan [--expected-sha SHA256] [--allow-create] [--private-eks-session-handoff /absolute/session.json]
-  hoodi-validator-release.sh stage plan|apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json
+  hoodi-validator-release.sh stage plan|apply|verify --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json
 USAGE
   exit 64
 }
 
 command_name="${1:-}"; [ -n "$command_name" ] || usage
 shift
-operation=''; bundle_root=''; inputs=''; work_dir=''; session_handoff=''; output_dir=''; ops_inputs=''; plan_file=''; expected_sha=''; aws_region='ap-northeast-2'; allow_create=false; deposit_attestation=''; public_deposit_verification=''; private_evidence=''; signer_evidence=''; confirm_public_key=''; confirm_withdrawal_address=''
+operation=''; bundle_root=''; inputs=''; work_dir=''; session_handoff=''; output_dir=''; ops_inputs=''; plan_file=''; expected_sha=''; aws_region='ap-northeast-2'; allow_create=false; deposit_attestation=''; public_deposit_verification=''; private_evidence=''; signer_evidence=''; confirm_public_key=''; confirm_withdrawal_address=''; keystore_dir=''; ceremony_dir=''
 case "$command_name" in
-  interactive|infrastructure|deploy|activate|ops-inputs|ops-access|stage)
+  interactive|infrastructure|deploy|custody|evidence|activate|ops-inputs|ops-access|stage)
     [ "$#" -gt 0 ] || usage
     operation="$1"
     shift
@@ -52,13 +56,36 @@ while [ "$#" -gt 0 ]; do
     --signer-evidence) signer_evidence="${2:-}"; shift 2 ;;
     --confirm-public-key) confirm_public_key="${2:-}"; shift 2 ;;
     --confirm-withdrawal-address) confirm_withdrawal_address="${2:-}"; shift 2 ;;
+    --keystore-dir) keystore_dir="${2:-}"; shift 2 ;;
+    --ceremony-dir) ceremony_dir="${2:-}"; shift 2 ;;
+    --custody-dir) ceremony_dir="${2:-}"; shift 2 ;;
     *) usage ;;
   esac
 done
 
 if [ "$command_name" = interactive ]; then
-  [ "$operation" = prepare ] || [ "$operation" = deploy ] || usage
-  [ -n "$bundle_root$output_dir" ] && [ -z "$inputs$work_dir$session_handoff$ops_inputs$plan_file$expected_sha" ] && [ "$allow_create" = false ] || usage
+  [ "$operation" = prepare ] || [ "$operation" = deploy ] || [ "$operation" = custody ] || usage
+  if [ "$operation" = custody ]; then
+    [ -n "$bundle_root$inputs$session_handoff$ceremony_dir" ] && [ -z "$work_dir$output_dir$ops_inputs$plan_file$expected_sha$keystore_dir" ] && [ "$allow_create" = false ] || usage
+    case "$bundle_root:$inputs:$session_handoff:$ceremony_dir" in /*:/*:/*:/*) ;; *) usage ;; esac
+    [ -t 0 ] && [ -t 1 ] || { printf '%s\n' 'interactive custody requires a terminal' >&2; exit 69; }
+    [ -d "$bundle_root/source" ] && [ -f "$bundle_root/bundle-manifest.json" ] || { printf '%s\n' 'bundle root is not a verified release layout' >&2; exit 65; }
+    [ -f "$inputs" ] && [ ! -L "$inputs" ] && [ -f "$session_handoff" ] && [ ! -L "$session_handoff" ] || { printf '%s\n' 'interactive custody inputs must be regular files' >&2; exit 65; }
+    [ ! -e "$ceremony_dir" ] && [ ! -L "$ceremony_dir" ] || { printf '%s\n' 'interactive custody directory must be new' >&2; exit 65; }
+    command -v find >/dev/null 2>&1 || { printf '%s\n' 'missing command: find' >&2; exit 69; }
+    input_parent="$(cd "$(dirname "$inputs")" && pwd -P)"
+    validator_handoff="$input_parent/validator-deployment/validator-deployment-handoff.json"
+    [ -f "$validator_handoff" ] && [ ! -L "$validator_handoff" ] || { printf '%s\n' 'interactive custody input lacks validator handoff' >&2; exit 65; }
+    withdrawal_address="$(jq -er '.withdrawal_address | select(test("^0x[0-9a-fA-F]{40}$"))' "$validator_handoff")" || { printf '%s\n' 'interactive custody input lacks a valid withdrawal address' >&2; exit 65; }
+    "$bundle_root/source/scripts/ops/generate-hoodi-validator-keystore.sh" --output-dir "$ceremony_dir"
+    deposit_data="$(find "$ceremony_dir" -maxdepth 2 -type f -name 'deposit_data-*.json' -print)"
+    [ "$(printf '%s\n' "$deposit_data" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { printf '%s\n' 'key ceremony did not produce exactly one deposit-data file' >&2; exit 65; }
+    "$bundle_root/source/scripts/ops/validate-hoodi-deposit-data.sh" --deposit-data "$deposit_data" --withdrawal-address "$withdrawal_address" --output-dir "$ceremony_dir/public-attestation"
+    "$0" custody apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session_handoff" --keystore-dir "$ceremony_dir/validator_keys" --ceremony-dir "$ceremony_dir/public-ceremony"
+    printf 'PASS: new local key custody is onboarded and public deposit attestation is ready at %s/public-attestation. Independently submit exactly one reviewed 32 HoodiETH deposit with your wallet before activation.\n' "$ceremony_dir"
+    exit 0
+  fi
+  [ -n "$bundle_root$output_dir" ] && [ -z "$inputs$work_dir$session_handoff$ops_inputs$plan_file$expected_sha$keystore_dir$ceremony_dir" ] && [ "$allow_create" = false ] || usage
   case "$bundle_root:$output_dir" in */*:/*) ;; *) usage ;; esac
   [ -t 0 ] && [ -t 1 ] || { printf '%s\n' 'interactive preparation requires a terminal' >&2; exit 69; }
   command -v aws >/dev/null 2>&1 || { printf '%s\n' 'missing command: aws' >&2; exit 69; }
@@ -93,6 +120,7 @@ if [ "$command_name" = interactive ]; then
     --signing-fence-image "$fence_image" --kubernetes-api-cidr "$kubernetes_api_cidr" --output-dir "$output_dir" "${backend_args[@]}"
   if [ "$operation" = deploy ]; then
     "$0" deploy apply --bundle-root "$bundle_root" --inputs "$output_dir/hoodi-zero-release-inputs.json" --work-dir "$output_dir/deployment-work" --private-eks-session-handoff "$output_dir/private-eks-session.json" --allow-create
+    printf 'NEXT: run %s interactive custody --bundle-root %s --inputs %s/hoodi-zero-release-inputs.json --private-eks-session-handoff %s/private-eks-session.json --custody-dir /new-absolute/local-custody-directory\n' "${0##*/}" "$bundle_root" "$output_dir" "$output_dir"
   fi
   printf 'PASS: initial release values are prepared in %s.\n' "$output_dir"
   exit 0
@@ -159,23 +187,72 @@ case "$command_name" in
     else
       "$0" ops-access apply --bundle-root "$bundle_root" --inputs "$inputs" --ops-inputs "$deploy_ops_inputs" --plan-file "$deploy_plan" --expected-sha "$deploy_sha" --allow-create --private-eks-session-handoff "$session_handoff"
     fi
-    "$0" stage apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session_handoff"
+    # Retry only an exact zero-replica boundary. A wholly absent set may be
+    # staged; a partial or active set fails closed rather than being adopted.
+    if "$0" stage verify --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session_handoff"; then
+      :
+    else
+      stage_status=$?
+      [ "$stage_status" -eq 3 ] || exit "$stage_status"
+      "$0" stage apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session_handoff"
+      "$0" stage verify --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session_handoff"
+    fi
     printf 'PASS: infrastructure, isolated private-EKS SSM access, and zero-replica validator staging are deployed. Continue with the separate Vault, custody, GitOps, deposit, and validator activation ceremonies.\n'
+    ;;
+  custody)
+    [ "$operation" = apply ] && [ -n "$session_handoff$keystore_dir$ceremony_dir" ] && [ -z "$work_dir$output_dir$ops_inputs$plan_file$expected_sha$deposit_attestation$public_deposit_verification$private_evidence$signer_evidence$confirm_public_key$confirm_withdrawal_address" ] || usage
+    case "$session_handoff:$keystore_dir:$ceremony_dir" in /*:/*:/*) ;; *) usage ;; esac
+    [ -f "$session_handoff" ] && [ ! -L "$session_handoff" ] || { printf '%s\n' 'custody session handoff must be a regular file' >&2; exit 65; }
+    [ -d "$keystore_dir" ] && [ ! -L "$keystore_dir" ] || { printf '%s\n' 'custody keystore directory must be a real local directory' >&2; exit 65; }
+    [ ! -e "$ceremony_dir" ] && [ ! -L "$ceremony_dir" ] || { printf '%s\n' 'custody ceremony directory must be new so public CA evidence cannot be overwritten' >&2; exit 65; }
+    session_region="$(jq -er 'select(.schema_version == 1 and (.aws_region | test("^ap-northeast-(1|2)$")) and (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and (.ssm_ops_instance_id | test("^i-[0-9a-f]+$"))) | .aws_region' "$session_handoff")" || { printf '%s\n' 'custody session handoff is invalid' >&2; exit 65; }
+    session_cluster="$(jq -er '.cluster_name' "$session_handoff")"; session_instance="$(jq -er '.ssm_ops_instance_id' "$session_handoff")"
+    [ "$session_region" = "$input_region" ] || { printf '%s\n' 'custody session points to another Region' >&2; exit 65; }
+    validator_set="$(jq -er '.validator_set' "$validator_handoff")"
+    mkdir -m 700 "$ceremony_dir"
+    eks_env=(env AWS_REGION="$session_region" EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance")
+    "$bundle_root/source/scripts/ops/with-private-vault.sh" -- "${eks_env[@]}" PRIVATE_VAULT_SESSION=1 "$bundle_root/source/scripts/ops/recover-and-bootstrap-hoodi-validator-runtime-vault.sh" --validator-set "$validator_set"
+    "$bundle_root/source/scripts/ops/with-private-vault.sh" -- "${eks_env[@]}" PRIVATE_VAULT_SESSION=1 "$bundle_root/source/scripts/ops/recover-and-onboard-hoodi-validator-keystore.sh" --validator-set "$validator_set" --keystore-dir "$keystore_dir" --signer-ca-output "$ceremony_dir/signer-ca.crt" --known-clients-output "$ceremony_dir/known-clients.txt"
+    "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" PRIVATE_EKS_SESSION=1 kubectl -n validator-operations create configmap "validator-${validator_set}-known-clients" --from-file="known-clients=$ceremony_dir/known-clients.txt" --dry-run=client -o yaml | "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" PRIVATE_EKS_SESSION=1 kubectl apply -f - >/dev/null
+    printf 'PASS: Vault runtime, encrypted local custody onboarding, and transport TLS were configured. Public CA evidence is in %s; no validator workload was started.\n' "$ceremony_dir"
+    ;;
+  evidence)
+    [ "$operation" = signer ] || [ "$operation" = beacon ] || usage
+    [ -n "$session_handoff$output_dir" ] && [ -z "$work_dir$ops_inputs$plan_file$expected_sha$keystore_dir$ceremony_dir$deposit_attestation$public_deposit_verification$private_evidence$signer_evidence$confirm_public_key$confirm_withdrawal_address" ] || usage
+    case "$session_handoff:$output_dir" in /*:/*) ;; *) usage ;; esac
+    [ -f "$session_handoff" ] && [ ! -L "$session_handoff" ] || { printf '%s\n' 'signer evidence session handoff must be a regular file' >&2; exit 65; }
+    session_region="$(jq -er 'select(.schema_version == 1 and (.aws_region | test("^ap-northeast-(1|2)$")) and (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and (.ssm_ops_instance_id | test("^i-[0-9a-f]+$"))) | .aws_region' "$session_handoff")" || { printf '%s\n' 'signer evidence session handoff is invalid' >&2; exit 65; }
+    session_cluster="$(jq -er '.cluster_name' "$session_handoff")"; session_instance="$(jq -er '.ssm_ops_instance_id' "$session_handoff")"
+    [ "$session_region" = "$input_region" ] || { printf '%s\n' 'signer evidence session points to another Region' >&2; exit 65; }
+    validator_set="$(jq -er '.validator_set' "$validator_handoff")"
+    validator_key="$(jq -er '.validator_public_key | select(test("^0x[0-9a-fA-F]{96}$"))' "$validator_handoff")" || { printf '%s\n' 'validator handoff lacks a valid public key for signer evidence' >&2; exit 65; }
+    eks_env=(env PRIVATE_EKS_SESSION=1 AWS_REGION="$session_region" EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance")
+    if [ "$operation" = signer ]; then
+      "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$bundle_root/source/scripts/ops/start-hoodi-validator-signer.sh" --validator-set "$validator_set"
+      "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$bundle_root/source/scripts/ops/collect-hoodi-signer-public-key-evidence.sh" --validator-set "$validator_set" --validator-public-key "$validator_key" --output-dir "$output_dir"
+      printf 'PASS: signer is running at one replica and fresh TLS public-key evidence was collected in %s. Wait for matching public deposit and private Beacon active evidence before activation.\n' "$output_dir"
+    else
+      command -v uuidgen >/dev/null 2>&1 || { printf '%s\n' 'missing command: uuidgen' >&2; exit 69; }
+      correlation_id="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+      "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$bundle_root/source/scripts/ops/observe-private-hoodi-validator.sh" --validator-set "$validator_set" --validator-public-key "$validator_key" --correlation-id "$correlation_id" --output-dir "$output_dir"
+      printf 'PASS: fresh private Beacon evidence was collected in %s. It must show synced and active_ongoing before activation.\n' "$output_dir"
+    fi
     ;;
   activate)
     [ "$operation" = apply ] && [ -n "$session_handoff$deposit_attestation$public_deposit_verification$private_evidence$signer_evidence$confirm_public_key$confirm_withdrawal_address" ] && [ -z "$work_dir$output_dir$ops_inputs$plan_file$expected_sha" ] || usage
     for evidence in "$session_handoff" "$deposit_attestation" "$public_deposit_verification" "$private_evidence" "$signer_evidence"; do case "$evidence" in /*) ;; *) usage ;; esac; [ -f "$evidence" ] && [ ! -L "$evidence" ] || { printf '%s\n' 'activation input must be a regular file' >&2; exit 65; }; done
     session_region="$(jq -er '
-      .schema_version == 1 and
-      (.aws_region | select(test("^ap-northeast-(1|2)$"))) and
-      (.cluster_name | select(test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$"))) and
-      (.ssm_ops_instance_id | select(test("^i-[0-9a-f]+$"))) | .aws_region
+      select(
+        .schema_version == 1 and
+        (.aws_region | test("^ap-northeast-(1|2)$")) and
+        (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and
+        (.ssm_ops_instance_id | test("^i-[0-9a-f]+$"))
+      ) | .aws_region
     ' "$session_handoff")" || { printf '%s\n' 'activation session handoff is invalid' >&2; exit 65; }
     session_cluster="$(jq -er '.cluster_name' "$session_handoff")"; session_instance="$(jq -er '.ssm_ops_instance_id' "$session_handoff")"
     [ "$session_region" = "$input_region" ] || { printf '%s\n' 'activation session points to another Region' >&2; exit 65; }
     validator_set="$(jq -er '.validator_set' "$validator_handoff")"
     eks_env=(env PRIVATE_EKS_SESSION=1 AWS_REGION="$session_region" EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance")
-    "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$bundle_root/source/scripts/ops/start-hoodi-validator-signer.sh" --validator-set "$validator_set"
     "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$bundle_root/source/scripts/ops/activate-hoodi-validator-client.sh" --validator-set "$validator_set" --deposit-attestation "$deposit_attestation" --public-deposit-verification "$public_deposit_verification" --private-evidence "$private_evidence" --signer-evidence "$signer_evidence" --confirm-public-key "$confirm_public_key" --confirm-withdrawal-address "$confirm_withdrawal_address"
     printf 'PASS: validator activation was submitted through the fixed session and guarded evidence path.\n'
     ;;
@@ -207,7 +284,7 @@ case "$command_name" in
     "$release_dir/node-operator-ops-access.sh" "${ops_args[@]}"
     ;;
   stage)
-    [ "$operation" = plan ] || [ "$operation" = apply ] || usage
+    [ "$operation" = plan ] || [ "$operation" = apply ] || [ "$operation" = verify ] || usage
     [ -n "$session_handoff" ] && [ -z "$work_dir$output_dir" ] || usage
     "$release_dir/stage-hoodi-validator-deployment.sh" "$operation" --handoff "$validator_handoff" --private-eks-session-handoff "$session_handoff"
     ;;
