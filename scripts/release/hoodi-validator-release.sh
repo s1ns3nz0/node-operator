@@ -9,6 +9,7 @@ usage() {
   cat >&2 <<'USAGE'
 usage:
   hoodi-validator-release.sh verify --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json
+  hoodi-validator-release.sh interactive prepare --bundle-root DIRECTORY --output-dir /new-absolute-directory
   hoodi-validator-release.sh infrastructure apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory
   hoodi-validator-release.sh ops-inputs prepare --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --zero-work-dir /absolute/zero-work-dir --output-dir /new-absolute-directory
   hoodi-validator-release.sh ops-access plan|apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --ops-inputs /absolute/ops-access-inputs.json --plan-file /absolute/private.tfplan [--expected-sha SHA256] [--allow-create] [--private-eks-session-handoff /absolute/session.json]
@@ -21,7 +22,7 @@ command_name="${1:-}"; [ -n "$command_name" ] || usage
 shift
 operation=''; bundle_root=''; inputs=''; work_dir=''; session_handoff=''; output_dir=''; ops_inputs=''; plan_file=''; expected_sha=''; allow_create=false
 case "$command_name" in
-  infrastructure|ops-inputs|ops-access|stage)
+  interactive|infrastructure|ops-inputs|ops-access|stage)
     [ "$#" -gt 0 ] || usage
     operation="$1"
     shift
@@ -44,6 +45,31 @@ while [ "$#" -gt 0 ]; do
     *) usage ;;
   esac
 done
+
+if [ "$command_name" = interactive ]; then
+  [ "$operation" = prepare ] && [ -n "$bundle_root$output_dir" ] && [ -z "$inputs$work_dir$session_handoff$ops_inputs$plan_file$expected_sha" ] && [ "$allow_create" = false ] || usage
+  case "$bundle_root:$output_dir" in */*:/*) ;; *) usage ;; esac
+  [ -t 0 ] && [ -t 1 ] || { printf '%s\n' 'interactive preparation requires a terminal' >&2; exit 69; }
+  command -v aws >/dev/null 2>&1 || { printf '%s\n' 'missing command: aws' >&2; exit 69; }
+  account="$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN aws sts get-caller-identity --query Account --output text)"
+  [[ "$account" =~ ^[0-9]{12}$ ]] || { printf '%s\n' 'current AWS identity did not return a valid account' >&2; exit 65; }
+  prompt() { local label="$1" value; printf '%s: ' "$label" >&2; IFS= read -r value; printf '%s' "$value"; }
+  validator_set="$(prompt 'Validator set (hoodi-...)')"
+  validator_key="$(prompt 'Validator public key (0x...)')"
+  withdrawal_address="$(prompt 'Withdrawal address (0x...)')"
+  web3signer_image="$(prompt 'Approved Web3Signer private ECR digest')"
+  postgres_image="$(prompt 'Approved PostgreSQL private ECR digest')"
+  prysm_image="$(prompt 'Approved Prysm validator private ECR digest')"
+  fence_image="$(prompt 'Approved signing-fence private ECR digest')"
+  kubernetes_api_cidr="$(prompt 'Operator public IPv4 /32')"
+  "$bundle_root/source/scripts/release/prepare-hoodi-zero-release-inputs.sh" \
+    --aws-account-id "$account" --validator-set "$validator_set" --validator-public-key "$validator_key" \
+    --withdrawal-address "$withdrawal_address" --web3signer-image "$web3signer_image" \
+    --postgres-image "$postgres_image" --prysm-validator-image "$prysm_image" \
+    --signing-fence-image "$fence_image" --kubernetes-api-cidr "$kubernetes_api_cidr" --output-dir "$output_dir"
+  printf 'PASS: initial release values are prepared. Continue with infrastructure apply using %s/hoodi-zero-release-inputs.json.\n' "$output_dir"
+  exit 0
+fi
 
 case "$bundle_root:$inputs" in */*:/*) ;; *) usage ;; esac
 [ -d "$bundle_root/source" ] && [ -f "$bundle_root/bundle-manifest.json" ] || { printf '%s\n' 'bundle root is not a verified release layout' >&2; exit 65; }

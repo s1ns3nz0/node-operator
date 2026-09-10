@@ -81,6 +81,17 @@ release/source/scripts/release/prepare-hoodi-zero-release-inputs.sh \
   --output-dir /controlled-input/hoodi-zero-release
 ```
 
+For an operator terminal, the same values can be collected once interactively.
+The current AWS short-lived identity supplies the account and role binding; it
+never prompts for or stores credentials, Vault material, custody keys, or a
+wallet secret:
+
+```sh
+release/source/scripts/release/hoodi-validator-release.sh interactive prepare \
+  --bundle-root release \
+  --output-dir /controlled-input/hoodi-zero-release
+```
+
 Use `zero-resource/zero-resource-inputs.json` with `zero apply`. The generated
 `validator-deployment/validator-deployment-handoff.json` remains at zero
 replicas and is staged only after the separately created SSM session handoff.
