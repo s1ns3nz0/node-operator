@@ -61,6 +61,30 @@ This is infrastructure only. Immutable GitOps artifact publication, private
 Argo bootstrap, optional SSM access, Vault initialize/restore, custody, and
 validator activation stay separate approved operations.
 
+If the final validator identity and approved immutable client images are known
+at the beginning, generate both the zero-resource configuration and the
+initially fenced validator manifests in one non-secret command. This prevents
+the AWS account ID and validator identity from being copied between commands:
+
+```sh
+release/source/scripts/release/prepare-hoodi-zero-release-inputs.sh \
+  --aws-account-id <new-account-id> \
+  --backend-principal-arn arn:aws:iam::<new-account-id>:role/<terraform-role> \
+  --validator-set hoodi-001 \
+  --validator-public-key <0x-validator-public-key> \
+  --withdrawal-address <0x-withdrawal-address> \
+  --web3signer-image <private-ecr@sha256:...> \
+  --postgres-image <private-ecr@sha256:...> \
+  --prysm-validator-image <private-ecr@sha256:...> \
+  --signing-fence-image <private-ecr@sha256:...> \
+  --kubernetes-api-cidr <operator-ip>/32 \
+  --output-dir /controlled-input/hoodi-zero-release
+```
+
+Use `zero-resource/zero-resource-inputs.json` with `zero apply`. The generated
+`validator-deployment/validator-deployment-handoff.json` remains at zero
+replicas and is staged only after the separately created SSM session handoff.
+
 For the separately managed private EKS operations host, derive its isolated
 Terraform inputs from the zero-release work directory rather than copying VPC,
 subnet, or backend values by hand. The command verifies the current AWS account
