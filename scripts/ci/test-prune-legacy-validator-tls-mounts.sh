@@ -65,8 +65,8 @@ run() {
 : > "$scratch/trace"
 run present >/dev/null
 test "$(wc -l < "$scratch/trace" | tr -d ' ')" = 4 || { printf '%s\n' 'exact legacy mounts did not receive one preview and one CAS patch per workload' >&2; exit 1; }
-rg -F 'remove' "$scratch/trace" >/dev/null
-if rg -i 'get secret|force-conflicts|apply ' "$scratch/trace"; then printf '%s\n' 'prune helper read secrets or took broad ownership' >&2; exit 1; fi
+grep -F 'remove' "$scratch/trace" >/dev/null
+if grep -Ei 'get secret|force-conflicts|apply ' "$scratch/trace"; then printf '%s\n' 'prune helper read secrets or took broad ownership' >&2; exit 1; fi
 
 : > "$scratch/trace"
 run absent >/dev/null
