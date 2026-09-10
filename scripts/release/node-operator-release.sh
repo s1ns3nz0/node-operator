@@ -122,7 +122,7 @@ zero_apply() {
   mkdir -p "$work_dir"; chmod 700 "$work_dir"
   local bootstrap_module="$work_dir/bootstrap-state" foundation_module="$work_dir/foundation-network" baseline_module="$work_dir/baseline"
   local bootstrap_backend="$work_dir/bootstrap.backend.hcl" foundation_backend="$work_dir/foundation.backend.hcl" baseline_backend="$work_dir/baseline.backend.hcl"
-  local bootstrap_output="$work_dir/bootstrap-output.json" foundation_output="$work_dir/foundation-output.json" foundation_input="$work_dir/foundation-network.auto.tfvars.json"
+  local bootstrap_output="$work_dir/bootstrap-output.json" foundation_output="$work_dir/foundation-output.json" foundation_input="$work_dir/foundation-network.auto.tfvars.json" baseline_output="$work_dir/baseline-output.json" gitops_handoff="$work_dir/gitops-publisher-handoff.json"
 
   copy_module infra/bootstrap-state "$bootstrap_module"
   terraform -chdir="$bootstrap_module" init -input=false -backend=false
@@ -146,7 +146,15 @@ zero_apply() {
   cp "$foundation_input" "$baseline_module/foundation-network.auto.tfvars.json"
   write_backend_config "$bootstrap_output" "node-operator/baseline/terraform.tfstate" "$baseline_backend"
   apply_phase "$baseline_module" "$baseline_config" "$baseline_backend" "$work_dir/baseline.tfplan"
-  printf 'PASS zero-resource infrastructure bootstrap completed. Run GitOps artifact publication and separately approved Argo, SSM, Vault, and validator phases next.\n'
+  terraform -chdir="$baseline_module" output -json > "$baseline_output"
+  jq -e '
+    (.deployment_account_id.value | test("^[0-9]{12}$")) and
+    (.gitops_client_ecr_repository_url.value | test("^[0-9]{12}\\.dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*$")) and
+    (.github_gitops_client_ecr_publisher_role_arn.value | test("^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_-]+$"))
+  ' "$baseline_output" >/dev/null || fail "baseline did not emit the required GitOps publisher handoff"
+  jq '{schema_version:"v1",gitops_repository:"s1ns3nz0/node-operator-gitops",publisher_environment:"gitops-client-ecr-publish",aws_account_id:.deployment_account_id.value,chart_repository:.gitops_client_ecr_repository_url.value,publisher_role_arn:.github_gitops_client_ecr_publisher_role_arn.value}' "$baseline_output" > "$gitops_handoff"
+  chmod 600 "$gitops_handoff"
+  printf 'PASS zero-resource infrastructure bootstrap completed. Configure the GitOps publisher from %s, then run separately approved Argo, SSM, Vault, and validator phases next.\n' "$gitops_handoff"
 }
 
 case "$command_name" in

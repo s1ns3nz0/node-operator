@@ -18,6 +18,8 @@ rg -F 'init -input=false -migrate-state' "$entrypoint" >/dev/null
 rg -F 'node-operator/foundation-network/terraform.tfstate' "$entrypoint" >/dev/null
 rg -F 'node-operator/baseline/terraform.tfstate' "$entrypoint" >/dev/null
 rg -F 'foundation-network.auto.tfvars.json' "$entrypoint" >/dev/null
+rg -F 'gitops-publisher-handoff.json' "$entrypoint" >/dev/null
+rg -F 'github_gitops_client_ecr_publisher_role_arn' "$entrypoint" >/dev/null
 rg -F 'backend "s3" {}' "$baseline/backend.tf" >/dev/null
 rg -F 'vpc_cidr' "$foundation/outputs.tf" >/dev/null
 rg -F 'variable "network_source"' "$baseline/variables.tf" >/dev/null
