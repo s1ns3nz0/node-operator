@@ -10,7 +10,10 @@ usage() {
 usage:
   hoodi-validator-release.sh verify --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json
   hoodi-validator-release.sh interactive prepare --bundle-root DIRECTORY --output-dir /new-absolute-directory [--aws-region ap-northeast-1|ap-northeast-2]
+  hoodi-validator-release.sh interactive deploy --bundle-root DIRECTORY --output-dir /new-absolute-directory [--aws-region ap-northeast-1|ap-northeast-2]
   hoodi-validator-release.sh infrastructure apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory
+  hoodi-validator-release.sh deploy apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory --private-eks-session-handoff /new-absolute/session.json --allow-create
+  hoodi-validator-release.sh activate apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json --deposit-attestation /absolute/file.json --public-deposit-verification /absolute/file.json --private-evidence /absolute/file.json --signer-evidence /absolute/file.json --confirm-public-key 0x... --confirm-withdrawal-address 0x...
   hoodi-validator-release.sh ops-inputs prepare --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --zero-work-dir /absolute/zero-work-dir --output-dir /new-absolute-directory
   hoodi-validator-release.sh ops-access plan|apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --ops-inputs /absolute/ops-access-inputs.json --plan-file /absolute/private.tfplan [--expected-sha SHA256] [--allow-create] [--private-eks-session-handoff /absolute/session.json]
   hoodi-validator-release.sh stage plan|apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json
@@ -20,9 +23,9 @@ USAGE
 
 command_name="${1:-}"; [ -n "$command_name" ] || usage
 shift
-operation=''; bundle_root=''; inputs=''; work_dir=''; session_handoff=''; output_dir=''; ops_inputs=''; plan_file=''; expected_sha=''; aws_region='ap-northeast-2'; allow_create=false
+operation=''; bundle_root=''; inputs=''; work_dir=''; session_handoff=''; output_dir=''; ops_inputs=''; plan_file=''; expected_sha=''; aws_region='ap-northeast-2'; allow_create=false; deposit_attestation=''; public_deposit_verification=''; private_evidence=''; signer_evidence=''; confirm_public_key=''; confirm_withdrawal_address=''
 case "$command_name" in
-  interactive|infrastructure|ops-inputs|ops-access|stage)
+  interactive|infrastructure|deploy|activate|ops-inputs|ops-access|stage)
     [ "$#" -gt 0 ] || usage
     operation="$1"
     shift
@@ -43,12 +46,19 @@ while [ "$#" -gt 0 ]; do
     --aws-region) aws_region="${2:-}"; shift 2 ;;
     --allow-create) allow_create=true; shift ;;
     --private-eks-session-handoff) session_handoff="${2:-}"; shift 2 ;;
+    --deposit-attestation) deposit_attestation="${2:-}"; shift 2 ;;
+    --public-deposit-verification) public_deposit_verification="${2:-}"; shift 2 ;;
+    --private-evidence) private_evidence="${2:-}"; shift 2 ;;
+    --signer-evidence) signer_evidence="${2:-}"; shift 2 ;;
+    --confirm-public-key) confirm_public_key="${2:-}"; shift 2 ;;
+    --confirm-withdrawal-address) confirm_withdrawal_address="${2:-}"; shift 2 ;;
     *) usage ;;
   esac
 done
 
 if [ "$command_name" = interactive ]; then
-  [ "$operation" = prepare ] && [ -n "$bundle_root$output_dir" ] && [ -z "$inputs$work_dir$session_handoff$ops_inputs$plan_file$expected_sha" ] && [ "$allow_create" = false ] || usage
+  [ "$operation" = prepare ] || [ "$operation" = deploy ] || usage
+  [ -n "$bundle_root$output_dir" ] && [ -z "$inputs$work_dir$session_handoff$ops_inputs$plan_file$expected_sha" ] && [ "$allow_create" = false ] || usage
   case "$bundle_root:$output_dir" in */*:/*) ;; *) usage ;; esac
   [ -t 0 ] && [ -t 1 ] || { printf '%s\n' 'interactive preparation requires a terminal' >&2; exit 69; }
   command -v aws >/dev/null 2>&1 || { printf '%s\n' 'missing command: aws' >&2; exit 69; }
@@ -81,7 +91,10 @@ if [ "$command_name" = interactive ]; then
     --withdrawal-address "$withdrawal_address" --web3signer-image "$web3signer_image" \
     --postgres-image "$postgres_image" --prysm-validator-image "$prysm_image" \
     --signing-fence-image "$fence_image" --kubernetes-api-cidr "$kubernetes_api_cidr" --output-dir "$output_dir" "${backend_args[@]}"
-  printf 'PASS: initial release values are prepared. Continue with infrastructure apply using %s/hoodi-zero-release-inputs.json.\n' "$output_dir"
+  if [ "$operation" = deploy ]; then
+    "$0" deploy apply --bundle-root "$bundle_root" --inputs "$output_dir/hoodi-zero-release-inputs.json" --work-dir "$output_dir/deployment-work" --private-eks-session-handoff "$output_dir/private-eks-session.json" --allow-create
+  fi
+  printf 'PASS: initial release values are prepared in %s.\n' "$output_dir"
   exit 0
 fi
 
@@ -116,6 +129,55 @@ case "$command_name" in
   infrastructure)
     [ "$operation" = apply ] && [ -n "$work_dir" ] && [ -z "$session_handoff$output_dir" ] || usage
     "$release_dir/node-operator-release.sh" zero apply --bundle-root "$bundle_root" --inputs "$zero_inputs" --work-dir "$work_dir"
+    ;;
+  deploy)
+    [ "$operation" = apply ] && [ -n "$work_dir$session_handoff" ] && [ -z "$output_dir$ops_inputs$plan_file$expected_sha" ] && [ "$allow_create" = true ] || usage
+    case "$work_dir:$session_handoff" in /*:/*) ;; *) usage ;; esac
+    # Vault, custody, GitOps publication, deposit, and validator activation
+    # remain separate operator ceremonies. Non-secret workload staging is safe
+    # to continue once private EKS access has been established.
+    "$0" infrastructure apply --bundle-root "$bundle_root" --inputs "$inputs" --work-dir "$work_dir"
+    deploy_ops_dir="$work_dir/ops-access-inputs"
+    deploy_ops_inputs="$deploy_ops_dir/ops-access-inputs.json"
+    deploy_plan="$work_dir/ops-access.tfplan"
+    if [ ! -f "$deploy_ops_inputs" ]; then
+      [ ! -e "$deploy_ops_dir" ] || { printf '%s\n' 'deploy checkpoint contains an unsafe or incomplete ops-access input directory' >&2; exit 65; }
+      "$0" ops-inputs prepare --bundle-root "$bundle_root" --inputs "$inputs" --zero-work-dir "$work_dir" --output-dir "$deploy_ops_dir"
+    fi
+    if [ ! -f "$deploy_plan" ]; then
+      "$0" ops-access plan --bundle-root "$bundle_root" --inputs "$inputs" --ops-inputs "$deploy_ops_inputs" --plan-file "$deploy_plan" --allow-create
+    fi
+    deploy_sha="$(shasum -a 256 "$deploy_plan" | awk '{print $1}')"
+    [[ "$deploy_sha" =~ ^[0-9a-f]{64}$ ]] || { printf '%s\n' 'deploy checkpoint contains an invalid ops-access plan digest' >&2; exit 65; }
+    if [ -e "$session_handoff" ]; then
+      [ -f "$session_handoff" ] && [ ! -L "$session_handoff" ] || { printf '%s\n' 'deploy checkpoint contains an unsafe private EKS session handoff' >&2; exit 65; }
+      jq -e --arg region "$input_region" '
+        .schema_version == 1 and .aws_region == $region and
+        (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and
+        (.ssm_ops_instance_id | test("^i-[0-9a-f]+$"))
+      ' "$session_handoff" >/dev/null || { printf '%s\n' 'deploy checkpoint has an invalid private EKS session handoff' >&2; exit 65; }
+    else
+      "$0" ops-access apply --bundle-root "$bundle_root" --inputs "$inputs" --ops-inputs "$deploy_ops_inputs" --plan-file "$deploy_plan" --expected-sha "$deploy_sha" --allow-create --private-eks-session-handoff "$session_handoff"
+    fi
+    "$0" stage apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session_handoff"
+    printf 'PASS: infrastructure, isolated private-EKS SSM access, and zero-replica validator staging are deployed. Continue with the separate Vault, custody, GitOps, deposit, and validator activation ceremonies.\n'
+    ;;
+  activate)
+    [ "$operation" = apply ] && [ -n "$session_handoff$deposit_attestation$public_deposit_verification$private_evidence$signer_evidence$confirm_public_key$confirm_withdrawal_address" ] && [ -z "$work_dir$output_dir$ops_inputs$plan_file$expected_sha" ] || usage
+    for evidence in "$session_handoff" "$deposit_attestation" "$public_deposit_verification" "$private_evidence" "$signer_evidence"; do case "$evidence" in /*) ;; *) usage ;; esac; [ -f "$evidence" ] && [ ! -L "$evidence" ] || { printf '%s\n' 'activation input must be a regular file' >&2; exit 65; }; done
+    session_region="$(jq -er '
+      .schema_version == 1 and
+      (.aws_region | select(test("^ap-northeast-(1|2)$"))) and
+      (.cluster_name | select(test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$"))) and
+      (.ssm_ops_instance_id | select(test("^i-[0-9a-f]+$"))) | .aws_region
+    ' "$session_handoff")" || { printf '%s\n' 'activation session handoff is invalid' >&2; exit 65; }
+    session_cluster="$(jq -er '.cluster_name' "$session_handoff")"; session_instance="$(jq -er '.ssm_ops_instance_id' "$session_handoff")"
+    [ "$session_region" = "$input_region" ] || { printf '%s\n' 'activation session points to another Region' >&2; exit 65; }
+    validator_set="$(jq -er '.validator_set' "$validator_handoff")"
+    eks_env=(env PRIVATE_EKS_SESSION=1 AWS_REGION="$session_region" EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance")
+    "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$bundle_root/source/scripts/ops/start-hoodi-validator-signer.sh" --validator-set "$validator_set"
+    "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$bundle_root/source/scripts/ops/activate-hoodi-validator-client.sh" --validator-set "$validator_set" --deposit-attestation "$deposit_attestation" --public-deposit-verification "$public_deposit_verification" --private-evidence "$private_evidence" --signer-evidence "$signer_evidence" --confirm-public-key "$confirm_public_key" --confirm-withdrawal-address "$confirm_withdrawal_address"
+    printf 'PASS: validator activation was submitted through the fixed session and guarded evidence path.\n'
     ;;
   ops-inputs)
     [ "$operation" = prepare ] && [ -n "$work_dir$output_dir" ] && [ -z "$session_handoff" ] || usage
