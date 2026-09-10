@@ -7,20 +7,28 @@ umask 077
 # workload policies/roles. It deliberately does not accept a validator key,
 # mnemonic, password, or any custody payload.
 dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-usage() { printf 'Usage: %s --validator-set <hoodi-id> [--prepare-existing --output-dir <new-absolute-dir>]\n' "${0##*/}" >&2; exit 64; }
-validator_set=''; prepare_existing=false; output=''
+usage() { printf 'Usage: %s --validator-set <hoodi-id> [--prepare-existing --output-dir <new-absolute-dir> | --activate-existing --preparation-evidence <absolute-json> --output-dir <new-absolute-dir>]\n' "${0##*/}" >&2; exit 64; }
+validator_set=''; prepare_existing=false; activate_existing=false; preparation=''; output=''
 while [ "$#" -gt 0 ]; do case "$1" in
   --validator-set) validator_set="${2:-}"; shift 2 ;;
   --prepare-existing) prepare_existing=true; shift ;;
+  --activate-existing) activate_existing=true; shift ;;
+  --preparation-evidence) preparation="${2:-}"; shift 2 ;;
   --output-dir) output="${2:-}"; shift 2 ;;
   *) usage ;;
 esac; done
 [[ "$validator_set" =~ ^hoodi-[a-z0-9][a-z0-9-]{0,35}$ ]] || usage
 args=(--validator-set "$validator_set")
-if [ "$prepare_existing" = true ]; then
+if [ "$activate_existing" = true ]; then
+  [ "$prepare_existing" = false ] || usage
+  [[ "$preparation" = /* ]] && [ -f "$preparation" ] && [ ! -L "$preparation" ] || usage
+  [[ "$output" = /* ]] && [ ! -e "$output" ] && [ ! -L "$output" ] || usage
+  args+=(--activate-existing --preparation-evidence "$preparation" --output-dir "$output")
+elif [ "$prepare_existing" = true ]; then
+  [ -z "$preparation" ] || usage
   [[ "$output" = /* ]] && [ ! -e "$output" ] && [ ! -L "$output" ] || usage
   args+=(--prepare-existing --output-dir "$output")
-elif [ -n "$output" ]; then usage; fi
+elif [ -n "$output" ] || [ -n "$preparation" ]; then usage; fi
 
 if [ "${PRIVATE_VAULT_SESSION:-}" != 1 ]; then
   exec "$dir/with-private-vault.sh" -- env PRIVATE_VAULT_SESSION=1 "$0" "${args[@]}"
@@ -41,7 +49,15 @@ cleanup() {
   fi
   unset root VAULT_TOKEN
   if [ "$rc" -eq 0 ] && [ "$bootstrap_complete" = true ]; then
-    if [ "$prepare_existing" = true ]; then
+    if [ "$activate_existing" = true ]; then
+      if ! jq -n --arg set "$validator_set" --arg now "$(date -u +%FT%TZ)" \
+        '{schema_version:1,operation:"activate-existing-hoodi-vault-v2",validator_set:$set,
+          collected_at_utc:$now,runtime_mount:"node-operator-runtime",custody_preserved:true,
+          transport_verified:true,engine_jwt_verified:true,generated_root_revoked:true,
+          live_roles_installed:true,public_trust_config_updated:true,client_and_fence_quiesced:true,live_workloads_changed:false,
+          source_secrets_retained:true,secret_values_emitted:false}' > "$output/activation.json"; then exit 74; fi
+      printf 'PASS: Vault v2 roles activated for %s; generated root token revoked. Workload cutover remains required.\n' "$validator_set"
+    elif [ "$prepare_existing" = true ]; then
       if ! jq -n --arg set "$validator_set" --arg now "$(date -u +%FT%TZ)" \
         '{schema_version:1,operation:"prepare-existing-hoodi-vault-v2",validator_set:$set,
           collected_at_utc:$now,runtime_mount:"node-operator-runtime",custody_preserved:true,
@@ -63,6 +79,10 @@ trap 'exit 129' HUP
 # shellcheck source=scripts/ops/lib/vault-recovery-auth.sh
 source "$dir/lib/vault-recovery-auth.sh"
 vault_recovery_auth_preflight
+if [ "$activate_existing" = true ]; then
+  "$dir/assert-hoodi-validator-quiesced.sh" --validator-set "$validator_set" >/dev/null
+  mkdir -m 700 "$output"
+fi
 status="$(vault operator generate-root -status -format=json)"
 [ "$(jq -r .started <<<"$status")" = false ] || { printf '%s\n' 'root-token ceremony already in progress' >&2; exit 75; }
 init="$(vault operator generate-root -init -format=json)"; started=true
@@ -79,7 +99,9 @@ done
 root="$(vault_recovery_decode_generated_root "$encoded" "$otp")"; unset encoded otp nonce init reply status
 [ -n "$root" ] || { printf '%s\n' 'generated root token is empty' >&2; exit 65; }
 
-if [ "$prepare_existing" = true ]; then
+if [ "$activate_existing" = true ]; then
+VAULT_TOKEN="$root" "$dir/activate-hoodi-vault-v2-roles.sh" --validator-set "$validator_set" --preparation-evidence "$preparation" >/dev/null
+elif [ "$prepare_existing" = true ]; then
 VAULT_TOKEN="$root" "$dir/copy-hoodi-custody-to-runtime-v2.sh" --validator-set "$validator_set" >/dev/null
 VAULT_TOKEN="$root" "$dir/bootstrap-hoodi-engine-api-vault.sh" --prepare-only >/dev/null
 VAULT_TOKEN="$root" "$dir/prepare-hoodi-vault-v2-transport.sh" --validator-set "$validator_set" --output-dir "$output" >/dev/null

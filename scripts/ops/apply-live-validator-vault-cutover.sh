@@ -22,7 +22,8 @@ python3 "$dir/verify-validator-cutover-rendering.py" --runtime "$runtime" --clie
   --web3signer-image "$(kubectl -n validator-operations get deployment "validator-$validator_set-remote-signer" -o jsonpath='{.spec.template.spec.containers[0].image}')" \
   --postgres-image "$(kubectl -n validator-operations get statefulset "validator-$validator_set-slashing-db" -o jsonpath='{.spec.template.spec.containers[0].image}')" \
   --signing-fence-image "$(kubectl -n validator-operations get deployment "validator-$validator_set-signing-fence" -o jsonpath='{.spec.template.spec.containers[0].image}')" >/dev/null
-jq -e --arg set "$validator_set" '.operation == "live-runtime-secret-migration" and .validator_set == $set and .source_secrets_retained == true' "$migration" >/dev/null
+jq -e --arg set "$validator_set" '.validator_set == $set' "$migration" >/dev/null
+jq -e -f "$dir/lib/vault-cutover-authorization.jq" "$migration" >/dev/null
 jq -e --arg set "$validator_set" --arg key "$(printf '%s' "$public_key" | tr '[:upper:]' '[:lower:]')" '.event_type == "signing-proxy-fence" and .validator_set == $set and .validator_public_key == $key and .payload.client_and_fence_quiesced == true and .payload.direct_client_to_signer_denied == true' "$fence" >/dev/null
 if grep -Eq 'secretName:[[:space:]]*(validator-.*-(signer|client)-tls)|name:[[:space:]]*(signer-tls|client-tls)' "$runtime" "$client"; then printf '%s\n' 'rendered validator manifest still mounts legacy TLS Secret material' >&2; exit 65; fi
 grep -Fq "node-operator-runtime/data/validators/hoodi/${validator_set}/runtime/signer-tls" "$runtime" || { printf '%s\n' 'runtime manifest lacks isolated Vault signer TLS injection' >&2; exit 65; }

@@ -12,7 +12,27 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class BootstrapCleanup(unittest.TestCase):
-    def invoke(self, bootstrap_rc=0, revoke_rc=0, prepare=False):
+    def test_cutover_requires_activation_not_preparation(self):
+        proof = {"schema_version": 1, "operation": "activate-existing-hoodi-vault-v2",
+                 "runtime_mount": "node-operator-runtime", "custody_preserved": True,
+                 "transport_verified": True, "engine_jwt_verified": True,
+                 "generated_root_revoked": True, "live_roles_installed": True,
+                 "public_trust_config_updated": True, "client_and_fence_quiesced": True,
+                 "live_workloads_changed": False, "source_secrets_retained": True,
+                 "secret_values_emitted": False}
+
+        def check(payload):
+            return subprocess.run(["jq", "-e", "-f", str(ROOT / "scripts/ops/lib/vault-cutover-authorization.jq")],
+                                  input=json.dumps(payload), text=True, capture_output=True).returncode
+
+        self.assertEqual(check(proof), 0)
+        for key in ("generated_root_revoked", "live_roles_installed", "public_trust_config_updated",
+                    "client_and_fence_quiesced", "custody_preserved"):
+            with self.subTest(key=key):
+                self.assertNotEqual(check({**proof, key: False}), 0)
+        self.assertNotEqual(check({**proof, "operation": "prepare-existing-hoodi-vault-v2"}), 0)
+
+    def invoke(self, bootstrap_rc=0, revoke_rc=0, prepare=False, activate=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "lib").mkdir()
@@ -49,6 +69,16 @@ esac
             events = root / "events"
             output = root / "public"
             args = ["bash", str(wrapper), "--validator-set", "hoodi-001"]
+            if activate:
+                preparation = root / "preparation.json"
+                preparation.write_text('{}')
+                args += ["--activate-existing", "--preparation-evidence", str(preparation),
+                         "--output-dir", str(output)]
+                for name in ("assert-hoodi-validator-quiesced.sh", "activate-hoodi-vault-v2-roles.sh"):
+                    path = root / name
+                    path.write_text('#!/bin/bash\n' + ('exit 0\n' if name.startswith('assert-')
+                                                     else 'exit "$BOOTSTRAP_RC"\n'))
+                    path.chmod(0o700)
             if prepare:
                 args += ["--prepare-existing", "--output-dir", str(output)]
                 for name in ("bootstrap-node-operator-vault-v2.sh",
@@ -75,12 +105,31 @@ esac
                     self.assertTrue(evidence["engine_jwt_verified"])
                 else:
                     self.assertFalse(proof.exists())
+            if activate:
+                proof = output / "activation.json"
+                if result.returncode == 0:
+                    evidence = json.loads(proof.read_text())
+                    self.assertEqual(evidence["operation"], "activate-existing-hoodi-vault-v2")
+                    self.assertTrue(evidence["generated_root_revoked"])
+                    self.assertTrue(evidence["public_trust_config_updated"])
+                    self.assertTrue(evidence["live_roles_installed"])
+                else:
+                    self.assertFalse(proof.exists())
             return result
 
     def test_success_only_after_revocation(self):
         result = self.invoke()
         self.assertEqual(result.returncode, 0)
         self.assertIn("generated root token revoked", result.stdout)
+
+    def test_activation_proof_after_revocation(self):
+        self.assertEqual(self.invoke(activate=True).returncode, 0)
+
+    def test_activation_revoke_failure_has_no_proof(self):
+        self.assertEqual(self.invoke(activate=True, revoke_rc=1).returncode, 70)
+
+    def test_activation_failure_has_no_proof(self):
+        self.assertEqual(self.invoke(activate=True, bootstrap_rc=42).returncode, 42)
 
     def test_existing_preparation_does_not_install_live_roles(self):
         self.assertEqual(self.invoke(prepare=True).returncode, 0)

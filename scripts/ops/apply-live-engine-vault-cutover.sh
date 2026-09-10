@@ -17,7 +17,7 @@ case "$migration:$preflight:$evidence" in /*:/*:/*) ;; *) usage;; esac
 [ -f "$migration" ] && [ ! -L "$migration" ] && [ -f "$preflight" ] && [ ! -L "$preflight" ] && [ ! -e "$evidence" ] && [ ! -L "$evidence" ] || { printf '%s\n' 'invalid evidence paths' >&2; exit 65; }
 if [ "${PRIVATE_EKS_SESSION:-}" != 1 ]; then exec "$dir/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$0" --chart-version "$version" --chart-digest "$digest" --migration-evidence "$migration" --preflight-evidence "$preflight" --evidence-output "$evidence" --execute; fi
 for command in aws kubectl jq date mkdir sleep seq; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
-jq -e '.operation == "live-runtime-secret-migration" and .source_secrets_retained == true and .secret_values_emitted == false' "$migration" >/dev/null
+jq -e -f "$dir/lib/vault-cutover-authorization.jq" "$migration" >/dev/null
 jq -e '.operation == "live-vault-cutover-preflight" and .phase == "baseline" and .engine_pair_ready == true and .vault_injector_ready == true' "$preflight" >/dev/null
 
 app_ns='argocd'; app='node-operator-client'; namespace='node-operator'
