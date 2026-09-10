@@ -55,6 +55,19 @@ scripts/release/prepare-hoodi-validator-deployment.sh \
   --output-dir /controlled-state/hoodi-001-prepared
 ```
 
+Before any resource is created, submit the generated manifests for a private
+API server-side admission check:
+
+```sh
+scripts/release/stage-hoodi-validator-deployment.sh plan \
+  --handoff /controlled-state/hoodi-001-prepared/validator-deployment-handoff.json
+```
+
+After the private-cluster health and the operator's review are accepted, use
+the same handoff with `apply`. This creates only the non-secret database
+runtime and zero-replica signer, client, and fence controllers. It cannot
+initialize Vault, take custody material, or enable signing.
+
 ## UC-3 — deposit and activation observation
 
 Record UC-3 evidence after the transaction is visible through the locally
