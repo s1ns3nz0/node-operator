@@ -47,9 +47,7 @@ Then run one verified command:
 ```sh
 release/source/scripts/release/node-operator-release.sh zero apply \
   --bundle-root release \
-  --bootstrap-config /controlled-input/node-operator-zero/bootstrap-state.tfvars.json \
-  --foundation-config /controlled-input/node-operator-zero/foundation-network.tfvars.json \
-  --baseline-config /controlled-input/node-operator-zero/baseline.tfvars.json \
+  --inputs /controlled-input/node-operator-zero/zero-resource-inputs.json \
   --work-dir /controlled-state/node-operator-zero-bootstrap
 ```
 

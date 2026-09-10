@@ -8,7 +8,7 @@ usage:
   node-operator-release.sh verify --bundle-root DIRECTORY
   node-operator-release.sh bootstrap plan|apply --bundle-root DIRECTORY --config FILE
   node-operator-release.sh zero apply --bundle-root DIRECTORY \
-    --bootstrap-config FILE --foundation-config FILE --baseline-config FILE \
+    (--inputs FILE | --bootstrap-config FILE --foundation-config FILE --baseline-config FILE) \
     --work-dir EMPTY_ABSOLUTE_DIRECTORY
 
 `verify` validates every archived source/rendered file against bundle-manifest.json.
@@ -28,7 +28,7 @@ command_name="${1:-}"
 shift
 
 bundle_root=""; config=""; operation=""
-bootstrap_config=""; foundation_config=""; baseline_config=""; work_dir=""
+bootstrap_config=""; foundation_config=""; baseline_config=""; inputs=""; work_dir=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --bundle-root) bundle_root="${2:-}"; shift 2 ;;
@@ -36,6 +36,7 @@ while [ "$#" -gt 0 ]; do
     --bootstrap-config) bootstrap_config="${2:-}"; shift 2 ;;
     --foundation-config) foundation_config="${2:-}"; shift 2 ;;
     --baseline-config) baseline_config="${2:-}"; shift 2 ;;
+    --inputs) inputs="${2:-}"; shift 2 ;;
     --work-dir) work_dir="${2:-}"; shift 2 ;;
     plan|apply) operation="$1"; shift ;;
     *) usage; fail "unsupported argument: $1" ;;
@@ -109,7 +110,22 @@ apply_phase() {
 }
 
 zero_apply() {
-  [ -n "$bootstrap_config" ] && [ -n "$foundation_config" ] && [ -n "$baseline_config" ] || fail "zero apply requires all three phase configs"
+  if [ -n "$inputs" ]; then
+    [ -z "$bootstrap_config$foundation_config$baseline_config" ] || fail "--inputs cannot be combined with individual phase configs"
+    case "$inputs" in /*) ;; *) fail "--inputs must be an absolute path" ;; esac
+    [ -f "$inputs" ] && [ ! -L "$inputs" ] || fail "--inputs must name a regular file"
+    local input_parent expected_bootstrap expected_foundation expected_baseline
+    input_parent="$(cd "$(dirname "$inputs")" && pwd -P)"
+    expected_bootstrap="$input_parent/bootstrap-state.tfvars.json"
+    expected_foundation="$input_parent/foundation-network.tfvars.json"
+    expected_baseline="$input_parent/baseline.tfvars.json"
+    jq -e --arg bootstrap "$expected_bootstrap" --arg foundation "$expected_foundation" --arg baseline "$expected_baseline" '
+      .schema_version == 1 and (.aws_account_id | test("^[0-9]{12}$")) and
+      .bootstrap_config == $bootstrap and .foundation_config == $foundation and .baseline_config == $baseline
+    ' "$inputs" >/dev/null || fail "--inputs is not a bounded zero-resource input contract"
+    bootstrap_config="$expected_bootstrap"; foundation_config="$expected_foundation"; baseline_config="$expected_baseline"
+  fi
+  [ -n "$bootstrap_config" ] && [ -n "$foundation_config" ] && [ -n "$baseline_config" ] || fail "zero apply requires --inputs or all three phase configs"
   case "$work_dir" in /*) ;; *) fail "--work-dir must be an absolute empty directory" ;; esac
   [ ! -e "$work_dir" ] || fail "--work-dir must not already exist"
   require_command terraform
@@ -159,7 +175,7 @@ zero_apply() {
 
 case "$command_name" in
   verify)
-    [ -z "$operation$config$bootstrap_config$foundation_config$baseline_config$work_dir" ] || fail "verify accepts only --bundle-root"
+    [ -z "$operation$config$bootstrap_config$foundation_config$baseline_config$inputs$work_dir" ] || fail "verify accepts only --bundle-root"
     verify_bundle ;;
   bootstrap)
     [ "$operation" = plan ] || [ "$operation" = apply ] || fail "bootstrap requires plan or apply"
