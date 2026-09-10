@@ -67,6 +67,17 @@ rg -F 'name: nethermind-hoodi-gp3-kms' "$extract_directory/rendered/nethermind.y
 cmp <(git show HEAD:deploy/prysm/kustomization.yaml) "$extract_directory/source/deploy/prysm/kustomization.yaml"
 cmp <(git show HEAD:policy/decision.rego) "$extract_directory/source/policy/decision.rego"
 "$extract_directory/source/scripts/release/node-operator-release.sh" verify --bundle-root "$extract_directory" >/dev/null
+prepared="$temporary_directory/prepared-validator"
+"$extract_directory/source/scripts/release/prepare-hoodi-validator-deployment.sh" \
+  --validator-set hoodi-release-001 \
+  --validator-public-key 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  --withdrawal-address 0x403ff64383b8ddf994d5563550c8040d89f025ac \
+  --web3signer-image 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-runtime-web3signer@sha256:9a20e02a5821ad72fd318fa2a3ec0158a9a5acd9db80aa9214e9cc991ad4dbc3 \
+  --postgres-image 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-runtime-postgres@sha256:030da09481c3876b71a7e49738a932e1c18c398201a1e4ccfdbff1e5a541215b \
+  --prysm-validator-image 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-prysm@sha256:7fe554adf0efd27c0e5c5a3f80a3bbbec3d3872626208cf0a003b0dee7761f89 \
+  --signing-fence-image 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-fence@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  --kubernetes-api-cidr 10.100.0.1/32 --output-dir "$prepared" >/dev/null
+jq -e '.validator_set == "hoodi-release-001" and .staged_client_replicas == 0 and .staged_fence_replicas == 0' "$prepared/validator-deployment-handoff.json" >/dev/null
 jq -e --arg digest "$digest" '
   .schema_version == "v1" and
   .artifact.digest == $digest and
