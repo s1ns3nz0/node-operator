@@ -30,6 +30,7 @@ rg -F -- '--inputs cannot be combined with individual phase configs' "$entrypoin
 rg -F 'zero apply requires --inputs or all three phase configs' "$entrypoint" >/dev/null
 rg -F 'incomplete bootstrap checkpoint; use a new work directory' "$entrypoint" >/dev/null
 rg -F 'incomplete foundation checkpoint; use a new work directory' "$entrypoint" >/dev/null
+rg -F 'cp -R "$bundle_root/source/$relative/." "$destination"' "$entrypoint" >/dev/null
 rg -F 'bootstrap-state.tfvars.json' "$entrypoint" >/dev/null
 rg -F 'github_gitops_client_ecr_publisher_role_arn' "$entrypoint" >/dev/null
 rg -F 'backend "s3" {}' "$baseline/backend.tf" >/dev/null
