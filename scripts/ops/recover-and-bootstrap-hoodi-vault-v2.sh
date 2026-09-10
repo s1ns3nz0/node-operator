@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set +x
 set -euo pipefail
 umask 077
 
@@ -6,16 +7,23 @@ umask 077
 # workload policies/roles. It deliberately does not accept a validator key,
 # mnemonic, password, or any custody payload.
 dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-usage() { printf 'Usage: %s --validator-set <hoodi-id>\n' "${0##*/}" >&2; exit 64; }
-validator_set=''
+usage() { printf 'Usage: %s --validator-set <hoodi-id> [--prepare-existing --output-dir <new-absolute-dir>]\n' "${0##*/}" >&2; exit 64; }
+validator_set=''; prepare_existing=false; output=''
 while [ "$#" -gt 0 ]; do case "$1" in
   --validator-set) validator_set="${2:-}"; shift 2 ;;
+  --prepare-existing) prepare_existing=true; shift ;;
+  --output-dir) output="${2:-}"; shift 2 ;;
   *) usage ;;
 esac; done
-case "$validator_set" in hoodi-[a-z0-9][a-z0-9-]*) ;; *) usage ;; esac
+[[ "$validator_set" =~ ^hoodi-[a-z0-9][a-z0-9-]{0,35}$ ]] || usage
+args=(--validator-set "$validator_set")
+if [ "$prepare_existing" = true ]; then
+  [[ "$output" = /* ]] && [ ! -e "$output" ] && [ ! -L "$output" ] || usage
+  args+=(--prepare-existing --output-dir "$output")
+elif [ -n "$output" ]; then usage; fi
 
 if [ "${PRIVATE_VAULT_SESSION:-}" != 1 ]; then
-  exec "$dir/with-private-vault.sh" -- env PRIVATE_VAULT_SESSION=1 "$0" --validator-set "$validator_set"
+  exec "$dir/with-private-vault.sh" -- env PRIVATE_VAULT_SESSION=1 "$0" "${args[@]}"
 fi
 for command in vault jq seq; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 
@@ -33,7 +41,17 @@ cleanup() {
   fi
   unset root VAULT_TOKEN
   if [ "$rc" -eq 0 ] && [ "$bootstrap_complete" = true ]; then
+    if [ "$prepare_existing" = true ]; then
+      if ! jq -n --arg set "$validator_set" --arg now "$(date -u +%FT%TZ)" \
+        '{schema_version:1,operation:"prepare-existing-hoodi-vault-v2",validator_set:$set,
+          collected_at_utc:$now,runtime_mount:"node-operator-runtime",custody_preserved:true,
+          transport_verified:true,engine_jwt_verified:true,generated_root_revoked:true,
+          live_policies_changed:false,live_workloads_changed:false,secret_values_emitted:false}' \
+        > "$output/preparation.json"; then exit 74; fi
+      printf 'PASS: existing custody and Vault v2 transport/JWT prepared for %s; generated root token revoked. Live cutover remains required.\n' "$validator_set"
+    else
     printf 'PASS: Hoodi Vault v2 runtime boundary is ready for %s; generated root token revoked. Custody onboarding is still required.\n' "$validator_set"
+    fi
   fi
   exit "$rc"
 }
@@ -61,7 +79,13 @@ done
 root="$(vault_recovery_decode_generated_root "$encoded" "$otp")"; unset encoded otp nonce init reply status
 [ -n "$root" ] || { printf '%s\n' 'generated root token is empty' >&2; exit 65; }
 
+if [ "$prepare_existing" = true ]; then
+VAULT_TOKEN="$root" "$dir/copy-hoodi-custody-to-runtime-v2.sh" --validator-set "$validator_set" >/dev/null
+VAULT_TOKEN="$root" "$dir/bootstrap-hoodi-engine-api-vault.sh" --prepare-only >/dev/null
+VAULT_TOKEN="$root" "$dir/prepare-hoodi-vault-v2-transport.sh" --validator-set "$validator_set" --output-dir "$output" >/dev/null
+else
 VAULT_TOKEN="$root" "$dir/bootstrap-node-operator-vault-v2.sh" >/dev/null
 VAULT_TOKEN="$root" "$dir/bootstrap-hoodi-engine-api-vault.sh" >/dev/null
 VAULT_TOKEN="$root" "$dir/bootstrap-hoodi-validator-runtime-vault.sh" --validator-set "$validator_set" >/dev/null
+fi
 bootstrap_complete=true

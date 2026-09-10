@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise cleanup outcomes using synthetic CLI responses, without live access."""
 import os
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -11,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class BootstrapCleanup(unittest.TestCase):
-    def invoke(self, bootstrap_rc=0, revoke_rc=0):
+    def invoke(self, bootstrap_rc=0, revoke_rc=0, prepare=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "lib").mkdir()
@@ -27,6 +28,14 @@ class BootstrapCleanup(unittest.TestCase):
                 path.write_text('#!/bin/bash\nexit "$BOOTSTRAP_RC"\n')
                 path.chmod(0o700)
             vault = root / "vault"
+            for name in ("copy-hoodi-custody-to-runtime-v2.sh",
+                         "prepare-hoodi-vault-v2-transport.sh"):
+                path = root / name
+                path.write_text('#!/bin/bash\n'
+                                'echo "' + name + '" >> "$CALLS"\n'
+                                'if [ "$BOOTSTRAP_RC" != 0 ]; then exit "$BOOTSTRAP_RC"; fi\n'
+                                'if [ "$1" = --validator-set ] && [ "${3:-}" = --output-dir ]; then mkdir "$4"; fi\n')
+                path.chmod(0o700)
             vault.write_text("""#!/bin/bash
 case "$*" in
   *"generate-root -status"*) echo '{"started":false}' ;;
@@ -38,20 +47,51 @@ esac
 """)
             vault.chmod(0o700)
             events = root / "events"
+            output = root / "public"
+            args = ["bash", str(wrapper), "--validator-set", "hoodi-001"]
+            if prepare:
+                args += ["--prepare-existing", "--output-dir", str(output)]
+                for name in ("bootstrap-node-operator-vault-v2.sh",
+                             "bootstrap-hoodi-validator-runtime-vault.sh"):
+                    (root / name).write_text('#!/bin/bash\nexit 99\n')
+                (root / "bootstrap-hoodi-engine-api-vault.sh").write_text(
+                    '#!/bin/bash\n[ "$*" = --prepare-only ] || exit 98\n')
             result = subprocess.run(
-                ["bash", str(wrapper), "--validator-set", "hoodi-001"],
+                args,
                 input="synthetic-share\n", text=True, capture_output=True,
                 env={**os.environ, "PATH": f"{root}:{os.environ['PATH']}",
                      "PRIVATE_VAULT_SESSION": "1", "BOOTSTRAP_RC": str(bootstrap_rc),
-                     "REVOKE_RC": str(revoke_rc), "EVENTS": str(events)})
+                     "REVOKE_RC": str(revoke_rc), "EVENTS": str(events),
+                     "CALLS": str(root / "calls")})
             self.assertEqual(events.read_text(), "revoked\n")
             self.assertNotIn("synthetic", result.stdout + result.stderr)
+            if prepare:
+                proof = output / "preparation.json"
+                if result.returncode == 0:
+                    evidence = json.loads(proof.read_text())
+                    self.assertTrue(evidence["generated_root_revoked"])
+                    self.assertFalse(evidence["live_policies_changed"])
+                    self.assertFalse(evidence["live_workloads_changed"])
+                    self.assertTrue(evidence["engine_jwt_verified"])
+                else:
+                    self.assertFalse(proof.exists())
             return result
 
     def test_success_only_after_revocation(self):
         result = self.invoke()
         self.assertEqual(result.returncode, 0)
         self.assertIn("generated root token revoked", result.stdout)
+
+    def test_existing_preparation_does_not_install_live_roles(self):
+        self.assertEqual(self.invoke(prepare=True).returncode, 0)
+
+    def test_existing_preparation_revoke_failure_has_no_success_evidence(self):
+        result = self.invoke(prepare=True, revoke_rc=1)
+        self.assertEqual(result.returncode, 70)
+        self.assertNotIn("PASS", result.stdout)
+
+    def test_existing_copy_failure_stops_and_revokes(self):
+        self.assertEqual(self.invoke(prepare=True, bootstrap_rc=42).returncode, 42)
 
     def test_revocation_failure_cannot_report_success(self):
         result = self.invoke(revoke_rc=1)

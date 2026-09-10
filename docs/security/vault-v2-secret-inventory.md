@@ -31,6 +31,18 @@ read-back equality, and refuses conflicting destination values. It leaves
 legacy records, policies, workloads, and PVCs unchanged. Re-running after a
 partial copy is supported when already-created values match.
 
+For the active validator, use the recovery coordinator with
+`--validator-set hoodi-001 --prepare-existing --output-dir <new-absolute-dir>`.
+It preserves the three existing custody records, stages and verifies the Engine
+JWT, and issues or validates the signer/client transport records. It does not
+install workload policies, update Kubernetes trust configuration, or restart
+workloads. A new Engine JWT requires a coordinated execution/beacon cutover;
+preparation alone does not connect the running clients.
+
+The output contains only public CA/fingerprint material and `preparation.json`.
+The success evidence is written only after generated root revocation succeeds.
+It is preparation evidence, not proof of migration, runtime health, or duty.
+
 Remaining live acceptance requirements:
 
 - Complete the user-controlled recovery ceremony and confirm root revocation.
