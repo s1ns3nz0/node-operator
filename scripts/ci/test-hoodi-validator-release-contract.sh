@@ -43,6 +43,9 @@ jq -n '{schema_version:"v1",aws_account_id:"106760547719"}' > "$scratch/zero/ops
 mkdir -m 700 "$scratch/plans"
 TRACE="$trace" "$script" ops-access plan --bundle-root "$bundle" --inputs "$inputs/hoodi-zero-release-inputs.json" --ops-inputs "$scratch/ops/ops-access-inputs.json" --plan-file "$scratch/plans/ops.tfplan" --allow-create >/dev/null
 rg -F "ops-access plan --root $bundle/source --inputs $scratch/ops/ops-access-inputs.json --plan-file $scratch/plans/ops.tfplan --allow-create" "$trace" >/dev/null
+rg -F 'deploy apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json' "$script" >/dev/null
+rg -F 'infrastructure and isolated private-EKS SSM access are deployed' "$script" >/dev/null
+rg -F 'deploy checkpoint contains an invalid ops-access plan digest' "$script" >/dev/null
 session="$scratch/session.json"; jq -n '{schema_version:1,aws_region:"ap-northeast-2",cluster_name:"node-operator",ssm_ops_instance_id:"i-0123456789abcdef0"}' > "$session"
 if TRACE="$trace" "$script" ops-access apply --bundle-root "$bundle" --inputs "$inputs/hoodi-zero-release-inputs.json" --ops-inputs "$scratch/ops/ops-access-inputs.json" --plan-file "$scratch/plans/ops.tfplan" >/dev/null 2>&1; then
   printf '%s\n' 'ops-access apply unexpectedly accepted without a session handoff' >&2; exit 1

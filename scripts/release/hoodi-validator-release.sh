@@ -11,6 +11,7 @@ usage:
   hoodi-validator-release.sh verify --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json
   hoodi-validator-release.sh interactive prepare --bundle-root DIRECTORY --output-dir /new-absolute-directory [--aws-region ap-northeast-1|ap-northeast-2]
   hoodi-validator-release.sh infrastructure apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory
+  hoodi-validator-release.sh deploy apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory --private-eks-session-handoff /new-absolute/session.json --allow-create
   hoodi-validator-release.sh ops-inputs prepare --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --zero-work-dir /absolute/zero-work-dir --output-dir /new-absolute-directory
   hoodi-validator-release.sh ops-access plan|apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --ops-inputs /absolute/ops-access-inputs.json --plan-file /absolute/private.tfplan [--expected-sha SHA256] [--allow-create] [--private-eks-session-handoff /absolute/session.json]
   hoodi-validator-release.sh stage plan|apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json
@@ -22,7 +23,7 @@ command_name="${1:-}"; [ -n "$command_name" ] || usage
 shift
 operation=''; bundle_root=''; inputs=''; work_dir=''; session_handoff=''; output_dir=''; ops_inputs=''; plan_file=''; expected_sha=''; aws_region='ap-northeast-2'; allow_create=false
 case "$command_name" in
-  interactive|infrastructure|ops-inputs|ops-access|stage)
+  interactive|infrastructure|deploy|ops-inputs|ops-access|stage)
     [ "$#" -gt 0 ] || usage
     operation="$1"
     shift
@@ -116,6 +117,27 @@ case "$command_name" in
   infrastructure)
     [ "$operation" = apply ] && [ -n "$work_dir" ] && [ -z "$session_handoff$output_dir" ] || usage
     "$release_dir/node-operator-release.sh" zero apply --bundle-root "$bundle_root" --inputs "$zero_inputs" --work-dir "$work_dir"
+    ;;
+  deploy)
+    [ "$operation" = apply ] && [ -n "$work_dir$session_handoff" ] && [ -z "$output_dir$ops_inputs$plan_file$expected_sha" ] && [ "$allow_create" = true ] || usage
+    case "$work_dir:$session_handoff" in /*:/*) ;; *) usage ;; esac
+    # This intentionally stops before Vault, custody, GitOps publication, and
+    # validator activation. Those phases require separate operator ceremonies.
+    "$0" infrastructure apply --bundle-root "$bundle_root" --inputs "$inputs" --work-dir "$work_dir"
+    deploy_ops_dir="$work_dir/ops-access-inputs"
+    deploy_ops_inputs="$deploy_ops_dir/ops-access-inputs.json"
+    deploy_plan="$work_dir/ops-access.tfplan"
+    if [ ! -f "$deploy_ops_inputs" ]; then
+      [ ! -e "$deploy_ops_dir" ] || { printf '%s\n' 'deploy checkpoint contains an unsafe or incomplete ops-access input directory' >&2; exit 65; }
+      "$0" ops-inputs prepare --bundle-root "$bundle_root" --inputs "$inputs" --zero-work-dir "$work_dir" --output-dir "$deploy_ops_dir"
+    fi
+    if [ ! -f "$deploy_plan" ]; then
+      "$0" ops-access plan --bundle-root "$bundle_root" --inputs "$inputs" --ops-inputs "$deploy_ops_inputs" --plan-file "$deploy_plan" --allow-create
+    fi
+    deploy_sha="$(shasum -a 256 "$deploy_plan" | awk '{print $1}')"
+    [[ "$deploy_sha" =~ ^[0-9a-f]{64}$ ]] || { printf '%s\n' 'deploy checkpoint contains an invalid ops-access plan digest' >&2; exit 65; }
+    "$0" ops-access apply --bundle-root "$bundle_root" --inputs "$inputs" --ops-inputs "$deploy_ops_inputs" --plan-file "$deploy_plan" --expected-sha "$deploy_sha" --allow-create --private-eks-session-handoff "$session_handoff"
+    printf 'PASS: infrastructure and isolated private-EKS SSM access are deployed. Continue with the separate Vault, custody, GitOps, and validator activation ceremonies.\n'
     ;;
   ops-inputs)
     [ "$operation" = prepare ] && [ -n "$work_dir$output_dir" ] && [ -z "$session_handoff" ] || usage
