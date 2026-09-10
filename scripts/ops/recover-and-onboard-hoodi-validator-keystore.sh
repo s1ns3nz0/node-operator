@@ -20,7 +20,7 @@ status="$(vault operator generate-root -status -format=json)"; [ "$(jq -r .start
 init="$(vault operator generate-root -init -format=json)"; started=true; nonce="$(jq -er .nonce <<<"$init")"; otp="$(jq -er .otp <<<"$init")"; required="$(jq -er .required <<<"$init")"
 for n in $(seq 1 "$required"); do printf 'Recovery key share %s of %s: ' "$n" "$required" >&2; IFS= read -r -s share; printf '\n' >&2; reply="$(printf %s "$share" | vault operator generate-root -nonce="$nonce" -format=json -)"; unset share; if [ "$(jq -r .complete <<<"$reply")" = true ]; then complete=true; encoded="$(jq -er .encoded_token <<<"$reply")"; break; fi; done
 [ "$complete" = true ] || { printf 'recovery quorum was not reached\n' >&2; exit 77; }
-root="$(vault operator generate-root -decode="$encoded" -otp="$otp")"; unset encoded otp nonce init reply status
+root="$(vault_recovery_decode_generated_root "$encoded" "$otp")"; unset encoded otp nonce init reply status
 child="$(VAULT_TOKEN="$root" vault token create -orphan -no-default-policy -policy="hoodi-$set_id-onboarding" -ttl=10m -field=token)"
 printf 'Keystore password: ' >&2; IFS= read -r -s key_password; printf '\n' >&2
 [ -n "$key_password" ] || { printf 'empty keystore password is not allowed\n' >&2; exit 64; }

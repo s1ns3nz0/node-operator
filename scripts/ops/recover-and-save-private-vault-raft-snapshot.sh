@@ -91,7 +91,7 @@ for number in $(seq 1 "$required"); do
   fi
 done
 [ "$complete" = true ] || { printf 'recovery quorum was not reached\n' >&2; exit 77; }
-root_token="$(vault operator generate-root -decode="$encoded" -otp="$otp")"
+root_token="$(vault_recovery_decode_generated_root "$encoded" "$otp")"
 [ -n "$root_token" ] || { printf 'root-token decode returned an empty value\n' >&2; exit 78; }
 unset encoded otp nonce init submitted status
 VAULT_TOKEN="$root_token" "$dir/save-private-vault-raft-snapshot.sh" "${bucket_args[@]}"

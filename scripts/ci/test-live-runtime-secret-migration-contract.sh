@@ -18,7 +18,7 @@ for required in \
   'bootstrap-hoodi-engine-api-vault.sh' \
   'bootstrap-hoodi-validator-runtime-vault.sh' \
   'source_secrets_retained:true' \
-  'bytes(a ^ b for a, b in zip(left, right))' \
+  'vault_recovery_decode_generated_root' \
   'vault token revoke -self'; do
   grep -Fq "$required" "$script" || fail "missing required migration boundary: $required"
 done

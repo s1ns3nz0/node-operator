@@ -27,6 +27,8 @@ jobs:
         run: scripts/ci/test-script-quality.sh
       - name: Test recovery authentication preflight (mock CLI)
         run: bash scripts/ci/test-vault-recovery-auth.sh
+      - name: Test generated-root decoder process-boundary contract
+        run: bash scripts/ci/test-vault-generated-root-decode-contract.sh
       - name: Test live Vault runtime secret migration contract
         run: bash scripts/ci/test-live-runtime-secret-migration-contract.sh
       - name: Test live Vault cutover preflight contract

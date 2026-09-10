@@ -42,7 +42,9 @@ class SnapshotRecoveryCleanupTests(unittest.TestCase):
             shutil.copy2(WRAPPER, ops / WRAPPER.name)
             (ops / WRAPPER.name).chmod(0o755)
             (ops / "lib/vault-recovery-auth.sh").write_text(
-                "vault_recovery_auth_preflight() { :; }\n", encoding="utf-8"
+                "vault_recovery_auth_preflight() { :; }\n"
+                "vault_recovery_decode_generated_root() { [ \"$MOCK_EMPTY_DECODE\" = 1 ] || printf x; }\n",
+                encoding="utf-8",
             )
             (ops / "save-private-vault-raft-snapshot.sh").write_text(
                 "#!/usr/bin/env bash\nprintf '%s\\n' snapshot >> \"$MOCK_EVENTS\"\nexit \"$MOCK_SNAPSHOT_RC\"\n",
@@ -135,6 +137,10 @@ esac
                 while not ready.exists() and time.monotonic() < deadline:
                     time.sleep(0.01)
                 self.assertTrue(ready.exists(), "ceremony did not reach the interrupt point")
+                # The mock marks the instant its init response is written;
+                # allow the shell to set `started=true` before delivering the
+                # signal, matching a real completed init response.
+                time.sleep(0.05)
                 process.send_signal(interrupt)
                 stdout, stderr = process.communicate(timeout=3)
                 result = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
