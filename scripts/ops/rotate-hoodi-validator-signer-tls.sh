@@ -64,7 +64,7 @@ base="node-operator-runtime/validators/hoodi/${validator_set}/runtime"
 signer_version="$(VAULT_TOKEN="$child_token" vault kv metadata get -format=json "$base/signer-tls" | jq -er '.data.current_version | select(. > 0)')"
 client_version="$(VAULT_TOKEN="$child_token" vault kv metadata get -format=json "$base/client-tls" | jq -er '.data.current_version | select(. > 0)')"
 
-server_issue="$(VAULT_TOKEN="$root_token" vault write -format=json node-operator-pki/issue/validator-mtls common_name="$signer.$namespace.svc" alt_names="$signer,$signer.$namespace.svc,$signer.$namespace.svc.cluster.local" ttl=720h)"
+server_issue="$(VAULT_TOKEN="$root_token" vault write -format=json node-operator-pki/issue/validator-mtls common_name="$signer.$namespace.svc" alt_names="$signer.$namespace.svc,$signer.$namespace.svc.cluster.local" ttl=720h)"
 client_issue="$(VAULT_TOKEN="$root_token" vault write -format=json node-operator-pki/issue/validator-mtls common_name="validator-${validator_set}-client.$namespace.svc" ttl=720h)"
 jq -er '.data.private_key' <<<"$server_issue" > "$scratch/server.key"
 jq -er '.data.certificate' <<<"$server_issue" > "$scratch/server.crt"

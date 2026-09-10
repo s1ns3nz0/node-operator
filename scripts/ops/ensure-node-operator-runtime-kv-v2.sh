@@ -17,5 +17,6 @@ if jq -e --arg mount "${mount}/" 'has($mount)' <<<"$mounts" >/dev/null; then
 else
   vault secrets enable -path="$mount" -version=2 kv >/dev/null
 fi
-vault read -format=json "${mount}/config" | jq -e '.data.max_versions | tonumber? | select(. >= 1)' >/dev/null
+# A newly enabled KV v2 engine reports zero to select Vault's default retention.
+vault read -format=json "${mount}/config" | jq -e '.data.max_versions | tonumber? | select(. >= 0)' >/dev/null
 printf '%s\n' 'PASS: isolated node-operator-runtime/ KV v2 mount is ready; legacy kv/ was not modified.'

@@ -27,7 +27,7 @@ child="$(VAULT_TOKEN="$root" vault token create -orphan -no-default-policy -poli
 printf 'Keystore password: ' >&2; IFS= read -r -s key_password; printf '\n' >&2
 [ -n "$key_password" ] || { printf 'empty keystore password is not allowed\n' >&2; exit 64; }
 tls_password="$(openssl rand -base64 48 | tr -d '\n')"; service="validator-$set_id-remote-signer"
-server_issue="$(VAULT_TOKEN="$root" vault write -format=json node-operator-pki/issue/validator-mtls common_name="$service.validator-operations.svc" alt_names="$service,$service.validator-operations.svc,$service.validator-operations.svc.cluster.local" ttl=720h)"
+server_issue="$(VAULT_TOKEN="$root" vault write -format=json node-operator-pki/issue/validator-mtls common_name="$service.validator-operations.svc" alt_names="$service.validator-operations.svc,$service.validator-operations.svc.cluster.local" ttl=720h)"
 client_issue="$(VAULT_TOKEN="$root" vault write -format=json node-operator-pki/issue/validator-mtls common_name="validator-$set_id-client.validator-operations.svc" ttl=720h)"
 jq -er '.data.private_key' <<<"$server_issue" > "$tmp/tls.key"
 jq -er '.data.certificate' <<<"$server_issue" > "$tmp/server.crt"
