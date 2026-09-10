@@ -4,8 +4,8 @@ variable "aws_region" {
   default     = "ap-northeast-2"
 
   validation {
-    condition     = var.aws_region == "ap-northeast-2"
-    error_message = "aws_region must be ap-northeast-2."
+    condition     = contains(["ap-northeast-1", "ap-northeast-2"], var.aws_region)
+    error_message = "aws_region must be one of ap-northeast-1 or ap-northeast-2."
   }
 }
 
@@ -25,8 +25,8 @@ variable "audit_replica_region" {
   default     = "ap-northeast-1"
 
   validation {
-    condition     = var.audit_replica_region == "ap-northeast-1"
-    error_message = "audit_replica_region must be ap-northeast-1."
+    condition     = contains(["ap-northeast-1", "ap-northeast-2"], var.audit_replica_region)
+    error_message = "audit_replica_region must be one of ap-northeast-1 or ap-northeast-2."
   }
 }
 
@@ -92,13 +92,13 @@ variable "foundation_network" {
 }
 
 variable "availability_zones" {
-  description = "Exactly two approved Seoul availability zones for private worker subnets."
+  description = "Exactly two approved availability zones in aws_region for private worker subnets."
   type        = list(string)
   default     = ["ap-northeast-2a", "ap-northeast-2c"]
 
   validation {
-    condition     = join(",", var.availability_zones) == "ap-northeast-2a,ap-northeast-2c"
-    error_message = "availability_zones must be [ap-northeast-2a, ap-northeast-2c]."
+    condition     = length(var.availability_zones) == 2 && length(distinct(var.availability_zones)) == 2 && alltrue([for zone in var.availability_zones : can(regex("^ap-northeast-(1|2)[a-z]$", zone))])
+    error_message = "availability_zones must contain exactly two distinct approved Tokyo or Seoul zones."
   }
 }
 

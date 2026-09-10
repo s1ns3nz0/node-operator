@@ -3,8 +3,8 @@ variable "aws_region" {
   default = "ap-northeast-2"
 
   validation {
-    condition     = var.aws_region == "ap-northeast-2"
-    error_message = "aws_region must be ap-northeast-2."
+    condition     = contains(["ap-northeast-1", "ap-northeast-2"], var.aws_region)
+    error_message = "aws_region must be one of ap-northeast-1 or ap-northeast-2."
   }
 }
 

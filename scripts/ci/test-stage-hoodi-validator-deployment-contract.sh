@@ -15,7 +15,7 @@ metadata: {name: runtime, namespace: validator-operations}' > "$runtime"
 printf '%s\n' 'apiVersion: v1
 kind: ConfigMap
 metadata: {name: client, namespace: validator-operations}' > "$client"
-jq -n --arg runtime "$runtime" --arg client "$client" '{schema_version:1,network:"hoodi",validator_set:"hoodi-stage-001",aws_account_id:"106760547719",runtime_manifest:$runtime,client_manifest:$client,staged_client_replicas:0,staged_fence_replicas:0,next_steps:["bounded"]}' > "$handoff"
+jq -n --arg runtime "$runtime" --arg client "$client" '{schema_version:1,network:"hoodi",validator_set:"hoodi-stage-001",aws_account_id:"106760547719",aws_region:"ap-northeast-2",runtime_manifest:$runtime,client_manifest:$client,staged_client_replicas:0,staged_fence_replicas:0,next_steps:["bounded"]}' > "$handoff"
 chmod 600 "$handoff"
 jq -n '{schema_version:1,aws_region:"ap-northeast-2",cluster_name:"node-operator",ssm_ops_instance_id:"i-0123456789abcdef0"}' > "$session"
 chmod 600 "$session"

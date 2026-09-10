@@ -3,12 +3,13 @@ set -euo pipefail
 
 # Produces a non-secret runtime manifest. Image inputs must be reviewed,
 # same-account immutable ECR digests; key material remains solely in Vault.
-usage() { printf '%s\n' "Usage: ${0##*/} --validator-set <hoodi-id> --aws-account-id <12-digit-id> --web3signer-image <private-ecr@sha256> --postgres-image <private-ecr@sha256> --output <absolute-yaml>" >&2; exit 64; }
-validator_set=''; aws_account_id=''; web3signer_image=''; postgres_image=''; output=''
+usage() { printf '%s\n' "Usage: ${0##*/} --validator-set <hoodi-id> --aws-account-id <12-digit-id> [--aws-region <ap-northeast-1|ap-northeast-2>] --web3signer-image <private-ecr@sha256> --postgres-image <private-ecr@sha256> --output <absolute-yaml>" >&2; exit 64; }
+validator_set=''; aws_account_id=''; aws_region='ap-northeast-2'; web3signer_image=''; postgres_image=''; output=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --validator-set) validator_set="${2:-}"; shift 2 ;;
     --aws-account-id) aws_account_id="${2:-}"; shift 2 ;;
+    --aws-region) aws_region="${2:-}"; shift 2 ;;
     --web3signer-image) web3signer_image="${2:-}"; shift 2 ;;
     --postgres-image) postgres_image="${2:-}"; shift 2 ;;
     --output) output="${2:-}"; shift 2 ;;
@@ -17,9 +18,10 @@ while [ "$#" -gt 0 ]; do
 done
 case "$validator_set" in hoodi-[a-z0-9][a-z0-9-]*) ;; *) usage ;; esac
 case "$aws_account_id" in [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;; *) usage ;; esac
+case "$aws_region" in ap-northeast-1|ap-northeast-2) ;; *) usage ;; esac
 case "$output" in /*) ;; *) usage ;; esac
 for image in "$web3signer_image" "$postgres_image"; do
-  printf '%s\n' "$image" | grep -Eq "^${aws_account_id}\\.dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$" || { printf '%s\n' 'image must be an approved same-account private ECR digest' >&2; exit 65; }
+  printf '%s\n' "$image" | grep -Eq "^${aws_account_id}\\.dkr\\.ecr\\.${aws_region}\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$" || { printf '%s\n' 'image must be an approved same-account private ECR digest in aws_region' >&2; exit 65; }
 done
 for command in sed mkdir mktemp mv grep dirname unlink; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 
