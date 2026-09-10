@@ -40,6 +40,22 @@ resource "aws_s3_bucket_versioning" "audit_replica" {
 }
 
 data "aws_iam_policy_document" "audit_replica_key" {
+  # KMS validates key creation against the caller's future ability to recover
+  # the key policy.  This standard root delegation enables same-account IAM
+  # authorization; it is not direct workload cryptographic access.
+  statement {
+    sid    = "EnableAccountIAMPolicyDelegation"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${var.aws_account_id}:root"]
+    }
+
+    actions   = ["kms:*"]
+    resources = ["*"]
+  }
+
   statement {
     sid    = "AllowDedicatedKMSAdministrator"
     effect = "Allow"
