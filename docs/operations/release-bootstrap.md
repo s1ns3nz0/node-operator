@@ -89,6 +89,17 @@ replicas and is staged only after the separately created SSM session handoff.
 handoff and reject cross-account or unfenced substitutions before delegating to
 the existing guarded commands.
 
+After `infrastructure apply`, derive the isolated SSM input set without copying
+the zero-work directory's handoff path:
+
+```sh
+release/source/scripts/release/hoodi-validator-release.sh ops-inputs prepare \
+  --bundle-root release \
+  --inputs /controlled-input/hoodi-zero-release/hoodi-zero-release-inputs.json \
+  --zero-work-dir /controlled-state/node-operator-zero-bootstrap \
+  --output-dir /controlled-input/node-operator-ops-access
+```
+
 For the separately managed private EKS operations host, derive its isolated
 Terraform inputs from the zero-release work directory rather than copying VPC,
 subnet, or backend values by hand. The command verifies the current AWS account

@@ -10,6 +10,7 @@ usage() {
 usage:
   hoodi-validator-release.sh verify --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json
   hoodi-validator-release.sh infrastructure apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory
+  hoodi-validator-release.sh ops-inputs prepare --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --zero-work-dir /absolute/zero-work-dir --output-dir /new-absolute-directory
   hoodi-validator-release.sh stage plan|apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json
 USAGE
   exit 64
@@ -17,9 +18,9 @@ USAGE
 
 command_name="${1:-}"; [ -n "$command_name" ] || usage
 shift
-operation=''; bundle_root=''; inputs=''; work_dir=''; session_handoff=''
+operation=''; bundle_root=''; inputs=''; work_dir=''; session_handoff=''; output_dir=''
 case "$command_name" in
-  infrastructure|stage)
+  infrastructure|ops-inputs|stage)
     [ "$#" -gt 0 ] || usage
     operation="$1"
     shift
@@ -32,6 +33,8 @@ while [ "$#" -gt 0 ]; do
     --bundle-root) bundle_root="${2:-}"; shift 2 ;;
     --inputs) inputs="${2:-}"; shift 2 ;;
     --work-dir) work_dir="${2:-}"; shift 2 ;;
+    --zero-work-dir) work_dir="${2:-}"; shift 2 ;;
+    --output-dir) output_dir="${2:-}"; shift 2 ;;
     --private-eks-session-handoff) session_handoff="${2:-}"; shift 2 ;;
     *) usage ;;
   esac
@@ -65,12 +68,17 @@ case "$command_name" in
     printf 'PASS: Hoodi zero-release input contract is consistent and remains non-secret.\n'
     ;;
   infrastructure)
-    [ "$operation" = apply ] && [ -n "$work_dir" ] && [ -z "$session_handoff" ] || usage
+    [ "$operation" = apply ] && [ -n "$work_dir" ] && [ -z "$session_handoff$output_dir" ] || usage
     "$release_dir/node-operator-release.sh" zero apply --bundle-root "$bundle_root" --inputs "$zero_inputs" --work-dir "$work_dir"
+    ;;
+  ops-inputs)
+    [ "$operation" = prepare ] && [ -n "$work_dir$output_dir" ] && [ -z "$session_handoff" ] || usage
+    case "$work_dir:$output_dir" in /*:/*) ;; *) usage ;; esac
+    "$release_dir/prepare-ops-access-inputs.sh" --handoff "$work_dir/ops-access-handoff.json" --output-dir "$output_dir"
     ;;
   stage)
     [ "$operation" = plan ] || [ "$operation" = apply ] || usage
-    [ -n "$session_handoff" ] && [ -z "$work_dir" ] || usage
+    [ -n "$session_handoff" ] && [ -z "$work_dir$output_dir" ] || usage
     "$release_dir/stage-hoodi-validator-deployment.sh" "$operation" --handoff "$validator_handoff" --private-eks-session-handoff "$session_handoff"
     ;;
 esac
