@@ -18,6 +18,10 @@ for file in "$runtime" "$client" "$migration" "$fence"; do [ -f "$file" ] && [ !
 [ ! -e "$evidence" ] && [ ! -L "$evidence" ] || { printf '%s\n' 'evidence output must be new' >&2; exit 65; }
 if [ "${PRIVATE_EKS_SESSION:-}" != 1 ]; then exec "$dir/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$0" --validator-set "$validator_set" --expected-public-key "$public_key" --runtime-manifest "$runtime" --client-manifest "$client" --migration-evidence "$migration" --fence-proof "$fence" --evidence-output "$evidence" --execute; fi
 for command in kubectl jq grep mkdir date sleep seq tr; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
+python3 "$dir/verify-validator-cutover-rendering.py" --runtime "$runtime" --client "$client" --validator-set "$validator_set" --public-key "$public_key" \
+  --web3signer-image "$(kubectl -n validator-operations get deployment "validator-$validator_set-remote-signer" -o jsonpath='{.spec.template.spec.containers[0].image}')" \
+  --postgres-image "$(kubectl -n validator-operations get statefulset "validator-$validator_set-slashing-db" -o jsonpath='{.spec.template.spec.containers[0].image}')" \
+  --signing-fence-image "$(kubectl -n validator-operations get deployment "validator-$validator_set-signing-fence" -o jsonpath='{.spec.template.spec.containers[0].image}')" >/dev/null
 jq -e --arg set "$validator_set" '.operation == "live-runtime-secret-migration" and .validator_set == $set and .source_secrets_retained == true' "$migration" >/dev/null
 jq -e --arg set "$validator_set" --arg key "$(printf '%s' "$public_key" | tr '[:upper:]' '[:lower:]')" '.event_type == "signing-proxy-fence" and .validator_set == $set and .validator_public_key == $key and .payload.client_and_fence_quiesced == true and .payload.direct_client_to_signer_denied == true' "$fence" >/dev/null
 if grep -Eq 'secretName:[[:space:]]*(validator-.*-(signer|client)-tls)|name:[[:space:]]*(signer-tls|client-tls)' "$runtime" "$client"; then printf '%s\n' 'rendered validator manifest still mounts legacy TLS Secret material' >&2; exit 65; fi

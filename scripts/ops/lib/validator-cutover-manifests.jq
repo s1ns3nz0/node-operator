@@ -15,7 +15,15 @@ def identity: [.kind, .metadata.namespace, .metadata.name];
   ["Service", "validator-operations", "client-headless"],
   ["StatefulSet", "validator-operations", "client"],
   ["NetworkPolicy", "validator-operations", "client-egress"],
-  ["NetworkPolicy", "node-operator", "beacon-ingress"]
+  ["NetworkPolicy", "node-operator", "beacon-ingress"],
+  ["ConfigMap", "validator-operations", "client-lease-fence"],
+  ["ServiceAccount", "validator-operations", "client-fence"],
+  ["Role", "validator-operations", "client-lease-fence"],
+  ["RoleBinding", "validator-operations", "client-lease-fence"],
+  ["Deployment", "validator-operations", "signing-fence"],
+  ["Service", "validator-operations", "remote-signer"],
+  ["NetworkPolicy", "validator-operations", "signing-fence-ingress"],
+  ["NetworkPolicy", "validator-operations", "signing-fence-egress"]
 ] | map(.[2] = ($prefix + .[2])) | sort as $expected |
 $documents | [objects] as $objects |
 ([$objects[] | identity] | sort) == $expected and

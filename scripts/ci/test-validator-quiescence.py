@@ -19,7 +19,11 @@ class Quiescence(unittest.TestCase):
             ("NetworkPolicy", "db-dependencies"), ("NetworkPolicy", "signer-ingress"),
             ("NetworkPolicy", "db-ingress"), ("Service", "client-headless"),
             ("StatefulSet", "client"), ("NetworkPolicy", "client-egress"),
-            ("NetworkPolicy", "beacon-ingress")]
+            ("NetworkPolicy", "beacon-ingress"), ("ConfigMap", "client-lease-fence"),
+            ("ServiceAccount", "client-fence"), ("Role", "client-lease-fence"),
+            ("RoleBinding", "client-lease-fence"), ("Deployment", "signing-fence"),
+            ("Service", "remote-signer"), ("NetworkPolicy", "signing-fence-ingress"),
+            ("NetworkPolicy", "signing-fence-egress")]
         items = [{"kind": kind, "metadata": {
             "name": "validator-hoodi-001-" + suffix,
             "namespace": "node-operator" if suffix == "beacon-ingress" else "validator-operations"},

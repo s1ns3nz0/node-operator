@@ -50,6 +50,21 @@ fence evidence is still required by the deployment workflow, but is not a
 substitute for this live check. The manifest cutover also rejects a client
 manifest that would start a replica before runtime verification.
 
+The cutover accepts only complete output from the checked-out runtime/client
+renderers, including the client fence resources. Before Kubernetes apply,
+`verify-validator-cutover-rendering.py` compares every byte outside the bounded
+renderer substitutions with the repository templates. This binds network rules,
+service accounts, Vault injection, volume definitions, and container commands
+to those templates. A changed policy or DB volume requires a reviewed template
+change and re-render, not a hand-edited deployment manifest. Server dry-run
+additionally verifies the expected 21 resource identities and zero replicas for
+signer, client, and fence. This does not itself prove live DB preservation or
+successful Engine/signing traffic; those remain runtime acceptance checks.
+Signer, PostgreSQL, and fence images must retain the exact digests read from
+the live workload templates. This migration cannot also upgrade those images;
+an image replacement requires a separate reviewed deployment. The Prysm client
+must additionally remain an exact stage-approved artifact in the repository.
+
 Remaining live acceptance requirements:
 
 - Complete the user-controlled recovery ceremony and confirm root revocation.
