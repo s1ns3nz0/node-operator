@@ -7,6 +7,8 @@ test -x "$script"; bash -n "$script"
 for required in \
   'source_secrets_retained == true' \
   'patch application "$app"' \
+  'aws ecr describe-images' \
+  'approved chart digest does not match the requested ECR chart version' \
   'approved-chart-digest' \
   'agent-inject-secret-engine.jwt' \
   'legacy JWT Secret remains mounted' \

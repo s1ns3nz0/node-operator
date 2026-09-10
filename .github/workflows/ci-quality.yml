@@ -33,6 +33,14 @@ jobs:
         run: bash scripts/ci/test-live-vault-cutover-preflight-contract.sh
       - name: Test live Engine Vault cutover contract
         run: bash scripts/ci/test-live-engine-vault-cutover-contract.sh
+      - name: Test live validator Vault cutover contract
+        run: bash scripts/ci/test-live-validator-vault-cutover-contract.sh
+      - name: Test signer public-key evidence contract
+        run: bash scripts/ci/test-collect-hoodi-signer-public-key-evidence-contract.sh
+      - name: Test live Vault legacy-secret finalization contract
+        run: bash scripts/ci/test-live-vault-secret-finalization-contract.sh
+      - name: Test live Vault cutover convergence contract
+        run: bash scripts/ci/test-live-vault-cutover-convergence-contract.sh
       - name: Test snapshot recovery cleanup lifecycle (mock CLI)
         run: python3 scripts/ci/test-vault-snapshot-recovery-cleanup.py
       - name: Test isolated recovery grant lifecycle (mock AWS only)

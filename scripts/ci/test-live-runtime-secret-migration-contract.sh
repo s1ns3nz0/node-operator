@@ -18,10 +18,11 @@ for required in \
   'bootstrap-hoodi-engine-api-vault.sh' \
   'bootstrap-hoodi-validator-runtime-vault.sh' \
   'source_secrets_retained:true' \
+  'bytes(a ^ b for a, b in zip(left, right))' \
   'vault token revoke -self'; do
   grep -Fq "$required" "$script" || fail "missing required migration boundary: $required"
 done
-if grep -Eq 'openssl rand|kubectl.*delete secret|create secret generic' "$script"; then
+if grep -Eq 'openssl rand|kubectl.*delete secret|create secret generic|generate-root -decode' "$script"; then
   fail 'migration must neither generate nor delete/reprint source secret material'
 fi
 printf '%s\n' 'PASS: live runtime migration preserves existing JWT/TLS material, writes Vault records with CAS, and retains source Secrets for staged cutover.'

@@ -6,6 +6,8 @@ script="$root/scripts/ops/preflight-live-vault-cutover.sh"
 test -x "$script"
 bash -n "$script"
 for required in \
+  'baseline|ready|finalized' \
+  'legacy credential Secret still exists after finalization' \
   'get secret "$name" -o json' \
   'source_secret_key_inventory_only:true' \
   'secret_values_emitted:false' \
