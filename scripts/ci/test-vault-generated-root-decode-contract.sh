@@ -4,7 +4,12 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 library="$root/scripts/ops/lib/vault-recovery-auth.sh"
 grep -Fq 'vault_recovery_decode_generated_root' "$library"
-grep -Fq 'bytes(a ^ b for a, b in zip(left, right))' "$library"
+grep -Fq 'bytes(a ^ b for a, b in zip(encoded_bytes, otp_bytes))' "$library"
+test "$(bash -c 'source "$1"; vault_recovery_decode_generated_root AA a' bash "$library")" = a
+if bash -c 'source "$1"; vault_recovery_decode_generated_root -w a' bash "$library" >/dev/null 2>&1; then
+  printf '%s\n' 'generated-root decoder must reject URL-safe encoded data' >&2
+  exit 1
+fi
 if rg -n 'generate-root -decode=.*(encoded|otp)' "$root/scripts/ops"; then
   printf '%s\n' 'recovery wrappers must not pass generated-root decode inputs as process arguments' >&2
   exit 1
