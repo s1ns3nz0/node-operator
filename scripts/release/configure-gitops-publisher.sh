@@ -18,9 +18,9 @@ case "$handoff" in /*) ;; *) usage ;; esac
 [ -f "$handoff" ] && [ ! -L "$handoff" ] || { printf '%s\n' 'handoff must be a regular file' >&2; exit 65; }
 for command in jq gh; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 127; }; done
 
-# A stale ambient GITHUB_TOKEN overrides the operator's valid gh keyring
-# session. Use the explicitly logged-in account without changing its state.
-github() { env -u GITHUB_TOKEN gh "$@"; }
+# Preserve the caller's GITHUB_TOKEN exactly; gh selects the authenticated
+# operator or CI credential without altering process environment state.
+github() { gh "$@"; }
 
 repository="$(jq -er '.schema_version == "v1" and .gitops_repository | select(test("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"))' "$handoff")" || { printf '%s\n' 'invalid GitOps repository handoff' >&2; exit 65; }
 environment="$(jq -er '.publisher_environment | select(. == "gitops-client-ecr-publish")' "$handoff")" || { printf '%s\n' 'unexpected publisher environment' >&2; exit 65; }

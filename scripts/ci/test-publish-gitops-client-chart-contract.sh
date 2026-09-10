@@ -6,7 +6,11 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 script="$root/scripts/release/publish-gitops-client-chart.sh"
 grep -Fq 'promotion_id=' "$script"
 grep -Fq 'gitops-chart-evidence-${promotion_id}' "$script"
-grep -Fq 'env -u GITHUB_TOKEN gh' "$script"
+grep -Fq 'github() { gh "$@"; }' "$script"
+if grep -Fq 'env -u GITHUB_TOKEN' "$script"; then
+  printf '%s\n' 'GitOps chart publisher must preserve GITHUB_TOKEN' >&2
+  exit 1
+fi
 grep -Fq 'multiple workflow runs produced the same promotion evidence identifier' "$script"
 grep -Fq 'github run view "$run_id"' "$script"
 if grep -Eq -- '--limit[[:space:]]+1([[:space:]]|$)' "$script"; then
