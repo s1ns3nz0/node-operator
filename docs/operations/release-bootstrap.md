@@ -92,6 +92,9 @@ release/source/scripts/release/hoodi-validator-release.sh interactive prepare \
   --output-dir /controlled-input/hoodi-zero-release
 ```
 
+When the current identity is an IAM user rather than the Terraform role, the
+prompt additionally requests the exact same-account backend role ARN once.
+
 Use `zero-resource/zero-resource-inputs.json` with `zero apply`. The generated
 `validator-deployment/validator-deployment-handoff.json` remains at zero
 replicas and is staged only after the separately created SSM session handoff.
