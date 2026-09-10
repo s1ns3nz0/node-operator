@@ -18,6 +18,10 @@ spec:
       serviceAccountName: validator-log-collector
       automountServiceAccountToken: true
       terminationGracePeriodSeconds: 30
+      # The collector reads the read-only /var/log hostPath and therefore must
+      # retain its image's root user; RuntimeDefault still constrains syscalls.
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
       containers:
         - name: fluent-bit
           image: REPLACE_WITH_APPROVED_PRIVATE_ECR_DIGEST

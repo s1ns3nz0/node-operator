@@ -8,7 +8,7 @@ metadata:
     policies.kyverno.io/severity: high
 spec:
   validationFailureAction: Enforce
-  background: false
+  background: true
   rules:
     - name: require-private-ecr-image-digest
       match:

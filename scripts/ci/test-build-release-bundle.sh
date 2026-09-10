@@ -37,6 +37,10 @@ for required_path in \
   source/deploy/prysm/kustomization.yaml \
   source/deploy/nethermind/kustomization.yaml \
   source/deploy/argocd/node-operator-client-application.yaml \
+  source/deploy/kyverno/kustomization.yaml \
+  source/deploy/kyverno/policies/node-operator-workload-baseline.yaml \
+  source/deploy/kyverno/policies/node-operator-project-workload-baseline.yaml \
+  source/scripts/ops/apply-kyverno-project-coverage.sh \
   source/deploy/validator/onboarding-contract.yaml \
   source/deploy/validator/vault-runtime-egress-policy.yaml \
   source/infra/terraform/eks.tf \
