@@ -72,6 +72,9 @@ release/source/scripts/release/prepare-ops-access-inputs.sh \
   --output-dir /controlled-input/node-operator-ops-access
 ```
 
+Pass `ops-access-inputs.json` to `node-operator-ops-access.sh` with a private
+saved-plan location; do not retype its config or backend paths.
+
 After publishing a chart and preparing the digest-bound Argo input, create a
 reviewed private plan against the same `--work-dir` used by `zero apply`; only
 then apply that exact saved plan:

@@ -2,16 +2,17 @@
 set -euo pipefail
 umask 077
 
-usage() { printf '%s\n' 'usage: node-operator-ops-access.sh verify|plan|apply|destroy --root BUNDLE_ROOT --config TFVARS --backend-config BACKEND_HCL --plan-file PRIVATE_SAVED_PLAN [--backend-profile PROFILE --expected-backend-principal-arn IAM_PRINCIPAL_ARN --provider-profile PROFILE --expected-provider-principal-arn IAM_PRINCIPAL_ARN] [--expected-sha SHA256] [--allow-create]'; }
+usage() { printf '%s\n' 'usage: node-operator-ops-access.sh verify|plan|apply|destroy --root BUNDLE_ROOT (--inputs OPS_INPUTS_JSON | --config TFVARS --backend-config BACKEND_HCL) --plan-file PRIVATE_SAVED_PLAN [--backend-profile PROFILE --expected-backend-principal-arn IAM_PRINCIPAL_ARN --provider-profile PROFILE --expected-provider-principal-arn IAM_PRINCIPAL_ARN] [--expected-sha SHA256] [--allow-create]'; }
 operation="${1:-}"
 [ "$operation" = verify ] || [ "$operation" = plan ] || [ "$operation" = apply ] || [ "$operation" = destroy ] || { usage; exit 64; }
 shift
-root=""; config=""; backend_config=""; plan_file=""; expected_sha=""; allow_create=false
+root=""; config=""; backend_config=""; inputs=""; plan_file=""; expected_sha=""; allow_create=false
 backend_profile=""; provider_profile=""; expected_backend_principal_arn=""; expected_provider_principal_arn=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --root) root="${2:-}"; shift 2 ;; --config) config="${2:-}"; shift 2 ;;
     --backend-config) backend_config="${2:-}"; shift 2 ;; --plan-file) plan_file="${2:-}"; shift 2 ;;
+    --inputs) inputs="${2:-}"; shift 2 ;;
     --backend-profile) backend_profile="${2:-}"; shift 2 ;;
     --provider-profile) provider_profile="${2:-}"; shift 2 ;;
     --expected-backend-principal-arn) expected_backend_principal_arn="${2:-}"; shift 2 ;;
@@ -109,8 +110,21 @@ private_path() {
 }
 
 [ -d "$root/infra/ops-access" ] || { printf 'ops-access root is missing\n' >&2; exit 1; }
-[ -f "$config" ] || { printf 'non-secret tfvars file is required\n' >&2; exit 1; }
-[ -f "$backend_config" ] || { printf 'an isolated non-secret backend config is required\n' >&2; exit 1; }
+if [ -n "$inputs" ]; then
+  [ -z "$config$backend_config" ] || { printf '%s\n' '--inputs cannot be combined with --config or --backend-config' >&2; exit 64; }
+  case "$inputs" in /*) ;; *) printf '%s\n' '--inputs must be an absolute path' >&2; exit 64 ;; esac
+  [ -f "$inputs" ] && [ ! -L "$inputs" ] || { printf '%s\n' '--inputs must name a regular file' >&2; exit 1; }
+  input_parent="$(cd "$(dirname "$inputs")" && pwd -P)"
+  expected_config="$input_parent/ops-access.tfvars.json"
+  expected_backend="$input_parent/ops-access.backend.hcl"
+  jq -e --arg config "$expected_config" --arg backend "$expected_backend" '
+    .schema_version == 1 and (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and
+    .config == $config and .backend_config == $backend
+  ' "$inputs" >/dev/null || { printf '%s\n' '--inputs is not a bounded ops-access input contract' >&2; exit 1; }
+  config="$expected_config"; backend_config="$expected_backend"
+fi
+[ -f "$config" ] && [ ! -L "$config" ] || { printf 'non-secret tfvars file is required\n' >&2; exit 1; }
+[ -f "$backend_config" ] && [ ! -L "$backend_config" ] || { printf 'an isolated non-secret backend config is required\n' >&2; exit 1; }
 [ -n "$plan_file" ] || { printf 'a private saved plan path is required\n' >&2; exit 64; }
 private_path "$plan_file" || exit 1
 command -v terraform >/dev/null 2>&1 || { printf 'terraform is required\n' >&2; exit 127; }
