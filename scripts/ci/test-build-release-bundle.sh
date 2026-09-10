@@ -38,6 +38,7 @@ for required_path in \
   source/deploy/nethermind/kustomization.yaml \
   source/deploy/argocd/node-operator-client-application.yaml \
   source/deploy/validator/onboarding-contract.yaml \
+  source/deploy/validator/vault-runtime-egress-policy.yaml \
   source/infra/terraform/eks.tf \
   source/infra/terraform/gitops-client-chart-retention.json \
   source/infra/bootstrap-state/main.tf \

@@ -103,6 +103,22 @@ test "$(sed -n '1p' "$scratch/trace")" = 'scale -n validator-operations scale st
 test "$(sed -n '2p' "$scratch/trace")" = 'scale -n validator-operations scale deployment validator-hoodi-001-signing-fence --replicas=1' || fail 'signing fence did not start second'
 
 reset_fixture
+jq '.source = "vault-injected-mtls-get-only-probe" | .vault_agent_init_succeeded = true' "$scratch/signer.json" > "$scratch/signer.next"
+mv "$scratch/signer.next" "$scratch/signer.json"
+run_gate | grep -Fq 'PASS: activation preflight passed; client and signing fence remain at zero because --dry-run was set.' || fail 'Vault-injected GET-only signer evidence with successful init did not pass dry-run gate'
+test ! -s "$scratch/trace" || fail 'Vault-injected GET-only dry-run reached a scale request'
+
+reset_fixture
+jq '.source = "vault-injected-mtls-get-only-probe" | .vault_agent_init_succeeded = false' "$scratch/signer.json" > "$scratch/signer.next"
+mv "$scratch/signer.next" "$scratch/signer.json"
+expect_rejected 'Vault-injected GET-only signer evidence without successful Vault init'
+
+reset_fixture
+jq '.source = "untrusted-signer-probe" | .vault_agent_init_succeeded = true' "$scratch/signer.json" > "$scratch/signer.next"
+mv "$scratch/signer.next" "$scratch/signer.json"
+expect_rejected 'unrecognized signer evidence source'
+
+reset_fixture
 if MOCK_FENCE_ROLLOUT_FAIL=true run_gate_actual >/dev/null 2>&1; then fail 'failed fence rollout unexpectedly activated'; fi
 grep -Fq 'rollback -n validator-operations scale deployment validator-hoodi-001-signing-fence --replicas=0' "$scratch/trace" || fail 'failed fence rollout did not rollback fence'
 grep -Fq 'rollback -n validator-operations scale statefulset validator-hoodi-001-client --replicas=0' "$scratch/trace" || fail 'failed fence rollout did not rollback client'

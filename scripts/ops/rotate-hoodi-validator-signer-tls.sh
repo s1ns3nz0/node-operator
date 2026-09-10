@@ -83,6 +83,6 @@ install -m 600 "$current_ca" "$previous_ca_output"; install -m 644 "$scratch/ca.
 VAULT_TOKEN="$child_token" vault kv put -cas="$signer_version" "$base/signer-tls" @"$scratch/signer.json" >/dev/null
 VAULT_TOKEN="$child_token" vault kv put -cas="$client_version" "$base/client-tls" @"$scratch/client.json" >/dev/null
 fingerprint="$(openssl x509 -in "$scratch/client.crt" -noout -fingerprint -sha256 | cut -d= -f2)"
-printf 'validator-%s-client %s\n' "$validator_set" "$fingerprint" > "$scratch/known-clients"
+printf 'validator-%s-client.%s.svc %s\n' "$validator_set" "$namespace" "$fingerprint" > "$scratch/known-clients"
 kubectl -n "$namespace" create configmap "$known" --from-file="known-clients=$scratch/known-clients" --dry-run=client -o yaml | kubectl -n "$namespace" apply -f - >/dev/null
 printf 'PASS: Vault PKI-issued signer/client leaf certificates rotated with CAS versions %s/%s; client remains fenced at zero until both workloads are restarted and verified.\n' "$signer_version" "$client_version"

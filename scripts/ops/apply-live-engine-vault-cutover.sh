@@ -28,6 +28,16 @@ jq -e '.status.sync.status == "Synced" and .status.health.status == "Healthy"' <
 repository="$(jq -er '.spec.source as $source | ($source.repoURL | capture("^[^/]+/(?<repository>[a-z0-9][a-z0-9._/-]*)$").repository) + "/" + ($source.chart | select(test("^[a-z0-9][a-z0-9._-]*$")))' <<<"$before")"
 published_digest="$(aws ecr describe-images --region "${AWS_REGION:-ap-northeast-2}" --repository-name "$repository" --image-ids "imageTag=${version}" --query 'imageDetails[0].imageDigest' --output text)"
 [ "$published_digest" = "$digest" ] || { printf '%s\n' 'approved chart digest does not match the requested ECR chart version' >&2; exit 65; }
+# Public CA only: never copy Vault server private keys or runtime credentials.
+# Agent TLS trust Secrets are namespace-scoped, so Engine Pods need their own.
+public_trust="$(kubectl -n validator-operations get secret vault-agent-ca -o json)"
+jq -e '(.data | keys) == ["ca.crt"]' <<<"$public_trust" >/dev/null
+existing_trust="$(kubectl -n "$namespace" get secret vault-agent-ca --ignore-not-found -o json)"
+if [ -n "$existing_trust" ]; then
+  jq -ne --argjson source "$public_trust" --argjson target "$existing_trust" '$source.data == $target.data' >/dev/null || { printf '%s\n' 'Engine public Vault CA differs; explicit trust rotation is required' >&2; exit 65; }
+else
+  jq --arg namespace "$namespace" '{apiVersion:"v1",kind:"Secret",metadata:{name:"vault-agent-ca",namespace:$namespace},type:"Opaque",data:{"ca.crt":.data["ca.crt"]}}' <<<"$public_trust" | kubectl create -f - >/dev/null
+fi
 kubectl -n "$app_ns" patch application "$app" --type merge -p "{\"metadata\":{\"annotations\":{\"node-operator.io/approved-chart-digest\":\"${digest}\"}},\"spec\":{\"source\":{\"targetRevision\":\"${version}\"}}}" >/dev/null
 
 ready=false

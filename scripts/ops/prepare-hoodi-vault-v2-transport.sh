@@ -94,5 +94,5 @@ fingerprint="$(openssl x509 -in "$scratch/client.crt" -noout -fingerprint -sha25
 fingerprint="${fingerprint#*=}"
 mkdir -m 700 "$output"
 install -m 644 "$scratch/ca.crt" "$output/signer-ca.crt"
-printf 'validator-%s-client %s\n' "$validator_set" "$fingerprint" > "$output/known-clients.txt"
+printf '%s %s\n' "$client" "$fingerprint" > "$output/known-clients.txt"
 printf '%s\n' 'PASS: Vault PKI transport records prepared and verified; public trust outputs written. Live workloads and policies unchanged.'

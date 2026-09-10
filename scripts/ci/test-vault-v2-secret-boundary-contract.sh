@@ -35,4 +35,7 @@ if [ "$scan_rc" -eq 0 ]; then
 fi
 [ "$scan_rc" -eq 1 ] || fail 'CA private-key scan could not complete'
 bash -n "$bootstrap" "$coordinator" "$onboard"
+grep -Fq 'printf '\''%s %s\n'\'' "$client" "$fingerprint"' "$root/scripts/ops/prepare-hoodi-vault-v2-transport.sh" || fail 'preparation known-client name differs from issued CN'
+grep -Fq 'printf '\''validator-%s-client.validator-operations.svc %s\n'\''' "$onboard" || fail 'onboarding known-client name differs from issued CN'
+grep -Fq 'printf '\''validator-%s-client.%s.svc %s\n'\'' "$validator_set" "$namespace"' "$root/scripts/ops/rotate-hoodi-validator-signer-tls.sh" || fail 'rotation known-client name differs from issued CN'
 printf '%s\n' 'PASS: Vault v2 inventory, isolated engines, workload paths, PKI issuance, and recovery coordinator are consistent.'

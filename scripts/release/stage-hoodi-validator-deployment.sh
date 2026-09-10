@@ -67,6 +67,9 @@ fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 self="$script_dir/${BASH_SOURCE[0]##*/}"
+repository_root="$(cd "$script_dir/../.." && pwd -P)"
+vault_egress_policy="$repository_root/deploy/validator/vault-runtime-egress-policy.yaml"
+[ -f "$vault_egress_policy" ] && [ ! -L "$vault_egress_policy" ] || { printf '%s\n' 'dedicated validator Vault egress policy is missing or unsafe' >&2; exit 66; }
 if [ "${PRIVATE_EKS_SESSION:-}" != 1 ]; then
   if [ -n "$private_eks_session_handoff" ]; then
     exec "$script_dir/../ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 AWS_REGION="$handoff_region" EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance" "$self" "$operation" --handoff "$handoff" --private-eks-session-handoff "$private_eks_session_handoff"
@@ -93,12 +96,16 @@ done
 
 # The server-side dry run proves admission, RBAC, and schema compatibility
 # before an apply. It is run for both operations so apply has the same guard.
-kubectl apply --server-side --field-manager=node-operator-release-stage --dry-run=server -f "$runtime" -f "$client" >/dev/null
+kubectl apply --server-side --field-manager=node-operator-release-stage --dry-run=server -f "$vault_egress_policy" -f "$runtime" -f "$client" >/dev/null
 if [ "$operation" = plan ]; then
   printf 'PASS: private EKS accepted non-secret staged manifests for %s; no resources were created.\n' "$validator_set"
   exit 0
 fi
 
+# Apply the dedicated, narrowly scoped egress policy first. Do not apply the
+# historical common validator base here: it contains fence policy selectors
+# that are not safe to adopt during a set-scoped staged release.
+kubectl apply --server-side --field-manager=node-operator-release-stage -f "$vault_egress_policy" >/dev/null
 kubectl apply --server-side --field-manager=node-operator-release-stage -f "$runtime" -f "$client" >/dev/null
 
 db_replicas="$(kubectl -n "$namespace" get "statefulset/validator-${validator_set}-slashing-db" -o jsonpath='{.spec.replicas}')"
