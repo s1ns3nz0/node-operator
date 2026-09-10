@@ -21,19 +21,22 @@ init="$(vault operator generate-root -init -format=json)"; started=true; nonce="
 for n in $(seq 1 "$required"); do printf 'Recovery key share %s of %s: ' "$n" "$required" >&2; IFS= read -r -s share; printf '\n' >&2; reply="$(printf %s "$share" | vault operator generate-root -nonce="$nonce" -format=json -)"; unset share; if [ "$(jq -r .complete <<<"$reply")" = true ]; then complete=true; encoded="$(jq -er .encoded_token <<<"$reply")"; break; fi; done
 [ "$complete" = true ] || { printf 'recovery quorum was not reached\n' >&2; exit 77; }
 root="$(vault_recovery_decode_generated_root "$encoded" "$otp")"; unset encoded otp nonce init reply status
+VAULT_TOKEN="$root" "$dir/bootstrap-node-operator-vault-v2.sh" >/dev/null
+VAULT_TOKEN="$root" "$dir/bootstrap-hoodi-validator-runtime-vault.sh" --validator-set "$set_id" >/dev/null
 child="$(VAULT_TOKEN="$root" vault token create -orphan -no-default-policy -policy="hoodi-$set_id-onboarding" -ttl=10m -field=token)"
 printf 'Keystore password: ' >&2; IFS= read -r -s key_password; printf '\n' >&2
 [ -n "$key_password" ] || { printf 'empty keystore password is not allowed\n' >&2; exit 64; }
 tls_password="$(openssl rand -base64 48 | tr -d '\n')"; service="validator-$set_id-remote-signer"
-openssl req -x509 -newkey rsa:3072 -nodes -days 30 -subj "/CN=$set_id-transport-ca" -addext 'basicConstraints=critical,CA:TRUE' -keyout "$tmp/ca.key" -out "$tmp/ca.crt" >/dev/null 2>&1
-openssl req -newkey rsa:3072 -nodes -subj "/CN=$service" -keyout "$tmp/tls.key" -out "$tmp/server.csr" >/dev/null 2>&1
-printf 'subjectAltName=DNS:%s,DNS:%s.validator-operations.svc\nextendedKeyUsage=serverAuth\n' "$service" "$service" > "$tmp/server.ext"
-openssl x509 -req -in "$tmp/server.csr" -CA "$tmp/ca.crt" -CAkey "$tmp/ca.key" -CAcreateserial -days 30 -extfile "$tmp/server.ext" -out "$tmp/server.crt" >/dev/null 2>&1
-openssl req -newkey rsa:3072 -nodes -subj "/CN=validator-$set_id-client" -keyout "$tmp/client.key" -out "$tmp/client.csr" >/dev/null 2>&1
-printf 'extendedKeyUsage=clientAuth\n' > "$tmp/client.ext"
-openssl x509 -req -in "$tmp/client.csr" -CA "$tmp/ca.crt" -CAkey "$tmp/ca.key" -CAcreateserial -days 30 -extfile "$tmp/client.ext" -out "$tmp/client.crt" >/dev/null 2>&1
+server_issue="$(VAULT_TOKEN="$root" vault write -format=json node-operator-pki/issue/validator-mtls common_name="$service.validator-operations.svc" alt_names="$service,$service.validator-operations.svc,$service.validator-operations.svc.cluster.local" ttl=720h)"
+client_issue="$(VAULT_TOKEN="$root" vault write -format=json node-operator-pki/issue/validator-mtls common_name="validator-$set_id-client.validator-operations.svc" ttl=720h)"
+jq -er '.data.private_key' <<<"$server_issue" > "$tmp/tls.key"
+jq -er '.data.certificate' <<<"$server_issue" > "$tmp/server.crt"
+jq -er '(.data.ca_chain[0] // .data.issuing_ca)' <<<"$server_issue" > "$tmp/ca.crt"
+jq -er '.data.private_key' <<<"$client_issue" > "$tmp/client.key"
+jq -er '.data.certificate' <<<"$client_issue" > "$tmp/client.crt"
+unset server_issue client_issue
 openssl pkcs12 -export -out "$tmp/tls.p12" -inkey "$tmp/tls.key" -in "$tmp/server.crt" -certfile "$tmp/ca.crt" -passout "pass:$tls_password" >/dev/null 2>&1
-base="kv/validators/hoodi/$set_id/runtime"
+base="node-operator-runtime/validators/hoodi/$set_id/runtime"
 VAULT_TOKEN="$child" vault kv put -cas=0 "$base/keystore" keystore=- < "${keys[0]}" >/dev/null
 printf %s "$key_password" | VAULT_TOKEN="$child" vault kv put -cas=0 "$base/password" password=- >/dev/null
 openssl rand -base64 48 | tr -d '\n' | VAULT_TOKEN="$child" vault kv put -cas=0 "$base/slashing-db-password" password=- >/dev/null

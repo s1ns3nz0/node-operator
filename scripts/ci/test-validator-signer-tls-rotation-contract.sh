@@ -14,16 +14,21 @@ for required in \
   'vault kv put -cas="$client_version" "$base/client-tls"' \
   'create configmap "$known"' \
   'known-clients=$scratch/known-clients' \
-  'basicConstraints=critical,CA:TRUE' \
-  'extendedKeyUsage=serverAuth' \
-  'extendedKeyUsage=clientAuth' \
+  'bootstrap-node-operator-vault-v2.sh' \
+  'node-operator-pki/issue/validator-mtls' \
+  'common_name="$signer.$namespace.svc"' \
+  'common_name="validator-${validator_set}-client.$namespace.svc"' \
   'passout "file:$scratch/password"' \
   'vault token revoke -self' \
+  'vault_recovery_decode_generated_root' \
   'tls-rotation.hcl'; do
   grep -Fq "$required" "$script" || fail "missing required boundary: $required"
 done
 if grep -Eq 'kv (get|put).*(keystore|slashing-db-password)' "$script"; then
   fail 'TLS rotation must not read or write custody/slashing material'
+fi
+if grep -Eq 'openssl req -x509|ca\.key|CAkey' "$script"; then
+  fail 'TLS rotation must not create or handle a CA private key outside Vault PKI'
 fi
 if grep -Eq 'create secret generic|kubectl.*create secret' "$script"; then
   fail 'TLS rotation must not create Kubernetes Secrets'

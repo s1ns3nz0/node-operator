@@ -44,9 +44,9 @@ spec:
         vault.hashicorp.com/ca-cert: /vault/tls/ca.crt
         vault.hashicorp.com/tls-server-name: vault.vault.svc
         vault.hashicorp.com/role: hoodi-REPLACE_WITH_VALIDATOR_SET-slashing-db
-        vault.hashicorp.com/agent-inject-secret-postgres-password: kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/slashing-db-password
+        vault.hashicorp.com/agent-inject-secret-postgres-password: node-operator-runtime/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/slashing-db-password
         vault.hashicorp.com/agent-inject-template-postgres-password: |
-          {{- with secret "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/slashing-db-password" -}}
+          {{- with secret "node-operator-runtime/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/slashing-db-password" -}}
           {{ .Data.data.password }}
           {{- end }}
     spec:
@@ -143,21 +143,21 @@ spec:
         vault.hashicorp.com/ca-cert: /vault/tls/ca.crt
         vault.hashicorp.com/tls-server-name: vault.vault.svc
         vault.hashicorp.com/role: hoodi-REPLACE_WITH_VALIDATOR_SET-runtime
-        vault.hashicorp.com/agent-inject-secret-keystore.json: kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/keystore
+        vault.hashicorp.com/agent-inject-secret-keystore.json: node-operator-runtime/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/keystore
         vault.hashicorp.com/agent-inject-template-keystore.json: |
-          {{- with secret "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/keystore" -}}{{ .Data.data.keystore }}{{- end }}
-        vault.hashicorp.com/agent-inject-secret-keystore.txt: kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/password
+          {{- with secret "node-operator-runtime/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/keystore" -}}{{ .Data.data.keystore }}{{- end }}
+        vault.hashicorp.com/agent-inject-secret-keystore.txt: node-operator-runtime/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/password
         vault.hashicorp.com/agent-inject-template-keystore.txt: |
-          {{- with secret "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/password" -}}{{ .Data.data.password }}{{- end }}
-        vault.hashicorp.com/agent-inject-secret-slashing-db.properties: kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/slashing-db-password
+          {{- with secret "node-operator-runtime/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/password" -}}{{ .Data.data.password }}{{- end }}
+        vault.hashicorp.com/agent-inject-secret-slashing-db.properties: node-operator-runtime/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/slashing-db-password
         vault.hashicorp.com/agent-inject-template-slashing-db.properties: |
-          {{- with secret "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/slashing-db-password" -}}password={{ .Data.data.password }}{{- end }}
-        vault.hashicorp.com/agent-inject-secret-tls.p12: kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/signer-tls
+          {{- with secret "node-operator-runtime/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/slashing-db-password" -}}password={{ .Data.data.password }}{{- end }}
+        vault.hashicorp.com/agent-inject-secret-tls.p12: node-operator-runtime/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/signer-tls
         vault.hashicorp.com/agent-inject-template-tls.p12: |
-          {{- with secret "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/signer-tls" -}}{{ .Data.data.pkcs12_b64 | base64Decode }}{{- end }}
-        vault.hashicorp.com/agent-inject-secret-tls-password.txt: kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/signer-tls
+          {{- with secret "node-operator-runtime/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/signer-tls" -}}{{ .Data.data.pkcs12_b64 | base64Decode }}{{- end }}
+        vault.hashicorp.com/agent-inject-secret-tls-password.txt: node-operator-runtime/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/signer-tls
         vault.hashicorp.com/agent-inject-template-tls-password.txt: |
-          {{- with secret "kv/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/signer-tls" -}}{{ .Data.data.password }}{{- end }}
+          {{- with secret "node-operator-runtime/data/validators/hoodi/REPLACE_WITH_VALIDATOR_SET/runtime/signer-tls" -}}{{ .Data.data.password }}{{- end }}
     spec:
       serviceAccountName: validator-remote-signer
       automountServiceAccountToken: false

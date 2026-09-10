@@ -61,6 +61,9 @@ for required_path in \
   source/scripts/ops/render-hoodi-validator-client.sh \
   source/scripts/ops/recover-and-bootstrap-hoodi-validator-runtime-vault.sh \
   source/scripts/ops/recover-and-bootstrap-hoodi-engine-api-vault.sh \
+  source/scripts/ops/recover-and-bootstrap-hoodi-vault-v2.sh \
+  source/scripts/ops/bootstrap-node-operator-vault-v2.sh \
+  source/scripts/ops/ensure-node-operator-runtime-kv-v2.sh \
   source/scripts/ops/recover-and-migrate-hoodi-runtime-secrets-to-vault.sh \
   source/scripts/ops/preflight-live-vault-cutover.sh \
   source/scripts/ops/apply-live-engine-vault-cutover.sh \

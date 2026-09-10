@@ -32,6 +32,7 @@ sed "s/REPLACE_WITH_SLASHING_DB_POLICY/${slashing_db_policy}/g" "$template_dir/s
 sed "s/REPLACE_WITH_CLIENT_TLS_POLICY/${client_tls_policy}/g" "$template_dir/client-tls-kubernetes-auth-role.json" > "$tmp/client-tls-role.json"
 
 vault read -format=json auth/kubernetes/config >/dev/null
+"$root/scripts/ops/ensure-node-operator-runtime-kv-v2.sh" >/dev/null
 vault policy write "$onboarding_policy" "$tmp/onboarding.hcl" >/dev/null
 vault policy write "$runtime_policy" "$tmp/runtime.hcl" >/dev/null
 vault policy write "$slashing_db_policy" "$tmp/slashing-db.hcl" >/dev/null

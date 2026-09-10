@@ -57,7 +57,7 @@ start() {
   for client in nethermind-execution prysm-beacon; do
     role="$(kubectl -n "$namespace" get statefulset "$client" -o jsonpath='{.spec.template.metadata.annotations.vault\.hashicorp\.com/role}')"
     injection="$(kubectl -n "$namespace" get statefulset "$client" -o jsonpath='{.spec.template.metadata.annotations.vault\.hashicorp\.com/agent-inject-secret-engine\.jwt}')"
-    [ -n "$role" ] && [ "$injection" = 'kv/data/nodes/hoodi/engine-api-jwt' ] || {
+    [ -n "$role" ] && [ "$injection" = 'node-operator-runtime/data/nodes/hoodi/engine-api-jwt' ] || {
       printf 'Vault Engine API JWT injection is absent for %s; complete the private Vault bootstrap first.\n' "$client" >&2
       exit 65
     }
