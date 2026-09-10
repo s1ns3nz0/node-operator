@@ -19,6 +19,9 @@ rg -F 'node-operator/foundation-network/terraform.tfstate' "$entrypoint" >/dev/n
 rg -F 'node-operator/baseline/terraform.tfstate' "$entrypoint" >/dev/null
 rg -F 'foundation-network.auto.tfvars.json' "$entrypoint" >/dev/null
 rg -F 'gitops-publisher-handoff.json' "$entrypoint" >/dev/null
+rg -F -- '--inputs cannot be combined with individual phase configs' "$entrypoint" >/dev/null
+rg -F 'zero apply requires --inputs or all three phase configs' "$entrypoint" >/dev/null
+rg -F 'bootstrap-state.tfvars.json' "$entrypoint" >/dev/null
 rg -F 'github_gitops_client_ecr_publisher_role_arn' "$entrypoint" >/dev/null
 rg -F 'backend "s3" {}' "$baseline/backend.tf" >/dev/null
 rg -F 'vpc_cidr' "$foundation/outputs.tf" >/dev/null
