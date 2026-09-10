@@ -84,6 +84,10 @@ release/source/scripts/release/prepare-hoodi-zero-release-inputs.sh \
 Use `zero-resource/zero-resource-inputs.json` with `zero apply`. The generated
 `validator-deployment/validator-deployment-handoff.json` remains at zero
 replicas and is staged only after the separately created SSM session handoff.
+`hoodi-validator-release.sh` is the corresponding execution entrypoint: its
+`infrastructure apply` and `stage plan|apply` commands consume the one prepared
+handoff and reject cross-account or unfenced substitutions before delegating to
+the existing guarded commands.
 
 For the separately managed private EKS operations host, derive its isolated
 Terraform inputs from the zero-release work directory rather than copying VPC,
