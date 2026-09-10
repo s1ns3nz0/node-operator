@@ -30,16 +30,26 @@ operations. They require their own command and approval boundary.
 
 ## Fresh zero-resource infrastructure
 
-For a new account scope, copy the three non-secret
-`release/zero-resource-*.tfvars.example` files outside the extracted release,
-then run one verified command:
+For a new account scope, create the three non-secret configuration files from
+the AWS account ID and the exact IAM role that will retain Terraform backend
+access. If the current AWS identity is that role, omit
+`--backend-principal-arn` and it is derived after an account-match check:
+
+```sh
+release/source/scripts/release/prepare-zero-resource-inputs.sh \
+  --aws-account-id <new-account-id> \
+  --backend-principal-arn arn:aws:iam::<new-account-id>:role/<terraform-role> \
+  --output-dir /controlled-input/node-operator-zero
+```
+
+Then run one verified command:
 
 ```sh
 release/source/scripts/release/node-operator-release.sh zero apply \
   --bundle-root release \
-  --bootstrap-config /controlled-input/bootstrap-state.tfvars \
-  --foundation-config /controlled-input/foundation-network.tfvars \
-  --baseline-config /controlled-input/baseline.tfvars \
+  --bootstrap-config /controlled-input/node-operator-zero/bootstrap-state.tfvars.json \
+  --foundation-config /controlled-input/node-operator-zero/foundation-network.tfvars.json \
+  --baseline-config /controlled-input/node-operator-zero/baseline.tfvars.json \
   --work-dir /controlled-state/node-operator-zero-bootstrap
 ```
 
