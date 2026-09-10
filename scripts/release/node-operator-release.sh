@@ -138,7 +138,7 @@ zero_apply() {
   mkdir -p "$work_dir"; chmod 700 "$work_dir"
   local bootstrap_module="$work_dir/bootstrap-state" foundation_module="$work_dir/foundation-network" baseline_module="$work_dir/baseline"
   local bootstrap_backend="$work_dir/bootstrap.backend.hcl" foundation_backend="$work_dir/foundation.backend.hcl" baseline_backend="$work_dir/baseline.backend.hcl"
-  local bootstrap_output="$work_dir/bootstrap-output.json" foundation_output="$work_dir/foundation-output.json" foundation_input="$work_dir/foundation-network.auto.tfvars.json" baseline_output="$work_dir/baseline-output.json" gitops_handoff="$work_dir/gitops-publisher-handoff.json"
+  local bootstrap_output="$work_dir/bootstrap-output.json" foundation_output="$work_dir/foundation-output.json" foundation_input="$work_dir/foundation-network.auto.tfvars.json" baseline_output="$work_dir/baseline-output.json" gitops_handoff="$work_dir/gitops-publisher-handoff.json" ops_handoff="$work_dir/ops-access-handoff.json"
 
   copy_module infra/bootstrap-state "$bootstrap_module"
   terraform -chdir="$bootstrap_module" init -input=false -backend=false
@@ -165,12 +165,20 @@ zero_apply() {
   terraform -chdir="$baseline_module" output -json > "$baseline_output"
   jq -e '
     (.deployment_account_id.value | test("^[0-9]{12}$")) and
+    (.cluster_name.value | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and
     (.gitops_client_ecr_repository_url.value | test("^[0-9]{12}\\.dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*$")) and
     (.github_gitops_client_ecr_publisher_role_arn.value | test("^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_-]+$"))
   ' "$baseline_output" >/dev/null || fail "baseline did not emit the required GitOps publisher handoff"
   jq '{schema_version:"v1",gitops_repository:"s1ns3nz0/node-operator-gitops",publisher_environment:"gitops-client-ecr-publish",aws_account_id:.deployment_account_id.value,chart_repository:.gitops_client_ecr_repository_url.value,publisher_role_arn:.github_gitops_client_ecr_publisher_role_arn.value}' "$baseline_output" > "$gitops_handoff"
-  chmod 600 "$gitops_handoff"
-  printf 'PASS zero-resource infrastructure bootstrap completed. Configure the GitOps publisher from %s, then run separately approved Argo, SSM, Vault, and validator phases next.\n' "$gitops_handoff"
+  jq --slurpfile foundation "$foundation_output" --slurpfile bootstrap "$bootstrap_output" '
+    {schema_version:"v1",aws_region:"ap-northeast-2",aws_account_id:.deployment_account_id.value,
+     cluster_name:.cluster_name.value,
+     vpc_id:$foundation[0].vpc_id.value,subnet_id:$foundation[0].system_subnet_ids.value[0],
+     backend:{bucket:$bootstrap[0].bucket.value,dynamodb_table:$bootstrap[0].dynamodb_table.value,kms_key_id:$bootstrap[0].kms_key_id.value,region:$bootstrap[0].region.value,
+       key:"node-operator/ops-access/terraform.tfstate"}}
+  ' "$baseline_output" > "$ops_handoff"
+  chmod 600 "$gitops_handoff" "$ops_handoff"
+  printf 'PASS zero-resource infrastructure bootstrap completed. Configure the GitOps publisher from %s and prepare isolated SSM access from %s before Argo, Vault, and validator phases.\n' "$gitops_handoff" "$ops_handoff"
 }
 
 case "$command_name" in
