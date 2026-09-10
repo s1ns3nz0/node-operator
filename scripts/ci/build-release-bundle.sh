@@ -50,7 +50,7 @@ materialize_source_file() {
   mkdir -p "$stage_directory/source/$(dirname "$relative_path")"
   git -C "$root" show "$source_revision:$relative_path" > "$stage_directory/source/$relative_path"
   case "$relative_path" in
-    scripts/release/*.sh|scripts/ops/*.sh|scripts/ci/check-ops-access-ssm-retention-plan.sh) chmod 0755 "$stage_directory/source/$relative_path" ;;
+    scripts/release/*.sh|scripts/ops/*|scripts/ci/check-ops-access-ssm-retention-plan.sh) chmod 0755 "$stage_directory/source/$relative_path" ;;
   esac
 }
 
