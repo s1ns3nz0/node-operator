@@ -6,7 +6,11 @@ renderer="$root/scripts/ops/render-hoodi-validator-runtime.sh"
 tmp="$(mktemp -d /private/tmp/node-operator-runtime-render.XXXXXX)"
 web3signer='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-runtime-web3signer@sha256:9a20e02a5821ad72fd318fa2a3ec0158a9a5acd9db80aa9214e9cc991ad4dbc3'
 postgres='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-runtime-postgres@sha256:030da09481c3876b71a7e49738a932e1c18c398201a1e4ccfdbff1e5a541215b'
-"$renderer" --validator-set hoodi-test-001 --web3signer-image "$web3signer" --postgres-image "$postgres" --output "$tmp/runtime.yaml" >/dev/null
+"$renderer" --validator-set hoodi-test-001 --aws-account-id 106760547719 --web3signer-image "$web3signer" --postgres-image "$postgres" --output "$tmp/runtime.yaml" >/dev/null
+if "$renderer" --validator-set hoodi-test-001 --aws-account-id 999999999999 --web3signer-image "$web3signer" --postgres-image "$postgres" --output "$tmp/wrong-account.yaml" >/dev/null 2>&1; then
+  printf '%s\n' 'runtime renderer accepted images from another AWS account' >&2
+  exit 1
+fi
 grep -Fq 'POSTGRES_PASSWORD_FILE' "$tmp/runtime.yaml"
 grep -Fq 'persistentVolumeClaimRetentionPolicy:' "$tmp/runtime.yaml"
 grep -Fq 'name: PGDATA, value: /var/lib/postgresql/data/pgdata' "$tmp/runtime.yaml"
