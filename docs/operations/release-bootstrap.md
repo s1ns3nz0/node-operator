@@ -65,6 +65,10 @@ scripts/release/apply-argocd-bootstrap.sh plan \
   --plan-file /controlled-state/argocd-bootstrap.tfplan
 ```
 
+After Argo health and private-CD verification are accepted, revoke the
+temporary runner and its cluster-admin association using the original disabled
+baseline input and a separately reviewed deletion-only plan.
+
 After `zero apply`, configure the GitOps publisher using the generated
 non-secret handoff (it writes only an AWS account ID and restricted OIDC role
 ARN to the protected GitHub environment):
