@@ -19,14 +19,28 @@ if [ "${PRIVATE_VAULT_SESSION:-}" != 1 ]; then
 fi
 for command in vault jq seq; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 
-started=false; complete=false; root=''
+started=false; complete=false; root=''; bootstrap_complete=false
 cleanup() {
+  local rc=$?
+  trap - EXIT
   set +e
-  [ -z "$root" ] || VAULT_TOKEN="$root" vault token revoke -self >/dev/null 2>&1
-  [ "$started" = true ] && [ "$complete" != true ] && vault operator generate-root -cancel >/dev/null 2>&1
+  if [ -n "$root" ] && ! VAULT_TOKEN="$root" vault token revoke -self >/dev/null 2>&1; then
+    printf '%s\n' 'CRITICAL: generated root token revocation could not be confirmed.' >&2
+    rc=70
+  fi
+  if [ "$started" = true ] && [ "$complete" != true ]; then
+    vault operator generate-root -cancel >/dev/null 2>&1 || rc=70
+  fi
   unset root VAULT_TOKEN
+  if [ "$rc" -eq 0 ] && [ "$bootstrap_complete" = true ]; then
+    printf 'PASS: Hoodi Vault v2 runtime boundary is ready for %s; generated root token revoked. Custody onboarding is still required.\n' "$validator_set"
+  fi
+  exit "$rc"
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
 # shellcheck source=scripts/ops/lib/vault-recovery-auth.sh
 source "$dir/lib/vault-recovery-auth.sh"
@@ -45,8 +59,9 @@ for number in $(seq 1 "$required"); do
 done
 [ "$complete" = true ] || { printf '%s\n' 'recovery quorum was not reached' >&2; exit 77; }
 root="$(vault_recovery_decode_generated_root "$encoded" "$otp")"; unset encoded otp nonce init reply status
+[ -n "$root" ] || { printf '%s\n' 'generated root token is empty' >&2; exit 65; }
 
 VAULT_TOKEN="$root" "$dir/bootstrap-node-operator-vault-v2.sh" >/dev/null
 VAULT_TOKEN="$root" "$dir/bootstrap-hoodi-engine-api-vault.sh" >/dev/null
 VAULT_TOKEN="$root" "$dir/bootstrap-hoodi-validator-runtime-vault.sh" --validator-set "$validator_set" >/dev/null
-printf 'PASS: Hoodi Vault v2 runtime boundary is ready for %s; run the separate custody onboarding ceremony before starting a signer.\n' "$validator_set"
+bootstrap_complete=true
