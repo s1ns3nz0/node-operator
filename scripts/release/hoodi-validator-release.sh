@@ -11,6 +11,7 @@ usage:
   hoodi-validator-release.sh verify --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json
   hoodi-validator-release.sh infrastructure apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory
   hoodi-validator-release.sh ops-inputs prepare --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --zero-work-dir /absolute/zero-work-dir --output-dir /new-absolute-directory
+  hoodi-validator-release.sh ops-access plan|apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --ops-inputs /absolute/ops-access-inputs.json --plan-file /absolute/private.tfplan [--expected-sha SHA256] [--allow-create] [--private-eks-session-handoff /absolute/session.json]
   hoodi-validator-release.sh stage plan|apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json
 USAGE
   exit 64
@@ -18,9 +19,9 @@ USAGE
 
 command_name="${1:-}"; [ -n "$command_name" ] || usage
 shift
-operation=''; bundle_root=''; inputs=''; work_dir=''; session_handoff=''; output_dir=''
+operation=''; bundle_root=''; inputs=''; work_dir=''; session_handoff=''; output_dir=''; ops_inputs=''; plan_file=''; expected_sha=''; allow_create=false
 case "$command_name" in
-  infrastructure|ops-inputs|stage)
+  infrastructure|ops-inputs|ops-access|stage)
     [ "$#" -gt 0 ] || usage
     operation="$1"
     shift
@@ -35,6 +36,10 @@ while [ "$#" -gt 0 ]; do
     --work-dir) work_dir="${2:-}"; shift 2 ;;
     --zero-work-dir) work_dir="${2:-}"; shift 2 ;;
     --output-dir) output_dir="${2:-}"; shift 2 ;;
+    --ops-inputs) ops_inputs="${2:-}"; shift 2 ;;
+    --plan-file) plan_file="${2:-}"; shift 2 ;;
+    --expected-sha) expected_sha="${2:-}"; shift 2 ;;
+    --allow-create) allow_create=true; shift ;;
     --private-eks-session-handoff) session_handoff="${2:-}"; shift 2 ;;
     *) usage ;;
   esac
@@ -75,6 +80,23 @@ case "$command_name" in
     [ "$operation" = prepare ] && [ -n "$work_dir$output_dir" ] && [ -z "$session_handoff" ] || usage
     case "$work_dir:$output_dir" in /*:/*) ;; *) usage ;; esac
     "$release_dir/prepare-ops-access-inputs.sh" --handoff "$work_dir/ops-access-handoff.json" --output-dir "$output_dir"
+    ;;
+  ops-access)
+    [ "$operation" = plan ] || [ "$operation" = apply ] || usage
+    case "$ops_inputs:$plan_file" in /*:/*) ;; *) usage ;; esac
+    [ -f "$ops_inputs" ] && [ ! -L "$ops_inputs" ] || { printf '%s\n' 'ops inputs must be a regular file' >&2; exit 65; }
+    ops_parent="$(cd "$(dirname "$ops_inputs")" && pwd -P)"
+    ops_handoff="$(jq -er '.ops_access_handoff' "$ops_inputs")" || { printf '%s\n' 'ops inputs lack a source handoff' >&2; exit 65; }
+    [ -f "$ops_handoff" ] && [ ! -L "$ops_handoff" ] || { printf '%s\n' 'ops source handoff is unsafe' >&2; exit 65; }
+    jq -e --arg account "$account" --arg handoff "$ops_handoff" --arg config "$ops_parent/ops-access.tfvars.json" --arg backend "$ops_parent/ops-access.backend.hcl" '
+      .schema_version == 1 and .ops_access_handoff == $handoff and .config == $config and .backend_config == $backend
+    ' "$ops_inputs" >/dev/null || { printf '%s\n' 'ops input paths are not bounded' >&2; exit 65; }
+    jq -e --arg account "$account" '.schema_version == "v1" and .aws_account_id == $account' "$ops_handoff" >/dev/null || { printf '%s\n' 'ops access account does not match the release contract' >&2; exit 65; }
+    ops_args=("$operation" --root "$bundle_root/source" --inputs "$ops_inputs" --plan-file "$plan_file")
+    [ -z "$expected_sha" ] || ops_args+=(--expected-sha "$expected_sha")
+    [ "$allow_create" = false ] || ops_args+=(--allow-create)
+    [ -z "$session_handoff" ] || ops_args+=(--session-handoff "$session_handoff")
+    "$release_dir/node-operator-ops-access.sh" "${ops_args[@]}"
     ;;
   stage)
     [ "$operation" = plan ] || [ "$operation" = apply ] || usage
