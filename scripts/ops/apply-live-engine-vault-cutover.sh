@@ -25,7 +25,7 @@ before="$(kubectl -n "$app_ns" get application "$app" -o json)"
 jq -e '.status.sync.status == "Synced" and .status.health.status == "Healthy"' <<<"$before" >/dev/null || { printf '%s\n' 'Argo Application is not healthy before cutover' >&2; exit 65; }
 # The digest is an approval input, not merely an annotation.  Bind it to the
 # exact immutable version in the ECR OCI repository before Argo can consume it.
-repository="$(jq -er '.spec.source.repoURL | capture("^[^/]+/(?<repository>[a-z0-9][a-z0-9._/-]*)$").repository' <<<"$before")"
+repository="$(jq -er '.spec.source as $source | ($source.repoURL | capture("^[^/]+/(?<repository>[a-z0-9][a-z0-9._/-]*)$").repository) + "/" + ($source.chart | select(test("^[a-z0-9][a-z0-9._-]*$")))' <<<"$before")"
 published_digest="$(aws ecr describe-images --region "${AWS_REGION:-ap-northeast-2}" --repository-name "$repository" --image-ids "imageTag=${version}" --query 'imageDetails[0].imageDigest' --output text)"
 [ "$published_digest" = "$digest" ] || { printf '%s\n' 'approved chart digest does not match the requested ECR chart version' >&2; exit 65; }
 kubectl -n "$app_ns" patch application "$app" --type merge -p "{\"metadata\":{\"annotations\":{\"node-operator.io/approved-chart-digest\":\"${digest}\"}},\"spec\":{\"source\":{\"targetRevision\":\"${version}\"}}}" >/dev/null

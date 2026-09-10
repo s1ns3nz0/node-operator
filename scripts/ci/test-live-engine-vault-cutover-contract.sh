@@ -8,6 +8,7 @@ for required in \
   'jq -e -f "$dir/lib/vault-cutover-authorization.jq" "$migration"' \
   'patch application "$app"' \
   'aws ecr describe-images' \
+  '$source.chart | select' \
   'approved chart digest does not match the requested ECR chart version' \
   'approved-chart-digest' \
   'agent-inject-secret-engine.jwt' \
