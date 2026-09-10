@@ -40,7 +40,7 @@ done
 
 for stateful in nethermind-execution prysm-beacon; do
   template="$(kubectl -n "$namespace" get statefulset "$stateful" -o json)"
-  jq -e '.spec.template.metadata.annotations["vault.hashicorp.com/agent-inject"] == "true" and .spec.template.metadata.annotations["vault.hashicorp.com/agent-inject-secret-engine.jwt"] == "kv/data/nodes/hoodi/engine-api-jwt"' <<<"$template" >/dev/null || { printf 'Vault injection template missing: %s\n' "$stateful" >&2; exit 65; }
+  jq -e '.spec.template.metadata.annotations["vault.hashicorp.com/agent-inject"] == "true" and .spec.template.metadata.annotations["vault.hashicorp.com/agent-inject-secret-engine.jwt"] == "node-operator-runtime/data/nodes/hoodi/engine-api-jwt"' <<<"$template" >/dev/null || { printf 'isolated Vault injection template missing: %s\n' "$stateful" >&2; exit 65; }
   jq -e '[.spec.template.spec.volumes[]? | select(.secret.secretName == "engine-api-jwt")] | length == 0' <<<"$template" >/dev/null || { printf 'legacy JWT Secret remains mounted: %s\n' "$stateful" >&2; exit 65; }
 done
 

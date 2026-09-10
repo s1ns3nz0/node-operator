@@ -40,10 +40,10 @@ require_vault_template() {
   jq -e --arg legacy "$legacy" 'all(.items[]?; [.spec.volumes[]? | .secret.secretName?] | index($legacy) | not)' <<<"$pods" >/dev/null || { printf 'legacy Secret mount remains in a live Pod: %s\n' "$legacy" >&2; exit 65; }
 }
 
-require_vault_template node-operator statefulset nethermind-execution 'kv/data/nodes/hoodi/engine-api-jwt' engine-api-jwt
-require_vault_template node-operator statefulset prysm-beacon 'kv/data/nodes/hoodi/engine-api-jwt' engine-api-jwt
-require_vault_template validator-operations deployment "validator-${validator_set}-remote-signer" "kv/data/validators/hoodi/${validator_set}/runtime/signer-tls" "validator-${validator_set}-signer-tls"
-require_vault_template validator-operations statefulset "validator-${validator_set}-client" "kv/data/validators/hoodi/${validator_set}/runtime/client-tls" "validator-${validator_set}-client-tls"
+require_vault_template node-operator statefulset nethermind-execution 'node-operator-runtime/data/nodes/hoodi/engine-api-jwt' engine-api-jwt
+require_vault_template node-operator statefulset prysm-beacon 'node-operator-runtime/data/nodes/hoodi/engine-api-jwt' engine-api-jwt
+require_vault_template validator-operations deployment "validator-${validator_set}-remote-signer" "node-operator-runtime/data/validators/hoodi/${validator_set}/runtime/signer-tls" "validator-${validator_set}-signer-tls"
+require_vault_template validator-operations statefulset "validator-${validator_set}-client" "node-operator-runtime/data/validators/hoodi/${validator_set}/runtime/client-tls" "validator-${validator_set}-client-tls"
 
 # Never delete the public vault-agent-ca trust anchor or the public
 # known-clients ConfigMap. Only the exact legacy credential objects are in scope.

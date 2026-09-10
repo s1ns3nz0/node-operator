@@ -60,6 +60,8 @@ jobs:
           bash scripts/ci/test-vault-operator-auth-recovery.sh
           bash scripts/ci/test-vault-operator-session.sh
           python3 scripts/ci/test-vault-injector-canary-guards.py
+      - name: Test Vault v2 runtime secret boundary
+        run: bash scripts/ci/test-vault-v2-secret-boundary-contract.sh
       - name: Test scanner image release deduplication
         run: scripts/ci/test-scanner-image-release.sh
       - name: Test scanner evidence upload boundary

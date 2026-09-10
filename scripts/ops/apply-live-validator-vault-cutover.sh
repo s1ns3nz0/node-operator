@@ -21,8 +21,8 @@ for command in kubectl jq grep mkdir date sleep seq tr; do command -v "$command"
 jq -e --arg set "$validator_set" '.operation == "live-runtime-secret-migration" and .validator_set == $set and .source_secrets_retained == true' "$migration" >/dev/null
 jq -e --arg set "$validator_set" --arg key "$(printf '%s' "$public_key" | tr '[:upper:]' '[:lower:]')" '.event_type == "signing-proxy-fence" and .validator_set == $set and .validator_public_key == $key and .payload.client_and_fence_quiesced == true and .payload.direct_client_to_signer_denied == true' "$fence" >/dev/null
 if grep -Eq 'secretName:[[:space:]]*(validator-.*-(signer|client)-tls)|name:[[:space:]]*(signer-tls|client-tls)' "$runtime" "$client"; then printf '%s\n' 'rendered validator manifest still mounts legacy TLS Secret material' >&2; exit 65; fi
-grep -Fq "kv/data/validators/hoodi/${validator_set}/runtime/signer-tls" "$runtime" || { printf '%s\n' 'runtime manifest lacks Vault signer TLS injection' >&2; exit 65; }
-grep -Fq "kv/data/validators/hoodi/${validator_set}/runtime/client-tls" "$client" || { printf '%s\n' 'client manifest lacks Vault client TLS injection' >&2; exit 65; }
+grep -Fq "node-operator-runtime/data/validators/hoodi/${validator_set}/runtime/signer-tls" "$runtime" || { printf '%s\n' 'runtime manifest lacks isolated Vault signer TLS injection' >&2; exit 65; }
+grep -Fq "node-operator-runtime/data/validators/hoodi/${validator_set}/runtime/client-tls" "$client" || { printf '%s\n' 'client manifest lacks isolated Vault client TLS injection' >&2; exit 65; }
 kubectl apply --server-side --field-manager=node-operator-vault-cutover --dry-run=server -f "$runtime" -f "$client" >/dev/null
 kubectl apply --server-side --field-manager=node-operator-vault-cutover -f "$runtime" -f "$client" >/dev/null
 

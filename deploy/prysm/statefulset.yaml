@@ -37,9 +37,9 @@ spec:
         vault.hashicorp.com/ca-cert: /vault/tls/ca.crt
         vault.hashicorp.com/tls-server-name: vault.vault.svc
         vault.hashicorp.com/role: hoodi-engine-prysm
-        vault.hashicorp.com/agent-inject-secret-engine.jwt: kv/data/nodes/hoodi/engine-api-jwt
+        vault.hashicorp.com/agent-inject-secret-engine.jwt: node-operator-runtime/data/nodes/hoodi/engine-api-jwt
         vault.hashicorp.com/agent-inject-template-engine.jwt: |
-          {{- with secret "kv/data/nodes/hoodi/engine-api-jwt" -}}{{ .Data.data.jwt }}{{- end }}
+          {{- with secret "node-operator-runtime/data/nodes/hoodi/engine-api-jwt" -}}{{ .Data.data.jwt }}{{- end }}
     spec:
       serviceAccountName: prysm-beacon
       automountServiceAccountToken: false

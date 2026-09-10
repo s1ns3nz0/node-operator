@@ -55,26 +55,23 @@ initial="$(vault operator generate-root -init -format=json)"; started=true
 nonce="$(jq -er .nonce <<<"$initial")"; otp="$(jq -er .otp <<<"$initial")"; required="$(jq -er .required <<<"$initial")"
 for number in $(seq 1 "$required"); do printf 'Recovery key share %s of %s: ' "$number" "$required" >&2; IFS= read -r -s share; printf '\n' >&2; reply="$(printf %s "$share" | vault operator generate-root -nonce="$nonce" -format=json -)"; unset share; if [ "$(jq -r .complete <<<"$reply")" = true ]; then complete=true; encoded="$(jq -er .encoded_token <<<"$reply")"; break; fi; done
 [ "$complete" = true ] || { printf '%s\n' 'recovery quorum was not reached' >&2; exit 77; }
-decoder='import base64,sys
-encoded=sys.stdin.readline().rstrip("\\n"); otp=sys.stdin.readline().rstrip("\\n")
-raw=base64.b64decode(encoded + "="*((4-len(encoded)%4)%4), validate=True)
-if not otp or len(raw) != len(otp.encode()): raise SystemExit("root decode length mismatch")
-sys.stdout.write(bytes(a ^ b for a,b in zip(raw,otp.encode())).decode())'
-root_token="$(printf '%s\n%s\n' "$encoded" "$otp" | python3 -c "$decoder")"; unset encoded otp nonce initial reply status
+root_token="$(vault_recovery_decode_generated_root "$encoded" "$otp")"; unset encoded otp nonce initial reply status
+VAULT_TOKEN="$root_token" "$dir/bootstrap-node-operator-vault-v2.sh" >/dev/null
 template="$dir/../../deploy/validator/vault/tls-rotation.hcl"; sed "s/REPLACE_WITH_VALIDATOR_SET/${validator_set}/g" "$template" > "$scratch/policy.hcl"
 VAULT_TOKEN="$root_token" vault policy write "$policy" "$scratch/policy.hcl" >/dev/null; policy_created=true
 child="$(VAULT_TOKEN="$root_token" vault token create -orphan -no-default-policy -policy="$policy" -ttl=10m -format=json)"; child_token="$(jq -er .auth.client_token <<<"$child")"; child_accessor="$(jq -er .auth.accessor <<<"$child")"; unset child
-base="kv/validators/hoodi/${validator_set}/runtime"
+base="node-operator-runtime/validators/hoodi/${validator_set}/runtime"
 signer_version="$(VAULT_TOKEN="$child_token" vault kv metadata get -format=json "$base/signer-tls" | jq -er '.data.current_version | select(. > 0)')"
 client_version="$(VAULT_TOKEN="$child_token" vault kv metadata get -format=json "$base/client-tls" | jq -er '.data.current_version | select(. > 0)')"
 
-openssl req -x509 -newkey rsa:3072 -nodes -sha256 -days 30 -subj "/CN=${validator_set}-transport-ca" -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign' -keyout "$scratch/ca.key" -out "$scratch/ca.crt" >/dev/null 2>&1
-openssl req -newkey rsa:3072 -nodes -sha256 -subj "/CN=$signer" -keyout "$scratch/server.key" -out "$scratch/server.csr" >/dev/null 2>&1
-printf 'subjectAltName=DNS:%s,DNS:%s.%s.svc,DNS:%s.%s.svc.cluster.local\nextendedKeyUsage=serverAuth\nkeyUsage=digitalSignature,keyEncipherment\nbasicConstraints=CA:FALSE\n' "$signer" "$signer" "$namespace" "$signer" "$namespace" > "$scratch/server.ext"
-openssl x509 -req -in "$scratch/server.csr" -CA "$scratch/ca.crt" -CAkey "$scratch/ca.key" -set_serial 2 -days 30 -sha256 -extfile "$scratch/server.ext" -out "$scratch/server.crt" >/dev/null 2>&1
-openssl req -newkey rsa:3072 -nodes -sha256 -subj "/CN=validator-${validator_set}-client" -keyout "$scratch/client.key" -out "$scratch/client.csr" >/dev/null 2>&1
-printf 'extendedKeyUsage=clientAuth\nkeyUsage=digitalSignature\nbasicConstraints=CA:FALSE\n' > "$scratch/client.ext"
-openssl x509 -req -in "$scratch/client.csr" -CA "$scratch/ca.crt" -CAkey "$scratch/ca.key" -set_serial 3 -days 30 -sha256 -extfile "$scratch/client.ext" -out "$scratch/client.crt" >/dev/null 2>&1
+server_issue="$(VAULT_TOKEN="$root_token" vault write -format=json node-operator-pki/issue/validator-mtls common_name="$signer.$namespace.svc" alt_names="$signer.$namespace.svc,$signer.$namespace.svc.cluster.local" ttl=720h)"
+client_issue="$(VAULT_TOKEN="$root_token" vault write -format=json node-operator-pki/issue/validator-mtls common_name="validator-${validator_set}-client.$namespace.svc" ttl=720h)"
+jq -er '.data.private_key' <<<"$server_issue" > "$scratch/server.key"
+jq -er '.data.certificate' <<<"$server_issue" > "$scratch/server.crt"
+jq -er '(.data.ca_chain[0] // .data.issuing_ca)' <<<"$server_issue" > "$scratch/ca.crt"
+jq -er '.data.private_key' <<<"$client_issue" > "$scratch/client.key"
+jq -er '.data.certificate' <<<"$client_issue" > "$scratch/client.crt"
+unset server_issue client_issue
 openssl verify -CAfile "$scratch/ca.crt" -purpose sslserver -verify_hostname "$signer.$namespace.svc" "$scratch/server.crt" >/dev/null
 openssl verify -CAfile "$scratch/ca.crt" -purpose sslclient "$scratch/client.crt" >/dev/null
 openssl rand -base64 48 | tr -d '\n' > "$scratch/password"
@@ -88,4 +85,4 @@ VAULT_TOKEN="$child_token" vault kv put -cas="$client_version" "$base/client-tls
 fingerprint="$(openssl x509 -in "$scratch/client.crt" -noout -fingerprint -sha256 | cut -d= -f2)"
 printf 'validator-%s-client %s\n' "$validator_set" "$fingerprint" > "$scratch/known-clients"
 kubectl -n "$namespace" create configmap "$known" --from-file="known-clients=$scratch/known-clients" --dry-run=client -o yaml | kubectl -n "$namespace" apply -f - >/dev/null
-printf 'PASS: signer/client TLS generation rotated with CAS versions %s/%s; client remains fenced at zero until both workloads are restarted and verified.\n' "$signer_version" "$client_version"
+printf 'PASS: Vault PKI-issued signer/client leaf certificates rotated with CAS versions %s/%s; client remains fenced at zero until both workloads are restarted and verified.\n' "$signer_version" "$client_version"
