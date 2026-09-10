@@ -14,7 +14,8 @@ for required in \
   'agent-inject-secret-engine.jwt' \
   'legacy JWT Secret remains mounted' \
   'delete pod "${stateful}-0"' \
-  'rollout status "statefulset/${stateful}"' \
+  'controller-revision-hash' \
+  'updated OnDelete Pod did not become Ready' \
   'vault-agent-init' \
   'legacy_engine_jwt_secret_retained:true'; do grep -Fq "$required" "$script" || { printf 'missing Engine cutover control: %s\n' "$required" >&2; exit 1; }; done
 if grep -Eq 'delete secret.*engine-api-jwt|kubectl.*get secret.*engine-api-jwt.*data' "$script"; then printf '%s\n' 'Engine cutover must retain and never print the legacy JWT Secret' >&2; exit 1; fi

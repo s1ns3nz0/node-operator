@@ -75,7 +75,7 @@ spec:
             pattern:
               securityContext:
                 runAsNonRoot: true
-                privileged: false
+                =(privileged): false
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
                 capabilities:
@@ -84,7 +84,7 @@ spec:
             pattern:
               securityContext:
                 runAsNonRoot: true
-                privileged: false
+                =(privileged): false
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
                 capabilities:

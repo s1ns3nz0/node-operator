@@ -45,8 +45,19 @@ for stateful in nethermind-execution prysm-beacon; do
 done
 
 for stateful in nethermind-execution prysm-beacon; do
-  kubectl -n "$namespace" delete pod "${stateful}-0" --wait=true >/dev/null
-  kubectl -n "$namespace" rollout status "statefulset/${stateful}" --timeout=20m >/dev/null
+  revision="$(kubectl -n "$namespace" get statefulset "$stateful" -o jsonpath='{.status.updateRevision}')"
+  existing="$(kubectl -n "$namespace" get pod "${stateful}-0" --ignore-not-found -o json)"
+  # Resume after a partial cutover without deleting an already updated Pod.
+  if [ -n "$existing" ] && ! jq -e --arg revision "$revision" '.metadata.labels["controller-revision-hash"] == $revision' <<<"$existing" >/dev/null; then
+    kubectl -n "$namespace" delete pod "${stateful}-0" --wait=true >/dev/null
+  fi
+  pod_ready=false
+  for _ in $(seq 1 240); do
+    pod="$(kubectl -n "$namespace" get pod "${stateful}-0" --ignore-not-found -o json)"
+    if [ -n "$pod" ] && jq -e --arg revision "$revision" '.metadata.labels["controller-revision-hash"] == $revision and any(.status.conditions[]?; .type == "Ready" and .status == "True")' <<<"$pod" >/dev/null; then pod_ready=true; break; fi
+    sleep 5
+  done
+  [ "$pod_ready" = true ] || { printf 'updated OnDelete Pod did not become Ready: %s\n' "$stateful" >&2; exit 70; }
   pod="$(kubectl -n "$namespace" get pod "${stateful}-0" -o json)"
   jq -e '[.status.initContainerStatuses[]? | select(.name == "vault-agent-init" and .state.terminated.exitCode == 0)] | length == 1' <<<"$pod" >/dev/null || { printf 'Vault Agent init did not succeed: %s\n' "$stateful" >&2; exit 70; }
 done
