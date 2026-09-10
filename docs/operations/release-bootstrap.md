@@ -51,3 +51,16 @@ retain it under controlled operator storage.
 This is infrastructure only. Immutable GitOps artifact publication, private
 Argo bootstrap, optional SSM access, Vault initialize/restore, custody, and
 validator activation stay separate approved operations.
+
+After `zero apply`, configure the GitOps publisher using the generated
+non-secret handoff (it writes only an AWS account ID and restricted OIDC role
+ARN to the protected GitHub environment):
+
+```sh
+release/source/scripts/release/configure-gitops-publisher.sh \
+  --handoff /controlled-state/node-operator-zero-bootstrap/gitops-publisher-handoff.json
+```
+
+The protected environment still requires its configured approval before the
+publisher can create an immutable chart. Never put GitHub tokens, Vault
+material, custody keys, or validator secrets in the handoff.
