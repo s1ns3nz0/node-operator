@@ -84,6 +84,11 @@ case "$command_name" in
   ops-access)
     [ "$operation" = plan ] || [ "$operation" = apply ] || usage
     case "$ops_inputs:$plan_file" in /*:/*) ;; *) usage ;; esac
+    if [ "$operation" = apply ]; then
+      [ -n "$session_handoff" ] || { printf '%s\n' 'ops-access apply must write --private-eks-session-handoff for the next release phase' >&2; exit 64; }
+    else
+      [ -z "$session_handoff" ] || { printf '%s\n' 'ops-access plan must not create a private EKS session handoff' >&2; exit 64; }
+    fi
     [ -f "$ops_inputs" ] && [ ! -L "$ops_inputs" ] || { printf '%s\n' 'ops inputs must be a regular file' >&2; exit 65; }
     ops_parent="$(cd "$(dirname "$ops_inputs")" && pwd -P)"
     ops_handoff="$(jq -er '.ops_access_handoff' "$ops_inputs")" || { printf '%s\n' 'ops inputs lack a source handoff' >&2; exit 65; }

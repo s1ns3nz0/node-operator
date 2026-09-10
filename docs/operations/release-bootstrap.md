@@ -100,6 +100,11 @@ release/source/scripts/release/hoodi-validator-release.sh ops-inputs prepare \
   --output-dir /controlled-input/node-operator-ops-access
 ```
 
+When applying that reviewed ops-access plan through the release entrypoint,
+provide a new mode-0600 `--private-eks-session-handoff` path. It is required
+there so the following validator staging command receives the exact SSM host
+and EKS cluster from Terraform output rather than manually copied values.
+
 For the separately managed private EKS operations host, derive its isolated
 Terraform inputs from the zero-release work directory rather than copying VPC,
 subnet, or backend values by hand. The command verifies the current AWS account
