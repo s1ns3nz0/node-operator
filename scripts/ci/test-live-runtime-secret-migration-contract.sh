@@ -11,10 +11,13 @@ for required in \
   'get secret engine-api-jwt -o json' \
   'get secret "validator-${validator_set}-signer-tls" -o json' \
   'get secret "validator-${validator_set}-client-tls" -o json' \
-  'put_or_match "$engine_path"' \
-  'put_or_match "$base/signer-tls"' \
-  'put_or_match "$base/client-tls"' \
+  'put_or_match "$engine_path" "$engine_record" engine' \
+  'put_or_match "$base/signer-tls" "$signer_record" signer' \
+  'put_or_match "$base/client-tls" "$client_record" client' \
   'vault kv put -cas=0 "$path"' \
+  'try fromjson catch null' \
+  'vault kv put -cas="$existing_version" "$path"' \
+  'repaired_legacy_vault_records' \
   'bootstrap-hoodi-engine-api-vault.sh' \
   'bootstrap-hoodi-validator-runtime-vault.sh' \
   'source_secrets_retained:true' \
