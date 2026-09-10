@@ -99,7 +99,16 @@ write_backend_config() {
 copy_module() {
   local relative="$1" destination="$2"
   [ -d "$bundle_root/source/$relative" ] || fail "release bundle is missing $relative"
-  cp -R "$bundle_root/source/$relative" "$destination"
+  [ ! -L "$destination" ] || fail "release module destination must not be a symlink"
+  if [ -e "$destination" ]; then
+    [ -d "$destination" ] || fail "release module destination must be a directory"
+  else
+    mkdir -p "$destination"; chmod 700 "$destination"
+  fi
+  # A checkpoint can be resumed with a newer verified bundle. Copy the module
+  # contents, rather than the directory itself, so referenced non-Terraform
+  # policy assets land at the module root and Terraform's local data remains.
+  cp -R "$bundle_root/source/$relative/." "$destination"
 }
 
 apply_phase() {
