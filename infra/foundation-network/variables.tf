@@ -10,6 +10,11 @@ variable "aws_region" {
 variable "name" {
   type    = string
   default = "node-operator"
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{1,18}[a-z0-9]$", var.name))
+    error_message = "name must be a 3-20 character DNS-compatible identifier so derived baseline resource names remain valid."
+  }
 }
 
 variable "network_mode" {
