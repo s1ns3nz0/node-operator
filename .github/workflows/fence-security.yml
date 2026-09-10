@@ -1,0 +1,42 @@
+name: Fence Security
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fence-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.26.6'
+          cache: false
+      - name: Install checksum-pinned fence SAST tool
+        run: scripts/ci/install-fence-security-tools.sh "$RUNNER_TEMP/fence-security-tools"
+      - name: Fence unit tests and static analysis
+        env:
+          GOSEC_BIN: ${{ runner.temp }}/fence-security-tools/gosec
+        run: |
+          go test ./cmd/validator-signing-fence
+          bash scripts/ci/test-fence-security-sast.sh
+          bash scripts/ci/test-fence-security-dast-report.sh
+          scripts/ci/run-fence-security-sast.sh "$RUNNER_TEMP/fence-security/sast"
+      - name: Isolated real-process fence DAST
+        run: scripts/ci/run-fence-security-dast.sh "$RUNNER_TEMP/fence-security/dast"
+      - name: Retain fence-only security reports including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fence-security-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/fence-security/
+          if-no-files-found: error
+          retention-days: 30
