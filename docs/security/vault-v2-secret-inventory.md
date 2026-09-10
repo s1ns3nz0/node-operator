@@ -17,6 +17,31 @@ only and must not receive new runtime records.
 
 No role may list metadata, read another validator set, or write at runtime.
 
+## Existing validator deployment
+
+For an already active validator, preserve the BLS keystore, its password, and
+the PostgreSQL password exactly. The slashing DB PVC and signing history must
+survive the deployment. Fresh onboarding generates a database password and
+must not be used to replace the existing validator's records.
+
+`scripts/ops/copy-hoodi-custody-to-runtime-v2.sh --validator-set hoodi-001`
+is the administrator-only data preparation step. It detects the legacy mount
+version, validates all three source records before writing, uses CAS=0, checks
+read-back equality, and refuses conflicting destination values. It leaves
+legacy records, policies, workloads, and PVCs unchanged. Re-running after a
+partial copy is supported when already-created values match.
+
+Remaining live acceptance requirements:
+
+- Complete the user-controlled recovery ceremony and confirm root revocation.
+- Prepare all six runtime records, issuing transport certificates from PKI.
+- Fence the existing validator before changing workload authentication.
+- Apply the immutable Engine chart and validator manifests; retain the DB PVC.
+- Verify Vault Agent initialization, Engine authentication, signer mTLS and
+  successful DB authentication before resuming the client.
+- Verify a subsequent canonical validator duty and collect non-secret evidence.
+- Remove superseded Kubernetes credential Secrets only after these checks.
+
 ## `node-operator-pki/` (PKI)
 
 The issuer private key remains inside the PKI secrets engine. Workloads never
