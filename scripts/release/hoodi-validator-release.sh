@@ -10,6 +10,7 @@ usage() {
 usage:
   hoodi-validator-release.sh verify --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json
   hoodi-validator-release.sh interactive prepare --bundle-root DIRECTORY --output-dir /new-absolute-directory [--aws-region ap-northeast-1|ap-northeast-2]
+  hoodi-validator-release.sh interactive deploy --bundle-root DIRECTORY --output-dir /new-absolute-directory [--aws-region ap-northeast-1|ap-northeast-2]
   hoodi-validator-release.sh infrastructure apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory
   hoodi-validator-release.sh deploy apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory --private-eks-session-handoff /new-absolute/session.json --allow-create
   hoodi-validator-release.sh activate apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json --deposit-attestation /absolute/file.json --public-deposit-verification /absolute/file.json --private-evidence /absolute/file.json --signer-evidence /absolute/file.json --confirm-public-key 0x... --confirm-withdrawal-address 0x...
@@ -56,7 +57,8 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$command_name" = interactive ]; then
-  [ "$operation" = prepare ] && [ -n "$bundle_root$output_dir" ] && [ -z "$inputs$work_dir$session_handoff$ops_inputs$plan_file$expected_sha" ] && [ "$allow_create" = false ] || usage
+  [ "$operation" = prepare ] || [ "$operation" = deploy ] || usage
+  [ -n "$bundle_root$output_dir" ] && [ -z "$inputs$work_dir$session_handoff$ops_inputs$plan_file$expected_sha" ] && [ "$allow_create" = false ] || usage
   case "$bundle_root:$output_dir" in */*:/*) ;; *) usage ;; esac
   [ -t 0 ] && [ -t 1 ] || { printf '%s\n' 'interactive preparation requires a terminal' >&2; exit 69; }
   command -v aws >/dev/null 2>&1 || { printf '%s\n' 'missing command: aws' >&2; exit 69; }
@@ -89,7 +91,10 @@ if [ "$command_name" = interactive ]; then
     --withdrawal-address "$withdrawal_address" --web3signer-image "$web3signer_image" \
     --postgres-image "$postgres_image" --prysm-validator-image "$prysm_image" \
     --signing-fence-image "$fence_image" --kubernetes-api-cidr "$kubernetes_api_cidr" --output-dir "$output_dir" "${backend_args[@]}"
-  printf 'PASS: initial release values are prepared. Continue with infrastructure apply using %s/hoodi-zero-release-inputs.json.\n' "$output_dir"
+  if [ "$operation" = deploy ]; then
+    "$0" deploy apply --bundle-root "$bundle_root" --inputs "$output_dir/hoodi-zero-release-inputs.json" --work-dir "$output_dir/deployment-work" --private-eks-session-handoff "$output_dir/private-eks-session.json" --allow-create
+  fi
+  printf 'PASS: initial release values are prepared in %s.\n' "$output_dir"
   exit 0
 fi
 
