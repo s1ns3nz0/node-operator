@@ -61,6 +61,17 @@ This is infrastructure only. Immutable GitOps artifact publication, private
 Argo bootstrap, optional SSM access, Vault initialize/restore, custody, and
 validator activation stay separate approved operations.
 
+For the separately managed private EKS operations host, derive its isolated
+Terraform inputs from the zero-release work directory rather than copying VPC,
+subnet, or backend values by hand. The command verifies the current AWS account
+and reads the cluster security group from the EKS control plane:
+
+```sh
+release/source/scripts/release/prepare-ops-access-inputs.sh \
+  --handoff /controlled-state/node-operator-zero-bootstrap/ops-access-handoff.json \
+  --output-dir /controlled-input/node-operator-ops-access
+```
+
 After publishing a chart and preparing the digest-bound Argo input, create a
 reviewed private plan against the same `--work-dir` used by `zero apply`; only
 then apply that exact saved plan:

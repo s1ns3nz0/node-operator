@@ -19,6 +19,7 @@ rg -F 'node-operator/foundation-network/terraform.tfstate' "$entrypoint" >/dev/n
 rg -F 'node-operator/baseline/terraform.tfstate' "$entrypoint" >/dev/null
 rg -F 'foundation-network.auto.tfvars.json' "$entrypoint" >/dev/null
 rg -F 'gitops-publisher-handoff.json' "$entrypoint" >/dev/null
+rg -F 'ops-access-handoff.json' "$entrypoint" >/dev/null
 rg -F -- '--inputs cannot be combined with individual phase configs' "$entrypoint" >/dev/null
 rg -F 'zero apply requires --inputs or all three phase configs' "$entrypoint" >/dev/null
 rg -F 'bootstrap-state.tfvars.json' "$entrypoint" >/dev/null
