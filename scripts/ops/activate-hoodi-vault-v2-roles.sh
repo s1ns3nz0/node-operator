@@ -27,7 +27,7 @@ jq -e --arg set "$validator_set" '
 "$dir/copy-hoodi-custody-to-runtime-v2.sh" --validator-set "$validator_set" >/dev/null
 # Reverify the current certificate chains, expiry, hostnames and key pairs.
 # This mode cannot issue certificates or write Vault records.
-scratch="$(mktemp -d /private/tmp/node-operator-v2-role-check.XXXXXX)"
+scratch="$(mktemp -d "${TMPDIR:-/tmp}/node-operator-v2-role-check.XXXXXX")"
 cleanup() {
   local rc=$?
   trap - EXIT

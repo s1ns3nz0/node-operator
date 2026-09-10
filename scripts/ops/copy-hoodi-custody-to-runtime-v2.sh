@@ -10,7 +10,7 @@ validator_set="$2"
 [[ "$validator_set" =~ ^hoodi-[a-z0-9][a-z0-9-]{0,35}$ ]] || exit 64
 : "${VAULT_TOKEN:?A short-lived administrator token is required}"
 for command in vault jq mktemp; do command -v "$command" >/dev/null || exit 69; done
-scratch="$(mktemp -d /private/tmp/node-operator-custody-copy.XXXXXX)"
+scratch="$(mktemp -d "${TMPDIR:-/tmp}/node-operator-custody-copy.XXXXXX")"
 cleanup() {
   local rc=$?
   trap - EXIT

@@ -28,7 +28,7 @@ openssl version | grep -q '^OpenSSL 3\.' || {
   printf '%s\n' 'OpenSSL 3 is required; install openssl@3 before starting this ceremony.' >&2
   exit 69
 }
-scratch="$(mktemp -d /private/tmp/node-operator-v2-transport.XXXXXX)"
+scratch="$(mktemp -d "${TMPDIR:-/tmp}/node-operator-v2-transport.XXXXXX")"
 cleanup() {
   local rc=$?
   trap - EXIT

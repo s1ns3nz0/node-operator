@@ -18,7 +18,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 policy="$root/deploy/vault/policies/hoodi-engine-api.hcl"
 nethermind_role="$root/deploy/vault/auth/hoodi-engine-nethermind-kubernetes-role.json"
 prysm_role="$root/deploy/vault/auth/hoodi-engine-prysm-kubernetes-role.json"
-payload="$(mktemp /private/tmp/node-operator-engine-jwt.XXXXXX)"
+payload="$(mktemp "${TMPDIR:-/tmp}/node-operator-engine-jwt.XXXXXX")"
 cleanup() { rm -f "$payload"; unset VAULT_TOKEN; }
 trap cleanup EXIT INT TERM
 

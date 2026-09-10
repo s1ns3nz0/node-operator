@@ -22,11 +22,17 @@ grep -Fq 'vault secrets enable -path=node-operator-pki pki' "$bootstrap" || fail
 grep -Fq 'node-operator-pki/issue/validator-mtls' "$onboard" || fail 'onboarding does not use Vault PKI issuance'
 grep -Fq 'bootstrap-hoodi-engine-api-vault.sh' "$coordinator" || fail 'coordinator misses Engine JWT role bootstrap'
 grep -Fq 'bootstrap-hoodi-validator-runtime-vault.sh' "$coordinator" || fail 'coordinator misses validator role bootstrap'
-if rg -n 'kv/(data|metadata)' "$root/deploy/nethermind" "$root/deploy/prysm" "$root/deploy/validator" "$root/deploy/vault/policies" >/dev/null; then
+scan_rc=0
+grep -REn 'kv/(data|metadata)' "$root/deploy/nethermind" "$root/deploy/prysm" "$root/deploy/validator" "$root/deploy/vault/policies" >/dev/null || scan_rc=$?
+if [ "$scan_rc" -eq 0 ]; then
   fail 'new workload manifests or policies still reference legacy kv/'
 fi
-if rg -n 'openssl req -x509|ca\.key|CAkey' "$onboard" "$root/scripts/ops/rotate-hoodi-validator-signer-tls.sh" >/dev/null; then
+[ "$scan_rc" -eq 1 ] || fail 'legacy path scan could not complete'
+scan_rc=0
+grep -En 'openssl req -x509|ca\.key|CAkey' "$onboard" "$root/scripts/ops/rotate-hoodi-validator-signer-tls.sh" >/dev/null || scan_rc=$?
+if [ "$scan_rc" -eq 0 ]; then
   fail 'runtime onboarding or rotation handles a CA private key outside Vault PKI'
 fi
+[ "$scan_rc" -eq 1 ] || fail 'CA private-key scan could not complete'
 bash -n "$bootstrap" "$coordinator" "$onboard"
 printf '%s\n' 'PASS: Vault v2 inventory, isolated engines, workload paths, PKI issuance, and recovery coordinator are consistent.'
