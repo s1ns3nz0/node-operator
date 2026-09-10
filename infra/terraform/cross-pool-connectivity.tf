@@ -1,6 +1,15 @@
 # Pod ENIs inherit these node-pool security groups. NetworkPolicies retain
 # workload-selector restrictions; these rules only permit the required paths
 # between pools, without public/CIDR ingress or general cross-pool access.
+resource "aws_vpc_security_group_ingress_rule" "system_validator_db_from_hoodi" {
+  description                  = "Private validator signer to retained slashing database"
+  security_group_id            = aws_security_group.nodes.id
+  referenced_security_group_id = aws_security_group.hoodi_nodes.id
+  from_port                    = 5432
+  to_port                      = 5432
+  ip_protocol                  = "tcp"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "hoodi_prysm_health_from_system" {
   description                  = "Private Prysm health from system-pool DAST"
   security_group_id            = aws_security_group.hoodi_nodes.id

@@ -55,18 +55,20 @@ claim_after="$(kubectl -n validator-operations get pvc "$pvc" -o json | jq -ce '
 [ "$claim_before" = "$claim_after" ] || { printf '%s\n' 'slashing DB PVC identity changed; refusing to start signer' >&2; exit 70; }
 "$dir/assert-hoodi-validator-quiesced.sh" --validator-set "$validator_set" >/dev/null
 
-namespace='validator-operations'; signer="validator-${validator_set}-remote-signer"; fence_deployment="validator-${validator_set}-signing-fence"; client_stateful="validator-${validator_set}-client"
+namespace='validator-operations'; signer="validator-${validator_set}-remote-signer"; client_stateful="validator-${validator_set}-client"
 kubectl -n "$namespace" scale deployment "$signer" --replicas=1 >/dev/null
 kubectl -n "$namespace" rollout status "deployment/${signer}" --timeout=15m >/dev/null
 signer_pod="$(kubectl -n "$namespace" get pods -l "app.kubernetes.io/component=validator-remote-signer,node-operator.io/validator-set=${validator_set}" -o json | jq -er '.items | select(length == 1) | .[0]')"
 jq -e '[.status.initContainerStatuses[]? | select(.name == "vault-agent-init" and .state.terminated.exitCode == 0)] | length == 1' <<<"$signer_pod" >/dev/null || { printf '%s\n' 'signer Vault Agent init did not succeed' >&2; exit 70; }
-kubectl -n "$namespace" scale deployment "$fence_deployment" --replicas=1 >/dev/null
-kubectl -n "$namespace" rollout status "deployment/${fence_deployment}" --timeout=10m >/dev/null
+# The fence binds the fixed client Pod UID/IP. With the client deliberately
+# absent it cannot become Ready. Only activate-hoodi-validator-client.sh may
+# start client first and then acquire the fence after fresh identity checks.
+"$dir/assert-hoodi-validator-quiesced.sh" --validator-set "$validator_set" >/dev/null
 client_replicas="$(kubectl -n "$namespace" get statefulset "$client_stateful" -o jsonpath='{.spec.replicas}')"
 [ "$client_replicas" = 0 ] || { printf '%s\n' 'validator client must remain at zero after staged mTLS cutover' >&2; exit 70; }
 
 mkdir -p "$(dirname "$evidence")"
 jq -n --arg set "$validator_set" --arg key "$(printf '%s' "$public_key" | tr '[:upper:]' '[:lower:]')" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  '{schema_version:1,operation:"live-validator-vault-cutover",completed_at_utc:$at,validator_set:$set,validator_public_key:$key,signer_vault_init_succeeded:true,fence_restored:true,validator_client_replicas:0,legacy_tls_secrets_retained:true,secret_values_emitted:false}' > "$evidence"
+  '{schema_version:1,operation:"live-validator-vault-cutover",completed_at_utc:$at,validator_set:$set,validator_public_key:$key,signer_vault_init_succeeded:true,fence_restored:false,signing_fence_replicas:0,validator_client_replicas:0,activation_required:true,legacy_tls_secrets_retained:true,secret_values_emitted:false}' > "$evidence"
 chmod 600 "$evidence"
-printf 'PASS: validator signer is Vault-mTLS backed; fence is restored and validator client remains fail-closed at zero. Evidence: %s\n' "$evidence"
+printf 'PASS: validator signer is Vault-mTLS backed; client and fence remain fail-closed at zero pending the activation gate. Evidence: %s\n' "$evidence"
