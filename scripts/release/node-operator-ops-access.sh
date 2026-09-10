@@ -217,7 +217,10 @@ fresh_plan() {
     ($owned_sg_changes | length == 1) and ($owned_profile_changes | length == 1) and
     ($host_changes[0].change.actions == ["create"]) and ($host_changes[0].change.after == $planned_hosts[0].values) and
     ($configured_hosts | length > 0) and
-    (all($configured_hosts[]; .expressions.iam_instance_profile.references == ["aws_iam_instance_profile.host.name"] and .expressions.vpc_security_group_ids.references == ["aws_security_group.host.id"])) and
+    # Terraform may emit both the attribute reference and its owning resource
+    # reference.  Require the owned attribute in that set instead of pinning
+    # the provider-version-specific complete list.
+    (all($configured_hosts[]; (.expressions.iam_instance_profile.references | index("aws_iam_instance_profile.host.name")) != null and (.expressions.vpc_security_group_ids.references | index("aws_security_group.host.id")) != null)) and
     ($host_changes[0].change.after_unknown | known_security_configuration) and
     ($planned_hosts[0].values.ebs_optimized == true) and ($planned_hosts[0].values.monitoring == false) and
     ($planned_hosts[0].values.associate_public_ip_address == false) and
