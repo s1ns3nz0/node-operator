@@ -160,7 +160,13 @@ case "$command_name" in
   activate)
     [ "$operation" = apply ] && [ -n "$session_handoff$deposit_attestation$public_deposit_verification$private_evidence$signer_evidence$confirm_public_key$confirm_withdrawal_address" ] && [ -z "$work_dir$output_dir$ops_inputs$plan_file$expected_sha" ] || usage
     for evidence in "$session_handoff" "$deposit_attestation" "$public_deposit_verification" "$private_evidence" "$signer_evidence"; do case "$evidence" in /*) ;; *) usage ;; esac; [ -f "$evidence" ] && [ ! -L "$evidence" ] || { printf '%s\n' 'activation input must be a regular file' >&2; exit 65; }; done
-    session_region="$(jq -er '.aws_region' "$session_handoff")"; session_cluster="$(jq -er '.cluster_name' "$session_handoff")"; session_instance="$(jq -er '.ssm_ops_instance_id' "$session_handoff")"
+    session_region="$(jq -er '
+      .schema_version == 1 and
+      (.aws_region | select(test("^ap-northeast-(1|2)$"))) and
+      (.cluster_name | select(test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$"))) and
+      (.ssm_ops_instance_id | select(test("^i-[0-9a-f]+$"))) | .aws_region
+    ' "$session_handoff")" || { printf '%s\n' 'activation session handoff is invalid' >&2; exit 65; }
+    session_cluster="$(jq -er '.cluster_name' "$session_handoff")"; session_instance="$(jq -er '.ssm_ops_instance_id' "$session_handoff")"
     [ "$session_region" = "$input_region" ] || { printf '%s\n' 'activation session points to another Region' >&2; exit 65; }
     validator_set="$(jq -er '.validator_set' "$validator_handoff")"
     eks_env=(env PRIVATE_EKS_SESSION=1 AWS_REGION="$session_region" EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance")
