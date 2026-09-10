@@ -15,13 +15,20 @@ cat > "$bundle/source/scripts/release/stage-hoodi-validator-deployment.sh" <<'SC
 #!/usr/bin/env bash
 printf 'stage %s\n' "$*" >> "$TRACE"
 SCRIPT
-chmod 700 "$bundle/source/scripts/release/node-operator-release.sh" "$bundle/source/scripts/release/stage-hoodi-validator-deployment.sh"
+cat > "$bundle/source/scripts/release/prepare-ops-access-inputs.sh" <<'SCRIPT'
+#!/usr/bin/env bash
+printf 'ops %s\n' "$*" >> "$TRACE"
+SCRIPT
+chmod 700 "$bundle/source/scripts/release/node-operator-release.sh" "$bundle/source/scripts/release/stage-hoodi-validator-deployment.sh" "$bundle/source/scripts/release/prepare-ops-access-inputs.sh"
 jq -n --arg zero "$inputs/zero-resource/zero-resource-inputs.json" --arg validator "$inputs/validator-deployment/validator-deployment-handoff.json" '{schema_version:1,network:"hoodi",aws_account_id:"106760547719",validator_set:"hoodi-release-001",zero_resource_inputs:$zero,validator_deployment_handoff:$validator,required_checkpoints:[1,2,3,4,5,6]}' > "$inputs/hoodi-zero-release-inputs.json"
 jq -n '{schema_version:1,aws_account_id:"106760547719"}' > "$inputs/zero-resource/zero-resource-inputs.json"
 jq -n '{schema_version:1,network:"hoodi",aws_account_id:"106760547719",staged_client_replicas:0,staged_fence_replicas:0}' > "$inputs/validator-deployment/validator-deployment-handoff.json"
 TRACE="$trace" "$script" infrastructure apply --bundle-root "$bundle" --inputs "$inputs/hoodi-zero-release-inputs.json" --work-dir "$scratch/work" >/dev/null
 rg -F "release verify --bundle-root $bundle" "$trace" >/dev/null
 rg -F "release zero apply --bundle-root $bundle --inputs $inputs/zero-resource/zero-resource-inputs.json --work-dir $scratch/work" "$trace" >/dev/null
+mkdir -p "$scratch/zero"; printf '{}' > "$scratch/zero/ops-access-handoff.json"
+TRACE="$trace" "$script" ops-inputs prepare --bundle-root "$bundle" --inputs "$inputs/hoodi-zero-release-inputs.json" --zero-work-dir "$scratch/zero" --output-dir "$scratch/ops" >/dev/null
+rg -F "ops --handoff $scratch/zero/ops-access-handoff.json --output-dir $scratch/ops" "$trace" >/dev/null
 session="$scratch/session.json"; jq -n '{schema_version:1,aws_region:"ap-northeast-2",cluster_name:"node-operator",ssm_ops_instance_id:"i-0123456789abcdef0"}' > "$session"
 TRACE="$trace" "$script" stage plan --bundle-root "$bundle" --inputs "$inputs/hoodi-zero-release-inputs.json" --private-eks-session-handoff "$session" >/dev/null
 rg -F "stage plan --handoff $inputs/validator-deployment/validator-deployment-handoff.json --private-eks-session-handoff $session" "$trace" >/dev/null
