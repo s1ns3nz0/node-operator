@@ -9,7 +9,7 @@ usage() {
   cat >&2 <<'USAGE'
 usage:
   hoodi-validator-release.sh verify --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json
-  hoodi-validator-release.sh interactive prepare --bundle-root DIRECTORY --output-dir /new-absolute-directory
+  hoodi-validator-release.sh interactive prepare --bundle-root DIRECTORY --output-dir /new-absolute-directory [--aws-region ap-northeast-1|ap-northeast-2]
   hoodi-validator-release.sh infrastructure apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory
   hoodi-validator-release.sh ops-inputs prepare --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --zero-work-dir /absolute/zero-work-dir --output-dir /new-absolute-directory
   hoodi-validator-release.sh ops-access plan|apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --ops-inputs /absolute/ops-access-inputs.json --plan-file /absolute/private.tfplan [--expected-sha SHA256] [--allow-create] [--private-eks-session-handoff /absolute/session.json]
@@ -20,7 +20,7 @@ USAGE
 
 command_name="${1:-}"; [ -n "$command_name" ] || usage
 shift
-operation=''; bundle_root=''; inputs=''; work_dir=''; session_handoff=''; output_dir=''; ops_inputs=''; plan_file=''; expected_sha=''; allow_create=false
+operation=''; bundle_root=''; inputs=''; work_dir=''; session_handoff=''; output_dir=''; ops_inputs=''; plan_file=''; expected_sha=''; aws_region='ap-northeast-2'; allow_create=false
 case "$command_name" in
   interactive|infrastructure|ops-inputs|ops-access|stage)
     [ "$#" -gt 0 ] || usage
@@ -40,6 +40,7 @@ while [ "$#" -gt 0 ]; do
     --ops-inputs) ops_inputs="${2:-}"; shift 2 ;;
     --plan-file) plan_file="${2:-}"; shift 2 ;;
     --expected-sha) expected_sha="${2:-}"; shift 2 ;;
+    --aws-region) aws_region="${2:-}"; shift 2 ;;
     --allow-create) allow_create=true; shift ;;
     --private-eks-session-handoff) session_handoff="${2:-}"; shift 2 ;;
     *) usage ;;
@@ -51,6 +52,7 @@ if [ "$command_name" = interactive ]; then
   case "$bundle_root:$output_dir" in */*:/*) ;; *) usage ;; esac
   [ -t 0 ] && [ -t 1 ] || { printf '%s\n' 'interactive preparation requires a terminal' >&2; exit 69; }
   command -v aws >/dev/null 2>&1 || { printf '%s\n' 'missing command: aws' >&2; exit 69; }
+  case "$aws_region" in ap-northeast-1|ap-northeast-2) ;; *) printf '%s\n' 'aws region must be ap-northeast-1 or ap-northeast-2' >&2; exit 64 ;; esac
   identity="$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN aws sts get-caller-identity --output json)"
   account="$(jq -er '.Account' <<<"$identity")"
   [[ "$account" =~ ^[0-9]{12}$ ]] || { printf '%s\n' 'current AWS identity did not return a valid account' >&2; exit 65; }
@@ -63,6 +65,9 @@ if [ "$command_name" = interactive ]; then
   prysm_image="$(prompt 'Approved Prysm validator private ECR digest')"
   fence_image="$(prompt 'Approved signing-fence private ECR digest')"
   kubernetes_api_cidr="$(prompt 'Operator public IPv4 /32')"
+  availability_zones=()
+  while IFS= read -r zone; do availability_zones+=("$zone"); done < <(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN aws ec2 describe-availability-zones --region "$aws_region" --filters Name=state,Values=available --query 'AvailabilityZones[].ZoneName' --output text | tr '\t' '\n' | sort | head -n 2)
+  [ "${#availability_zones[@]}" -eq 2 ] || { printf '%s\n' 'could not discover two available zones in the selected Region' >&2; exit 65; }
   backend_args=()
   identity_arn="$(jq -er '.Arn' <<<"$identity")"
   case "$identity_arn" in
@@ -72,7 +77,7 @@ if [ "$command_name" = interactive ]; then
       ;;
   esac
   "$bundle_root/source/scripts/release/prepare-hoodi-zero-release-inputs.sh" \
-    --aws-account-id "$account" --validator-set "$validator_set" --validator-public-key "$validator_key" \
+    --aws-account-id "$account" --aws-region "$aws_region" --availability-zone "${availability_zones[0]}" --availability-zone "${availability_zones[1]}" --validator-set "$validator_set" --validator-public-key "$validator_key" \
     --withdrawal-address "$withdrawal_address" --web3signer-image "$web3signer_image" \
     --postgres-image "$postgres_image" --prysm-validator-image "$prysm_image" \
     --signing-fence-image "$fence_image" --kubernetes-api-cidr "$kubernetes_api_cidr" --output-dir "$output_dir" "${backend_args[@]}"
@@ -92,13 +97,14 @@ jq -e --arg zero "$zero_inputs" --arg validator "$validator_handoff" '
   .schema_version == 1 and .network == "hoodi" and
   (.aws_account_id | test("^[0-9]{12}$")) and
   (.validator_set | test("^hoodi-[a-z0-9][a-z0-9-]*$")) and
-  .zero_resource_inputs == $zero and .validator_deployment_handoff == $validator and
+  (.aws_region | test("^ap-northeast-(1|2)$")) and .zero_resource_inputs == $zero and .validator_deployment_handoff == $validator and
   (.required_checkpoints | type == "array" and length == 6)
 ' "$inputs" >/dev/null || { printf '%s\n' 'inputs are not a bounded Hoodi zero-release contract' >&2; exit 65; }
 [ -f "$zero_inputs" ] && [ ! -L "$zero_inputs" ] && [ -f "$validator_handoff" ] && [ ! -L "$validator_handoff" ] || { printf '%s\n' 'release contract references missing or unsafe inputs' >&2; exit 65; }
 account="$(jq -er '.aws_account_id' "$inputs")"
-jq -e --arg account "$account" '.schema_version == 1 and .aws_account_id == $account' "$zero_inputs" >/dev/null || { printf '%s\n' 'zero-resource input account does not match the release contract' >&2; exit 65; }
-jq -e --arg account "$account" '.schema_version == 1 and .network == "hoodi" and .aws_account_id == $account and .staged_client_replicas == 0 and .staged_fence_replicas == 0' "$validator_handoff" >/dev/null || { printf '%s\n' 'validator handoff does not match the release contract or is not fenced' >&2; exit 65; }
+input_region="$(jq -er '.aws_region' "$inputs")"
+jq -e --arg account "$account" --arg region "$input_region" '.schema_version == 1 and .aws_account_id == $account and .aws_region == $region' "$zero_inputs" >/dev/null || { printf '%s\n' 'zero-resource input account or region does not match the release contract' >&2; exit 65; }
+jq -e --arg account "$account" --arg region "$input_region" '.schema_version == 1 and .network == "hoodi" and .aws_account_id == $account and .aws_region == $region and .staged_client_replicas == 0 and .staged_fence_replicas == 0' "$validator_handoff" >/dev/null || { printf '%s\n' 'validator handoff does not match the release contract or is not fenced' >&2; exit 65; }
 
 release_dir="$bundle_root/source/scripts/release"
 "$release_dir/node-operator-release.sh" verify --bundle-root "$bundle_root"

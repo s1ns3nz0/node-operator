@@ -7,12 +7,12 @@ umask 077
 # independently authorized operations; this command only removes duplicated
 # operator input while preserving those boundaries.
 usage() {
-  printf '%s\n' "usage: ${0##*/} --aws-account-id <12-digit-id> --validator-set <hoodi-id> --validator-public-key <0x-key> --withdrawal-address <0x-address> --web3signer-image <private-ecr@sha256> --postgres-image <private-ecr@sha256> --prysm-validator-image <private-ecr@sha256> --signing-fence-image <private-ecr@sha256> --kubernetes-api-cidr <ipv4/32> --output-dir <new-absolute-dir> [--name <dns-name>] [--backend-principal-arn <same-account-role-arn>]" >&2
+  printf '%s\n' "usage: ${0##*/} --aws-account-id <12-digit-id> --validator-set <hoodi-id> --validator-public-key <0x-key> --withdrawal-address <0x-address> --web3signer-image <private-ecr@sha256> --postgres-image <private-ecr@sha256> --prysm-validator-image <private-ecr@sha256> --signing-fence-image <private-ecr@sha256> --kubernetes-api-cidr <ipv4/32> --output-dir <new-absolute-dir> [--aws-region <ap-northeast-1|ap-northeast-2>] [--availability-zone <zone> --availability-zone <zone>] [--name <dns-name>] [--backend-principal-arn <same-account-role-arn>]" >&2
   exit 64
 }
 
 account=''; validator_set=''; validator_public_key=''; withdrawal_address=''
-web3signer_image=''; postgres_image=''; prysm_image=''; fence_image=''; kubernetes_api_cidr=''; output_dir=''; name='node-operator'; principals=()
+web3signer_image=''; postgres_image=''; prysm_image=''; fence_image=''; kubernetes_api_cidr=''; output_dir=''; name='node-operator'; aws_region='ap-northeast-2'; availability_zones=(); principals=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --aws-account-id) account="${2:-}"; shift 2 ;;
@@ -25,6 +25,8 @@ while [ "$#" -gt 0 ]; do
     --signing-fence-image) fence_image="${2:-}"; shift 2 ;;
     --kubernetes-api-cidr) kubernetes_api_cidr="${2:-}"; shift 2 ;;
     --output-dir) output_dir="${2:-}"; shift 2 ;;
+    --aws-region) aws_region="${2:-}"; shift 2 ;;
+    --availability-zone) availability_zones+=("${2:-}"); shift 2 ;;
     --name) name="${2:-}"; shift 2 ;;
     --backend-principal-arn) principals+=("${2:-}"); shift 2 ;;
     *) usage ;;
@@ -46,7 +48,8 @@ completed=0
 trap cleanup EXIT INT TERM
 
 mkdir -m 700 "$output_dir"
-zero_args=(--aws-account-id "$account" --name "$name" --output-dir "$zero_dir")
+zero_args=(--aws-account-id "$account" --aws-region "$aws_region" --name "$name" --output-dir "$zero_dir")
+for zone in "${availability_zones[@]}"; do zero_args+=(--availability-zone "$zone"); done
 for principal in "${principals[@]}"; do zero_args+=(--backend-principal-arn "$principal"); done
 "$script_dir/prepare-zero-resource-inputs.sh" "${zero_args[@]}"
 "$script_dir/prepare-hoodi-validator-deployment.sh" \
@@ -54,6 +57,7 @@ for principal in "${principals[@]}"; do zero_args+=(--backend-principal-arn "$pr
   --validator-public-key "$validator_public_key" \
   --withdrawal-address "$withdrawal_address" \
   --aws-account-id "$account" \
+  --aws-region "$aws_region" \
   --web3signer-image "$web3signer_image" \
   --postgres-image "$postgres_image" \
   --prysm-validator-image "$prysm_image" \
@@ -63,10 +67,11 @@ for principal in "${principals[@]}"; do zero_args+=(--backend-principal-arn "$pr
 
 jq -n \
   --arg account "$account" \
+  --arg region "$aws_region" \
   --arg validator_set "$validator_set" \
   --arg zero_inputs "$zero_dir/zero-resource-inputs.json" \
   --arg validator_handoff "$validator_dir/validator-deployment-handoff.json" \
-  '{schema_version:1,network:"hoodi",aws_account_id:$account,validator_set:$validator_set,zero_resource_inputs:$zero_inputs,validator_deployment_handoff:$validator_handoff,required_checkpoints:["verified release bundle","zero-resource infrastructure apply","immutable GitOps artifact publication and Argo bootstrap","isolated SSM ops-access saved plan and apply","interactive Vault recovery and custody onboarding","public deposit and activation evidence"]}' > "$manifest"
+  '{schema_version:1,network:"hoodi",aws_account_id:$account,aws_region:$region,validator_set:$validator_set,zero_resource_inputs:$zero_inputs,validator_deployment_handoff:$validator_handoff,required_checkpoints:["verified release bundle","zero-resource infrastructure apply","immutable GitOps artifact publication and Argo bootstrap","isolated SSM ops-access saved plan and apply","interactive Vault recovery and custody onboarding","public deposit and activation evidence"]}' > "$manifest"
 chmod 600 "$manifest"
 completed=1
 printf 'PASS: complete non-secret Hoodi zero-release inputs prepared in %s. Use zero-resource/ for infrastructure and validator-deployment/ only after private EKS access is created.\n' "$output_dir"

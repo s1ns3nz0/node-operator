@@ -40,6 +40,7 @@ validator_set="$(jq -er '
 ' "$handoff")" || { printf '%s\n' 'handoff is not a Hoodi validator deployment contract' >&2; exit 65; }
 jq -e --arg parent "$parent" --arg runtime "$runtime" --arg client "$client" '
   (.aws_account_id | test("^[0-9]{12}$")) and
+  (.aws_region | test("^ap-northeast-(1|2)$")) and
   .runtime_manifest == $runtime and .client_manifest == $client and
   .staged_client_replicas == 0 and .staged_fence_replicas == 0 and
   (.next_steps | type == "array" and length > 0)
@@ -59,7 +60,8 @@ fi
 if [ -n "$private_eks_session_handoff" ]; then
   case "$private_eks_session_handoff" in /*) ;; *) printf '%s\n' 'private EKS session handoff must be an absolute path' >&2; exit 65 ;; esac
   [ -f "$private_eks_session_handoff" ] && [ ! -L "$private_eks_session_handoff" ] || { printf '%s\n' 'private EKS session handoff must be a regular file' >&2; exit 65; }
-  session_cluster="$(jq -er '.schema_version == 1 and .aws_region == "ap-northeast-2" and (.cluster_name | select(test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")))' "$private_eks_session_handoff")" || { printf '%s\n' 'private EKS session handoff is invalid' >&2; exit 65; }
+  handoff_region="$(jq -er '.aws_region' "$handoff")"
+  session_cluster="$(jq -er --arg region "$handoff_region" '.schema_version == 1 and .aws_region == $region and (.cluster_name | select(test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")))' "$private_eks_session_handoff")" || { printf '%s\n' 'private EKS session handoff is invalid or points to another Region' >&2; exit 65; }
   session_instance="$(jq -er '.ssm_ops_instance_id | select(test("^i-[0-9a-f]+$"))' "$private_eks_session_handoff")" || { printf '%s\n' 'private EKS session handoff lacks a valid SSM instance' >&2; exit 65; }
 fi
 
@@ -67,7 +69,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 self="$script_dir/${BASH_SOURCE[0]##*/}"
 if [ "${PRIVATE_EKS_SESSION:-}" != 1 ]; then
   if [ -n "$private_eks_session_handoff" ]; then
-    exec "$script_dir/../ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 AWS_REGION=ap-northeast-2 EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance" "$self" "$operation" --handoff "$handoff" --private-eks-session-handoff "$private_eks_session_handoff"
+    exec "$script_dir/../ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 AWS_REGION="$handoff_region" EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance" "$self" "$operation" --handoff "$handoff" --private-eks-session-handoff "$private_eks_session_handoff"
   fi
   exec "$script_dir/../ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$self" "$operation" --handoff "$handoff"
 fi

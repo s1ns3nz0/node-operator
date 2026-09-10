@@ -24,9 +24,9 @@ cat > "$bundle/source/scripts/release/node-operator-ops-access.sh" <<'SCRIPT'
 printf 'ops-access %s\n' "$*" >> "$TRACE"
 SCRIPT
 chmod 700 "$bundle/source/scripts/release/node-operator-release.sh" "$bundle/source/scripts/release/stage-hoodi-validator-deployment.sh" "$bundle/source/scripts/release/prepare-ops-access-inputs.sh" "$bundle/source/scripts/release/node-operator-ops-access.sh"
-jq -n --arg zero "$inputs/zero-resource/zero-resource-inputs.json" --arg validator "$inputs/validator-deployment/validator-deployment-handoff.json" '{schema_version:1,network:"hoodi",aws_account_id:"106760547719",validator_set:"hoodi-release-001",zero_resource_inputs:$zero,validator_deployment_handoff:$validator,required_checkpoints:[1,2,3,4,5,6]}' > "$inputs/hoodi-zero-release-inputs.json"
-jq -n '{schema_version:1,aws_account_id:"106760547719"}' > "$inputs/zero-resource/zero-resource-inputs.json"
-jq -n '{schema_version:1,network:"hoodi",aws_account_id:"106760547719",staged_client_replicas:0,staged_fence_replicas:0}' > "$inputs/validator-deployment/validator-deployment-handoff.json"
+jq -n --arg zero "$inputs/zero-resource/zero-resource-inputs.json" --arg validator "$inputs/validator-deployment/validator-deployment-handoff.json" '{schema_version:1,network:"hoodi",aws_account_id:"106760547719",aws_region:"ap-northeast-2",validator_set:"hoodi-release-001",zero_resource_inputs:$zero,validator_deployment_handoff:$validator,required_checkpoints:[1,2,3,4,5,6]}' > "$inputs/hoodi-zero-release-inputs.json"
+jq -n '{schema_version:1,aws_account_id:"106760547719",aws_region:"ap-northeast-2"}' > "$inputs/zero-resource/zero-resource-inputs.json"
+jq -n '{schema_version:1,network:"hoodi",aws_account_id:"106760547719",aws_region:"ap-northeast-2",staged_client_replicas:0,staged_fence_replicas:0}' > "$inputs/validator-deployment/validator-deployment-handoff.json"
 if "$script" interactive prepare --bundle-root "$bundle" --output-dir "$scratch/interactive" </dev/null >/dev/null 2>&1; then
   printf '%s\n' 'interactive preparation unexpectedly accepted a non-terminal input stream' >&2; exit 1
 fi

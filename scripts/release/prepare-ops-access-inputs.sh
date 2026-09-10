@@ -18,20 +18,22 @@ case "$handoff:$output_dir" in /*:/*) ;; *) usage ;; esac
 command -v jq >/dev/null 2>&1 || { printf '%s\n' 'missing command: jq' >&2; exit 69; }
 command -v aws >/dev/null 2>&1 || { printf '%s\n' 'missing command: aws' >&2; exit 69; }
 jq -e '
-  .schema_version == "v1" and .aws_region == "ap-northeast-2" and
+  .schema_version == "v1" and (.aws_region | test("^ap-northeast-(1|2)$")) and
   (.aws_account_id | test("^[0-9]{12}$")) and (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and
   (.vpc_id | test("^vpc-[0-9a-f]+$")) and (.subnet_id | test("^subnet-[0-9a-f]+$")) and
   (.backend | type == "object" and (.bucket | test("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$")) and
    (.dynamodb_table | type == "string" and length > 0) and
-   (.kms_key_id | test("^arn:aws:kms:ap-northeast-2:[0-9]{12}:key/[A-Za-z0-9-]+$")) and
-   .region == "ap-northeast-2" and .key == "node-operator/ops-access/terraform.tfstate")
+   (.kms_key_id | test("^arn:aws:kms:ap-northeast-(1|2):[0-9]{12}:key/[A-Za-z0-9-]+$")) and
+   (.region | test("^ap-northeast-(1|2)$")) and .key == "node-operator/ops-access/terraform.tfstate")
 ' "$handoff" >/dev/null || { printf '%s\n' 'handoff is not an isolated ops-access contract' >&2; exit 65; }
 
 account="$(jq -r '.aws_account_id' "$handoff")"
 cluster="$(jq -r '.cluster_name' "$handoff")"
+region="$(jq -r '.aws_region' "$handoff")"
+jq -e --arg region "$region" '.backend.region == $region and (.backend.kms_key_id | startswith("arn:aws:kms:" + $region + ":"))' "$handoff" >/dev/null || { printf '%s\n' 'ops-access backend region does not match the deployment region' >&2; exit 65; }
 caller_account="$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN aws sts get-caller-identity --query Account --output text)"
 [ "$caller_account" = "$account" ] || { printf '%s\n' 'current AWS identity does not match the ops-access handoff account' >&2; exit 65; }
-cluster_security_group_id="$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN aws eks describe-cluster --region ap-northeast-2 --name "$cluster" --query 'cluster.resourcesVpcConfig.clusterSecurityGroupId' --output text)"
+cluster_security_group_id="$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN aws eks describe-cluster --region "$region" --name "$cluster" --query 'cluster.resourcesVpcConfig.clusterSecurityGroupId' --output text)"
 [[ "$cluster_security_group_id" =~ ^sg-[0-9a-f]+$ ]] || { printf '%s\n' 'EKS did not return a valid cluster security group ID' >&2; exit 65; }
 
 mkdir -m 700 "$output_dir"
