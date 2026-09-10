@@ -27,9 +27,11 @@ printf '%s\n' "$*" >> "$TRACE"
 case "$*" in
   'status -format=json') printf '%s\n' '{"initialized":true,"sealed":false,"version":"1.20.4"}' ;;
   'operator generate-root -status -format=json') printf '%s\n' '{"started":false}' ;;
-  'operator generate-root -init -format=json') printf '%s\n' '{"nonce":"mock-nonce","otp":"mock-otp","required":1}' ;;
-  'operator generate-root -nonce=mock-nonce -format=json -') cat >/dev/null; printf '%s\n' '{"complete":true,"encoded_token":"mock-encoded"}' ;;
-  'operator generate-root -decode=mock-encoded -otp=mock-otp') printf '%s\n' root-token ;;
+  # These are deliberately tiny, non-secret base64 fixtures.  XOR decoding
+  # yields the one-character mock administrator token "a"; longer
+  # token-shaped strings would correctly be reported by Gitleaks.
+  'operator generate-root -init -format=json') printf '%s\n' '{"nonce":"mock-nonce","otp":"AA==","required":1}' ;;
+  'operator generate-root -nonce=mock-nonce -format=json -') cat >/dev/null; printf '%s\n' '{"complete":true,"encoded_token":"YQ=="}' ;;
   'auth list -format=json') printf '%s\n' '{}' ;;
   'policy list -format=json') printf '%s\n' '[]' ;;
   'auth enable -path=operator-aws aws'|'policy write operator-recovery '*|'write auth/operator-aws/config/client '*|'write auth/operator-aws/role/operator-recovery '*) : ;;
@@ -44,7 +46,7 @@ case "$*" in
   'token revoke -self')
     case "${VAULT_TOKEN:-}" in
       operator-token) printf '%s\n' revoke-operator >> "$TRACE" ;;
-      root-token)
+      a)
         printf '%s\n' revoke-root >> "$TRACE"
         if [ "${MODE:-ok}" = root-cleanup-fail ]; then exit 1; fi
         ;;
@@ -68,7 +70,7 @@ run() {
   else
     [ "$rc" -ne 0 ] || { printf 'unexpected %s success\n' "$name" >&2; exit 1; }
   fi
-  if grep -Eq 'root-token|operator-token|mock-share|mock-encoded|mock-otp' <<<"$last_out"; then
+  if grep -Eq '(^|[^[:alnum:]])a([^[:alnum:]]|$)|operator-token|mock-share|YQ==|AA==' <<<"$last_out"; then
     printf '%s\n' 'credential material leaked to wrapper output' >&2
     exit 1
   fi

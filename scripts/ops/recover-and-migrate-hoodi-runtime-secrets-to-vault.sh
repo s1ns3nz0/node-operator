@@ -88,16 +88,7 @@ for number in $(seq 1 "$required"); do
   if [ "$(jq -r .complete <<<"$reply")" = true ]; then complete=true; encoded="$(jq -er .encoded_token <<<"$reply")"; break; fi
 done
 [ "$complete" = true ] || { printf '%s\n' 'recovery quorum was not reached' >&2; exit 77; }
-# Do not put the encoded token or OTP in a process argument.  The Vault CLI
-# documents the generated-root decoding as XOR; decode it locally through
-# stdin so process inspection cannot recover either secret.
-root_token="$(printf '%s\n%s\n' "$encoded" "$otp" | python3 -c '
-import base64, sys
-encoded, otp = sys.stdin.read().splitlines()
-left = base64.b64decode(encoded); right = base64.b64decode(otp)
-if len(left) != len(right): raise SystemExit("invalid generated-root response")
-print(bytes(a ^ b for a, b in zip(left, right)).decode("utf-8"))
-')"
+root_token="$(vault_recovery_decode_generated_root "$encoded" "$otp")"
 unset encoded otp nonce initial reply status
 
 put_or_match() {

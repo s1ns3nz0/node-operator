@@ -24,6 +24,6 @@ for n in $(seq 1 "$required"); do
   if [ "$(jq -r .complete <<<"$submitted")" = true ]; then complete=true; encoded="$(jq -er .encoded_token <<<"$submitted")"; break; fi
 done
 [ "$complete" = true ] || { printf 'recovery quorum was not reached\n' >&2; exit 77; }
-root_token="$(vault operator generate-root -decode="$encoded" -otp="$otp")"; unset encoded otp nonce init submitted status
+root_token="$(vault_recovery_decode_generated_root "$encoded" "$otp")"; unset encoded otp nonce init submitted status
 VAULT_TOKEN="$root_token" PRIVATE_VAULT_SESSION=1 "$dir/bootstrap-hoodi-validator-runtime-vault.sh" --validator-set "$set_id"
 printf 'PASS: Hoodi runtime Vault bootstrap completed; generated root token will now be revoked.\n'

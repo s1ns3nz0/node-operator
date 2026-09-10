@@ -62,3 +62,24 @@ vault_recovery_auth_preflight() {
     return 1
   fi
 }
+
+# Vault's CLI decoder accepts both secrets as flags, which places them in the
+# local process argument list. Generated-root decoding is a XOR of base64
+# values, so keep the equivalent operation on stdin and expose neither value
+# to process inspection. Callers must already have completed the ceremony.
+vault_recovery_decode_generated_root() {
+  if ! command -v python3 >/dev/null 2>&1; then
+    printf '%s\n' 'Vault recovery decode requires python3' >&2
+    return 69
+  fi
+  [ "$#" -eq 2 ] || return 64
+  printf '%s\n%s\n' "$1" "$2" | python3 -c '
+import base64, sys
+encoded, otp = sys.stdin.read().splitlines()
+left = base64.b64decode(encoded, validate=True)
+right = base64.b64decode(otp, validate=True)
+if len(left) != len(right):
+    raise SystemExit("invalid generated-root response")
+print(bytes(a ^ b for a, b in zip(left, right)).decode("utf-8"))
+'
+}

@@ -66,7 +66,7 @@ for number in $(seq 1 "$required"); do
   fi
 done
 [ "$complete" = true ] || { printf 'Recovery quorum not reached.\n' >&2; exit 77; }
-root_token="$(vault operator generate-root -decode="$encoded" -otp="$otp")"
+root_token="$(vault_recovery_decode_generated_root "$encoded" "$otp")"
 unset initial reply status nonce otp encoded
 VAULT_TOKEN="$root_token" bash "$dir/configure-private-vault-operator-auth.sh" "$@"
 
