@@ -19,7 +19,11 @@ cat > "$bundle/source/scripts/release/prepare-ops-access-inputs.sh" <<'SCRIPT'
 #!/usr/bin/env bash
 printf 'ops %s\n' "$*" >> "$TRACE"
 SCRIPT
-chmod 700 "$bundle/source/scripts/release/node-operator-release.sh" "$bundle/source/scripts/release/stage-hoodi-validator-deployment.sh" "$bundle/source/scripts/release/prepare-ops-access-inputs.sh"
+cat > "$bundle/source/scripts/release/node-operator-ops-access.sh" <<'SCRIPT'
+#!/usr/bin/env bash
+printf 'ops-access %s\n' "$*" >> "$TRACE"
+SCRIPT
+chmod 700 "$bundle/source/scripts/release/node-operator-release.sh" "$bundle/source/scripts/release/stage-hoodi-validator-deployment.sh" "$bundle/source/scripts/release/prepare-ops-access-inputs.sh" "$bundle/source/scripts/release/node-operator-ops-access.sh"
 jq -n --arg zero "$inputs/zero-resource/zero-resource-inputs.json" --arg validator "$inputs/validator-deployment/validator-deployment-handoff.json" '{schema_version:1,network:"hoodi",aws_account_id:"106760547719",validator_set:"hoodi-release-001",zero_resource_inputs:$zero,validator_deployment_handoff:$validator,required_checkpoints:[1,2,3,4,5,6]}' > "$inputs/hoodi-zero-release-inputs.json"
 jq -n '{schema_version:1,aws_account_id:"106760547719"}' > "$inputs/zero-resource/zero-resource-inputs.json"
 jq -n '{schema_version:1,network:"hoodi",aws_account_id:"106760547719",staged_client_replicas:0,staged_fence_replicas:0}' > "$inputs/validator-deployment/validator-deployment-handoff.json"
@@ -29,6 +33,13 @@ rg -F "release zero apply --bundle-root $bundle --inputs $inputs/zero-resource/z
 mkdir -p "$scratch/zero"; printf '{}' > "$scratch/zero/ops-access-handoff.json"
 TRACE="$trace" "$script" ops-inputs prepare --bundle-root "$bundle" --inputs "$inputs/hoodi-zero-release-inputs.json" --zero-work-dir "$scratch/zero" --output-dir "$scratch/ops" >/dev/null
 rg -F "ops --handoff $scratch/zero/ops-access-handoff.json --output-dir $scratch/ops" "$trace" >/dev/null
+mkdir -p "$scratch/ops"
+printf '{}' > "$scratch/ops/ops-access.tfvars.json"; printf '{}' > "$scratch/ops/ops-access.backend.hcl"
+jq -n --arg handoff "$scratch/zero/ops-access-handoff.json" --arg config "$scratch/ops/ops-access.tfvars.json" --arg backend "$scratch/ops/ops-access.backend.hcl" '{schema_version:1,ops_access_handoff:$handoff,config:$config,backend_config:$backend}' > "$scratch/ops/ops-access-inputs.json"
+jq -n '{schema_version:"v1",aws_account_id:"106760547719"}' > "$scratch/zero/ops-access-handoff.json"
+mkdir -m 700 "$scratch/plans"
+TRACE="$trace" "$script" ops-access plan --bundle-root "$bundle" --inputs "$inputs/hoodi-zero-release-inputs.json" --ops-inputs "$scratch/ops/ops-access-inputs.json" --plan-file "$scratch/plans/ops.tfplan" --allow-create >/dev/null
+rg -F "ops-access plan --root $bundle/source --inputs $scratch/ops/ops-access-inputs.json --plan-file $scratch/plans/ops.tfplan --allow-create" "$trace" >/dev/null
 session="$scratch/session.json"; jq -n '{schema_version:1,aws_region:"ap-northeast-2",cluster_name:"node-operator",ssm_ops_instance_id:"i-0123456789abcdef0"}' > "$session"
 TRACE="$trace" "$script" stage plan --bundle-root "$bundle" --inputs "$inputs/hoodi-zero-release-inputs.json" --private-eks-session-handoff "$session" >/dev/null
 rg -F "stage plan --handoff $inputs/validator-deployment/validator-deployment-handoff.json --private-eks-session-handoff $session" "$trace" >/dev/null
