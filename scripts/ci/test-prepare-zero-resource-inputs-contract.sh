@@ -23,4 +23,8 @@ if "$script" --aws-account-id 106760547719 --backend-principal-arn arn:aws:iam::
   printf '%s\n' 'cross-account backend principal unexpectedly accepted' >&2
   exit 1
 fi
+if "$script" --aws-account-id 106760547719 --name node-operator-tokyo-smoke --backend-principal-arn arn:aws:iam::106760547719:role/NodeOperatorTerraformApply --output-dir "$scratch/too-long" >/dev/null 2>&1; then
+  printf '%s\n' 'name that would overflow derived IAM and S3 resource names unexpectedly accepted' >&2
+  exit 1
+fi
 printf '%s\n' 'PASS: zero-resource input preparation emits one bounded non-secret configuration set.'

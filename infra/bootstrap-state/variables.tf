@@ -22,8 +22,8 @@ variable "name" {
   default = "node-operator"
 
   validation {
-    condition     = can(regex("^[a-z][a-z0-9-]{1,38}[a-z0-9]$", var.name))
-    error_message = "name must be a DNS-compatible identifier."
+    condition     = can(regex("^[a-z][a-z0-9-]{1,18}[a-z0-9]$", var.name))
+    error_message = "name must be a 3-20 character DNS-compatible identifier so derived IAM and S3 resource names remain valid."
   }
 }
 

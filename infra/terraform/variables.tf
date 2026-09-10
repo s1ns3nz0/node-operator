@@ -36,8 +36,8 @@ variable "name" {
   default     = "node-operator"
 
   validation {
-    condition     = can(regex("^[a-z][a-z0-9-]{1,38}[a-z0-9]$", var.name))
-    error_message = "name must be 3-40 lowercase letters, digits, and hyphens, beginning and ending with a letter or digit."
+    condition     = can(regex("^[a-z][a-z0-9-]{1,18}[a-z0-9]$", var.name))
+    error_message = "name must be 3-20 lowercase letters, digits, and hyphens, beginning and ending with a letter or digit so derived IAM and S3 names remain valid."
   }
 }
 
