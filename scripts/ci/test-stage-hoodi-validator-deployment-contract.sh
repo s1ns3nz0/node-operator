@@ -34,6 +34,11 @@ chmod 700 "$tools/kubectl"
 
 KUBECTL_TRACE="$scratch/kubectl.trace" PATH="$tools:$PATH" PRIVATE_EKS_SESSION=1 "$script" plan --handoff "$handoff" --private-eks-session-handoff "$session" >/dev/null
 rg -F -- '--server-side --field-manager=node-operator-release-stage --dry-run=server' "$scratch/kubectl.trace" >/dev/null
+sed -i.bak 's/\*\x27 get \x27\*) exit 1 ;;/\*\x27 get \x27\*) exit 0 ;;/ ' "$tools/kubectl"
+if KUBECTL_TRACE="$scratch/existing.trace" PATH="$tools:$PATH" PRIVATE_EKS_SESSION=1 "$script" plan --handoff "$handoff" --private-eks-session-handoff "$session" >"$scratch/existing.out" 2>&1; then
+  printf '%s\n' 'existing validator target unexpectedly accepted' >&2; exit 1
+fi
+rg -F 'fresh staging will not adopt it' "$scratch/existing.out" >/dev/null
 if KUBECTL_TRACE="$scratch/secret.trace" PATH="$tools:$PATH" PRIVATE_EKS_SESSION=1 "$script" plan --handoff /dev/null >/dev/null 2>&1; then
   printf '%s\n' 'unsafe handoff unexpectedly accepted' >&2
   exit 1
