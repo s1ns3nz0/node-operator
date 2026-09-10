@@ -64,9 +64,10 @@ vault_recovery_auth_preflight() {
 }
 
 # Vault's CLI decoder accepts both secrets as flags, which places them in the
-# local process argument list. Generated-root decoding is a XOR of base64
-# values, so keep the equivalent operation on stdin and expose neither value
-# to process inspection. Callers must already have completed the ceremony.
+# local process argument list. Vault encodes *only* the XOR result with raw
+# standard base64: its OTP is a base62 string and must be used as literal UTF-8
+# bytes. Keep the equivalent operation on stdin and expose neither value to
+# process inspection. Callers must already have completed the ceremony.
 vault_recovery_decode_generated_root() {
   if ! command -v python3 >/dev/null 2>&1; then
     printf '%s\n' 'Vault recovery decode requires python3' >&2
@@ -77,11 +78,11 @@ vault_recovery_decode_generated_root() {
 import base64, re, sys
 encoded, otp = sys.stdin.read().splitlines()
 
-def decode_generated_root_part(value):
-    # Vault can return either RFC 4648 or URL-safe base64 without trailing
-    # padding. Validate one alphabet only, validate any supplied padding, and
-    # restore only deterministic trailing padding for strict decoding.
-    if not re.fullmatch(r"(?:[A-Za-z0-9+/]+|[A-Za-z0-9_-]+)={0,2}", value):
+def decode_encoded_token(value):
+    # HashiCorp Vault roottoken.EncodeToken uses base64.RawStdEncoding, not
+    # URL-safe base64. Accept optional canonical padding solely for transport
+    # compatibility, then strictly decode the raw-standard alphabet.
+    if not re.fullmatch(r"[A-Za-z0-9+/]+={0,2}", value):
         raise SystemExit("invalid generated-root response")
     unpadded = value.rstrip("=")
     padding_length = len(value) - len(unpadded)
@@ -90,13 +91,20 @@ def decode_generated_root_part(value):
         raise SystemExit("invalid generated-root response")
     if padding_length and (len(value) % 4 or padding_length != required_padding):
         raise SystemExit("invalid generated-root response")
-    return base64.b64decode(unpadded + "=" * required_padding,
-                            altchars=b"-_", validate=True)
+    return base64.b64decode(unpadded + "=" * required_padding, validate=True)
 
-left = decode_generated_root_part(encoded)
-right = decode_generated_root_part(otp)
-if len(left) != len(right):
+encoded_bytes = decode_encoded_token(encoded)
+# GenerateRoot automatically creates a base62 OTP. It is intentionally not
+# base64-decoded: EncodeToken XORs the literal OTP bytes with the root token.
+if not re.fullmatch(r"[A-Za-z0-9]+", otp):
     raise SystemExit("invalid generated-root response")
-print(bytes(a ^ b for a, b in zip(left, right)).decode("utf-8"))
+otp_bytes = otp.encode("ascii")
+if len(encoded_bytes) != len(otp_bytes):
+    raise SystemExit("invalid generated-root response")
+root_token = bytes(a ^ b for a, b in zip(encoded_bytes, otp_bytes))
+try:
+    print(root_token.decode("utf-8"))
+except UnicodeDecodeError:
+    raise SystemExit("invalid generated-root response")
 '
 }
