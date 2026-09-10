@@ -227,7 +227,10 @@ fresh_plan() {
     ($planned_hosts[0].values.subnet_id | type == "string" and length > 0) and
     (($host_changes[0].change.after_unknown.iam_instance_profile == true) or
       ($planned_hosts[0].values.iam_instance_profile == $owned_profile_changes[0].change.after.name)) and
-    ($host_changes[0].change.after_unknown.vpc_security_group_ids == [true]) and
+    # Terraform's JSON plan represents an entirely unknown set as either a
+    # boolean or a single unknown element, depending on provider version.
+    (($host_changes[0].change.after_unknown.vpc_security_group_ids == true) or
+      ($host_changes[0].change.after_unknown.vpc_security_group_ids == [true])) and
     ($planned_hosts[0].values.metadata_options | type == "array" and length == 1) and
     ($planned_hosts[0].values.metadata_options[0].http_tokens == "required") and
     ($planned_hosts[0].values.metadata_options[0].http_endpoint == "enabled") and
