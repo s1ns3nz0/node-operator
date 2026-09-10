@@ -23,7 +23,15 @@ grep -Fq 'repository=node-operator-baseline-validator-fence' "$workflow" || fail
 grep -Fq 'install-validator-signing-fence-release-tools.sh' "$workflow" || fail 'pinned release tools are not installed'
 # shellcheck disable=SC2016 # Literal workflow source.
 grep -Fq 'cosign sign --yes "$subject"' "$workflow" || fail 'exact image digest is not signed'
-for kind in slsaprovenance1 cyclonedx vuln; do grep -Fq "cosign attest --yes --type $kind" "$workflow" || fail "$kind attestation missing"; done
+for kind in slsaprovenance1 cyclonedx https://github.com/s1ns3nz0/node-operator/attestations/scan-summary/v1; do grep -Fq "cosign attest --yes --type $kind" "$workflow" || fail "$kind attestation missing"; done
+grep -Fq 'needs: [fence-security]' "$workflow" || fail 'fence security does not block publication'
+grep -Fq 'uses: ./.github/workflows/fence-security.yml' "$workflow" || fail 'release does not execute the security workflow'
+grep -Fq 'needs: [fence-security]' "$root/.github/workflows/ci-quality.yml" || fail 'required quality check does not depend on fence security'
+grep -Fq 'if: always()' "$root/.github/workflows/ci-quality.yml" || fail 'required quality check can be skipped after failed security'
+# shellcheck disable=SC2016 # Literal workflow source.
+grep -Fq 'run: test "$FENCE_SECURITY_RESULT" = success' "$root/.github/workflows/ci-quality.yml" || fail 'required quality check does not fail on skipped/failed security'
+# shellcheck disable=SC2016 # Literal workflow source.
+grep -Fq 'FENCE_SECURITY_RESULT: ${{ needs.fence-security.result }}' "$root/.github/workflows/ci-quality.yml" || fail 'quality result is not bound to the actual security dependency'
 # shellcheck disable=SC2016 # Literal workflow source.
 grep -Fq 'collect-validator-signing-fence-release-evidence.sh "$subject" "$GITHUB_SHA"' "$workflow" || fail 'authenticated release collector is not executed'
 grep -Fq 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' "$workflow" || fail 'sanitized release evidence is not retained through a pinned action'

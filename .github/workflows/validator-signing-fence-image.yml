@@ -4,10 +4,17 @@ on: {workflow_dispatch: {}}
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
+  fence-security:
+    uses: ./.github/workflows/fence-security.yml
+    permissions:
+      contents: read
   build:
+    needs: [fence-security]
+    permissions:
+      contents: read
+      id-token: write
     runs-on: ubuntu-24.04
     environment: validator-client-ecr-mirror
     steps:
@@ -24,7 +31,7 @@ jobs:
           scripts/ci/install-validator-signing-fence-release-tools.sh "$RUNNER_TEMP/fence-tools"
           export PATH="$RUNNER_TEMP/fence-tools:$PATH"
           bash scripts/ci/test-release-scan-cosign-roundtrip.sh
-          input_sha="$({ sha256sum go.mod .ci/validator-signing-fence/Dockerfile cmd/validator-signing-fence/main.go cmd/validator-signing-fence/main_test.go scripts/ci/collect-validator-signing-fence-release-evidence.sh; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
+          input_sha="$({ sha256sum go.mod .ci/validator-signing-fence/Dockerfile cmd/validator-signing-fence/main.go cmd/validator-signing-fence/main_test.go scripts/ci/collect-validator-signing-fence-release-evidence.sh .github/workflows/fence-security.yml .ci/fence-security/Dockerfile .ci/fence-security/blackbox.go .ci/fence-security/tools.env .ci/fence-security/zap-report.jq scripts/ci/install-fence-security-tools.sh scripts/ci/run-fence-security-sast.sh scripts/ci/run-fence-security-dast.sh; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
           token="$(curl --fail --silent -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -er .value)"
           token_file="$RUNNER_TEMP/aws-web-identity-token"
           (umask 077; printf '%s' "$token" > "$token_file")

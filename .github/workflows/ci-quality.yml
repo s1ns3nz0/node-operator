@@ -13,9 +13,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  fence-security:
+    uses: ./.github/workflows/fence-security.yml
+    permissions:
+      contents: read
   quality:
+    needs: [fence-security]
+    if: always()
     runs-on: ubuntu-24.04
     steps:
+      - name: Require successful fence security (never skip the required check)
+        env:
+          FENCE_SECURITY_RESULT: ${{ needs.fence-security.result }}
+        run: test "$FENCE_SECURITY_RESULT" = success
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -110,6 +120,7 @@ jobs:
           COSIGN_BIN="$RUNNER_TEMP/vault-blob-test-tools/cosign" bash scripts/ci/test-vault-runtime-blob-roundtrip.sh
       - name: Test release scan attestation content contract
         run: |
+          bash scripts/ci/test-validator-signing-fence-image-contract.sh
           bash scripts/ci/test-release-scan-attestation.sh
           bash scripts/ci/test-validator-signing-fence-release-evidence.sh
       - name: Test private DAST mirror boundary
