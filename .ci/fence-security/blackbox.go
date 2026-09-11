@@ -218,11 +218,16 @@ func main() {
 	}
 	// A Pod identity whose IP is not the TCP peer must not receive a forwarded
 	// signer connection, even when it presents a valid mTLS client certificate.
-	api.Lock()
-	api.podIP = "127.0.0.2"
-	api.Unlock()
+	// Negative scenarios must not mutate the API observed by the original
+	// fence: its renewal loop continues while this second process runs.
+	mismatchAPI := &fakeAPI{podIP: "127.0.0.2"}
+	mismatchServer := httptest.NewUnstartedServer(http.HandlerFunc(mismatchAPI.serve))
+	mismatchServer.TLS = &tls.Config{Certificates: []tls.Certificate{material.cert}}
+	mismatchServer.StartTLS()
+	defer mismatchServer.Close()
 	mismatchListen, mismatchHealth := freeAddress(), freeAddress()
-	mismatch := start(*binary, server.URL, caPath, tokenPath, upstream.Addr().String(), mismatchListen, mismatchHealth)
+	mismatch := start(*binary, mismatchServer.URL, caPath, tokenPath, upstream.Addr().String(), mismatchListen, mismatchHealth)
+	defer mismatch.Process.Kill()
 	if !ready(mismatchHealth) {
 		panic("source-mismatch fence did not start")
 	}
@@ -235,11 +240,14 @@ func main() {
 	if err == nil {
 		panic("source IP mismatch was forwarded")
 	}
+	// Keep the negative case alive across renewal ticks: it must not revoke
+	// the independent positive-control fence used by the outage scenario.
+	time.Sleep(2 * time.Second)
+	if !ready(health) {
+		panic("source mismatch scenario disrupted the independent fence")
+	}
 	_ = mismatch.Process.Kill()
 	_, _ = mismatch.Process.Wait()
-	api.Lock()
-	api.podIP = "127.0.0.1"
-	api.Unlock()
 	// A synthetic Kubernetes API outage on renewal must close an active TLS
 	// stream and terminate the fence; it cannot retain cached authority.
 	active, err := tls.Dial("tcp", listen, &tls.Config{Certificates: []tls.Certificate{material.cert}, RootCAs: material.pool, ServerName: "localhost", MinVersion: tls.VersionTLS12})
