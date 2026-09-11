@@ -39,7 +39,7 @@ path_is_in_release_boundary() {
     docs/gitops/vault-tls-internal-ca.example.yaml)
       return 0
       ;;
-    scripts/release/installer_state.py|scripts/release/installer_preflight.py|scripts/release/installer_bundle.py|scripts/release/installer_infrastructure.py|scripts/release/installer_ops_access.py|scripts/release/installer_ops_execution.py|scripts/release/installer_ops_verify.py|scripts/release/installer_vault_inputs.py|scripts/release/installer_vault_plan.py|scripts/release/installer_vault_workspace.py|scripts/release/installer_vault_execution.py|scripts/release/installer_vault_receipt.py|scripts/release/installer_files.py|scripts/release/interactive_deploy.py)
+    scripts/release/installer_state.py|scripts/release/installer_preflight.py|scripts/release/installer_bundle.py|scripts/release/installer_infrastructure.py|scripts/release/installer_ops_access.py|scripts/release/installer_ops_execution.py|scripts/release/installer_ops_verify.py|scripts/release/installer_vault_inputs.py|scripts/release/installer_vault_plan.py|scripts/release/installer_vault_workspace.py|scripts/release/installer_vault_execution.py|scripts/release/installer_vault_receipt.py|scripts/release/installer_files.py|scripts/release/interactive_deploy.py|scripts/release/render-private-cert-manager-values.py)
       return 0
       ;;
     deploy/kyverno/kustomization.yaml|deploy/kyverno/policies/*.yaml)
@@ -59,7 +59,7 @@ materialize_source_file() {
   mkdir -p "$stage_directory/source/$(dirname "$relative_path")"
   git -C "$root" show "$source_revision:$relative_path" > "$stage_directory/source/$relative_path"
   case "$relative_path" in
-    scripts/release/*.sh|scripts/ops/*|scripts/ci/check-ops-access-ssm-retention-plan.sh) chmod 0755 "$stage_directory/source/$relative_path" ;;
+    scripts/release/*.sh|scripts/release/render-private-cert-manager-values.py|scripts/ops/*|scripts/ci/check-ops-access-ssm-retention-plan.sh) chmod 0755 "$stage_directory/source/$relative_path" ;;
   esac
 }
 

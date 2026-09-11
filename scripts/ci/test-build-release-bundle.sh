@@ -68,6 +68,9 @@ for required_path in \
   source/scripts/release/installer_vault_workspace.py \
   source/scripts/release/installer_vault_execution.py \
   source/scripts/release/prepare-vault-bootstrap-tls.sh \
+  source/scripts/release/render-private-cert-manager-values.py \
+  source/scripts/release/deploy-private-cert-manager.sh \
+  source/release/cert-manager-values.yaml.example \
   source/docs/gitops/vault-tls-internal-ca.example.yaml \
   source/scripts/release/installer_vault_receipt.py \
   source/scripts/release/render-private-vault-values.sh \

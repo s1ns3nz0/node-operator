@@ -1,0 +1,80 @@
+# Non-secret cert-manager v1.21.1 values. The renderer replaces every image token.
+# The OCI chart itself is supplied separately by immutable private ECR digest.
+crds:
+  enabled: true
+  keep: true
+
+global:
+  leaderElection:
+    namespace: cert-manager
+  revisionHistoryLimit: 1
+
+prometheus:
+  enabled: false
+
+image:
+  repository: __CERT_MANAGER_CONTROLLER_REPOSITORY__
+  tag: "__CERT_MANAGER_CONTROLLER_TAG__"
+  digest: "sha256:__CERT_MANAGER_CONTROLLER_DIGEST__"
+  pullPolicy: IfNotPresent
+resources:
+  requests: {cpu: "100m", memory: "128Mi"}
+  limits: {cpu: "500m", memory: "512Mi"}
+securityContext:
+  runAsNonRoot: true
+  seccompProfile: {type: RuntimeDefault}
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: {drop: ["ALL"]}
+
+webhook:
+  image:
+    repository: __CERT_MANAGER_WEBHOOK_REPOSITORY__
+    tag: "__CERT_MANAGER_WEBHOOK_TAG__"
+    digest: "sha256:__CERT_MANAGER_WEBHOOK_DIGEST__"
+    pullPolicy: IfNotPresent
+  resources:
+    requests: {cpu: "100m", memory: "128Mi"}
+    limits: {cpu: "500m", memory: "512Mi"}
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile: {type: RuntimeDefault}
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities: {drop: ["ALL"]}
+
+cainjector:
+  image:
+    repository: __CERT_MANAGER_CAINJECTOR_REPOSITORY__
+    tag: "__CERT_MANAGER_CAINJECTOR_TAG__"
+    digest: "sha256:__CERT_MANAGER_CAINJECTOR_DIGEST__"
+    pullPolicy: IfNotPresent
+  resources:
+    requests: {cpu: "100m", memory: "128Mi"}
+    limits: {cpu: "500m", memory: "512Mi"}
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile: {type: RuntimeDefault}
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities: {drop: ["ALL"]}
+
+startupapicheck:
+  image:
+    repository: __CERT_MANAGER_STARTUPAPICHECK_REPOSITORY__
+    tag: "__CERT_MANAGER_STARTUPAPICHECK_TAG__"
+    digest: "sha256:__CERT_MANAGER_STARTUPAPICHECK_DIGEST__"
+    pullPolicy: IfNotPresent
+  resources:
+    requests: {cpu: "50m", memory: "64Mi"}
+    limits: {cpu: "200m", memory: "256Mi"}
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile: {type: RuntimeDefault}
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities: {drop: ["ALL"]}

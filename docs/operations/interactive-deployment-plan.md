@@ -147,6 +147,14 @@ Private cert-manager installation and the CodeBuild invocation/authority
 lifecycle still need installer orchestration; this TLS helper does not supply
 those dependencies or prove live deployment.
 
+The release bundle now carries a fresh-only private cert-manager values
+renderer, fixed hardened values template and guarded deploy helper. Local mock
+tests reject public, cross-account, cross-Region, missing and mismatched image
+digests and arbitrary values overrides. These helpers are not yet wired into
+the installer or Vault CodeBuild image: that image currently lacks the Python
+runtime required by the renderer, and a fresh-only install must be an explicit
+reconcilable stage before TLS rather than an implicit Vault retry side effect.
+
 Always pass Region, cluster and SSM instance from the verified handoff into
 private transport commands. Existing historical operator-auth scripts contain
 Seoul/account-specific defaults and must not be reused unchanged for a fresh
