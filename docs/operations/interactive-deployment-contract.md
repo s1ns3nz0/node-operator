@@ -68,10 +68,13 @@ vCPU, NAT gateway, VPC, endpoint and other quotas remain unverified.
 
 The release infrastructure wrapper now rejects enabled SSM/temporary
 cluster-admin flags and caller-supplied derived network fields in JSON as well
-as HCL inputs. This is not full input authorization: its generic credential
-field screen still needs JSON coverage, and standalone `zero apply` still needs
-cross-file account/Region binding. Do not connect automatic apply until those
-checks and state-aware partial-apply recovery are implemented. In particular,
+as HCL inputs. The generic credential-field screen now inspects nested JSON
+keys, and `zero apply --inputs` compares the generated manifest's account,
+Region, name and AZs with the three phase files before Terraform executes.
+This proves input consistency, not AWS identity, full secret detection or
+effective permissions. Individually supplied HCL configs do not have this
+manifest binding. Do not connect automatic apply until caller authorization
+and state-aware partial-apply recovery are implemented. In particular,
 an existing bootstrap/foundation module without an output checkpoint is now
 reconciled in place: original backend/state, a zero-change plan and a successful
 output query are required to reconstruct the checkpoint. Baseline recovery uses

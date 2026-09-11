@@ -8,6 +8,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 entrypoint="$root/scripts/release/node-operator-release.sh"
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/node-operator-bootstrap-migration.XXXXXX")"
+scratch="$(cd "$scratch" && pwd -P)"
 trap 'rm -rf "$scratch"' EXIT
 bin="$scratch/bin"; mkdir -p "$bin"
 
@@ -95,12 +96,14 @@ run_case() {
   local work="${3:-$scratch/work-$case_name}"
   local log="$scratch/$case_name.log"
   local output="$scratch/$case_name.out"
+  local config_args=(--bootstrap-config "$scratch/bootstrap.tfvars" --foundation-config "$scratch/foundation.tfvars" --baseline-config "$scratch/baseline.tfvars")
+  if [ -n "${4:-}" ]; then config_args=(--inputs "$4"); fi
   set +e
   PATH="$bin:$PATH" TEST_TERRAFORM_LOG="$log" TF_CASE="$case_name" \
     TF_CLI_ARGS=-force-copy TF_CLI_ARGS_init='-force-copy -input=false' TF_CLI_ARGS_plan=-refresh=false TF_LOG=TRACE \
     TF_DATA_DIR=/unapproved-state-directory TF_WORKSPACE=unapproved-workspace \
     bash "$entrypoint" zero apply --bundle-root "$bundle" \
-    --bootstrap-config "$scratch/bootstrap.tfvars" --foundation-config "$scratch/foundation.tfvars" --baseline-config "$scratch/baseline.tfvars" --work-dir "$work" >"$output" 2>&1
+    "${config_args[@]}" --work-dir "$work" >"$output" 2>&1
   result=$?
   set -e
   if { [ "$expected" = pass ] && [ "$result" -ne 0 ]; } || { [ "$expected" = fail ] && [ "$result" -eq 0 ]; }; then
@@ -176,4 +179,13 @@ for boundary in network backend output; do
   fi
   cp "$scratch/baseline-$boundary.original.json" "$boundary_file"
 done
+bash "$root/scripts/release/prepare-zero-resource-inputs.sh" \
+  --aws-account-id 123456789012 --aws-region ap-northeast-2 --name installer-test \
+  --backend-principal-arn arn:aws:iam::123456789012:role/installer-backend \
+  --output-dir "$scratch/generated-inputs" >/dev/null
+run_case generated_context pass "$scratch/generated-context-work" "$scratch/generated-inputs/zero-resource-inputs.json" >/dev/null
+cp "$scratch/generated-inputs/baseline.tfvars.json" "$scratch/baseline-input.original.json"
+jq '.aws_account_id = "999999999999"' "$scratch/baseline-input.original.json" > "$scratch/generated-inputs/baseline.tfvars.json"
+run_case changed_context fail "$scratch/changed-context-work" "$scratch/generated-inputs/zero-resource-inputs.json" >/dev/null
+[ ! -e "$scratch/changed_context.log" ] || { printf 'Terraform ran before input context rejection\n' >&2; exit 1; }
 printf 'PASS bootstrap migration mocks enforce local backup, remote identity, state equivalence, and downstream ordering.\n'

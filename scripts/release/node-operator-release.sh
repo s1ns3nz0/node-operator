@@ -103,9 +103,38 @@ reject_derived_network_inputs() {
 require_nonsecret_file() {
   local input="$1"
   [ -f "$input" ] && [ ! -L "$input" ] || fail "configuration must name a regular non-secret file"
+  if [[ "$input" == *.json ]]; then
+    jq -e -s 'length == 1 and (.[0] | type == "object")' "$input" >/dev/null 2>&1 || fail "configuration JSON must contain one object"
+    jq -e '[paths | .[-1] | select(type == "string") |
+      select(test("vault[_-]?token|recovery[_-]?key|mnemonic|keystore|private[_-]?key|secret[_-]?access[_-]?key|aws_secret_access_key"; "i"))] | length == 0' "$input" >/dev/null 2>&1 || fail "configuration contains a prohibited credential field"
+    return
+  fi
   if rg -n -i '(vault[_-]?token|recovery[_-]?key|mnemonic|keystore|private[_-]?key|secret[_-]?access[_-]?key|aws_secret_access_key)[[:space:]]*=' "$input" >/dev/null; then
     fail "configuration contains a prohibited credential field"
   fi
+}
+
+verify_generated_input_context() {
+  # The generated manifest and each phase must target one deployment. This is
+  # input consistency, not proof of the caller's AWS identity or permissions.
+  local manifest="$1" bootstrap="$2" foundation="$3" baseline="$4"
+  require_nonsecret_file "$manifest"
+  require_nonsecret_file "$bootstrap"
+  require_nonsecret_file "$foundation"
+  require_nonsecret_file "$baseline"
+  jq -e --slurpfile bootstrap "$bootstrap" --slurpfile foundation "$foundation" --slurpfile baseline "$baseline" '
+    . as $context |
+    (.name | type == "string" and test("^[a-z][a-z0-9-]{1,18}[a-z0-9]$")) and
+    (.availability_zones | type == "array" and length == 2 and (unique | length) == 2) and
+    all(.availability_zones[]; type == "string" and test("^" + $context.aws_region + "[a-z]$")) and
+    ($bootstrap[0].aws_account_id == .aws_account_id) and
+    ($baseline[0].aws_account_id == .aws_account_id) and
+    all([$bootstrap[0], $foundation[0], $baseline[0]][];
+      .name == $context.name and .aws_region == $context.aws_region) and
+    ($foundation[0].availability_zones == .availability_zones) and
+    ($baseline[0].availability_zones == .availability_zones) and
+    ($foundation[0].network_mode == "fresh")
+  ' "$manifest" >/dev/null 2>&1 || fail "generated phase inputs differ from the selected account, region, name or availability zones"
 }
 
 write_backend_config() {
@@ -434,6 +463,7 @@ zero_apply() {
       .bootstrap_config == $bootstrap and .foundation_config == $foundation and .baseline_config == $baseline
     ' "$inputs" >/dev/null || fail "--inputs is not a bounded zero-resource input contract"
     bootstrap_config="$expected_bootstrap"; foundation_config="$expected_foundation"; baseline_config="$expected_baseline"
+    verify_generated_input_context "$inputs" "$bootstrap_config" "$foundation_config" "$baseline_config"
   fi
   [ -n "$bootstrap_config" ] && [ -n "$foundation_config" ] && [ -n "$baseline_config" ] || fail "zero apply requires --inputs or all three phase configs"
   case "$work_dir" in /*) ;; *) fail "--work-dir must be an absolute directory" ;; esac
@@ -538,7 +568,7 @@ case "$command_name" in
   bootstrap)
     [ "$operation" = plan ] || [ "$operation" = apply ] || fail "bootstrap requires plan or apply"
     [ -n "$config" ] && [ -f "$config" ] || fail "--config must name a readable non-secret tfvars file"
-    verify_bundle; reject_privileged_baseline_inputs "$config"; require_command terraform
+    verify_bundle; require_nonsecret_file "$config"; reject_privileged_baseline_inputs "$config"; require_command terraform
     terraform -chdir="$bundle_root/source/infra/terraform" init -input=false
     terraform -chdir="$bundle_root/source/infra/terraform" "$operation" -input=false -var-file="$config" ;;
   zero)
