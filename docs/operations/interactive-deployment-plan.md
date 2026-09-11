@@ -4,6 +4,16 @@ Baseline: v0.1.20, source a87b02f9422d33e75a20879e5916ff73fe036df5. Status: impl
 
 ## Verified delivery status
 
+- PR #221 head `1d8e220b53b06bd3c5818e88e8b0f5b54bf09284`: CI run
+  `34584148229` failed because a new test objective did not satisfy the
+  presentation contract, and Release Images run `34584145923` failed because
+  the release-build image lacked the Python runtime required by the staged
+  index generator. Both defects have local fixes awaiting a new exact-head
+  run; neither failed run is completion evidence.
+- PR #221 head `711d7e04752ad03c368f4cd32b036c6bbbad76e0`: CI run
+  `34582396963`, Release Images run `34582391823`, and evidence signal
+  `34582395795` passed. Those runs predate the artifact-index and private
+  cert-manager integration and therefore do not verify the current slice.
 - PR #221 head `9b3e93ef174c60f9079a74391d9bb069127d0980`: CI run
   `34580874828` and Release Images run `34580870792` passed. The Vault
   bootstrap image built successfully; publication was skipped on this branch.
@@ -159,7 +169,7 @@ Release-bundle generation can now accept the exact Vault bootstrap, audit
 relay and GitOps OCI mirror publication records together and deterministically
 stage an eleven-component installer artifact index. The mirror tool is a
 bootstrap dependency, not a runtime workload. Supplying only some records or a record for another
-release fails closed. Omitting both preserves non-publishing PR bundle checks
+release fails closed. Omitting all three preserves non-publishing PR bundle checks
 and does not claim a usable artifact index. Authentic exact-run record
 retrieval and main-branch publication gating remain required before a signed
 release can carry this index.

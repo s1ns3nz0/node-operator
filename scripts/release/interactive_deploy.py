@@ -54,6 +54,7 @@ def run(argv: list[str] | None = None) -> int:
     parser.add_argument("--prepare-infrastructure", action="store_true", help="Materialize verified release and generate local Terraform inputs; does not apply")
     parser.add_argument("--prepare-ops-access", action="store_true", help="Prepare separate SSM inputs after infrastructure completion; never plans, applies or opens a session")
     parser.add_argument("--prepare-vault", action="store_true", help="Prepare local Vault bootstrap inputs from reviewed artifacts; no apply or initialization")
+    parser.add_argument("--mirror-vault-artifacts", action="store_true", help="Mirror the release-bound Vault artifacts after terminal confirmation; does not deploy Vault")
     parser.add_argument("--plan-vault", action="store_true", help="Reconcile the baseline and save a Vault runner preparation plan; never apply")
     parser.add_argument("--apply-vault", action="store_true", help="Apply the reviewed Vault runner plan after terminal confirmation; does not initialize Vault")
     parser.add_argument("--vault-plan-sha", help="Exact reviewed Vault preparation plan SHA-256; required for apply")
@@ -68,6 +69,9 @@ def run(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     ops_requested = args.prepare_ops_access or args.plan_ops_access or args.apply_ops_access or args.verify_ops_access
     vault_requested = args.prepare_vault or args.plan_vault or args.apply_vault
+    mirror_requested = args.mirror_vault_artifacts
+    if mirror_requested and (args.command != "resume" or vault_requested or ops_requested or args.prepare_infrastructure or args.apply_infrastructure or args.backend_principal_arn or args.execution_profile or not sys.stdin.isatty()):
+        raise StateError("Artifact mirroring is a separate interactive resume operation.")
     if vault_requested and (args.command != "resume" or ops_requested or args.prepare_infrastructure or args.apply_infrastructure or args.backend_principal_arn or args.execution_profile or args.vault_artifacts is None or sum((args.prepare_vault, args.plan_vault, args.apply_vault)) != 1):
         raise StateError("Vault preparation is a separate resume operation requiring --vault-artifacts.")
     if args.vault_plan_sha is not None and not args.apply_vault:
@@ -136,6 +140,18 @@ def run(argv: list[str] | None = None) -> int:
         # all-resource collision safety or provisioning readiness.
         if not ops_requested and not vault_requested:
             store.set_stage("preflight", "awaiting_input")
+        if mirror_requested:
+            if any(checkpoint["stages"].get(stage, {}).get("status") != "complete" for stage in ("infrastructure", "ops_access")):
+                raise StateError("Artifact mirroring requires completed infrastructure and verified private access.")
+            confirmation = f"MIRROR VAULT ARTIFACTS {discovery['aws_account_id']} {region} {name}"
+            print("This copies only release-indexed artifacts to existing private ECR repositories. It does not deploy or initialize Vault.", file=sys.stderr)
+            if prompt(None, "Type exactly " + confirmation) != confirmation:
+                raise StateError("Artifact mirroring cancelled; no copy was requested.")
+            from installer_bundle import materialize_release
+            bundle_root = materialize_release(args.release_dir, args.state_dir / "release", release["release_sha"], release["bundle_digest"])
+            from installer_artifact_mirror import mirror
+            mirror(args.state_dir, bundle_root, discovery, profile, release["release_sha"])
+            ops_result = "vault_artifact_mirroring_ready_for_reconciliation"
         if vault_requested:
             if any(checkpoint["stages"].get(stage, {}).get("status") != "complete" for stage in ("infrastructure", "ops_access")):
                 raise StateError("Vault preparation requires completed infrastructure and verified private access.")

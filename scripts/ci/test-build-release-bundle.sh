@@ -91,6 +91,7 @@ for required_path in \
   source/release/vault-values.yaml.example \
   source/scripts/release/installer_files.py \
   source/scripts/release/installer_bundle.py \
+  source/scripts/release/installer_artifact_mirror.py \
   source/scripts/release/interactive_deploy.py \
   source/scripts/release/node-operator-install.sh \
   source/scripts/release/prepare-zero-resource-inputs.sh \

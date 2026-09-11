@@ -29,6 +29,7 @@ scripts/ci/test-private-vault-bootstrap-transport.py
 scripts/ci/test-deploy-sealed-vault.py
 scripts/ci/test-prepare-vault-bootstrap-tls.py
 scripts/ci/test-private-cert-manager-bootstrap.py
+scripts/ci/test-installer-artifact-mirror.py
 scripts/ci/test-image-publication-records.py
 scripts/ci/test-installer-artifact-index.py
 scripts/ci/test-installer-files.py

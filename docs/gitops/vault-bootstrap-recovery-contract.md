@@ -9,11 +9,16 @@ The ordered machine-checkable form is
 ## Operator-only bootstrap boundary
 
 Live initialization and unsealing happen only during a separately authorized
-rollout and only at the operator administration boundary. No `vault operator init`,
-`vault operator unseal`, or apply command is included or executable in this
-repository contract. Root material, recovery material, and unseal
+rollout and only at the operator administration boundary. This declarative
+release-path contract and its machine-checkable JSON do not include or execute
+`vault operator init`, `vault operator unseal`, or an apply command. That
+historical recovery-only boundary does not prohibit a distinct interactive
+installer ceremony, but such a ceremony must require separate operator
+authorization, reconcile the authoritative initialized state before any
+attempt, and keep all secret output at the operator terminal. Root material, recovery material, and unseal
 material are external to CI, GitOps, Terraform state, logs, and evidence. The
-contract never generates, accepts, records, or automates that material.
+declarative contract never generates, accepts, records, or automates that
+material. No installer initialization is authorized merely by this document.
 
 The operator must record an approval identifier, environment identifier, Vault
 cluster identifier, status, and a denied-path result without recording a

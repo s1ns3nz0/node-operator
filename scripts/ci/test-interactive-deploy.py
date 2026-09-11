@@ -18,6 +18,10 @@ DISCOVERY = {"aws_profile": "test", "aws_account_id": "123456789012", "aws_regio
 
 
 class InstallerCommandTests(unittest.TestCase):
+    def test_artifact_mirror_requires_separate_tty_scope(self):
+        with patch.object(cli.sys.stdin, "isatty", return_value=False), patch.object(cli, "discover") as discover, self.assertRaises(cli.StateError):
+            cli.run(["resume", "--state-dir", "/unused", "--mirror-vault-artifacts"])
+        discover.assert_not_called()
     def test_vault_apply_confirmation_and_partial_failure_never_mark_ready(self):
         for outcome in ("cancel", "failure", "success"):
             with self.subTest(outcome=outcome), tempfile.TemporaryDirectory() as temporary:
