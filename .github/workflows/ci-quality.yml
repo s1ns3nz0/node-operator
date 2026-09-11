@@ -35,6 +35,11 @@ jobs:
         run: npm run harness:check
       - name: Test shell scripts
         run: scripts/ci/test-script-quality.sh
+      - name: Test bounded runtime diagnostics and signer audit source contract
+        run: |
+          python3 scripts/ci/test-validator-runtime-probe-renderer.py
+          python3 scripts/ci/test-web3signer-audit-contract.py
+          docker build --platform linux/amd64 -f .ci/validator-runtime-probe/Dockerfile -t node-operator-runtime-probe:ci .
       - name: Test project Kyverno admission policies
         env:
           KYVERNO_BIN: ${{ runner.temp }}/kyverno-policy-tools/kyverno
