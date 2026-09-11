@@ -11,7 +11,7 @@ from pathlib import Path
 import stat
 import sys
 
-from installer_preflight import PreflightError, discover, validate_inputs, verify_backend_role
+from installer_preflight import PreflightError, discover, validate_inputs, verify_backend_role, verify_execution_profile
 from installer_state import CheckpointStore, StateError, STAGE_NAMES
 from installer_infrastructure import InfrastructureError, prepare_inputs
 
@@ -52,11 +52,12 @@ def run(argv: list[str] | None = None) -> int:
     parser.add_argument("--name")
     parser.add_argument("--prepare-infrastructure", action="store_true", help="Materialize verified release and generate local Terraform inputs; does not apply")
     parser.add_argument("--backend-principal-arn", help="Exact same-account backend IAM role for infrastructure preparation")
+    parser.add_argument("--execution-profile", help="Optional existing AWS role profile to verify against the selected backend role; preparation only")
     args = parser.parse_args(argv)
     if not args.state_dir.is_absolute():
         raise StateError("Use an absolute state directory.")
     if args.command == "status":
-        if args.release_dir or args.aws_profile or args.aws_region or args.name or args.prepare_infrastructure or args.backend_principal_arn:
+        if args.release_dir or args.aws_profile or args.aws_region or args.name or args.prepare_infrastructure or args.backend_principal_arn or args.execution_profile:
             raise StateError("status accepts only --state-dir; it does not query AWS.")
         context = load_context(args.state_dir)
         store = CheckpointStore(args.state_dir, context)
@@ -66,6 +67,8 @@ def run(argv: list[str] | None = None) -> int:
         return 0
     if args.backend_principal_arn and not args.prepare_infrastructure:
         raise StateError("--backend-principal-arn requires --prepare-infrastructure.")
+    if args.execution_profile and not args.prepare_infrastructure:
+        raise StateError("--execution-profile requires --prepare-infrastructure.")
     if args.release_dir is None:
         raise StateError("start/resume requires --release-dir with verified release assets.")
     from installer_bundle import verify_release
@@ -104,6 +107,8 @@ def run(argv: list[str] | None = None) -> int:
             inputs_dir = args.state_dir / "infrastructure-inputs"
             expected_inputs(inputs_dir, discovery, principal)
             discovery["backend_role"] = verify_backend_role(discovery, principal)
+            if args.execution_profile:
+                discovery["execution_identity"] = verify_execution_profile(discovery, discovery["backend_role"], args.execution_profile)
             bundle_root = materialize_release(args.release_dir, args.state_dir / "release",
                                               release["release_sha"], release["bundle_digest"])
             prepare_inputs(bundle_root, inputs_dir, discovery, principal)

@@ -13,6 +13,21 @@ spec.loader.exec_module(module)
 
 
 class PreflightTests(unittest.TestCase):
+    def test_execution_profile_binds_unique_role_id_without_getrole_permission(self):
+        context = {"aws_profile": "operator", "aws_region": "ap-northeast-1", "aws_account_id": "123456789012", "deployment_name": "test-node"}
+        role = {"arn": "arn:aws:iam::123456789012:role/path/backend", "role_id": "AROA" + "A" * 17}
+        identity = {"Account": "123456789012", "Arn": "arn:aws:sts::123456789012:assumed-role/backend/session", "UserId": role["role_id"] + ":session"}
+        with patch.object(module, "aws_read", return_value=identity) as read:
+            result = module.verify_execution_profile(context, role, "execution")
+        read.assert_called_once_with("execution", "ap-northeast-1", ["sts", "get-caller-identity"])
+        self.assertEqual(result["session_identity"], "verified")
+        self.assertEqual(result["provisioning_permissions"], "not_verified")
+        self.assertNotIn("UserId", result)
+        for field, bad in (("Account", "999999999999"), ("UserId", "AROA" + "B" * 17 + ":session"),
+                           ("UserId", role["role_id"] + ":other"), ("Arn", "arn:aws:iam::123456789012:user/operator")):
+            with patch.object(module, "aws_read", return_value={**identity, field: bad}), self.assertRaises(module.PreflightError):
+                module.verify_execution_profile(context, role, "execution")
+
     def test_backend_role_lookup_checks_exact_identity_not_permissions(self):
         context = {"aws_profile": "test", "aws_region": "ap-northeast-1", "aws_account_id": "123456789012"}
         arn = "arn:aws:iam::123456789012:role/path/backend"

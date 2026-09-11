@@ -75,6 +75,34 @@ def verify_backend_role(discovery: dict, principal: str) -> dict:
             "backend_permissions": "not_verified", "provisioning_permissions": "not_verified"}
 
 
+def verify_execution_profile(discovery: dict, role: dict, profile: str) -> dict:
+    """Bind an existing execution profile to the role verified by discovery.
+
+    STS UserId's role ID binds this session even when it cannot call GetRole.
+    No credential values are returned; AWS CLI owns its normal profile cache.
+    """
+    validate_inputs(profile, discovery["aws_region"], discovery["deployment_name"])
+    identity = aws_read(profile, discovery["aws_region"], ["sts", "get-caller-identity"])
+    account = discovery["aws_account_id"]
+    role_id = role.get("role_id")
+    if not isinstance(role_id, str) or not re.fullmatch(r"AROA[A-Z0-9]{12,124}", role_id):
+        raise PreflightError("Execution profile requires a previously verified role identity.")
+    role_arn = role.get("arn", "")
+    if not isinstance(role_arn, str) or not role_arn.startswith(f"arn:aws:iam::{account}:role/"):
+        raise PreflightError("Execution role does not belong to the selected account.")
+    arn_prefix = f"arn:aws:sts::{account}:assumed-role/{role_arn.rsplit('/', 1)[-1]}/"
+    if (not isinstance(identity, dict) or identity.get("Account") != account
+            or not isinstance(identity.get("UserId"), str)
+            or not identity["UserId"].startswith(role_id + ":")
+            or not isinstance(identity.get("Arn"), str)
+            or not identity["Arn"].startswith(arn_prefix)
+            or not identity["Arn"][len(arn_prefix):]
+            or identity["UserId"][len(role_id) + 1:] != identity["Arn"][len(arn_prefix):]):
+        raise PreflightError("Execution profile is not a session of the verified deployment role.")
+    return {"aws_profile": profile, "role_arn": role_arn, "role_id": role_id,
+            "session_identity": "verified", "provisioning_permissions": "not_verified"}
+
+
 def backend_collisions(profile: str, region: str, name: str, account: str) -> dict:
     """Check deterministic backend names; never treat foreign S3 names as free.
 

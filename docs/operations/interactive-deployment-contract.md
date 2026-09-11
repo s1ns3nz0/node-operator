@@ -30,8 +30,18 @@ is checked for same-account ARN syntax and then queried with `iam:GetRole` using
 the selected profile. Its exact ARN and unique role ID must be returned before
 release materialization or input generation. This verifies existence, not role
 trust, assume-role access or effective backend/provisioning permissions. A missing
-role or denied lookup stops preparation with an actionable message. No role is
-created or assumed, and Terraform is not run.
+role or denied lookup stops preparation with an actionable message. No role or
+IAM policy is created, and Terraform is not run.
+When the inventory profile and deployment role profile differ, add
+`--execution-profile <existing-profile>`. The installer uses STS under that
+profile and compares its account, assumed-role ARN and unique role ID with
+the IAM identity returned by the inventory profile. The execution profile
+does not need `iam:GetRole`; the inventory profile still does. The CLI may
+use its normal profile credential cache, but the installer never receives or
+stores access-key/session-token values. This option verifies identity only:
+no IAM policies are attached, no Terraform command runs, and no permission
+success is claimed. The execution profile is not persisted as an apply
+authorization; it must be supplied and reverified on a later execution path.
 `infrastructure_inputs_ready` is a preparation result, not a deployment result.
 Newly generated baseline inputs also set `terraform_apply_role_arn` to the
 selected role, eliminating the mandatory historical role name from new KMS
