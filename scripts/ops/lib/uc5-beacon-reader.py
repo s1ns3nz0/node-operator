@@ -47,7 +47,7 @@ def _uid(pod):
 def _port():
     sock = socket.socket(); sock.bind(("127.0.0.1", 0)); port = sock.getsockname()[1]; sock.close(); return port
 
-def read_ready(expected_public_key, transport=None, now_epoch=None):
+def read_ready(expected_public_key, transport=None, now_epoch=None, sleep=time.sleep):
     if not isinstance(expected_public_key, str) or KEY.fullmatch(expected_public_key) is None: raise BeaconReaderError("expected validator public key is malformed")
     transport, now_epoch = transport or KubectlTransport(), now_epoch or time.time
     before = _uid(transport.pod()); process = None
@@ -55,21 +55,29 @@ def read_ready(expected_public_key, transport=None, now_epoch=None):
         port = _port(); process = transport.start(port)
         if transport.ready(process, port) is not True: raise BeaconReaderError("private Beacon port-forward readiness is unconfirmed")
         if getattr(process, "poll", lambda: None)() is not None: raise BeaconReaderError("private Beacon port-forward exited")
-        genesis = transport.get(port, "/eth/v1/beacon/genesis").get("data", {})
-        sync = transport.get(port, "/eth/v1/node/syncing").get("data", {})
-        validator = transport.get(port, "/eth/v1/beacon/states/head/validators/" + expected_public_key).get("data", {})
-        head_response = transport.get(port, "/eth/v1/beacon/headers/head")
-        head = head_response.get("data", {})
-        if genesis.get("genesis_validators_root") != GENESIS_ROOT or genesis.get("genesis_time") != str(GENESIS_TIME): raise BeaconReaderError("private Beacon Hoodi genesis mismatch")
-        if any(sync.get(key) is not False for key in ("is_syncing", "is_optimistic", "el_offline")) or str(sync.get("sync_distance")) != "0": raise BeaconReaderError("private Beacon is not fully synced")
-        value = validator.get("validator", {})
-        if str(validator.get("index")) != VALIDATOR_INDEX or value.get("pubkey") != expected_public_key or validator.get("status") != "active_ongoing": raise BeaconReaderError("private Beacon validator identity mismatch")
-        try: slot, age = int(head.get("header", {}).get("message", {}).get("slot")), int(now_epoch()) - GENESIS_TIME
-        except (TypeError, ValueError): raise BeaconReaderError("private Beacon head is malformed") from None
-        if head.get("canonical") is not True or head_response.get("execution_optimistic", False) is not False or age < 0 or not max(0, age // 12 - 2) <= slot <= age // 12 + 2: raise BeaconReaderError("private Beacon head is unreasonable")
-        if _uid(transport.pod()) != before: raise BeaconReaderError("private Beacon Pod changed during read")
-        if getattr(process, "poll", lambda: None)() is not None: raise BeaconReaderError("private Beacon port-forward exited")
-        return {"result": "PASS_PRIVATE_BEACON_READY", "scope": "private Beacon readiness only; not duty evidence", "pod_uid": before, "validator_public_key": expected_public_key, "validator_index": VALIDATOR_INDEX, "head_slot": slot}
+        # A small distance can briefly appear around slot boundaries even with
+        # all three health flags false. Re-observe, never accept that lag as PASS.
+        # Keep one owned transport and the original Pod identity across attempts.
+        for attempt in range(9):
+            genesis = transport.get(port, "/eth/v1/beacon/genesis").get("data", {})
+            sync = transport.get(port, "/eth/v1/node/syncing").get("data", {})
+            validator = transport.get(port, "/eth/v1/beacon/states/head/validators/" + expected_public_key).get("data", {})
+            head_response = transport.get(port, "/eth/v1/beacon/headers/head")
+            head = head_response.get("data", {})
+            if genesis.get("genesis_validators_root") != GENESIS_ROOT or genesis.get("genesis_time") != str(GENESIS_TIME): raise BeaconReaderError("private Beacon Hoodi genesis mismatch")
+            if any(sync.get(key) is not False for key in ("is_syncing", "is_optimistic", "el_offline")): raise BeaconReaderError("private Beacon is not fully synced")
+            value = validator.get("validator", {})
+            if str(validator.get("index")) != VALIDATOR_INDEX or value.get("pubkey") != expected_public_key or validator.get("status") != "active_ongoing": raise BeaconReaderError("private Beacon validator identity mismatch")
+            try: slot, age = int(head.get("header", {}).get("message", {}).get("slot")), int(now_epoch()) - GENESIS_TIME
+            except (TypeError, ValueError): raise BeaconReaderError("private Beacon head is malformed") from None
+            if head.get("canonical") is not True or head_response.get("execution_optimistic", False) is not False or age < 0 or not max(0, age // 12 - 2) <= slot <= age // 12 + 2: raise BeaconReaderError("private Beacon head is unreasonable")
+            if _uid(transport.pod()) != before: raise BeaconReaderError("private Beacon Pod changed during read")
+            if getattr(process, "poll", lambda: None)() is not None: raise BeaconReaderError("private Beacon port-forward exited")
+            distance = str(sync.get("sync_distance"))
+            if distance == "0":
+                return {"result": "PASS_PRIVATE_BEACON_READY", "scope": "private Beacon readiness only; not duty evidence", "pod_uid": before, "validator_public_key": expected_public_key, "validator_index": VALIDATOR_INDEX, "head_slot": slot}
+            if distance not in ("1", "2") or attempt == 8: raise BeaconReaderError("private Beacon is not fully synced")
+            sleep(3)
     except BeaconReaderError: raise
     except Exception as error: raise BeaconReaderError("private Beacon read failed") from error
     finally:
