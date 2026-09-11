@@ -8,7 +8,17 @@ root="$(cd "$script_dir/../.." && pwd)"
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
 
-grep -Eqx 'FROM ubuntu@sha256:[0-9a-f]{64}' "$root/.ci/scanners/Dockerfile"
+grep -Eqx 'FROM ubuntu@sha256:[0-9a-f]{64} AS scanner-system' "$root/.ci/scanners/Dockerfile"
+grep -Fxq 'FROM scanner-system' "$root/.ci/scanners/Dockerfile"
+# Keep the CA bootstrap authenticated and make bulk downloads use verified TLS.
+grep -Fq 'Acquire::Retries=3' "$root/.ci/scanners/Dockerfile"
+grep -Fq 'Acquire::https::Timeout=30' "$root/.ci/scanners/Dockerfile"
+grep -Fq 'APT::Update::Error-Mode=any' "$root/.ci/scanners/Dockerfile"
+grep -Fq "s|http://|https://|g" "$root/.ci/scanners/Dockerfile"
+if grep -Eiq 'allow-unauthenticated|trusted=yes|Verify-Peer=false|Verify-Host=false|AllowInsecureRepositories=true' "$root/.ci/scanners/Dockerfile"; then
+  printf 'scanner package downloads must preserve TLS and repository authentication\n' >&2
+  exit 1
+fi
 grep -Eq 'GITLEAKS_SHA256=[0-9a-f]{64}' "$root/.ci/scanners/Dockerfile"
 grep -Eq 'OSV_SCANNER_SHA256=[0-9a-f]{64}' "$root/.ci/scanners/Dockerfile"
 grep -Fq 'gitleaks git "$source_directory"' "$root/scripts/ci/collect-pr-evidence.sh"
