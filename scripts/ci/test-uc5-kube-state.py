@@ -177,6 +177,21 @@ def test_list_bounds_and_service_exposure_are_refused():
     rejects(lambda: MODULE.collect_baseline(runner(values, calls), KEY), "UC5 baseline direct signer Service is incompatible")
 
 
+def test_empty_endpoint_slice_null_is_not_a_malformed_response():
+    values, calls = fixtures(), []
+    slice_ = object_("slice", name="slice", spec={}, status={})
+    slice_["metadata"]["labels"] = {"kubernetes.io/service-name": MODULE.PUBLIC_SERVICE}
+    slice_["endpoints"], slice_["ports"] = None, None
+    values[("-n", MODULE.NAMESPACE, "get", "endpointslices.discovery.k8s.io", "-l", "kubernetes.io/service-name=" + MODULE.PUBLIC_SERVICE, "-o", "json")] = {"items": [slice_]}
+    baseline = MODULE.collect_baseline(runner(values, calls), KEY)
+    assert MODULE.collect_live(runner(values, calls), baseline)["public_endpoint"] == {"ready_addresses": []}
+    for invalid in ({}, "", 0, False):
+        slice_["endpoints"] = invalid
+        rejects(lambda: MODULE.collect_live(runner(values, calls), baseline), "public signer endpoint is malformed")
+    del slice_["endpoints"]
+    rejects(lambda: MODULE.collect_live(runner(values, calls), baseline), "public signer endpoint is malformed")
+
+
 def test_timeout_and_runner_failures_have_fixed_non_sensitive_messages():
     rejects(lambda: MODULE.collect_baseline(lambda args: (_ for _ in ()).throw(TimeoutError()), KEY), "kubectl collection timed out")
     rejects(lambda: MODULE.collect_baseline(lambda args: (_ for _ in ()).throw(ValueError("sensitive API error")), KEY), "kubectl collection failed")
@@ -188,5 +203,6 @@ if __name__ == "__main__":
     test_deployment_replicaset_and_terminating_pods_are_owned_not_label_matched()
     test_additive_policies_endpoint_slices_and_argo_are_conservative()
     test_list_bounds_and_service_exposure_are_refused()
+    test_empty_endpoint_slice_null_is_not_a_malformed_response()
     test_timeout_and_runner_failures_have_fixed_non_sensitive_messages()
     print("PASS uc5 kube state")

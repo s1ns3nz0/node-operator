@@ -382,7 +382,13 @@ def _endpoint(runner):
             _fail("public signer endpoint is malformed")
         if labels.get("kubernetes.io/service-name") != PUBLIC_SERVICE:
             continue
-        endpoints = slice_.get("endpoints") if isinstance(slice_, dict) else None
+        if "endpoints" not in slice_:
+            _fail("public signer endpoint is malformed")
+        endpoints = slice_["endpoints"]
+        # The EndpointSlice controller serializes its empty slice as null
+        # after the last backend disappears. Missing/other types are not empty.
+        if endpoints is None:
+            endpoints = []
         if not isinstance(endpoints, list) or len(endpoints) > MAX_LIST_ITEMS:
             _fail("public signer endpoint is malformed")
         for endpoint in endpoints:
