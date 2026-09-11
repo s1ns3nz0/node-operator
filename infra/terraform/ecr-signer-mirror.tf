@@ -61,6 +61,13 @@ resource "aws_kms_alias" "release_signer_ecr" {
   count         = var.enable_release_signer_ecr_mirror ? 1 : 0
   name          = "alias/${local.name_prefix}-release-signer-ecr"
   target_key_id = aws_kms_key.release_signer_ecr[0].key_id
+
+  # Legacy environments may retain this alias under a key whose resource
+  # policy denies UpdateAlias. Keep the existing alias target untouched while
+  # the ECR key itself remains managed by Terraform.
+  lifecycle {
+    ignore_changes = [target_key_id]
+  }
 }
 
 resource "aws_ecr_repository" "release_signer" {

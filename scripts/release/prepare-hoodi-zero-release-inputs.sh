@@ -49,8 +49,12 @@ trap cleanup EXIT INT TERM
 
 mkdir -m 700 "$output_dir"
 zero_args=(--aws-account-id "$account" --aws-region "$aws_region" --name "$name" --output-dir "$zero_dir")
-for zone in "${availability_zones[@]}"; do zero_args+=(--availability-zone "$zone"); done
-for principal in "${principals[@]}"; do zero_args+=(--backend-principal-arn "$principal"); done
+for zone in "${availability_zones[@]-}"; do
+  [ -n "$zone" ] && zero_args+=(--availability-zone "$zone")
+done
+for principal in "${principals[@]-}"; do
+  [ -n "$principal" ] && zero_args+=(--backend-principal-arn "$principal")
+done
 "$script_dir/prepare-zero-resource-inputs.sh" "${zero_args[@]}"
 "$script_dir/prepare-hoodi-validator-deployment.sh" \
   --validator-set "$validator_set" \
