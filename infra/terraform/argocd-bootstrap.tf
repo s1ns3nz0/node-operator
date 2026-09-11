@@ -152,6 +152,7 @@ data "aws_iam_policy_document" "argocd_bootstrap" {
     actions = [
       "ecr:BatchCheckLayerAvailability",
       "ecr:BatchGetImage",
+      "ecr:DescribeImages",
       "ecr:GetDownloadUrlForLayer",
     ]
     # Keep this existing pull scope independent from unrelated additions to the
