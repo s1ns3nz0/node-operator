@@ -51,10 +51,13 @@ def run(argv: list[str] | None = None) -> int:
     parser.add_argument("--aws-region")
     parser.add_argument("--name")
     parser.add_argument("--prepare-infrastructure", action="store_true", help="Materialize verified release and generate local Terraform inputs; does not apply")
+    parser.add_argument("--prepare-ops-access", action="store_true", help="Prepare separate SSM inputs after infrastructure completion; never plans, applies or opens a session")
     parser.add_argument("--apply-infrastructure", action="store_true", help="Prepare and apply infrastructure after terminal confirmation; does not set up SSM/Vault/workloads")
     parser.add_argument("--backend-principal-arn", help="Exact same-account backend IAM role for infrastructure preparation")
     parser.add_argument("--execution-profile", help="Optional existing AWS role profile to verify and use for infrastructure execution")
     args = parser.parse_args(argv)
+    if args.prepare_ops_access and (args.command != "resume" or args.prepare_infrastructure or args.apply_infrastructure or args.backend_principal_arn or args.execution_profile):
+        raise StateError("SSM preparation is a separate resume operation; do not combine it with infrastructure or execution-role options.")
     if args.apply_infrastructure:
         if not sys.stdin.isatty():
             raise StateError("Infrastructure apply requires an interactive terminal and deployment-scope confirmation.")
@@ -98,12 +101,25 @@ def run(argv: list[str] | None = None) -> int:
         checkpoint = store.resume()
         if any(stage["status"] == "running" for stage in checkpoint["stages"].values()):
             raise StateError("An interrupted stage requires reconciliation. No stage was retried or marked complete.")
-        for stage in sorted(STAGE_NAMES):
-            if stage not in checkpoint["stages"]:
-                store.set_stage(stage, "pending")
+        if not args.prepare_ops_access:
+            for stage in sorted(STAGE_NAMES):
+                if stage not in checkpoint["stages"]:
+                    store.set_stage(stage, "pending")
         # Read-only discovery is useful but does not prove permissions, quotas,
         # all-resource collision safety or provisioning readiness.
-        store.set_stage("preflight", "awaiting_input")
+        if not args.prepare_ops_access:
+            store.set_stage("preflight", "awaiting_input")
+        if args.prepare_ops_access:
+            if checkpoint["stages"].get("infrastructure", {}).get("status") != "complete":
+                raise StateError("SSM preparation requires completed infrastructure in this original state directory.")
+            if checkpoint["stages"].get("ops_access", {}).get("status") == "complete":
+                raise StateError("SSM access is already complete; preparation cannot reset its status.")
+            from installer_bundle import materialize_release
+            from installer_ops_access import prepare_ops_access
+            bundle_root = materialize_release(args.release_dir, args.state_dir / "release",
+                                              release["release_sha"], release["bundle_digest"])
+            prepare_ops_access(bundle_root, args.state_dir, discovery, profile)
+            store.set_stage("ops_access", "awaiting_input")
         if args.prepare_infrastructure:
             from installer_bundle import materialize_release
             principal = prompt(args.backend_principal_arn, "Same-account Terraform backend IAM role ARN")
@@ -134,7 +150,7 @@ def run(argv: list[str] | None = None) -> int:
                     store.set_stage("infrastructure", "failed")
                     raise
                 store.set_stage("infrastructure", "complete")
-    print(json.dumps({"result": "infrastructure_ready" if args.apply_infrastructure else ("infrastructure_inputs_ready" if args.prepare_infrastructure else "discovery_complete"), "discovery": discovery,
+    print(json.dumps({"result": "ops_access_inputs_ready" if args.prepare_ops_access else ("infrastructure_ready" if args.apply_infrastructure else ("infrastructure_inputs_ready" if args.prepare_infrastructure else "discovery_complete")), "discovery": discovery,
                       "deployment_complete": False,
                       "remaining": "SSM, Vault, secrets, GitOps, workloads, custody, deposit, activation, duty and E2E remain required." if args.apply_infrastructure else "Infrastructure apply and later deployment stages remain required."}, sort_keys=True))
     return 0

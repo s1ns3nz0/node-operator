@@ -2,7 +2,19 @@
 
 ## Commands
 
-The public entrypoint is `scripts/release/node-operator-install.sh`. It provides `start`, `status` and `resume` for release checks, AWS discovery and private checkpoints. `--prepare-infrastructure` only generates local inputs. `--apply-infrastructure` additionally invokes the verified release's guarded Terraform path after explicit terminal confirmation. SSM and later deployment adapters remain unimplemented. `resume` rejects running stages pending reconciliation; a failed apply can be retried through the release wrapper's existing-state checks, but residual changes still stop for review. `status` is local only. Future `ops-access` owns a separate apply and confirmation.
+The public entrypoint is `scripts/release/node-operator-install.sh`. It provides `start`, `status` and `resume` for release checks, AWS discovery and private checkpoints. `--prepare-infrastructure` only generates local inputs. `--apply-infrastructure` additionally invokes the verified release's guarded Terraform path after explicit terminal confirmation. Separate `resume --prepare-ops-access` prepares SSM inputs only; SSM apply, connection readiness and later deployment adapters remain unimplemented. `resume` rejects running stages pending reconciliation; a failed apply can be retried through the release wrapper's existing-state checks, but residual changes still stop for review. `status` is local only. SSM retains a separate apply and confirmation.
+
+## Separate operations-access preparation
+
+After infrastructure completion in the same state directory, use `resume
+--prepare-ops-access` with the original release assets and state directory.
+This operation cannot be combined with infrastructure apply or an execution
+profile override. It uses the discovery profile for read-only checks and
+preparation, not for Terraform apply. The original infrastructure handoff and
+the live private EKS context must match before private SSM inputs are prepared.
+The result is `ops_access_inputs_ready`, with `ops_access` awaiting input:
+no instance is created, no session is opened and deployment remains incomplete.
+SSM plan/apply and connection verification are still separate pending work.
 
 ## Explicit infrastructure apply
 

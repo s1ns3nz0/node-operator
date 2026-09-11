@@ -60,6 +60,7 @@ for required_path in \
   source/scripts/release/installer_state.py \
   source/scripts/release/installer_preflight.py \
   source/scripts/release/installer_infrastructure.py \
+  source/scripts/release/installer_ops_access.py \
   source/scripts/release/installer_files.py \
   source/scripts/release/installer_bundle.py \
   source/scripts/release/interactive_deploy.py \

@@ -2,6 +2,19 @@
 
 Baseline: v0.1.20, source a87b02f9422d33e75a20879e5916ff73fe036df5. Status: implementation started; no end-to-end installer completion claimed.
 
+## Verified delivery status
+
+- PR #221 head `54609648a14a2b0c2ed4ac37d0066857d7821f36`: CI run
+  `34572077991` passed, including Evidence Contracts after installing the
+  missing ripgrep dependency. The trusted decision reported `block=0` and
+  `require_approval=1`; passing CI alone does not authorize merge or release.
+- Infrastructure preparation/apply adapters have local contract evidence;
+  a downloaded-release live infrastructure deployment is not yet verified.
+- Task 7 is being connected as a separate input-preparation operation.
+  SSM plan/apply, private-session readiness and tasks 8-14 remain incomplete.
+- No live deployment, Vault ceremony, validator activation or resource
+  deletion is evidenced by these local tests.
+
 ## Durable decisions
 
 - One public entrypoint, small reusable internal modules. First run, status and resume use the same entrypoint.

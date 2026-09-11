@@ -18,6 +18,73 @@ DISCOVERY = {"aws_profile": "test", "aws_account_id": "123456789012", "aws_regio
 
 
 class InstallerCommandTests(unittest.TestCase):
+    def test_ops_preparation_is_separate_and_never_claims_access_ready(self):
+        for infrastructure_status in ("pending", "complete"):
+            with tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary).resolve() / "state"
+                store = cli.CheckpointStore(directory, {**DISCOVERY, **RELEASE})
+                with store.lock():
+                    store.resume()
+                    store.set_stage("infrastructure", infrastructure_status)
+                prepare = Mock()
+                bundle = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=Mock(return_value=directory / "release"))
+                with patch.dict(sys.modules, {"installer_bundle": bundle, "installer_ops_access": types.SimpleNamespace(prepare_ops_access=prepare)}), patch.object(cli, "discover", return_value=DISCOVERY):
+                    options = ["--release-dir", temporary, "--prepare-ops-access"]
+                    if infrastructure_status == "pending":
+                        with self.assertRaises(cli.StateError):
+                            self.invoke(directory, "resume", options)
+                        prepare.assert_not_called()
+                        bundle.materialize_release.assert_not_called()
+                    else:
+                        _, result = self.invoke(directory, "resume", options)
+                        prepare.assert_called_once_with(directory / "release", directory, DISCOVERY, "test")
+                        self.assertEqual(result["result"], "ops_access_inputs_ready")
+                        self.assertFalse(result["deployment_complete"])
+                        _, status = self.invoke(directory, "status")
+                        self.assertEqual(status["stages"]["ops_access"]["status"], "awaiting_input")
+                        self.assertEqual(status["stages"]["infrastructure"]["status"], "complete")
+
+    def test_ops_cannot_be_combined_with_infrastructure_or_start(self):
+        for command, extra in (("start", []), ("resume", ["--apply-infrastructure"]), ("resume", ["--execution-profile", "other"])):
+            with patch.object(cli, "discover") as discover, self.assertRaises(cli.StateError):
+                cli.run([command, "--state-dir", "/unused", "--prepare-ops-access", *extra])
+            discover.assert_not_called()
+
+    def test_ops_preparation_cannot_reset_completed_access(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary).resolve() / "state"
+            store = cli.CheckpointStore(directory, {**DISCOVERY, **RELEASE})
+            with store.lock():
+                store.resume()
+                store.set_stage("infrastructure", "complete")
+                store.set_stage("ops_access", "complete")
+                store.set_stage("preflight", "complete")
+            original = (directory / "checkpoint.json").read_bytes()
+            materialize = Mock()
+            bundle = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=materialize)
+            with patch.dict(sys.modules, {"installer_bundle": bundle}), patch.object(cli, "discover", return_value=DISCOVERY), self.assertRaises(cli.StateError):
+                self.invoke(directory, "resume", ["--release-dir", temporary, "--prepare-ops-access"])
+            materialize.assert_not_called()
+            _, status = self.invoke(directory, "status")
+            self.assertEqual(status["stages"]["ops_access"]["status"], "complete")
+            self.assertEqual(status["stages"]["preflight"]["status"], "complete")
+            self.assertEqual((directory / "checkpoint.json").read_bytes(), original)
+
+    def test_failed_ops_preparation_preserves_checkpoint(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary).resolve() / "state"
+            store = cli.CheckpointStore(directory, {**DISCOVERY, **RELEASE})
+            with store.lock():
+                store.resume()
+                store.set_stage("infrastructure", "complete")
+                store.set_stage("preflight", "complete")
+            original = (directory / "checkpoint.json").read_bytes()
+            bundle = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=Mock())
+            ops = types.SimpleNamespace(prepare_ops_access=Mock(side_effect=cli.InfrastructureError("context mismatch")))
+            with patch.dict(sys.modules, {"installer_bundle": bundle, "installer_ops_access": ops}), patch.object(cli, "discover", return_value=DISCOVERY), self.assertRaises(cli.InfrastructureError):
+                self.invoke(directory, "resume", ["--release-dir", temporary, "--prepare-ops-access"])
+            self.assertEqual((directory / "checkpoint.json").read_bytes(), original)
+
     def test_apply_requires_terminal_before_any_discovery(self):
         with patch.object(cli.sys.stdin, "isatty", return_value=False), patch.object(cli, "discover") as discovery, self.assertRaises(cli.StateError):
             cli.run(["start", "--state-dir", "/unused", "--apply-infrastructure"])
