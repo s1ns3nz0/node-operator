@@ -30,13 +30,31 @@ class PreflightTests(unittest.TestCase):
     def test_discovery_does_not_claim_apply_permission(self):
         responses = [{"Account": "123456789012", "Arn": "arn:aws:sts::123456789012:assumed-role/operator/session"},
                      {"AvailabilityZones": [{"ZoneName": "ap-northeast-1c", "State": "available"}, {"ZoneName": "ap-northeast-1a", "State": "available"}]},
-                     {"clusters": ["test-node"]}, [], []]
+                     {"clusters": ["test-node"]}, [], [], ["test-node-foundation-flow-logs", "test-node-baseline-eks-cluster", "unrelated-role"]]
         with patch.object(module, "aws_read", side_effect=responses) as read:
             result = module.discover("test", "ap-northeast-1", "test-node")
         self.assertEqual(result["availability_zones"], ["ap-northeast-1a", "ap-northeast-1c"])
         self.assertTrue(result["cluster_name_present"])
         self.assertEqual(result["provisioning_permissions"], "not_verified")
-        self.assertEqual([c.args[2][0] for c in read.call_args_list], ["sts", "ec2", "eks", "s3api", "dynamodb"])
+        self.assertEqual(result["iam_role_collisions"]["deployment_role_name_conflicts"], ["test-node-baseline-eks-cluster", "test-node-foundation-flow-logs"])
+        self.assertEqual(result["iam_role_collisions"]["iam_permissions"], "not_verified")
+        self.assertEqual([c.args[2][0] for c in read.call_args_list], ["sts", "ec2", "eks", "s3api", "dynamodb", "iam"])
+
+    def test_iam_role_collisions_keep_only_deployment_namespaces(self):
+        roles = ["test-node-foundation-flow-logs", "test-node-baseline-vault", "test-node-baseline", "test-node-foundation-flow-logs-extra", "another-baseline-vault"]
+        with patch.object(module, "aws_read", return_value=roles) as read:
+            result = module.iam_role_collisions("test", "ap-northeast-1", "test-node")
+        self.assertEqual(result["deployment_role_name_conflicts"], ["test-node-baseline-vault", "test-node-foundation-flow-logs"])
+        self.assertEqual(result["checked_role_namespaces"], {"foundation_flow_logs": "test-node-foundation-flow-logs", "baseline_prefix": "test-node-baseline-"})
+        self.assertEqual(result["role_policies"], "not_verified")
+        self.assertEqual(read.call_args.args[2], ["iam", "list-roles", "--query", "Roles[].RoleName"])
+        self.assertNotIn("--no-paginate", read.call_args.args[2])
+
+    def test_invalid_iam_role_inventory_fails_closed_without_leaking_result(self):
+        for response in [None, {}, "role", ["valid-role", 1], ["bad/role"]]:
+            with patch.object(module, "aws_read", return_value=response), self.assertRaises(module.PreflightError) as error:
+                module.iam_role_collisions("test", "ap-northeast-1", "test-node")
+            self.assertEqual(str(error.exception), "AWS IAM role inventory is incomplete; no role name is considered available.")
 
     def test_backend_collision_does_not_authorize_adoption(self):
         bucket = "test-node-tfstate-123456789012-apnortheast1"

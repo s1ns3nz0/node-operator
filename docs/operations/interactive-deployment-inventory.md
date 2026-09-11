@@ -43,3 +43,8 @@ This inventory is source inspection, not a live-state verification. No deploymen
   bootstrap/foundation module directory and suggests a new work directory.
   The installer must reconcile the existing Terraform state instead; blindly
   starting over can collide with partially created infrastructure.
+- The implementation branch now publishes Terraform output checkpoints only
+  after a successful command and nonempty-object JSON validation. Failed queries
+  preserve any prior checkpoint and do not create a false completion marker.
+  This does not yet reconcile stale outputs, repair legacy empty checkpoints,
+  or make interrupted resource creation automatically resumable.

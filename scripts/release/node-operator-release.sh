@@ -118,6 +118,32 @@ apply_phase() {
   terraform -chdir="$module" apply -input=false "$plan_file"
 }
 
+capture_terraform_output() {
+  # Publish a checkpoint only after Terraform and JSON validation succeed.
+  # A failed output query must not turn a partial apply into a completed phase.
+  local module="$1" destination="$2" output_name="${3:-}" temporary
+  [ ! -L "$destination" ] || fail "output checkpoint must not be a symlink"
+  [ ! -e "$destination" ] || [ -f "$destination" ] || fail "output checkpoint must be a regular file"
+  temporary="$(mktemp "${destination}.pending.XXXXXX")" || fail "cannot allocate private output checkpoint"
+  chmod 600 "$temporary"
+  if [ -n "$output_name" ]; then
+    if ! terraform -chdir="$module" output -json "$output_name" > "$temporary"; then
+      unlink "$temporary"
+      fail "Terraform output query failed; checkpoint was not replaced"
+    fi
+  else
+    if ! terraform -chdir="$module" output -json > "$temporary"; then
+      unlink "$temporary"
+      fail "Terraform output query failed; checkpoint was not replaced"
+    fi
+  fi
+  if ! jq -se 'length == 1 and (.[0] | type == "object" and length > 0)' "$temporary" >/dev/null 2>&1; then
+    unlink "$temporary"
+    fail "Terraform output is not a nonempty JSON object; checkpoint was not replaced"
+  fi
+  mv -f "$temporary" "$destination"
+}
+
 zero_apply() {
   if [ -n "$inputs" ]; then
     [ -z "$bootstrap_config$foundation_config$baseline_config" ] || fail "--inputs cannot be combined with individual phase configs"
@@ -160,7 +186,7 @@ zero_apply() {
     terraform -chdir="$bootstrap_module" init -input=false -backend=false
     terraform -chdir="$bootstrap_module" plan -input=false -var-file="$bootstrap_config" -out="$work_dir/bootstrap.tfplan"
     terraform -chdir="$bootstrap_module" apply -input=false "$work_dir/bootstrap.tfplan"
-    terraform -chdir="$bootstrap_module" output -json backend > "$bootstrap_output"
+    capture_terraform_output "$bootstrap_module" "$bootstrap_output" backend
   fi
   write_backend_config "$bootstrap_output" "node-operator/bootstrap-state/terraform.tfstate" "$bootstrap_backend"
   if [ -d "$bootstrap_module" ] && [ ! -d "$bootstrap_module/.terraform" ]; then
@@ -174,7 +200,7 @@ zero_apply() {
     [ ! -e "$foundation_module" ] || fail "incomplete foundation checkpoint; use a new work directory"
     copy_module infra/foundation-network "$foundation_module"
     apply_phase "$foundation_module" "$foundation_config" "$foundation_backend" "$work_dir/foundation.tfplan"
-    terraform -chdir="$foundation_module" output -json network > "$foundation_output"
+    capture_terraform_output "$foundation_module" "$foundation_output" network
   fi
   jq -e 'type == "object" and (.vpc_id | test("^vpc-[0-9a-f]+$")) and (.vpc_cidr | type == "string") and (.system_subnet_ids | type == "array" and length >= 2) and (.hoodi_subnet_ids | type == "array" and length >= 1) and (.system_route_table_id | test("^rtb-[0-9a-f]+$")) and (.hoodi_route_table_id | test("^rtb-[0-9a-f]+$")) and (.hoodi_nat_gateway_id | test("^nat-[0-9a-f]+$"))' "$foundation_output" >/dev/null || fail "foundation output is not a usable zero-resource network contract"
   jq '{network_source:"foundation", foundation_network:{vpc_id:.vpc_id, vpc_cidr:.vpc_cidr, system_subnet_ids:.system_subnet_ids, hoodi_subnet_ids:.hoodi_subnet_ids, system_route_table_id:.system_route_table_id, hoodi_route_table_id:.hoodi_route_table_id, hoodi_nat_gateway_id:.hoodi_nat_gateway_id}}' "$foundation_output" > "$foundation_input"
@@ -184,7 +210,7 @@ zero_apply() {
   cp "$foundation_input" "$baseline_module/foundation-network.auto.tfvars.json"
   write_backend_config "$bootstrap_output" "node-operator/baseline/terraform.tfstate" "$baseline_backend"
   apply_phase "$baseline_module" "$baseline_config" "$baseline_backend" "$work_dir/baseline.tfplan"
-  terraform -chdir="$baseline_module" output -json > "$baseline_output"
+  capture_terraform_output "$baseline_module" "$baseline_output"
   deployment_region="$(jq -er '.aws_region' "$foundation_config")" || fail "foundation configuration lacks aws_region"
   jq -e --arg region "$deployment_region" '
     (.deployment_account_id.value | test("^[0-9]{12}$")) and

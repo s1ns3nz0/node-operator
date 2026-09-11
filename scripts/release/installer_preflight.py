@@ -66,6 +66,35 @@ def backend_collisions(profile: str, region: str, name: str, account: str) -> di
     }
 
 
+def iam_role_collisions(profile: str, region: str, name: str) -> dict:
+    """Inventory only role names Terraform can derive for this deployment.
+
+    IAM has no role-name-prefix filter, so the AWS CLI's default paginator reads
+    list-roles pages and this function retains only the two deployment
+    namespaces.  This neither inventories policy attachments nor verifies that
+    the caller has every IAM permission required for an apply.
+    """
+    foundation_flow_logs = f"{name}-foundation-flow-logs"
+    baseline_prefix = f"{name}-baseline-"
+    roles = aws_read(profile, region, ["iam", "list-roles", "--query", "Roles[].RoleName"])
+    if (not isinstance(roles, list)
+            or not all(isinstance(role, str)
+                       and re.fullmatch(r"[A-Za-z0-9+=,.@_-]{1,64}", role)
+                       for role in roles)):
+        raise PreflightError("AWS IAM role inventory is incomplete; no role name is considered available.")
+    return {
+        "deployment_role_name_conflicts": sorted({role for role in roles
+                                                   if role == foundation_flow_logs
+                                                   or role.startswith(baseline_prefix)}),
+        "checked_role_namespaces": {
+            "foundation_flow_logs": foundation_flow_logs,
+            "baseline_prefix": baseline_prefix,
+        },
+        "role_policies": "not_verified",
+        "iam_permissions": "not_verified",
+    }
+
+
 def aws_read(profile: str, region: str, arguments: list[str]) -> object:
     if shutil.which("aws") is None:
         raise PreflightError("AWS CLI is missing; install it before target discovery.")
@@ -119,5 +148,6 @@ def discover(profile: str, region: str, name: str) -> dict:
             "cluster_name_present": name in clusters["clusters"],
             "local_prerequisites": local_prerequisites(),
             "backend_collisions": backend_collisions(profile, region, name, account),
+            "iam_role_collisions": iam_role_collisions(profile, region, name),
             "provisioning_permissions": "not_verified", "quotas": "not_verified",
             "other_resource_collisions": "not_verified"}
