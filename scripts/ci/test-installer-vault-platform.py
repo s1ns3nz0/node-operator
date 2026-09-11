@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Check objective: platform CodeBuild only starts with reconciled authority, exact identity, and immutable no-restart state.
+# Check objective: Platform starts only from reconciled authority and immutable state.
 import json,os,sys,tempfile,unittest
 from pathlib import Path
 from types import SimpleNamespace
