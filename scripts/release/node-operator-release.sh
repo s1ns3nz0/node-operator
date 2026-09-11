@@ -144,6 +144,31 @@ capture_terraform_output() {
   mv -f "$temporary" "$destination"
 }
 
+verify_completed_phase() {
+  # Read-only reconciliation: a saved output file is not proof of live state.
+  # Exit 2 from plan means changes, not success; never apply them on this path.
+  local module="$1" config="$2" checkpoint="$3" output_name="$4" result=0 temporary
+  [ -d "$module" ] && [ ! -L "$module" ] || fail "saved phase lacks its original Terraform directory; restore that directory before resuming"
+  [ -f "$checkpoint" ] && [ ! -L "$checkpoint" ] || fail "saved phase output is not a regular file"
+  jq -se 'length == 1 and (.[0] | type == "object" and length > 0)' "$checkpoint" >/dev/null 2>&1 || fail "saved phase output is invalid; preserve state and reconcile before resuming"
+  terraform -chdir="$module" plan -input=false -detailed-exitcode -var-file="$config" >/dev/null || result=$?
+  case "$result" in
+    0) ;;
+    2) fail "saved phase differs from actual infrastructure or configuration; no changes applied; reconcile before resuming" ;;
+    *) fail "saved phase could not be checked; verify authentication, backend and state before resuming" ;;
+  esac
+  temporary="$(mktemp "${checkpoint}.verify.XXXXXX")" || fail "cannot allocate private reconciliation file"
+  if ! terraform -chdir="$module" output -json "$output_name" > "$temporary"; then
+    unlink "$temporary"
+    fail "saved phase output could not be read from Terraform state"
+  fi
+  if ! jq -es --slurpfile saved "$checkpoint" 'length == 1 and ($saved | length) == 1 and .[0] == $saved[0]' "$temporary" >/dev/null 2>&1; then
+    unlink "$temporary"
+    fail "saved phase output differs from Terraform state; no checkpoint replaced"
+  fi
+  unlink "$temporary"
+}
+
 zero_apply() {
   if [ -n "$inputs" ]; then
     [ -z "$bootstrap_config$foundation_config$baseline_config" ] || fail "--inputs cannot be combined with individual phase configs"
@@ -187,6 +212,8 @@ zero_apply() {
     terraform -chdir="$bootstrap_module" plan -input=false -var-file="$bootstrap_config" -out="$work_dir/bootstrap.tfplan"
     terraform -chdir="$bootstrap_module" apply -input=false "$work_dir/bootstrap.tfplan"
     capture_terraform_output "$bootstrap_module" "$bootstrap_output" backend
+  else
+    verify_completed_phase "$bootstrap_module" "$bootstrap_config" "$bootstrap_output" backend
   fi
   write_backend_config "$bootstrap_output" "node-operator/bootstrap-state/terraform.tfstate" "$bootstrap_backend"
   if [ -d "$bootstrap_module" ] && [ ! -d "$bootstrap_module/.terraform" ]; then
@@ -201,6 +228,8 @@ zero_apply() {
     copy_module infra/foundation-network "$foundation_module"
     apply_phase "$foundation_module" "$foundation_config" "$foundation_backend" "$work_dir/foundation.tfplan"
     capture_terraform_output "$foundation_module" "$foundation_output" network
+  else
+    verify_completed_phase "$foundation_module" "$foundation_config" "$foundation_output" network
   fi
   jq -e 'type == "object" and (.vpc_id | test("^vpc-[0-9a-f]+$")) and (.vpc_cidr | type == "string") and (.system_subnet_ids | type == "array" and length >= 2) and (.hoodi_subnet_ids | type == "array" and length >= 1) and (.system_route_table_id | test("^rtb-[0-9a-f]+$")) and (.hoodi_route_table_id | test("^rtb-[0-9a-f]+$")) and (.hoodi_nat_gateway_id | test("^nat-[0-9a-f]+$"))' "$foundation_output" >/dev/null || fail "foundation output is not a usable zero-resource network contract"
   jq '{network_source:"foundation", foundation_network:{vpc_id:.vpc_id, vpc_cidr:.vpc_cidr, system_subnet_ids:.system_subnet_ids, hoodi_subnet_ids:.hoodi_subnet_ids, system_route_table_id:.system_route_table_id, hoodi_route_table_id:.hoodi_route_table_id, hoodi_nat_gateway_id:.hoodi_nat_gateway_id}}' "$foundation_output" > "$foundation_input"

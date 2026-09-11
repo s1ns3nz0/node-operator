@@ -17,3 +17,4 @@ scripts/ci/test-installer-preflight.py
 scripts/ci/test-installer-bundle.py
 scripts/ci/test-interactive-deploy.py
 scripts/ci/test-terraform-output-checkpoint.py
+scripts/ci/test-terraform-phase-reconcile.py

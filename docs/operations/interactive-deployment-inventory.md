@@ -46,5 +46,8 @@ This inventory is source inspection, not a live-state verification. No deploymen
 - The implementation branch now publishes Terraform output checkpoints only
   after a successful command and nonempty-object JSON validation. Failed queries
   preserve any prior checkpoint and do not create a false completion marker.
-  This does not yet reconcile stale outputs, repair legacy empty checkpoints,
-  or make interrupted resource creation automatically resumable.
+  On a completed bootstrap/foundation phase, resume now requires a successful
+  no-change Terraform plan and exact semantic agreement between the saved
+  output and Terraform state. Drift, invalid outputs, or missing original module
+  directories stop before downstream apply. This does not repair legacy empty
+  checkpoints or make interrupted resource creation automatically resumable.
