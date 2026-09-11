@@ -20,11 +20,14 @@ authenticates a statement; it does not by itself authorize deployment.
 Inputs listing GitHub tokens or OIDC variables mean runner-provided credentials,
 not values to paste into Git, documentation or shell history.
 
-The documentation review identified two existing verification limitations:
-`mirror-signer-image.sh` and `mirror-validator-log-collector.sh` validate the
-destination digest's format but do not compare it with the source digest.
-Their inline `Limitation` comments record this gap; the comment-only review
-does not repair or certify these mirror paths.
+The signer and Fluent Bit mirrors require the ECR digest to equal the pinned
+source digest before emitting verified outputs. The signer also rejects a
+`SOURCE_DIGEST` that disagrees with `SOURCE` before registry access. Both copy
+the source manifest/index with `--prefer-index=false`, avoiding automatic
+single-manifest wrapping or runner-platform selection. A failed copy or digest
+check fails the job without success outputs; it does not delete an image that
+may already have reached ECR. These boundaries are exercised with mocked CLIs
+by `test-mirror-digest-integrity.py`; no live registry validation is implied.
 
 ## Local checks
 

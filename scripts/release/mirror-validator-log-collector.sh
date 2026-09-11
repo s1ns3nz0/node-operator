@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Limitation: The destination digest is format-checked, not compared with the source digest.
 # Check objective: Mirror reviewed Fluent Bit digest to private ECR.
-# Purpose: Mirror the reviewed Fluent Bit image to its private ECR repository.
+# Purpose: Mirror the reviewed Fluent Bit image and require exact source/destination digest equality.
 # Inputs: SOURCE_IMAGE, ACCOUNT_ID, AWS_ROLE_ARN, AWS_REGION, GitHub OIDC variables, GITHUB_RUN_ID, and RUNNER_TEMP.
 # Outputs: The private image digest in GITHUB_STEP_SUMMARY; temporary STS credential file.
 # Side effects: Calls GitHub OIDC/AWS STS and creates an image in private ECR.
@@ -17,7 +16,8 @@ AWS_SESSION_TOKEN="$(jq -r .Credentials.SessionToken "$RUNNER_TEMP/creds.json")"
 export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
 destination="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/node-operator-baseline-validator-fluent-bit:${SOURCE_IMAGE#*@sha256:}"
 aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-docker buildx imagetools create --tag "$destination" "$SOURCE_IMAGE"
+docker buildx imagetools create --prefer-index=false --tag "$destination" "$SOURCE_IMAGE"
 digest="$(aws ecr describe-images --region "$AWS_REGION" --repository-name node-operator-baseline-validator-fluent-bit --image-ids "imageTag=${SOURCE_IMAGE#*@sha256:}" --query 'imageDetails[0].imageDigest' --output text)"
 [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
+[[ "$digest" == "${SOURCE_IMAGE##*@}" ]] || { echo 'ECR Fluent Bit digest differs from the reviewed source digest; no verified output emitted' >&2; exit 1; }
 printf 'private_image=%s@%s\n' "${destination%:*}" "$digest" >> "$GITHUB_STEP_SUMMARY"

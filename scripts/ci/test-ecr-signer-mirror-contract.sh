@@ -73,7 +73,8 @@ for required in \
   'ECR_SIGNER_MIRROR_ROLE_ARN' \
   "ghcr\\.io/s1ns3nz0/node-operator/vault-release-signer@sha256" \
   "destination_repository='node-operator-baseline-vault-release-signer'" \
-  'docker push' \
+  'docker buildx imagetools create --prefer-index=false' \
+  "\"\$destination_digest\" == \"\$SOURCE_DIGEST\"" \
   'describe-images' \
   '::add-mask::'; do
   grep -Fq "$required" <(workflow_job_source "$workflow" signer) || fail "mirror workflow omits contract fragment: $required"
