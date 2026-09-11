@@ -131,6 +131,13 @@ Live saved-plan execution is not yet verified. Tokyo and Seoul bootstrap fixture
 network-disabled Terraform validation and plan generation; this is not live
 deployment evidence.
 
+The grant/revoke authority executor now plans from the expected current
+composed baseline plus Vault delta, rather than incorrectly returning to the
+original runner-disabled baseline. It binds a refreshed stable output subset,
+uses phase-specific fresh workspaces and saved-plan hashes, and retains an
+immutable attempt marker across uncertain apply or post-apply reconciliation.
+It is locally tested but not yet connected to the guided CLI or live-verified.
+
 Task 8 cannot be fulfilled by calling a recovery script on an uninitialized
 Vault. Existing bootstrap-runner automation deliberately installs sealed Vault
 without initialization. The installer must implement a distinct first-init

@@ -14,7 +14,11 @@ class VaultExecutionError(InfrastructureError): pass
 
 def prepare_vault_plan_workspace(bundle_root: Path,state_dir: Path,discovery: dict,profile: str,minimum_free: int=2*1024**3,target_name="vault-bootstrap-plan-work")->Path:
  _safe_state(state_dir)
- if target_name not in {"vault-bootstrap-plan-work","vault-bootstrap-apply-work"}:
+ if target_name not in {
+  "vault-bootstrap-plan-work", "vault-bootstrap-apply-work",
+  "vault-bootstrap-grant-plan-work", "vault-bootstrap-grant-apply-work",
+  "vault-bootstrap-revoke-plan-work", "vault-bootstrap-revoke-apply-work",
+ }:
   raise VaultExecutionError("Vault plan workspace name is not approved.")
  if shutil.disk_usage(state_dir).free < minimum_free: raise VaultExecutionError("Vault plan staging requires at least 2 GiB free private disk space.")
  original=validate_vault_workspace(bundle_root,state_dir,discovery)

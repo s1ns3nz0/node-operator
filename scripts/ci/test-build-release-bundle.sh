@@ -79,6 +79,7 @@ for required_path in \
   source/scripts/release/installer_vault_plan.py \
   source/scripts/release/installer_vault_workspace.py \
   source/scripts/release/installer_vault_execution.py \
+  source/scripts/release/installer_vault_authority.py \
   source/scripts/release/prepare-vault-bootstrap-tls.sh \
   source/scripts/release/create-installer-artifact-index.py \
   source/scripts/release/render-private-cert-manager-values.py \
