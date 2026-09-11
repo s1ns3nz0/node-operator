@@ -3,3 +3,4 @@
 !.ci/web3signer-hardened/
 !.ci/web3signer-hardened/patches/
 !.ci/web3signer-hardened/patches/0001-security-dependencies.patch
+!.ci/web3signer-hardened/patches/0002-signing-audit-metadata.patch

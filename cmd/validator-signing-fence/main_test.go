@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -487,5 +489,133 @@ func TestOnlyOneDownstreamSourceIPIsAdmitted(t *testing.T) {
 	}
 	if p.admitSource(second) {
 		t.Fatal("a second downstream source IP was admitted")
+	}
+}
+
+// A timeout on the test's own socket is not evidence of fence closure.
+func requirePeerClosed(t *testing.T, c net.Conn) {
+	t.Helper()
+	_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, err := c.Read(make([]byte, 1))
+	if err == nil {
+		t.Fatal("connection still forwarded data")
+	}
+	if e, ok := err.(net.Error); ok && e.Timeout() {
+		t.Fatal("observation timed out instead of observing peer closure")
+	}
+}
+
+func echoUpstream(t *testing.T) net.Listener {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = l.Close() })
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			go func() { defer c.Close(); _, _ = io.Copy(c, c) }()
+		}
+	}()
+	return l
+}
+
+func openProvenStream(t *testing.T, address string) net.Conn {
+	t.Helper()
+	c, err := net.DialTimeout("tcp", address, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	_ = c.SetDeadline(time.Now().Add(time.Second))
+	if _, err := c.Write([]byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, 1)
+	if _, err := io.ReadFull(c, buf); err != nil || buf[0] != 'x' {
+		t.Fatalf("positive passthrough failed: %v", err)
+	}
+	_ = c.SetDeadline(time.Time{})
+	return c
+}
+
+func TestAuthorityExpiryClosesProvenActiveStream(t *testing.T) {
+	u := echoUpstream(t)
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := newFenceProxy(nil, "", u.Addr().String(), time.Hour, time.Second)
+	p.listener = l
+	p.clientIP = "127.0.0.1"
+	p.setAuthorityDeadline(time.Now().Add(250 * time.Millisecond))
+	defer p.close()
+	go p.acceptLoop()
+	c := openProvenStream(t, l.Addr().String())
+	requirePeerClosed(t, c)
+	select {
+	case <-p.done:
+	case <-time.After(time.Second):
+		t.Fatal("expiry did not trip authority watchdog")
+	}
+	if p.healthy() {
+		t.Fatal("expired fence remained healthy")
+	}
+	newConn, err := net.DialTimeout("tcp", l.Addr().String(), time.Second)
+	if err == nil {
+		newConn.Close()
+		t.Fatal("expired listener accepted new connection")
+	}
+}
+
+func TestAPIEOFAndResetCloseProvenActiveStream(t *testing.T) {
+	for _, reset := range []bool{false, true} {
+		name := "EOF"
+		if reset {
+			name = "RST"
+		}
+		t.Run(name, func(t *testing.T) {
+			var fault atomic.Bool
+			now := time.Now().UTC()
+			fake := &fakeLeaseAPI{lease: testLease("pod-uid-1", now), pod: testClientPod("client-pod-uid", "127.0.0.1")}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if !fault.Load() {
+					fake.serveHTTP(w, r)
+					return
+				}
+				conn, _, err := w.(http.Hijacker).Hijack()
+				if err != nil {
+					return
+				}
+				if reset {
+					_ = conn.(*net.TCPConn).SetLinger(0)
+				}
+				_ = conn.Close()
+			}))
+			defer server.Close()
+			lease := newTestClient(server, now)
+			lease.pollInterval = 20 * time.Millisecond
+			u := echoUpstream(t)
+			p := newFenceProxy(lease, "127.0.0.1:0", u.Addr().String(), time.Hour, time.Second)
+			if err := p.start(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			defer p.close()
+			c := openProvenStream(t, p.address())
+			fault.Store(true)
+			requirePeerClosed(t, c)
+			select {
+			case <-p.done:
+			case <-time.After(time.Second):
+				t.Fatal("API transport loss did not trip fence")
+			}
+			if p.healthy() {
+				t.Fatal("fence remained healthy after API transport loss")
+			}
+		})
 	}
 }
