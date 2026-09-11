@@ -99,14 +99,24 @@ Terraform state nor a silently changed original config is acceptable.
 
 A pure plan-scope validator now distinguishes prepare, grant and revoke.
 It rejects unrelated managed mutations, replacements, drift and unresolved
-checks. The `--plan-vault` source path now connects it to saved preparation
-planning after baseline reconciliation; apply remains unimplemented and the
-plan check is not operator authorization. Independent review verified the
+checks. The `--plan-vault` source path connects it to saved preparation
+planning after baseline reconciliation. The `--apply-vault` adapter has local
+contract evidence (6 executor tests, 24 entrypoint tests, and the 36-check
+policy-contracts suite); no live apply is evidenced. A plan check is not
+operator authorization. Independent review verified the
 fresh-provider-cache boundary and pinned Terraform 1.5.7 JSON compatibility.
 Preparation receipts also validate their exact schema, selected deployment,
 reviewed hash and type-sensitive scope before publication. Apply still needs
 fresh provider initialization, source/backend bindings, terminal confirmation
 and post-apply reconciliation; receipt validation alone is not authorization.
+
+The apply command requires `resume --apply-vault --vault-artifacts FILE
+--vault-plan-sha SHA256` together with the original state and verified release
+directories. It asks for an exact account/Region/deployment/phase/hash phrase
+on a terminal. Cancellation starts no apply. Failure and successful runner
+provisioning both leave the Vault stage awaiting further work, not complete.
+An apply-attempt record must prevent blind retries after an uncertain outcome;
+the operator must preserve the state and reconcile remote resources first.
 Live saved-plan execution is not yet verified. Tokyo and Seoul bootstrap fixtures have both passed actual
 network-disabled Terraform validation and plan generation; this is not live
 deployment evidence.
@@ -118,6 +128,14 @@ ceremony with recovery material held by the operator, followed by temporary
 administrator revocation and post-init verification. The TLS Secret required
 before Vault can serve its own PKI is a bootstrap dependency, not a reason to
 place validator signing material in Kubernetes Secrets.
+
+Fresh-install ordering must provision the private cert-manager chart/images
+and reconcile `docs/gitops/vault-tls-internal-ca.example.yaml` before invoking
+the Vault CodeBuild project: its buildspec requires `vault/vault-tls` to exist.
+This is a Task 8 platform prerequisite, not work that can wait until Task 10.
+Do not export the generated CA/private TLS Secret bytes. The first-init
+ceremony is still missing and must be integrated interactively; existing
+generate-root recovery wrappers cannot initialize a fresh Vault.
 
 Always pass Region, cluster and SSM instance from the verified handoff into
 private transport commands. Existing historical operator-auth scripts contain

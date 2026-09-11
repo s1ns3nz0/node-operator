@@ -55,7 +55,9 @@ def run(argv: list[str] | None = None) -> int:
     parser.add_argument("--prepare-ops-access", action="store_true", help="Prepare separate SSM inputs after infrastructure completion; never plans, applies or opens a session")
     parser.add_argument("--prepare-vault", action="store_true", help="Prepare local Vault bootstrap inputs from reviewed artifacts; no apply or initialization")
     parser.add_argument("--plan-vault", action="store_true", help="Reconcile the baseline and save a Vault runner preparation plan; never apply")
-    parser.add_argument("--vault-artifacts", type=Path, help="Private reviewed Vault image/chart manifest; required with --prepare-vault")
+    parser.add_argument("--apply-vault", action="store_true", help="Apply the reviewed Vault runner plan after terminal confirmation; does not initialize Vault")
+    parser.add_argument("--vault-plan-sha", help="Exact reviewed Vault preparation plan SHA-256; required for apply")
+    parser.add_argument("--vault-artifacts", type=Path, help="Private reviewed Vault image/chart manifest; required for Vault prepare, plan and apply")
     parser.add_argument("--plan-ops-access", action="store_true", help="Create a separate private SSM saved plan; does not apply")
     parser.add_argument("--apply-ops-access", action="store_true", help="Apply the separately reviewed SSM plan after terminal confirmation")
     parser.add_argument("--verify-ops-access", action="store_true", help="Verify SSM Online and private EKS access through a temporary session; no Terraform apply")
@@ -65,11 +67,15 @@ def run(argv: list[str] | None = None) -> int:
     parser.add_argument("--execution-profile", help="Optional existing AWS role profile to verify and use for infrastructure execution")
     args = parser.parse_args(argv)
     ops_requested = args.prepare_ops_access or args.plan_ops_access or args.apply_ops_access or args.verify_ops_access
-    vault_requested = args.prepare_vault or args.plan_vault
-    if vault_requested and (args.command != "resume" or ops_requested or args.prepare_infrastructure or args.apply_infrastructure or args.backend_principal_arn or args.execution_profile or args.vault_artifacts is None or (args.prepare_vault and args.plan_vault)):
+    vault_requested = args.prepare_vault or args.plan_vault or args.apply_vault
+    if vault_requested and (args.command != "resume" or ops_requested or args.prepare_infrastructure or args.apply_infrastructure or args.backend_principal_arn or args.execution_profile or args.vault_artifacts is None or sum((args.prepare_vault, args.plan_vault, args.apply_vault)) != 1):
         raise StateError("Vault preparation is a separate resume operation requiring --vault-artifacts.")
+    if args.vault_plan_sha is not None and not args.apply_vault:
+        raise StateError("--vault-plan-sha is accepted only with --apply-vault.")
+    if args.apply_vault and (not sys.stdin.isatty() or not re.fullmatch(r"[0-9a-f]{64}", args.vault_plan_sha or "")):
+        raise StateError("Vault apply requires an interactive terminal and the reviewed 64-character plan SHA-256.")
     if args.vault_artifacts is not None and not vault_requested:
-        raise StateError("--vault-artifacts requires --prepare-vault or --plan-vault.")
+        raise StateError("--vault-artifacts requires --prepare-vault, --plan-vault or --apply-vault.")
     if ops_requested and (args.command != "resume" or args.prepare_infrastructure or args.apply_infrastructure or args.backend_principal_arn or args.execution_profile or sum((args.prepare_ops_access, args.plan_ops_access, args.apply_ops_access, args.verify_ops_access)) != 1):
         raise StateError("SSM is a separate resume operation; choose one preparation, plan or apply step without infrastructure options.")
     if args.ops_plan_sha and not args.apply_ops_access:
@@ -142,13 +148,23 @@ def run(argv: list[str] | None = None) -> int:
             else:
                 from installer_bundle import materialize_release
                 bundle_root = materialize_release(args.release_dir, args.state_dir / "release", release["release_sha"], release["bundle_digest"])
-                from installer_vault_execution import plan_vault_prepare
+                if args.apply_vault:
+                    confirmation = f"APPLY VAULT PREPARE {discovery['aws_account_id']} {region} {name} {args.vault_plan_sha}"
+                    print("This provisions only the reviewed Vault bootstrap runner resources. It does not grant cluster-admin access, deploy or initialize Vault.", file=sys.stderr)
+                    if prompt(None, "Type exactly " + confirmation) != confirmation:
+                        raise StateError("Vault apply cancelled; no resource changes requested.")
                 store.set_stage("vault", "running")
                 try:
-                    vault_plan_sha = plan_vault_prepare(bundle_root, args.state_dir, discovery, profile, args.vault_artifacts)
+                    if args.apply_vault:
+                        from installer_vault_execution import apply_vault_prepare
+                        apply_vault_prepare(bundle_root, args.state_dir, discovery, profile, args.vault_artifacts, args.vault_plan_sha)
+                        ops_result = "vault_bootstrap_provisioned"
+                    else:
+                        from installer_vault_execution import plan_vault_prepare
+                        vault_plan_sha = plan_vault_prepare(bundle_root, args.state_dir, discovery, profile, args.vault_artifacts)
+                        ops_result = "vault_bootstrap_plan_ready"
                 finally:
                     store.set_stage("vault", "awaiting_input")
-                ops_result = "vault_bootstrap_plan_ready"
             store.set_stage("vault", "awaiting_input")
         if ops_requested:
             if checkpoint["stages"].get("infrastructure", {}).get("status") != "complete":
@@ -233,7 +249,7 @@ def run(argv: list[str] | None = None) -> int:
     if args.verify_ops_access:
         remaining = "Vault, secrets, GitOps, workloads, custody, deposit, activation, duty and E2E remain required."
     if vault_requested:
-        remaining = "Vault inputs are prepared only. Artifact mirroring, TLS, deployment, initialization, secrets, workloads and E2E remain required."
+        remaining = "Vault readiness is unproven. Artifact mirroring, TLS, sealed deployment, initialization, secrets, workloads and E2E remain required."
     print(json.dumps({"result": ops_result or ("infrastructure_ready" if args.apply_infrastructure else ("infrastructure_inputs_ready" if args.prepare_infrastructure else "discovery_complete")), "discovery": discovery,
                       "ops_plan_sha256": ops_plan_sha,
                       "vault_plan_sha256": vault_plan_sha,

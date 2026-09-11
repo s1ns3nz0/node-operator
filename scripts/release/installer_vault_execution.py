@@ -1,6 +1,6 @@
 """Create a fresh, private Vault delta plan workspace; never execute retained cache."""
 from __future__ import annotations
-import json, os, shutil, stat, subprocess, tempfile
+import json, os, re, shutil, stat, subprocess, tempfile
 from pathlib import Path
 from installer_infrastructure import InfrastructureError, _read_object
 from installer_ops_execution import _environment, _private, _safe_state, _identity, _hash
@@ -12,13 +12,15 @@ from installer_vault_workspace import validate_vault_workspace
 
 class VaultExecutionError(InfrastructureError): pass
 
-def prepare_vault_plan_workspace(bundle_root: Path,state_dir: Path,discovery: dict,profile: str,minimum_free: int=2*1024**3)->Path:
+def prepare_vault_plan_workspace(bundle_root: Path,state_dir: Path,discovery: dict,profile: str,minimum_free: int=2*1024**3,target_name="vault-bootstrap-plan-work")->Path:
  _safe_state(state_dir)
+ if target_name not in {"vault-bootstrap-plan-work","vault-bootstrap-apply-work"}:
+  raise VaultExecutionError("Vault plan workspace name is not approved.")
  if shutil.disk_usage(state_dir).free < minimum_free: raise VaultExecutionError("Vault plan staging requires at least 2 GiB free private disk space.")
  original=validate_vault_workspace(bundle_root,state_dir,discovery)
  source=bundle_root/"source/infra/terraform"
  if (source/".terraform").exists() or (source/".terraform").is_symlink(): raise VaultExecutionError("Verified Terraform source must not contain a provider cache.")
- target=state_dir/"vault-bootstrap-plan-work"
+ target=state_dir/target_name
  if target.exists() or target.is_symlink(): raise VaultExecutionError("Vault plan workspace already exists; preserve it for reviewed apply.")
  stage=Path(tempfile.mkdtemp(prefix=".vault-plan-",dir=state_dir))/"module"
  try:
@@ -40,7 +42,25 @@ def _run(args, environment, *, output=False):
  try:
   return subprocess.run(args,env=environment,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE if output else subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=1800,check=False)
  except (OSError,subprocess.TimeoutExpired) as error:
-  raise VaultExecutionError("Vault planning command failed or timed out; no apply attempted.") from error
+  raise VaultExecutionError("Vault command failed or timed out; preserve state for reconciliation.") from error
+
+def _baseline_stable(terraform,environment,state_dir):
+ baseline=state_dir/"infrastructure-inputs/baseline.tfvars.json"
+ result=_run(terraform+["plan","-input=false","-detailed-exitcode",f"-var-file={baseline}"],environment)
+ if result.returncode: raise VaultExecutionError("Baseline has drift or could not be reconciled; no Vault delta was planned.")
+ result=_run(terraform+["output","-json"],environment,output=True)
+ expected=_read_object(state_dir/"terraform-work/baseline-output.json")
+ try: current=json.loads(result.stdout) if result.returncode==0 else None
+ except (TypeError,ValueError) as error: raise VaultExecutionError("Baseline output could not be reconciled; no Vault delta was planned.") from error
+ if json.dumps(current,sort_keys=True)!=json.dumps(expected,sort_keys=True): raise VaultExecutionError("Baseline output changed; no Vault delta was planned.")
+ return baseline
+
+def _create_private_json(path,value,message):
+ try:
+  descriptor=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+  with os.fdopen(descriptor,"w",encoding="utf-8") as handle:
+   json.dump(value,handle,sort_keys=True);handle.write("\n");handle.flush();os.fsync(handle.fileno())
+ except OSError as error: raise VaultExecutionError(message) from error
 
 def plan_vault_prepare(bundle_root,state_dir,discovery,profile,artifacts_path):
  """Caller owns lock and verified release. Plan hash is not apply approval."""
@@ -56,12 +76,7 @@ def plan_vault_prepare(bundle_root,state_dir,discovery,profile,artifacts_path):
  stage=Path(tempfile.mkdtemp(prefix=".prepare-",dir=plans))
  try:
   terraform=["terraform",f"-chdir={module}"]
-  baseline=state_dir/"infrastructure-inputs/baseline.tfvars.json"
-  result=_run(terraform+["plan","-input=false","-detailed-exitcode",f"-var-file={baseline}"],environment)
-  if result.returncode: raise VaultExecutionError("Baseline has drift or could not be reconciled; no delta planned.")
-  result=_run(terraform+["output","-json"],environment,output=True)
-  expected=_read_object(state_dir/"terraform-work/baseline-output.json")
-  if result.returncode or json.dumps(json.loads(result.stdout),sort_keys=True)!=json.dumps(expected,sort_keys=True): raise VaultExecutionError("Baseline output changed; no delta planned.")
+  baseline=_baseline_stable(terraform,environment,state_dir)
   saved=stage/"plan.tfplan"; fd=os.open(saved,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600);os.close(fd)
   result=_run(terraform+["plan","-input=false",f"-var-file={baseline}",f"-var-file={delta}",f"-out={saved}"],environment)
   if result.returncode: raise VaultExecutionError("Vault preparation plan failed; no apply attempted.")
@@ -83,3 +98,36 @@ def plan_vault_prepare(bundle_root,state_dir,discovery,profile,artifacts_path):
   if stage.exists():
    shutil.rmtree(stage)
    shutil.rmtree(module)
+
+def apply_vault_prepare(bundle_root,state_dir,discovery,profile,artifacts_path,expected_sha)->None:
+ """Apply only an exactly reviewed Vault prepare plan; caller owns consent."""
+ if not isinstance(expected_sha,str) or re.fullmatch(r"[0-9a-f]{64}",expected_sha) is None: raise VaultExecutionError("Reviewed Vault plan digest is invalid.")
+ prepare_vault_inputs(state_dir,discovery,artifacts_path)
+ _identity(discovery,profile); environment=_environment(profile,discovery)
+ plans=state_dir/"vault-plans"
+ try:
+  _private(plans,"Vault plans directory is unsafe.")
+  prepare=plans/"prepare"; _private(prepare,"Reviewed Vault prepare plan directory is unsafe.")
+ except InfrastructureError as error: raise VaultExecutionError("Vault saved-plan directory is unsafe.") from error
+ saved=prepare/"plan.tfplan"; receipt=prepare/"receipt.json"
+ if _hash(saved)!=expected_sha: raise VaultExecutionError("Reviewed Vault plan digest does not match.")
+ attempt=plans/"prepare-apply-attempt.json"
+ if attempt.exists() or attempt.is_symlink(): raise VaultExecutionError("Vault prepare apply uncertainty exists; do not retry blindly.")
+ success=plans/"prepare-success.json"
+ if success.exists() or success.is_symlink(): raise VaultExecutionError("Vault prepare success record already exists; no apply was started.")
+ module=prepare_vault_plan_workspace(bundle_root,state_dir,discovery,profile,target_name="vault-bootstrap-apply-work")
+ try:
+  terraform=["terraform",f"-chdir={module}"]
+  baseline=_baseline_stable(terraform,environment,state_dir)
+  shown=_run(terraform+["show","-json",str(saved)],environment,output=True)
+  if shown.returncode: raise VaultExecutionError("Reviewed Vault plan cannot be inspected.")
+  try: validate_prepare_receipt(_read_object(receipt),json.loads(shown.stdout),discovery,expected_sha)
+  except (InfrastructureError,TypeError,ValueError,VaultReceiptError,VaultPlanError) as error: raise VaultExecutionError("Reviewed Vault receipt or plan is malformed or outside preparation scope.") from error
+  if _hash(saved)!=expected_sha: raise VaultExecutionError("Reviewed Vault plan changed before apply.")
+  _create_private_json(attempt,{"schema_version":1,"phase":"prepare","plan_sha256":expected_sha},"Vault prepare apply marker could not be created safely.")
+  result=_run(terraform+["apply","-input=false",str(saved)],environment)
+  if result.returncode: raise VaultExecutionError("Vault prepare apply outcome is uncertain; preserve the attempt marker.")
+  _create_private_json(success,{"schema_version":1,"phase":"prepare","plan_sha256":expected_sha,"applied":True},"Vault prepare success record could not be created safely.")
+ finally:
+  # Once an apply attempt is recorded, retain the fresh workspace for reconciliation.
+  if module.exists() and not (attempt.exists() or attempt.is_symlink()): shutil.rmtree(module)

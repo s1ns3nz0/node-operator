@@ -18,6 +18,46 @@ DISCOVERY = {"aws_profile": "test", "aws_account_id": "123456789012", "aws_regio
 
 
 class InstallerCommandTests(unittest.TestCase):
+    def test_vault_apply_confirmation_and_partial_failure_never_mark_ready(self):
+        for outcome in ("cancel", "failure", "success"):
+            with self.subTest(outcome=outcome), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary).resolve() / "state"
+                store = cli.CheckpointStore(directory, {**DISCOVERY, **RELEASE})
+                with store.lock():
+                    store.resume()
+                    store.set_stage("infrastructure", "complete")
+                    store.set_stage("ops_access", "complete")
+                apply = Mock(side_effect=cli.InfrastructureError("uncertain apply") if outcome == "failure" else None)
+                bundle = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=Mock(return_value=directory / "release"))
+                digest = "c" * 64
+                phrase = f"APPLY VAULT PREPARE 123456789012 ap-northeast-1 test-node {digest}"
+                with patch.dict(sys.modules, {"installer_bundle": bundle, "installer_vault_execution": types.SimpleNamespace(apply_vault_prepare=apply)}), patch.object(cli, "discover", return_value=DISCOVERY), patch.object(cli.sys.stdin, "isatty", return_value=True), patch.object(cli, "prompt", return_value="no" if outcome == "cancel" else phrase):
+                    args = ["--release-dir", temporary, "--apply-vault", "--vault-artifacts", str(directory / "artifacts.json"), "--vault-plan-sha", digest]
+                    if outcome == "success":
+                        _, result = self.invoke(directory, "resume", args)
+                        self.assertEqual(result["result"], "vault_bootstrap_provisioned")
+                        self.assertFalse(result["deployment_complete"])
+                    else:
+                        with self.assertRaises(cli.StateError if outcome == "cancel" else cli.InfrastructureError):
+                            self.invoke(directory, "resume", args)
+                    if outcome == "cancel":
+                        apply.assert_not_called()
+                    else:
+                        apply.assert_called_once_with(directory / "release", directory, DISCOVERY, "test", directory / "artifacts.json", digest)
+                        _, status = self.invoke(directory, "status")
+                        self.assertEqual(status["stages"]["vault"]["status"], "awaiting_input")
+
+    def test_vault_apply_rejects_invalid_scope_before_discovery(self):
+        base = ["--apply-vault", "--vault-artifacts", "/unused", "--vault-plan-sha", "a" * 64]
+        for tty, options in ((False, base), (True, base + ["--plan-vault"]),
+                             (True, base + ["--apply-infrastructure"]),
+                             (True, base + ["--verify-ops-access"]),
+                             (True, ["--vault-plan-sha", "a" * 64]),
+                             (True, base[:-1] + ["bad"])):
+            with patch.object(cli.sys.stdin, "isatty", return_value=tty), patch.object(cli, "discover") as discover, self.assertRaises(cli.StateError):
+                cli.run(["resume", "--state-dir", "/unused", *options])
+            discover.assert_not_called()
+
     def test_vault_plan_returns_hash_without_readiness_and_recovers_failed_stage(self):
         for failure in (False, True):
             with tempfile.TemporaryDirectory() as temporary:
