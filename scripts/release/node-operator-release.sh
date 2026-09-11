@@ -387,7 +387,9 @@ verify_completed_phase() {
     *) fail "saved phase could not be checked; verify authentication, backend and state before resuming" ;;
   esac
   temporary="$(mktemp "${checkpoint}.verify.XXXXXX")" || fail "cannot allocate private reconciliation file"
-  if ! terraform -chdir="$module" output -json "$output_name" > "$temporary"; then
+  local output_args=(-json)
+  if [ -n "$output_name" ]; then output_args+=("$output_name"); fi
+  if ! terraform -chdir="$module" output "${output_args[@]}" > "$temporary"; then
     unlink "$temporary"
     fail "saved phase output could not be read from Terraform state"
   fi
@@ -491,11 +493,25 @@ zero_apply() {
   jq '{network_source:"foundation", foundation_network:{vpc_id:.vpc_id, vpc_cidr:.vpc_cidr, system_subnet_ids:.system_subnet_ids, hoodi_subnet_ids:.hoodi_subnet_ids, system_route_table_id:.system_route_table_id, hoodi_route_table_id:.hoodi_route_table_id, hoodi_nat_gateway_id:.hoodi_nat_gateway_id}}' "$foundation_output" > "$foundation_input"
   chmod 600 "$foundation_input"
 
-  copy_module infra/terraform "$baseline_module"
-  cp "$foundation_input" "$baseline_module/foundation-network.auto.tfvars.json"
   write_backend_config "$bootstrap_output" "node-operator/baseline/terraform.tfstate" "$baseline_backend"
-  apply_phase "$baseline_module" "$baseline_config" "$baseline_backend" "$work_dir/baseline.tfplan"
-  capture_terraform_output "$baseline_module" "$baseline_output"
+  if [ -e "$baseline_module" ] || [ -L "$baseline_module" ]; then
+    [ -d "$baseline_module" ] && [ ! -L "$baseline_module" ] || fail "baseline requires its original Terraform directory"
+    local saved_network="$baseline_module/foundation-network.auto.tfvars.json"
+    [ -f "$saved_network" ] && [ ! -L "$saved_network" ] || fail "baseline is missing its original derived network input"
+    cmp -s "$foundation_input" "$saved_network" || fail "baseline network inputs changed; preserve state and reconcile before resuming"
+    verify_s3_backend_identity "$baseline_module" "$bootstrap_output" "node-operator/baseline/terraform.tfstate"
+    if [ -e "$baseline_output" ] || [ -L "$baseline_output" ]; then
+      verify_completed_phase "$baseline_module" "$baseline_config" "$baseline_output" ""
+    else
+      recover_missing_phase_output "$baseline_module" "$baseline_config" "$baseline_output" ""
+    fi
+  else
+    [ ! -e "$baseline_output" ] && [ ! -L "$baseline_output" ] || fail "baseline checkpoint lacks its original Terraform directory"
+    copy_module infra/terraform "$baseline_module"
+    cp "$foundation_input" "$baseline_module/foundation-network.auto.tfvars.json"
+    apply_phase "$baseline_module" "$baseline_config" "$baseline_backend" "$work_dir/baseline.tfplan"
+    capture_terraform_output "$baseline_module" "$baseline_output"
+  fi
   deployment_region="$(jq -er '.aws_region' "$foundation_config")" || fail "foundation configuration lacks aws_region"
   jq -e --arg region "$deployment_region" '
     (.deployment_account_id.value | test("^[0-9]{12}$")) and

@@ -74,8 +74,11 @@ cross-file account/Region binding. Do not connect automatic apply until those
 checks and state-aware partial-apply recovery are implemented. In particular,
 an existing bootstrap/foundation module without an output checkpoint is now
 reconciled in place: original backend/state, a zero-change plan and a successful
-output query are required to reconstruct the checkpoint. No resource apply is
-repeated on that recovery path. A remaining change plan still stops for review;
-approved execution of residual changes and baseline recovery remain unfinished.
+output query are required to reconstruct the checkpoint. Baseline recovery uses
+the same path, additionally checking its original derived network input and exact
+S3 backend. A completed baseline is reconciled without recopying module sources
+or applying resources again. No resource apply is repeated on these recovery
+paths. A remaining change plan still stops for review; approved execution of
+residual changes remains unfinished.
 
 Do not automatically delete partially created resources. Record only controlled status codes, keep sensitive tool output outside normal logs, reconcile actual state on resume, and request missing credentials/authority in context. Preserve a running checkpoint after abrupt interruption until its associated resources and operation are inspected. A successful local checkpoint write is not evidence that a remote operation completed.

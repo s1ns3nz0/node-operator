@@ -31,6 +31,7 @@ metadata() {
   mkdir -p "$directory/.terraform"
   local state_key="node-operator/bootstrap-state/terraform.tfstate"
   if [[ "$directory" == *foundation-network ]]; then state_key="node-operator/foundation-network/terraform.tfstate"; fi
+  if [[ "$directory" == */baseline ]]; then state_key="node-operator/baseline/terraform.tfstate"; fi
   if [ "${TF_CASE:-success}" = wrongbackend ]; then
     printf '%s' '{"backend":{"type":"s3","config":{"bucket":"wrong","key":"wrong","region":"ap-northeast-2","dynamodb_table":"lock","kms_key_id":"kms","encrypt":true}}}' > "$directory/.terraform/terraform.tfstate"
   else
@@ -61,6 +62,8 @@ case "$command" in
       [ "${TF_CASE:-success}" != foundation_output_fail ] || exit 22
       printf '%s\n' '{"vpc_id":"vpc-abc","vpc_cidr":"10.0.0.0/16","system_subnet_ids":["subnet-a","subnet-b"],"hoodi_subnet_ids":["subnet-c"],"system_route_table_id":"rtb-a","hoodi_route_table_id":"rtb-b","hoodi_nat_gateway_id":"nat-a"}'
     else
+      [ "${TF_CASE:-success}" != baseline_output_fail ] || exit 23
+      [ "${#args[@]}" = 2 ] || exit 24
       printf '%s\n' '{"deployment_account_id":{"value":"123456789012"},"cluster_name":{"value":"node-operator"},"gitops_client_ecr_repository_url":{"value":"123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator"},"github_gitops_client_ecr_publisher_role_arn":{"value":"arn:aws:iam::123456789012:role/publisher"}}'
     fi ;;
   state)
@@ -132,7 +135,7 @@ migrate_retry_work="$(run_case migrate_fail fail)"
 run_case success pass "$migrate_retry_work" >/dev/null
 mismatch_retry_work="$(run_case mismatch fail)"
 run_case mismatch fail "$mismatch_retry_work" >/dev/null
-for phase in bootstrap foundation; do
+for phase in bootstrap foundation baseline; do
   partial_work="$(run_case "${phase}_output_fail" fail)"
   if [ "$phase" = foundation ]; then
     metadata_file="$partial_work/foundation-network/.terraform/terraform.tfstate"
@@ -148,10 +151,29 @@ for phase in bootstrap foundation; do
   # Completed resource application must not be repeated to recover its output.
   module="bootstrap-state"
   [ "$phase" != foundation ] || module="foundation-network"
+  [ "$phase" != baseline ] || module="baseline"
   [ "$(rg -c "^$module apply " "$scratch/${phase}_output_fail.log")" = 1 ]
   if rg -q "^$module apply " "$scratch/${phase}_recovered.log"; then
     printf 'checkpoint recovery repeated resource application\n' >&2; exit 1
   fi
   [ -f "$partial_work/${phase}-output.json.recovery-state.json" ]
+done
+run_case completed_resume pass "$success_work" >/dev/null
+if rg -q ' apply ' "$scratch/completed_resume.log"; then
+  printf 'completed deployment was applied again during reconciliation\n' >&2; exit 1
+fi
+for boundary in network backend output; do
+  case "$boundary" in
+    network) boundary_file="$success_work/baseline/foundation-network.auto.tfvars.json" ;;
+    backend) boundary_file="$success_work/baseline/.terraform/terraform.tfstate" ;;
+    output) boundary_file="$success_work/baseline-output.json" ;;
+  esac
+  cp "$boundary_file" "$scratch/baseline-$boundary.original.json"
+  printf '%s\n' '{"changed":true}' > "$boundary_file"
+  run_case "baseline_changed_$boundary" fail "$success_work" >/dev/null
+  if rg -q ' apply ' "$scratch/baseline_changed_$boundary.log"; then
+    printf 'baseline drift triggered resource application\n' >&2; exit 1
+  fi
+  cp "$scratch/baseline-$boundary.original.json" "$boundary_file"
 done
 printf 'PASS bootstrap migration mocks enforce local backup, remote identity, state equivalence, and downstream ordering.\n'
