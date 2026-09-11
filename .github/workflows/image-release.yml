@@ -149,6 +149,14 @@ jobs:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
         run: bash scripts/release/publish-toolchain-image.sh
+      # Role: Retain the exact digest-bound toolchain publication record.
+      - name: Toolchain publication record
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: toolchain-${{ matrix.image }}-publication-record-${{ github.sha }}
+          path: ${{ runner.temp }}/toolchain-publication-records/toolchain-${{ matrix.image }}-publication-record.json
+          if-no-files-found: error
+          retention-days: 30
 
   # Role: Require the reusable Fence SAST and isolated DAST suite before publishing Fence.
   fence-security:

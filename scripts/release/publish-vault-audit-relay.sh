@@ -6,6 +6,8 @@
 # Side effects: Calls GitHub OIDC/AWS STS, pushes to private ECR, and writes Cosign signatures and attestations.
 set -euo pipefail; umask 077
 test "$GITHUB_REF" = refs/heads/main
+[[ "${GITHUB_SHA:?GITHUB_SHA is required}" =~ ^[0-9a-f]{40}$ ]] || { printf '%s\n' 'GITHUB_SHA must be a lowercase commit SHA' >&2; exit 64; }
+[[ "${GITHUB_WORKFLOW:?GITHUB_WORKFLOW is required}" != '' ]] && [[ "${GITHUB_RUN_ID:?GITHUB_RUN_ID is required}" =~ ^[0-9]+$ ]] && [[ "${GITHUB_RUN_ATTEMPT:?GITHUB_RUN_ATTEMPT is required}" =~ ^[0-9]+$ ]] || { printf '%s\n' 'GitHub publication context is invalid' >&2; exit 64; }
 evidence="$RUNNER_TEMP/vault-audit-relay-release-evidence"; mkdir -p "$evidence"
 docker_config="$(mktemp -d)"; token_file="$RUNNER_TEMP/vault-audit-relay-oidc-token"; curl_config="$RUNNER_TEMP/vault-audit-relay-oidc.conf"; response="$RUNNER_TEMP/vault-audit-relay-oidc.json"; creds="$RUNNER_TEMP/vault-audit-relay-creds.json"
 cleanup() { rm -rf "$docker_config"; rm -f "$token_file" "$curl_config" "$response" "$creds"; }; trap cleanup EXIT
@@ -15,6 +17,7 @@ identity='https://github.com/s1ns3nz0/node-operator/.github/workflows/image-rele
 issuer='https://token.actions.githubusercontent.com'
 input_sha="$({ sha256sum .ci/vault-audit-relay/Dockerfile go.mod cmd/vault-audit-relay/main.go cmd/vault-audit-relay/main_test.go; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
 local_image="$repository:local-${GITHUB_SHA}-${GITHUB_RUN_ID}"
+[[ "$input_sha" =~ ^[a-f0-9]{64}$ ]] || { printf '%s\n' 'audit relay input hash is invalid' >&2; exit 65; }
 label_format='{{ index .Config.Labels "io.node-operator.vault-audit-relay-input-sha" }}'
 scripts/ci/install-validator-signing-fence-release-tools.sh "$RUNNER_TEMP/vault-audit-relay-tools"; export PATH="$RUNNER_TEMP/vault-audit-relay-tools:$PATH"
 bash scripts/ci/test-release-scan-cosign-roundtrip.sh
@@ -44,4 +47,17 @@ cosign verify-attestation --type https://github.com/s1ns3nz0/node-operator/attes
 jq -s -e --arg digest "$digest" --arg revision "$GITHUB_SHA" 'map(.payload|@base64d|fromjson)|any(.[]; .predicateType == "https://slsa.dev/provenance/v1" and (.subject|any(.digest.sha256 == ($digest|sub("^sha256:";"")))) and (.predicate.buildDefinition.resolvedDependencies|any(.digest.gitCommit == $revision)))' "$evidence/provenance-verification.json" >/dev/null
 jq -s -e --arg digest "$digest" 'map(.payload|@base64d|fromjson)|any(.[]; (.subject|any(.digest.sha256 == ($digest|sub("^sha256:";"")))) and .predicate.bomFormat == "CycloneDX" and .predicate.metadata.component.version == $digest)' "$evidence/sbom-verification.json" >/dev/null
 bash scripts/ci/verify-release-scan-attestation.sh "$evidence/scan-verification.json" "$digest" "$evidence/registry-scan-summary.json"
+record_output="${PUBLICATION_RECORD_OUTPUT:-$evidence/vault-audit-relay-publication-record.json}"
+case "$record_output" in /*) ;; *) printf '%s\n' 'publication record output must be absolute' >&2; exit 64 ;; esac
+record_parent="$(dirname "$record_output")"
+[ -d "$record_parent" ] && [ ! -L "$record_parent" ] && [ ! -e "$record_output" ] && [ ! -L "$record_output" ] || { printf '%s\n' 'publication record path is unsafe' >&2; exit 65; }
+record_parent_mode="$(stat -c '%a' "$record_parent" 2>/dev/null || stat -f '%OLp' "$record_parent")"
+[ "$record_parent_mode" = 700 ] || { printf '%s\n' 'publication record parent must be private' >&2; exit 65; }
+stage="$(mktemp "$record_parent/.vault-audit-relay-publication-record.XXXXXX")"
+trap 'rm -f "$stage"; cleanup' EXIT
+jq -n --arg revision "$GITHUB_SHA" --arg image_ref "$subject" --arg digest "$digest" --arg input_sha "$input_sha" --arg workflow "${GITHUB_WORKFLOW:?GITHUB_WORKFLOW is required}" --arg run_id "$GITHUB_RUN_ID" --arg invocation "github-actions:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}" \
+  '{schema_version:1,component:"vault-audit-relay",kind:"image",release_revision:$revision,build_revision:$revision,third_party_source_revision:null,image_ref:$image_ref,manifest_digest:$digest,input_sha256:$input_sha,publication:{workflow:$workflow,run_id:$run_id,invocation:$invocation},verification:{method:"cosign-and-slsa",status:"passed"}}' > "$stage"
+chmod 600 "$stage"
+ln "$stage" "$record_output" || { printf '%s\n' 'refusing to overwrite publication record' >&2; exit 65; }
+rm -f "$stage"
 printf 'private_image=%s\nsource_revision=%s\nreproducibility_input_sha256=%s\nrelease_verification=PASS\n' "$subject" "$GITHUB_SHA" "$input_sha" >> "$GITHUB_STEP_SUMMARY"

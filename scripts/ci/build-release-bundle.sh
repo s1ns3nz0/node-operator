@@ -9,15 +9,30 @@ set -euo pipefail
 # policy/IaC source needed to review them.  Fixtures, raw scanner evidence,
 # credentials, and release-tool reports are outside this boundary.
 
-if [ "$#" -ne 1 ]; then
-  printf 'usage: %s OUTPUT_DIRECTORY\n' "$0" >&2
+if [ "$#" -ne 1 ] && [ "$#" -ne 5 ]; then
+  printf 'usage: %s OUTPUT_DIRECTORY [--vault-bootstrap-record FILE --audit-relay-record FILE]\n' "$0" >&2
+  exit 64
+fi
+
+output_directory="$1"
+vault_bootstrap_record=''
+audit_relay_record=''
+shift
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --vault-bootstrap-record) [ -z "$vault_bootstrap_record" ] || exit 64; vault_bootstrap_record="${2:-}"; shift 2 ;;
+    --audit-relay-record) [ -z "$audit_relay_record" ] || exit 64; audit_relay_record="${2:-}"; shift 2 ;;
+    *) exit 64 ;;
+  esac
+done
+if { [ -n "$vault_bootstrap_record" ] && [ -z "$audit_relay_record" ]; } || { [ -z "$vault_bootstrap_record" ] && [ -n "$audit_relay_record" ]; }; then
+  printf 'both exact publication records are required to build an installer artifact index\n' >&2
   exit 64
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/lib/common.sh"
 
-output_directory="$1"
 root="$(repo_root)"
 require_command kubectl
 require_command node
@@ -33,13 +48,14 @@ temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
 stage_directory="$temporary_directory/stage"
 mkdir -p "$stage_directory/source" "$stage_directory/rendered"
+chmod 0700 "$stage_directory/rendered"
 
 path_is_in_release_boundary() {
   case "$1" in
     docs/gitops/vault-tls-internal-ca.example.yaml)
       return 0
       ;;
-    scripts/release/installer_state.py|scripts/release/installer_preflight.py|scripts/release/installer_bundle.py|scripts/release/installer_infrastructure.py|scripts/release/installer_ops_access.py|scripts/release/installer_ops_execution.py|scripts/release/installer_ops_verify.py|scripts/release/installer_vault_inputs.py|scripts/release/installer_vault_plan.py|scripts/release/installer_vault_workspace.py|scripts/release/installer_vault_execution.py|scripts/release/installer_vault_receipt.py|scripts/release/installer_files.py|scripts/release/interactive_deploy.py|scripts/release/render-private-cert-manager-values.py)
+    scripts/release/installer_state.py|scripts/release/installer_preflight.py|scripts/release/installer_bundle.py|scripts/release/installer_infrastructure.py|scripts/release/installer_ops_access.py|scripts/release/installer_ops_execution.py|scripts/release/installer_ops_verify.py|scripts/release/installer_vault_inputs.py|scripts/release/installer_vault_plan.py|scripts/release/installer_vault_workspace.py|scripts/release/installer_vault_execution.py|scripts/release/installer_vault_receipt.py|scripts/release/installer_files.py|scripts/release/interactive_deploy.py|scripts/release/render-private-cert-manager-values.py|scripts/release/create-installer-artifact-index.py)
       return 0
       ;;
     deploy/kyverno/kustomization.yaml|deploy/kyverno/policies/*.yaml)
@@ -69,6 +85,14 @@ done < <(git -C "$root" ls-tree -r --name-only "$source_revision" | LC_ALL=C sor
 
 kubectl kustomize "$stage_directory/source/deploy/prysm" > "$stage_directory/rendered/prysm.yaml"
 kubectl kustomize "$stage_directory/source/deploy/nethermind" > "$stage_directory/rendered/nethermind.yaml"
+if [ -n "$vault_bootstrap_record" ]; then
+  "$stage_directory/source/scripts/release/create-installer-artifact-index.py" \
+    --release-sha "$source_revision" \
+    --approved-catalog "$root/.ci/gitops/approved-oci-artifacts.json" \
+    --vault-bootstrap-record "$vault_bootstrap_record" \
+    --audit-relay-record "$audit_relay_record" \
+    --output "$stage_directory/rendered/installer-artifact-index.json"
+fi
 
 # Kubernetes Secret objects and common private-key encodings do not belong in
 # a distributable release bundle.  This is a boundary check, not a substitute

@@ -9,6 +9,7 @@ fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/lib/common.sh"
+root="$(repo_root)"
 require_command jq
 require_command tar
 require_command cmp
@@ -17,8 +18,16 @@ temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
 
 first="${1:-$temporary_directory/first}"
-"$script_dir/build-release-bundle.sh" "$first" >/dev/null
-"$script_dir/build-release-bundle.sh" "$temporary_directory/second" >/dev/null
+private_records="$temporary_directory/records"
+mkdir -m 0700 "$private_records"
+source_revision="$(git -C "$root" rev-parse HEAD)"
+jq -n --arg component vault-bootstrap --arg revision "$source_revision" --arg method input-hash-and-registry-digest \
+  '{schema_version:1,component:$component,kind:"image",release_revision:$revision,build_revision:$revision,third_party_source_revision:null,image_ref:("ghcr.io/example/"+$component+"@sha256:"+("a"*64)),manifest_digest:("sha256:"+("a"*64)),input_sha256:("b"*64),publication:{workflow:"fixture",run_id:"1",invocation:"fixture"},verification:{method:$method,status:"passed"}}' > "$private_records/vault-bootstrap.json"
+jq -n --arg component vault-audit-relay --arg revision "$source_revision" --arg method cosign-and-slsa \
+  '{schema_version:1,component:$component,kind:"image",release_revision:$revision,build_revision:$revision,third_party_source_revision:null,image_ref:("private.example/"+$component+"@sha256:"+("c"*64)),manifest_digest:("sha256:"+("c"*64)),input_sha256:("d"*64),publication:{workflow:"fixture",run_id:"2",invocation:"fixture"},verification:{method:$method,status:"passed"}}' > "$private_records/vault-audit-relay.json"
+bundle_record_args=(--vault-bootstrap-record "$private_records/vault-bootstrap.json" --audit-relay-record "$private_records/vault-audit-relay.json")
+"$script_dir/build-release-bundle.sh" "$first" "${bundle_record_args[@]}" >/dev/null
+"$script_dir/build-release-bundle.sh" "$temporary_directory/second" "${bundle_record_args[@]}" >/dev/null
 
 for filename in node-operator-release-bundle.tar node-operator-release-bundle.sha256 manifest.json provenance-input.json; do
   cmp "$first/$filename" "$temporary_directory/second/$filename"
@@ -34,6 +43,7 @@ for required_path in \
   bundle-manifest.json \
   rendered/prysm.yaml \
   rendered/nethermind.yaml \
+  rendered/installer-artifact-index.json \
   source/deploy/base/namespace.yaml \
   source/deploy/prysm/kustomization.yaml \
   source/deploy/nethermind/kustomization.yaml \
@@ -68,6 +78,7 @@ for required_path in \
   source/scripts/release/installer_vault_workspace.py \
   source/scripts/release/installer_vault_execution.py \
   source/scripts/release/prepare-vault-bootstrap-tls.sh \
+  source/scripts/release/create-installer-artifact-index.py \
   source/scripts/release/render-private-cert-manager-values.py \
   source/scripts/release/deploy-private-cert-manager.sh \
   source/release/cert-manager-values.yaml.example \
@@ -114,6 +125,7 @@ rg -F 'name: prysm-hoodi-gp3-kms' "$extract_directory/rendered/prysm.yaml" >/dev
 rg -F 'name: nethermind-hoodi-gp3-kms' "$extract_directory/rendered/nethermind.yaml" >/dev/null
 cmp <(git show HEAD:deploy/prysm/kustomization.yaml) "$extract_directory/source/deploy/prysm/kustomization.yaml"
 cmp <(git show HEAD:policy/decision.rego) "$extract_directory/source/policy/decision.rego"
+jq -e --arg revision "$source_revision" '.schema_version == 1 and .release_revision == $revision and (.components | length == 10)' "$extract_directory/rendered/installer-artifact-index.json" >/dev/null
 "$extract_directory/source/scripts/release/node-operator-release.sh" verify --bundle-root "$extract_directory" >/dev/null
 prepared="$temporary_directory/prepared-validator"
 "$extract_directory/source/scripts/release/prepare-hoodi-validator-deployment.sh" \

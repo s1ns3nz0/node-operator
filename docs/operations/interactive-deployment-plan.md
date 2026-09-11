@@ -155,6 +155,14 @@ the installer or Vault CodeBuild image: that image currently lacks the Python
 runtime required by the renderer, and a fresh-only install must be an explicit
 reconcilable stage before TLS rather than an implicit Vault retry side effect.
 
+Release-bundle generation can now accept the exact Vault bootstrap and audit
+relay publication records together and deterministically stage a ten-component
+installer artifact index. Supplying only one record or a record for another
+release fails closed. Omitting both preserves non-publishing PR bundle checks
+and does not claim a usable artifact index. Authentic exact-run record
+retrieval and main-branch publication gating remain required before a signed
+release can carry this index.
+
 Always pass Region, cluster and SSM instance from the verified handoff into
 private transport commands. Existing historical operator-auth scripts contain
 Seoul/account-specific defaults and must not be reused unchanged for a fresh
