@@ -12,16 +12,45 @@ spec.loader.exec_module(module)
 
 
 class PreflightTests(unittest.TestCase):
+    def test_missing_tools_are_aggregated_without_executing_or_installing(self):
+        with patch.object(module.shutil, "which", side_effect=lambda tool: "/bin/" + tool if tool in {"aws", "jq"} else None), patch.object(module.subprocess, "run") as run:
+            result = module.local_prerequisites()
+        run.assert_not_called()
+        self.assertEqual(result["missing_by_stage"]["infrastructure"], ["terraform", "shasum", "rg"])
+        self.assertIn("session-manager-plugin", result["missing_by_stage"]["ops_access"])
+        self.assertIn("vault", result["missing_by_stage"]["vault"])
+        self.assertEqual(result["versions"], "not_verified")
+
+    def test_installed_tools_do_not_imply_runtime_readiness(self):
+        with patch.object(module.shutil, "which", return_value="/bin/tool"):
+            result = module.local_prerequisites()
+        self.assertTrue(all(not missing for missing in result["missing_by_stage"].values()))
+        self.assertEqual(result["runtime_health"], "not_verified")
+
     def test_discovery_does_not_claim_apply_permission(self):
         responses = [{"Account": "123456789012", "Arn": "arn:aws:sts::123456789012:assumed-role/operator/session"},
                      {"AvailabilityZones": [{"ZoneName": "ap-northeast-1c", "State": "available"}, {"ZoneName": "ap-northeast-1a", "State": "available"}]},
-                     {"clusters": ["test-node"]}]
+                     {"clusters": ["test-node"]}, [], []]
         with patch.object(module, "aws_read", side_effect=responses) as read:
             result = module.discover("test", "ap-northeast-1", "test-node")
         self.assertEqual(result["availability_zones"], ["ap-northeast-1a", "ap-northeast-1c"])
         self.assertTrue(result["cluster_name_present"])
         self.assertEqual(result["provisioning_permissions"], "not_verified")
-        self.assertEqual([c.args[2][0] for c in read.call_args_list], ["sts", "ec2", "eks"])
+        self.assertEqual([c.args[2][0] for c in read.call_args_list], ["sts", "ec2", "eks", "s3api", "dynamodb"])
+
+    def test_backend_collision_does_not_authorize_adoption(self):
+        bucket = "test-node-tfstate-123456789012-apnortheast1"
+        with patch.object(module, "aws_read", side_effect=[[bucket], ["test-node-terraform-lock"]]):
+            result = module.backend_collisions("test", "ap-northeast-1", "test-node", "123456789012")
+        self.assertEqual(result["account_owned_bucket_conflicts"], [bucket])
+        self.assertEqual(result["regional_table_conflicts"], ["test-node-terraform-lock"])
+        self.assertEqual(result["existing_resource_adoption"], "not_authorized")
+        self.assertEqual(result["global_bucket_availability"], "not_verified")
+
+    def test_invalid_backend_inventory_is_not_treated_as_empty(self):
+        for response in [None, {}, [123], ""]:
+            with patch.object(module, "aws_read", side_effect=[response, []]), self.assertRaises(module.PreflightError):
+                module.backend_collisions("test", "ap-northeast-1", "test-node", "123456789012")
 
     def test_invalid_inputs_never_call_aws(self):
         for profile, region, name in [("bad profile", "ap-northeast-1", "test"), ("ok", "us-east-1", "test"), ("ok", "ap-northeast-1", "../bad")]:

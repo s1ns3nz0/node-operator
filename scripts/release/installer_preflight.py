@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import shutil
@@ -12,6 +13,28 @@ class PreflightError(RuntimeError):
     """A non-sensitive actionable preflight failure."""
 
 
+def local_prerequisites() -> dict:
+    """Report missing stage tools together, without installing or executing them.
+
+    Presence is not a version or runtime-health check. Keep optional custody
+    tools separate so a node-only installation need not generate a validator.
+    """
+    stages = {
+        "infrastructure": ("aws", "terraform", "jq", "shasum", "rg"),
+        "ops_access": ("aws", "session-manager-plugin", "kubectl", "nc", "mktemp", "unlink"),
+        "vault": ("vault", "openssl", "kubectl"),
+        "custody": ("curl", "shasum", "tar", "mkdir", "chmod", "find", "gh"),
+    }
+    available = {tool: shutil.which(tool) is not None
+                 for tool in sorted({tool for tools in stages.values() for tool in tools})}
+    return {
+        "missing_by_stage": {stage: [tool for tool in tools if not available[tool]]
+                             for stage, tools in stages.items()},
+        "versions": "not_verified",
+        "runtime_health": "not_verified",
+    }
+
+
 def validate_inputs(profile: str, region: str, name: str) -> None:
     if not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", profile):
         raise PreflightError("Use an AWS profile name containing letters, digits, dots, underscores or hyphens.")
@@ -19,6 +42,28 @@ def validate_inputs(profile: str, region: str, name: str) -> None:
         raise PreflightError("Choose ap-northeast-1 or ap-northeast-2.")
     if not re.fullmatch(r"[a-z][a-z0-9-]{1,18}[a-z0-9]", name):
         raise PreflightError("Deployment name must be 3-20 lowercase DNS characters.")
+
+
+def backend_collisions(profile: str, region: str, name: str, account: str) -> dict:
+    """Check deterministic backend names; never treat foreign S3 names as free.
+
+    AWS CLI pagination must stay enabled. This checks account-owned buckets,
+    not global S3 availability, and cannot authorize adoption on resume.
+    """
+    bucket = f"{name}-tfstate-{account}-{region.replace('-', '')}"
+    logs = f"{bucket[:48]}-{hashlib.sha256(bucket.encode()).hexdigest()[:8]}-logs"
+    table = f"{name}-terraform-lock"
+    buckets = aws_read(profile, region, ["s3api", "list-buckets", "--query", "Buckets[].Name"])
+    tables = aws_read(profile, region, ["dynamodb", "list-tables", "--query", "TableNames"])
+    for values in (buckets, tables):
+        if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+            raise PreflightError("AWS backend inventory is incomplete; no resource name is considered available.")
+    return {
+        "account_owned_bucket_conflicts": sorted({bucket, logs}.intersection(buckets)),
+        "regional_table_conflicts": [table] if table in tables else [],
+        "global_bucket_availability": "not_verified",
+        "existing_resource_adoption": "not_authorized",
+    }
 
 
 def aws_read(profile: str, region: str, arguments: list[str]) -> object:
@@ -40,7 +85,7 @@ def aws_read(profile: str, region: str, arguments: list[str]) -> object:
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise PreflightError("AWS discovery timed out or could not start; check CLI connectivity and retry.") from exc
     if result.returncode:
-        raise PreflightError("AWS read-only discovery failed; check the selected profile login and STS/EC2/EKS read permissions. No resources were created.")
+        raise PreflightError("AWS read-only discovery failed; check the selected profile login and the requested service read permissions. No resources were created.")
     try:
         return json.loads(result.stdout)
     except (ValueError, TypeError) as exc:
@@ -72,5 +117,7 @@ def discover(profile: str, region: str, name: str) -> dict:
     return {"aws_account_id": account, "aws_profile": profile, "aws_region": region,
             "deployment_name": name, "availability_zones": available[:2],
             "cluster_name_present": name in clusters["clusters"],
+            "local_prerequisites": local_prerequisites(),
+            "backend_collisions": backend_collisions(profile, region, name, account),
             "provisioning_permissions": "not_verified", "quotas": "not_verified",
             "other_resource_collisions": "not_verified"}

@@ -20,8 +20,26 @@
 3. `release/hoodi-release-contract.json` still declares Seoul while interfaces permit Tokyo. Static Prysm/Nethermind manifests embed account 106760547719 and Seoul artifacts/AZs. Render from target-specific verified outputs; do not reuse those values for fresh installs.
 4. Secret source of truth is `docs/security/vault-v2-secret-inventory.md`. Inventory and validate the entire document before task9, not only validator signing secrets.
 5. GitOps publication and registry permissions still require independent adapters. Image destination digests are not first-run user inputs in the intended interface.
-6. Release bundle allowlist currently includes shell entrypoints only. New Python support modules require explicit inclusion and archive contract tests.
+6. The baseline release did not include the new installer Python modules. The implementation branch now explicitly packages its four support modules and tests their archive presence; future modules must extend that allowlist and contract.
 
 ## Evidence limits
 
 This inventory is source inspection, not a live-state verification. No deployment or secret access was performed. Tasks1 discovery is complete for the current release orchestration; detailed phase contracts and E2E proof remain required before claiming the entire installer works.
+
+## Additional preflight and resume findings
+
+- Backend names come from `infra/bootstrap-state/main.tf`: the state bucket
+  includes account and region; the access-log bucket includes a truncated name
+  and hash; the lock table is `${name}-terraform-lock`. Account bucket inventory
+  cannot establish global S3 name availability or authorize resource adoption.
+- A different region alone does not isolate IAM names. Foundation flow-log role
+  `${name}-foundation-flow-logs` and baseline roles using `${name}-baseline-`
+  require account-wide collision checks before provisioning.
+- Baseline node capacity is intentionally not workload-ready: system desired
+  size is one while consensus and execution desired sizes default to zero
+  (`infra/terraform/variables.tf`). Workload deployment must explicitly connect
+  capacity changes and their quota checks; EKS creation is not node completion.
+- `scripts/release/node-operator-release.sh` currently rejects an incomplete
+  bootstrap/foundation module directory and suggests a new work directory.
+  The installer must reconcile the existing Terraform state instead; blindly
+  starting over can collide with partially created infrastructure.

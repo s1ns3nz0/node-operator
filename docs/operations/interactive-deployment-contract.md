@@ -17,7 +17,7 @@ scripts/release/node-operator-install.sh resume \
   --state-dir /absolute/new-private-checkpoint
 ```
 
-Missing initial profile/Region/name values are prompted only in a terminal. Release assets must come from the trusted release workflow; self-consistent manifests are not standalone public-key signature verification. Permission, quota and non-EKS resource collision checks remain explicitly `not_verified`.
+Missing initial profile/Region/name values are prompted only in a terminal. Release assets must come from the trusted release workflow; self-consistent manifests are not standalone public-key signature verification. Discovery reports missing local commands by infrastructure, private-access, Vault and optional custody stages; command presence does not prove supported versions or runtime health. It checks account-owned backend bucket names and regional DynamoDB lock-table names without authorizing adoption. Global S3 name availability, provisioning permissions, quotas and remaining resource collisions are still explicitly unverified. Inventory failures stop discovery instead of being treated as empty inventories.
 
 ## Input boundaries
 
