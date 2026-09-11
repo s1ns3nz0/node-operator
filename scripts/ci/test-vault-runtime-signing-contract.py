@@ -4,6 +4,7 @@
 from pathlib import Path
 import os
 import re
+import runpy
 import subprocess
 import tempfile
 
@@ -36,6 +37,7 @@ def validate(workflow, verifier):
 
 
 workflow = (ROOT / ".github/workflows/vault-runtime-candidate-verification.yml").read_text()
+workflow = runpy.run_path(str(ROOT / "scripts/ci/lib/workflow-source.py"))["expand_text"](workflow)
 verifier = (ROOT / "scripts/ci/verify-vault-runtime-signed-evidence.sh").read_text()
 validate(workflow, verifier)
 mutations = [

@@ -3,6 +3,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/lib/common.sh"
+source "$script_dir/lib/workflow-contract.sh"
 root="$(repo_root)"
 fail() { printf 'FAIL ECR signer mirror contract: %s\n' "$*" >&2; exit 1; }
 
@@ -74,10 +75,10 @@ for required in \
   'docker push' \
   'describe-images' \
   '::add-mask::'; do
-  grep -Fq "$required" "$workflow" || fail "mirror workflow omits contract fragment: $required"
+  grep -Fq "$required" <(workflow_source "$workflow") || fail "mirror workflow omits contract fragment: $required"
 done
 
-if grep -Eq '^[[:space:]]*packages:[[:space:]]*write' "$workflow" || grep -Fq 'ecr:*' "$workflow"; then
+if grep -Eq '^[[:space:]]*packages:[[:space:]]*write' "$workflow" || grep -Fq 'ecr:*' <(workflow_source "$workflow"); then
   fail 'mirror workflow requests broad package or ECR permission'
 fi
 

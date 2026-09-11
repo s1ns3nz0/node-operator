@@ -9,39 +9,16 @@ permissions:
 
 jobs:
   mirror:
+    name: Artifact Mirror
     runs-on: ubuntu-24.04
     environment: validator-runtime-ecr-mirror
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Publish | Mirror reviewed runtime digests to private ECR
+      - name: Reviewed runtime digests to private ECR
         env:
           AWS_REGION: ap-northeast-2
           ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
           AWS_ROLE_ARN: ${{ vars.VALIDATOR_RUNTIME_ECR_MIRROR_ROLE_ARN }}
-        run: |
-          set -euo pipefail
-          test -n "$ACCOUNT_ID"; test -n "$AWS_ROLE_ARN"
-          approved=.ci/validator/approved-runtime-images.json
-          web3signer="$(jq -er '.images.web3signer.source' "$approved")"
-          postgres="$(jq -er '.images.postgres.source' "$approved")"
-          [[ "$web3signer" =~ ^consensys/web3signer@sha256:[a-f0-9]{64}$ ]]
-          [[ "$postgres" =~ ^postgres@sha256:[a-f0-9]{64}$ ]]
-          token="$(curl --fail --silent -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -er .value)"
-          aws sts assume-role-with-web-identity --role-arn "$AWS_ROLE_ARN" --role-session-name "validator-runtime-mirror-${GITHUB_RUN_ID}" --web-identity-token "$token" --duration-seconds 900 > "$RUNNER_TEMP/creds.json"
-          export AWS_ACCESS_KEY_ID="$(jq -r .Credentials.AccessKeyId "$RUNNER_TEMP/creds.json")" AWS_SECRET_ACCESS_KEY="$(jq -r .Credentials.SecretAccessKey "$RUNNER_TEMP/creds.json")" AWS_SESSION_TOKEN="$(jq -r .Credentials.SessionToken "$RUNNER_TEMP/creds.json")"
-          registry="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$registry"
-          mirror() {
-            local component="$1" source="$2" repo="node-operator-baseline-validator-runtime-$1" tag digest source_digest
-            tag="${source#*@sha256:}"
-            source_digest="sha256:$tag"
-            docker buildx imagetools create --tag "$registry/$repo:$tag" "$source"
-            digest="$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$repo" --image-ids "imageTag=$tag" --query 'imageDetails[0].imageDigest' --output text)"
-            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
-            [[ "$digest" == "$source_digest" ]] || { echo "ECR digest differs from reviewed source digest" >&2; exit 1; }
-            printf '%s_private_image=%s/%s@%s\n' "$component" "$registry" "$repo" "$digest" >> "$GITHUB_STEP_SUMMARY"
-          }
-          mirror web3signer "$web3signer"
-          mirror postgres "$postgres"
+        run: bash scripts/release/mirror-validator-runtime.sh

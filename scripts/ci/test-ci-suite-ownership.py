@@ -2,13 +2,14 @@
 # Check objective: Keep each required CI suite assigned exactly once to its workflow owner.
 """Keep common required CI suites present exactly once across their owners."""
 from pathlib import Path
+import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 OWNERS = {
-    "ci-policy.yml": ("test-policy.sh", "test-terraform-policy.sh", "test-conftest.sh"),
-    "policy-foundation.yml": ("test-normalizer.sh", "test-pr-gate.sh",
-                              "test-pr-baseline-findings.sh", "test-dast-target-contract.sh"),
+    "ci-policy.yml": ("test-policy.sh", "test-terraform-policy.sh", "test-conftest.sh",
+                      "test-normalizer.sh", "test-pr-gate.sh",
+                      "test-pr-baseline-findings.sh", "test-dast-target-contract.sh"),
     "ci-quality.yml": ("test-script-quality.sh",),
 }
 
@@ -17,6 +18,9 @@ class SuiteOwnership(unittest.TestCase):
     def test_required_suites_have_one_owner(self):
         workflows = {name: (ROOT / ".github/workflows" / name).read_text()
                      for name in OWNERS}
+        for name, source in workflows.items():
+            for suite in re.findall(r"bash scripts/ci/run-suite.sh ([a-z0-9-]+)", source):
+                workflows[name] += "\n" + (ROOT / "scripts/ci/suites" / (suite + ".txt")).read_text()
         for owner, scripts in OWNERS.items():
             for script in scripts:
                 with self.subTest(script=script):

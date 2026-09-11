@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   upstream-failure:
+    name: Upstream Failure Gate
     if: >-
       github.event.workflow_run.conclusion != 'success' &&
       github.event.workflow_run.event == 'pull_request' &&
@@ -26,7 +27,7 @@ jobs:
     env:
       SUBJECT_SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
-      - name: Prepare | Resolve trusted control-plane and current PR head
+      - name: Trusted control-plane and current PR head
         id: context
         env:
           GH_TOKEN: ${{ github.token }}
@@ -41,12 +42,13 @@ jobs:
           ref: ${{ steps.context.outputs.trusted_sha }}
           fetch-depth: 1
           persist-credentials: false
-      - name: Publish | Publish failed exact-SHA evidence check
+      - name: Failed Exact-SHA Evidence Check
         env:
           GH_TOKEN: ${{ github.token }}
           DETAILS_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: scripts/ci/publish-pr-evidence-check.sh "$SUBJECT_SHA" - "$DETAILS_URL"
   evidence-gate:
+    name: Pull Request Policy
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'pull_request' &&
@@ -64,7 +66,7 @@ jobs:
       SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:b224334bb3b86a086dea3b11c1e8ad6e3b619dc350af3f9f54c4a85ba576f4c9
       TERRAFORM_IMAGE: ghcr.io/s1ns3nz0/node-operator/terraform-validation@sha256:1f2ac75ec09b43b4a79eaaae94eca8f8f1655315a5aa81e7c80d3a8a14ac189a
     steps:
-      - name: Prepare | Resolve trusted control-plane and current PR head
+      - name: Trusted control-plane and current PR head
         id: context
         env:
           GH_TOKEN: ${{ github.token }}
@@ -81,118 +83,56 @@ jobs:
           ref: ${{ steps.context.outputs.trusted_sha }}
           fetch-depth: 1
           persist-credentials: false
-      - name: Prepare | Checkout pull-request source as untrusted Terraform input
+      - name: Pull-request source as untrusted Terraform input
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.SUBJECT_SHA }}
           path: .pr-source
           fetch-depth: 0
           persist-credentials: false
-      - name: Prepare | Checkout pull-request base as untrusted scanner input
+      - name: Pull-request base as untrusted scanner input
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.BASE_SHA }}
           path: .base-source
           fetch-depth: 0
           persist-credentials: false
-      - name: Check | Reject pull-request scanner policy replacement
-        run: |
-          while IFS= read -r -d '' path; do
-            name="${path##*/}"
-            case "$path:$name" in
-              .semgrep/*:*|*/.semgrep/*:*|*:*.semgrepignore|*:*.gitleaks.toml|*:*.gitleaksignore|*:*.checkov.yml|*:*.checkov.yaml|*:osv-scanner.toml|*:.osv-scanner.toml)
-                echo "Pull requests cannot replace trusted scanner policy or ignore files: $path" >&2
-                exit 1
-                ;;
-            esac
-          done < <(git -C .pr-source diff --name-only -z "$BASE_SHA" "$SUBJECT_SHA")
-      - name: Evidence | Collect trusted security evidence from untrusted source
+      - name: Scanner Policy Boundary
+        run: bash scripts/ci/workflows/reject-scanner-policy-replacement.sh
+      - name: Trusted PR Security Evidence
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
-        run: |
-          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
-          docker pull "$SCANNER_IMAGE"
-          mkdir -p "$RUNNER_TEMP/head-security-evidence"
-          docker run --rm \
-            --env SKIP_TERRAFORM=true \
-            --env SEMGREP_RULES=/trusted-config/semgrep.yml \
-            --env GITLEAKS_CONFIG=/trusted-config/gitleaks.toml \
-            --env GITLEAKS_IGNORE_PATH=/trusted-config/gitleaksignore \
-            --env CHECKOV_CONFIG_FILE=/trusted-config/checkov.yml \
-            --env OSV_CONFIG_FILE=/trusted-config/osv-scanner.toml \
-            --volume "$GITHUB_WORKSPACE/.semgrep/ci.yml:/trusted-config/semgrep.yml:ro" \
-            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaks.toml:/trusted-config/gitleaks.toml:ro" \
-            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaksignore:/trusted-config/gitleaksignore:ro" \
-            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/checkov.yml:/trusted-config/checkov.yml:ro" \
-            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/osv-scanner.toml:/trusted-config/osv-scanner.toml:ro" \
-            --volume "$GITHUB_WORKSPACE/.pr-source:/workspace:ro" \
-            --volume "$RUNNER_TEMP/head-security-evidence:/evidence" \
-            "$SCANNER_IMAGE" /evidence "$SUBJECT_SHA" "$BASE_SHA"
-          mkdir -p "$EVIDENCE_ROOT/raw"
-          cp "$RUNNER_TEMP/head-security-evidence"/*.json "$EVIDENCE_ROOT/raw/"
+        run: bash scripts/ci/workflows/collect-head-security.sh
       - uses: open-policy-agent/setup-opa@b2b258e089860efaadaaf71bf6e3aecb4a3eeff1 # v2.4.0
         with:
           version: v1.17.0
-      - name: Evidence | Collect Terraform evidence using the trusted collector
+      - name: Terraform evidence using the trusted collector
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
-        run: |
-          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
-          docker pull "$TERRAFORM_IMAGE"
-          mkdir -p "$RUNNER_TEMP/terraform-evidence"
-          docker run --rm --network none --user "$(id -u):$(id -g)" \
-            --env COLLECTOR_MODE=terraform \
-            --env TERRAFORM_PLUGIN_MIRROR=/opt/terraform-plugin-mirror \
-            --volume "$GITHUB_WORKSPACE:/trusted:ro" \
-            --volume "$GITHUB_WORKSPACE/.pr-source:/source:ro" \
-            --volume "$RUNNER_TEMP/terraform-evidence:/evidence" \
-            "$TERRAFORM_IMAGE" bash /trusted/scripts/ci/collect-pr-evidence.sh \
-            /evidence "$SUBJECT_SHA" /source
-          mv "$RUNNER_TEMP/terraform-evidence/terraform.json" "$EVIDENCE_ROOT/raw/terraform.json"
-      - name: Evidence | Isolate newly introduced policy findings
+        run: bash scripts/ci/workflows/collect-trusted-terraform.sh
+      - name: Isolate newly introduced policy findings
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
-        run: |
-          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
-          docker pull "$SCANNER_IMAGE"
-          mkdir -p "$RUNNER_TEMP/base-security-evidence"
-          docker run --rm \
-            --env SKIP_TERRAFORM=true \
-            --env SEMGREP_RULES=/trusted-config/semgrep.yml \
-            --env GITLEAKS_CONFIG=/trusted-config/gitleaks.toml \
-            --env GITLEAKS_IGNORE_PATH=/trusted-config/gitleaksignore \
-            --env CHECKOV_CONFIG_FILE=/trusted-config/checkov.yml \
-            --env OSV_CONFIG_FILE=/trusted-config/osv-scanner.toml \
-            --volume "$GITHUB_WORKSPACE/.semgrep/ci.yml:/trusted-config/semgrep.yml:ro" \
-            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaks.toml:/trusted-config/gitleaks.toml:ro" \
-            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaksignore:/trusted-config/gitleaksignore:ro" \
-            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/checkov.yml:/trusted-config/checkov.yml:ro" \
-            --volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/osv-scanner.toml:/trusted-config/osv-scanner.toml:ro" \
-            --volume "$GITHUB_WORKSPACE/.base-source:/workspace:ro" \
-            --volume "$RUNNER_TEMP/base-security-evidence:/evidence" \
-            "$SCANNER_IMAGE" /evidence "$BASE_SHA" "$BASE_SHA"
-          scripts/ci/filter-pr-baseline-findings.sh \
-            "$EVIDENCE_ROOT/raw" "$RUNNER_TEMP/base-security-evidence" \
-            "$EVIDENCE_ROOT/policy-input" "$SUBJECT_SHA"
-      - name: Evidence | Collect pull-request posture
+        run: bash scripts/ci/workflows/collect-baseline-security.sh
+      - name: Pull-request posture
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           pr_number="$(jq -er '.workflow_run.pull_requests[0].number' "$GITHUB_EVENT_PATH")"
           scripts/ci/collect-scm-posture.sh "$SUBJECT_SHA" "$EVIDENCE_ROOT/scm.json" "$pr_number"
-      - name: Evidence | Normalize evidence
+      - name: Evidence
         run: scripts/ci/normalize-evidence.sh "$EVIDENCE_ROOT/policy-input" "$SUBJECT_SHA" "$EVIDENCE_ROOT/scm.json" "$EVIDENCE_ROOT/normalized/evidence.json"
-      - name: Check | Evaluate OPA policy
+      - name: OPA policy
         id: policy
         continue-on-error: true
         run: scripts/ci/evaluate-policy.sh "$EVIDENCE_ROOT/normalized/evidence.json" "$EVIDENCE_ROOT/decision.json"
-      - name: Evidence | Create safe JSON and SARIF outputs
+      - name: Safe JSON and SARIF outputs
         if: always()
         run: scripts/ci/publish-evidence.sh "$EVIDENCE_ROOT/normalized/evidence.json" "$EVIDENCE_ROOT/decision.json" "$EVIDENCE_ROOT/published"
-      - name: Evidence | Upload normalized policy outputs
+      - name: Normalized policy outputs
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
@@ -204,12 +144,12 @@ jobs:
             ${{ env.EVIDENCE_ROOT }}/policy-input/baseline-summary.json
           if-no-files-found: error
           retention-days: 90
-      - name: Publish | Publish exact-SHA evidence check
+      - name: Exact-SHA Evidence Check
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           DETAILS_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: scripts/ci/publish-pr-evidence-check.sh "$SUBJECT_SHA" "$EVIDENCE_ROOT/published/decision.json" "$DETAILS_URL"
-      - name: Check | Enforce OPA decision
+      - name: OPA decision
         if: always()
         run: scripts/ci/verify-policy-decision.sh "$EVIDENCE_ROOT/published/decision.json"

@@ -8,7 +8,8 @@ permissions: {}
 
 jobs:
   signal:
+    name: Review Signal
     runs-on: ubuntu-24.04
     steps:
-      - name: Publish | Emit unprivileged review signal
+      - name: Unprivileged Review Signal
         run: echo 'Review state changed; trusted workflow_run handler will refresh evidence.'

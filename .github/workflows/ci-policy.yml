@@ -10,16 +10,24 @@ permissions:
 
 jobs:
   policy:
+    name: Policy Rules
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Prepare | Install pinned policy adapter tools
+      - name: Policy Tools
         run: scripts/ci/install-policy-tools.sh "$RUNNER_TEMP/node-operator-policy-tools"
-      - name: Check | Test Rego policy
-        run: scripts/ci/test-policy.sh
-      - name: Check | Test Terraform security policy
-        run: scripts/ci/test-terraform-policy.sh
-      - name: Check | Test rendered manifests
-        run: scripts/ci/test-conftest.sh
+      - name: Policy Rules
+        run: bash scripts/ci/run-suite.sh policy
+  policy-foundation:
+    name: Evidence Contracts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Policy Tools
+        run: scripts/ci/install-policy-tools.sh "$RUNNER_TEMP/node-operator-policy-tools"
+      - name: Evidence Contracts
+        run: bash scripts/ci/run-suite.sh policy-contracts

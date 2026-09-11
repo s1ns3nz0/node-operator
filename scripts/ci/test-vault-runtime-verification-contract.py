@@ -3,6 +3,7 @@
 """Focused source contract with negative mutations, not an end-to-end CI test."""
 import json
 import re
+import runpy
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -34,6 +35,7 @@ def validate(script, workflow):
 
 script = (ROOT / "scripts/ci/verify-vault-runtime-candidate.sh").read_text()
 workflow = (ROOT / ".github/workflows/vault-runtime-candidate-verification.yml").read_text()
+workflow = runpy.run_path(str(ROOT / "scripts/ci/lib/workflow-source.py"))["expand_text"](workflow)
 validate(script, workflow)
 for bad_script, bad_workflow in (
     (script.replace("--network none", "--network host"), workflow),

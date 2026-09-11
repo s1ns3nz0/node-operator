@@ -2,6 +2,8 @@
 # Check objective: Keep PR evidence Terraform validation bound to the deployable root module.
 # shellcheck disable=SC2016
 set -euo pipefail
+# shellcheck source=scripts/ci/lib/workflow-contract.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/workflow-contract.sh"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 collector="$script_dir/collect-pr-evidence.sh"

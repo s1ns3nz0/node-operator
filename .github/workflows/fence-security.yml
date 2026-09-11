@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   fence-security:
+    name: Fence Security
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -20,9 +21,9 @@ jobs:
         with:
           go-version: '1.26.6'
           cache: false
-      - name: Prepare | Install checksum-pinned fence SAST tool
+      - name: Checksum-pinned fence SAST tool
         run: scripts/ci/install-fence-security-tools.sh "$RUNNER_TEMP/fence-security-tools"
-      - name: Check | Fence unit tests and static analysis
+      - name: Fence unit tests and static analysis
         env:
           GOSEC_BIN: ${{ runner.temp }}/fence-security-tools/gosec
         run: |
@@ -30,9 +31,9 @@ jobs:
           bash scripts/ci/test-fence-security-sast.sh
           bash scripts/ci/test-fence-security-dast-report.sh
           scripts/ci/run-fence-security-sast.sh "$RUNNER_TEMP/fence-security/sast"
-      - name: Check | Isolated real-process fence DAST
+      - name: Isolated real-process fence DAST
         run: scripts/ci/run-fence-security-dast.sh "$RUNNER_TEMP/fence-security/dast"
-      - name: Evidence | Retain fence-only security reports including failures
+      - name: Fence-only security reports including failures
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   eligibility:
+    name: Release Eligibility
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -19,17 +20,19 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Check | Verify exact source release eligibility
+      - name: Exact source release eligibility
         env:
           GH_TOKEN: ${{ github.token }}
         run: scripts/ci/verify-release-source-eligibility.sh "$GITHUB_SHA"
   reproducibility:
+    name: Release Integrity
     needs: eligibility
     uses: ./.github/workflows/ci-release-integrity.yml
     permissions:
       contents: read
       checks: read
   build-and-publish:
+    name: Signed Release
     needs: [eligibility, reproducibility]
     # A CodeBuild-hosted runner is ephemeral per workflow job and is bound to
     # the dedicated private project by its name plus run identity. A
@@ -45,82 +48,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Build | Build release bundle and evidence
+      - name: Release Bundle
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
           APPROVED_ARTIFACT_DIGEST: ${{ needs.reproducibility.outputs.artifact_digest }}
-        run: |
-          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
-          docker pull "$RELEASE_BUILD_IMAGE"
-          mkdir -p "$RUNNER_TEMP/release"
-          docker run --rm --user "$(id -u):$(id -g)" --volume "$GITHUB_WORKSPACE:/workspace:ro" --volume "$RUNNER_TEMP:/output" --workdir /workspace "$RELEASE_BUILD_IMAGE" bash scripts/ci/build-release-bundle.sh /output/release
-          actual_artifact_digest="sha256:$(sha256sum "$RUNNER_TEMP/release/node-operator-release-bundle.tar" | awk '{print $1}')"
-          test "$actual_artifact_digest" = "$APPROVED_ARTIFACT_DIGEST"
-          test "$(jq -er '.metadata.component.version' "$RUNNER_TEMP/release/sbom.cyclonedx.json")" = "$APPROVED_ARTIFACT_DIGEST"
-      - name: Evidence | Upload signer input to S3
+        run: scripts/release/build-release-bundle.sh
+      - name: Release Signing Handoff
         env:
           AWS_ROLE_ARN: ${{ vars.RELEASE_RUNNER_ROLE_ARN }}
           AWS_REGION: ap-northeast-2
           INPUT_BUCKET: ${{ vars.RELEASE_ARTIFACT_BUCKET }}
-        run: |
-          test -n "$AWS_ROLE_ARN"; test -n "$INPUT_BUCKET"
-          token_file="$RUNNER_TEMP/oidc-token"
-          curl --fail --silent --show-error -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" > "$token_file"
-          web_token="$(jq -r .value "$token_file")"
-          creds="$(aws sts assume-role-with-web-identity --role-arn "$AWS_ROLE_ARN" --role-session-name "release-${GITHUB_RUN_ID}" --web-identity-token "$web_token" --duration-seconds 900)"
-          export AWS_ACCESS_KEY_ID="$(jq -r .Credentials.AccessKeyId <<<"$creds")" AWS_SECRET_ACCESS_KEY="$(jq -r .Credentials.SecretAccessKey <<<"$creds")" AWS_SESSION_TOKEN="$(jq -r .Credentials.SessionToken <<<"$creds")"
-          source_revision="$(jq -er '.predicate.buildDefinition.resolvedDependencies[] | select(.uri == "git+node-operator") | .digest.gitCommit' "$RUNNER_TEMP/release/provenance-input.json")"
-          test "$source_revision" = "$GITHUB_SHA"
-          cp "$GITHUB_WORKSPACE/deploy/vault/buildspec-release-sign.yml" "$RUNNER_TEMP/release/buildspec-release-sign.yml"
-          input_archive="$RUNNER_TEMP/${GITHUB_SHA}.zip"
-          input_key="release-input/sha256/${GITHUB_SHA}.zip"
-          zip -q -j "$input_archive" \
-            "$RUNNER_TEMP/release/node-operator-release-bundle.tar" \
-            "$RUNNER_TEMP/release/node-operator-release-bundle.sha256" \
-            "$RUNNER_TEMP/release/provenance-input.json" \
-            "$RUNNER_TEMP/release/buildspec-release-sign.yml"
-          if ! aws s3api put-object --bucket "$INPUT_BUCKET" --key "$input_key" --body "$input_archive" --if-none-match '*' --region "$AWS_REGION" >/dev/null; then
-            existing_input_dir="$(mktemp -d)"
-            trap 'rm -rf "$existing_input_dir"' EXIT
-            aws s3 cp "s3://${INPUT_BUCKET}/${input_key}" "$existing_input_dir/input.zip" --region "$AWS_REGION"
-            test "$(unzip -Z1 "$existing_input_dir/input.zip" | sort)" = "$(printf '%s\n' buildspec-release-sign.yml node-operator-release-bundle.sha256 node-operator-release-bundle.tar provenance-input.json | sort)"
-            unzip -q "$existing_input_dir/input.zip" -d "$existing_input_dir"
-            cmp "$RUNNER_TEMP/release/node-operator-release-bundle.sha256" "$existing_input_dir/node-operator-release-bundle.sha256"
-            cmp "$RUNNER_TEMP/release/provenance-input.json" "$existing_input_dir/provenance-input.json"
-            cmp "$RUNNER_TEMP/release/buildspec-release-sign.yml" "$existing_input_dir/buildspec-release-sign.yml"
-          fi
-          input_version="$(aws s3api head-object --bucket "$INPUT_BUCKET" --key "$input_key" --query VersionId --output text --region "$AWS_REGION")"
-          test -n "$input_version"; test "$input_version" != "None"
-          aws codebuild start-build --project-name "node-operator-baseline-release-signer" --source-version "$input_version" --source-location-override "${INPUT_BUCKET}/${input_key}" --region "$AWS_REGION" > "$RUNNER_TEMP/codebuild.json"
-          build_id="$(jq -r .build.id "$RUNNER_TEMP/codebuild.json")"
-          for _ in $(seq 1 60); do
-            status="$(aws codebuild batch-get-builds --ids "$build_id" --region "$AWS_REGION" | jq -r '.builds[0].buildStatus')"
-            case "$status" in SUCCEEDED) break;; FAILED|FAULT|STOPPED|TIMED_OUT) echo "CodeBuild signer failed: $status" >&2; exit 1;; esac
-            sleep 10
-          done
-          [ "$status" = SUCCEEDED ] || { echo 'CodeBuild signer timed out' >&2; exit 1; }
-          output_location="$(aws codebuild batch-get-builds --ids "$build_id" --region "$AWS_REGION" | jq -er '.builds[0].artifacts.location')"
-          case "$output_location" in
-            arn:aws:s3:::*) output_key="${output_location#arn:aws:s3:::}" ;;
-            *) echo "unexpected CodeBuild output location: $output_location" >&2; exit 1 ;;
-          esac
-          aws s3 cp "s3://${output_key}" "$RUNNER_TEMP/release-signer-output.zip" --region "$AWS_REGION"
-          signer_output="$RUNNER_TEMP/release/signer-output"
-          unzip -oq "$RUNNER_TEMP/release-signer-output.zip" -d "$signer_output"
-          test -f "$signer_output/release-verification.json"
-          scripts/ci/verify-release-signature.sh "$signer_output"
-          jq -e --arg sha "$source_revision" '.provenance.source_revision == $sha' "$signer_output/release-verification.json" >/dev/null
-      - name: Publish | Create GitHub Release
+        run: scripts/release/sign-release-bundle.sh
+      - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="${GITHUB_REF_NAME}"
-          gh release create "$tag" \
-            "$RUNNER_TEMP/release/node-operator-release-bundle.tar" \
-            "$RUNNER_TEMP/release/node-operator-release-bundle.sha256" \
-            "$RUNNER_TEMP/release/manifest.json" \
-            "$RUNNER_TEMP/release/sbom.cyclonedx.json" \
-            "$RUNNER_TEMP/release/provenance-input.json" \
-            "$RUNNER_TEMP/release/signer-output/release-verification.json" \
-            --title "$tag" --generate-notes
+        run: scripts/release/create-github-release.sh

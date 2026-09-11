@@ -10,7 +10,7 @@ trap 'rm -rf "$temporary_directory"' EXIT
 mkdir -p "$temporary_directory/bin"
 sha="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
-for workflow in ci-terraform.yml ci-policy.yml policy-foundation.yml; do
+for workflow in ci-terraform.yml ci-policy.yml; do
   grep -Fq 'pull_request:' "$root/.github/workflows/$workflow"
   grep -Fq 'branches: [main]' "$root/.github/workflows/$workflow"
 done
@@ -26,13 +26,13 @@ case "$1" in
 esac' > "$temporary_directory/bin/unzip"
 chmod +x "$temporary_directory/bin/git" "$temporary_directory/bin/gh" "$temporary_directory/bin/unzip"
 jq -n --arg sha "$sha" '
-  ["quality","scanners","policy","terraform","policy-foundation"] |
+  ["quality","scanners","Policy Rules","Terraform Validation","Evidence Contracts"] |
   to_entries | map({name:.value,status:"completed",conclusion:"success",head_sha:$sha,app:{slug:"github-actions"},details_url:("https://github.com/owner/repo/actions/runs/10" + ((.key + 1) | tostring) + "/job/456")}) |
   {total_count:length,check_runs:.}
 ' > "$temporary_directory/pass.json"
 printf '%s\n' '{"total_count":1,"check_runs":[{"id":900,"external_id":"ci-evidence-workflow-run:106:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","name":"CI Evidence Decision","status":"completed","conclusion":"success","head_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","app":{"slug":"github-actions"},"details_url":"https://github.com/owner/repo/actions/runs/106"}]}' > "$temporary_directory/pr-check.json"
 printf '%s\n' '[{"merged_at":"2026-09-08T00:00:00Z","merge_commit_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","base":{"ref":"main","repo":{"full_name":"owner/repo"}},"head":{"sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}]' > "$temporary_directory/pulls.json"
-jq -n --arg sha "$sha" '[101,102,103,104,105,106] as $ids | {"101":{repository:{full_name:"owner/repo"},path:".github/workflows/ci-quality.yml",event:"push",head_sha:$sha},"102":{repository:{full_name:"owner/repo"},path:".github/workflows/ci-security.yml",event:"push",head_sha:$sha},"103":{repository:{full_name:"owner/repo"},path:".github/workflows/ci-policy.yml",event:"push",head_sha:$sha},"104":{repository:{full_name:"owner/repo"},path:".github/workflows/ci-terraform.yml",event:"push",head_sha:$sha},"105":{repository:{full_name:"owner/repo"},path:".github/workflows/policy-foundation.yml",event:"push",head_sha:$sha},"106":{repository:{full_name:"owner/repo"},path:".github/workflows/opa-pr-gate.yml",event:"workflow_run",head_sha:"cccccccccccccccccccccccccccccccccccccccc"}} | with_entries(.value.status="completed" | .value.conclusion="success")' > "$temporary_directory/runs.json"
+jq -n --arg sha "$sha" '[101,102,103,104,105,106] as $ids | {"101":{repository:{full_name:"owner/repo"},path:".github/workflows/ci-quality.yml",event:"push",head_sha:$sha},"102":{repository:{full_name:"owner/repo"},path:".github/workflows/ci-security.yml",event:"push",head_sha:$sha},"103":{repository:{full_name:"owner/repo"},path:".github/workflows/ci-policy.yml",event:"push",head_sha:$sha},"104":{repository:{full_name:"owner/repo"},path:".github/workflows/ci-terraform.yml",event:"push",head_sha:$sha},"105":{repository:{full_name:"owner/repo"},path:".github/workflows/ci-policy.yml",event:"push",head_sha:$sha},"106":{repository:{full_name:"owner/repo"},path:".github/workflows/opa-pr-gate.yml",event:"workflow_run",head_sha:"cccccccccccccccccccccccccccccccccccccccc"}} | with_entries(.value.status="completed" | .value.conclusion="success")' > "$temporary_directory/runs.json"
 printf '%s\n' '{"artifacts":[{"id":777,"name":"ci-evidence-gate-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","expired":false,"workflow_run":{"id":106}}]}' > "$temporary_directory/artifacts.json"
 printf '%s\n' '{"subject":{"commit_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}' > "$temporary_directory/evidence.json"
 printf '%s\n' '{"summary":{"block":0,"require_approval":0},"violations":[]}' > "$temporary_directory/decision.json"

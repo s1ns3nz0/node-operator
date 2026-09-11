@@ -3,8 +3,9 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$script_dir/lib/common.sh"
-root="$(repo_root)"
+# A bind-mounted Git worktree can point at host-only metadata. This test needs
+# the source tree, not Git history, and must also work from a release checkout.
+root="$(cd "$script_dir/../.." && pwd -P)"
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
 fail() { printf 'FAIL validator runtime mirror enabled plan: %s\n' "$*" >&2; exit 1; }

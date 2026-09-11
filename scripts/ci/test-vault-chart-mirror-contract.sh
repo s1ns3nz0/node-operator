@@ -3,6 +3,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$root/scripts/ci/lib/workflow-contract.sh"
 allowlist="$root/.ci/gitops/approved-oci-artifacts.json"
 workflow="$root/.github/workflows/vault-chart-mirror.yml"
 terraform_file="$root/infra/terraform/private-gitops.tf"
@@ -30,12 +31,12 @@ for required in \
   'aws ecr describe-images' \
   'test "$ecr_manifest_digest" = "$chart_manifest_digest"' \
   'helm push "$RUNNER_TEMP/vault-$chart_version.tgz"'; do
-  grep -Fq "$required" "$workflow"
+  grep -Fq "$required" <(workflow_source "$workflow")
 done
 
 grep -Fq 'vault_chart = "${local.name_prefix}-gitops-vault/vault"' "$terraform_file"
 
-if grep -Fq "helm pull vault --repo" "$workflow"; then
+if grep -Fq "helm pull vault --repo" <(workflow_source "$workflow"); then
   printf 'Vault chart mirror must not bypass the approved archive record.\n' >&2
   exit 1
 fi

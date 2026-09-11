@@ -14,7 +14,10 @@ for cmd in terraform jq dirname stat; do command -v "$cmd" >/dev/null 2>&1 || { 
 parent="$(dirname "$plan_file")"; [ -d "$parent" ] || { printf '%s\n' 'plan directory is missing' >&2; exit 65; }
 mode="$(stat -f '%Lp' "$parent" 2>/dev/null || stat -c '%a' "$parent")"; [ $((8#$mode & 077)) -eq 0 ] || { printf '%s\n' 'plan directory must not be accessible by group or others' >&2; exit 65; }
 # The original baseline must explicitly keep both bootstrap controls disabled.
-rg -Fx 'enable_argocd_bootstrap_runner           = false' "$config" >/dev/null && rg -Fx 'enable_argocd_bootstrap_cluster_admin    = false' "$config" >/dev/null || { printf '%s\n' 'baseline config must explicitly disable the Argo bootstrap runner and cluster admin' >&2; exit 65; }
+if ! rg -Fx 'enable_argocd_bootstrap_runner           = false' "$config" >/dev/null || ! rg -Fx 'enable_argocd_bootstrap_cluster_admin    = false' "$config" >/dev/null; then
+  printf '%s\n' 'baseline config must explicitly disable the Argo bootstrap runner and cluster admin' >&2
+  exit 65
+fi
 terraform -chdir="$work_dir/baseline" init -input=false -reconfigure -backend-config="$work_dir/baseline.backend.hcl" >/dev/null
 validate_plan() {
   terraform -chdir="$work_dir/baseline" show -json "$plan_file" | jq -e '

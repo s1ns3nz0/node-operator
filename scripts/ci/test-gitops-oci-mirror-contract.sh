@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
+# Check objective: Verify the GitOps mirror's exact OIDC subject, approved digest input and restricted ECR publication contract.
 # shellcheck disable=SC2016 # Literal Terraform and workflow fragments intentionally contain $ expressions.
 set -euo pipefail
+# shellcheck source=scripts/ci/lib/workflow-contract.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/workflow-contract.sh"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/lib/common.sh"
@@ -33,7 +36,7 @@ for required in \
   'vault_chart = "${local.name_prefix}-gitops-vault/vault"' \
   'cert_manager_chart = "${local.name_prefix}-gitops-cert-manager/cert-manager"' \
   'token.actions.githubusercontent.com:repository' \
-  'repo:${split("/", var.github_repository)[0]}@*/${split("/", var.github_repository)[1]}@*:environment:gitops-oci-mirror' \
+  '${var.github_oidc_subject_prefix}:environment:gitops-oci-mirror' \
   '"ecr:BatchGetImage"' \
   '"ecr:DescribeImages"' \
   '"ecr:PutImage"' \
@@ -60,10 +63,10 @@ for required in \
   'aws ecr describe-images' \
   'test "$destination_digest" = "$source_digest"' \
   'GITHUB_STEP_SUMMARY'; do
-  grep -Fq "$required" "$workflow" || fail "workflow contract omits: $required"
+  grep -Fq "$required" <(workflow_source "$workflow") || fail "workflow contract omits: $required"
 done
 
-if grep -Fq 'docker buildx imagetools create' "$workflow"; then
+if grep -Fq 'docker buildx imagetools create' <(workflow_source "$workflow"); then
   fail 'workflow uses manifest-only imagetools instead of a blob-copying OCI client'
 fi
 

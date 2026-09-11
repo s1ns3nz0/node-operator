@@ -3,6 +3,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+source "$root/scripts/ci/lib/workflow-contract.sh"
 terraform_file="$root/infra/terraform/validator-runtime-ecr-mirror.tf"
 workflow="$root/.github/workflows/validator-runtime-image-mirror.yml"
 allowlist="$root/.ci/validator/approved-runtime-images.json"
@@ -12,9 +13,9 @@ for required in 'enable_validator_runtime_ecr_mirror' 'default     = false' 'aws
 done
 grep -Fq 'validator-runtime-web3signer' "$terraform_file" || fail 'runtime mirror can collide with the legacy Web3Signer repository'
 grep -Fq 'validator-runtime-postgres' "$terraform_file" || fail 'runtime mirror can collide with the legacy PostgreSQL repository'
-grep -Fq 'approved-runtime-images.json' "$workflow" || fail 'workflow does not use committed allowlist'
-grep -Fq 'docker buildx imagetools create' "$workflow" || fail 'workflow does not mirror source manifests'
-grep -Fq 'ECR digest differs from reviewed source digest' "$workflow" || fail 'workflow does not verify destination digest identity'
+grep -Fq 'approved-runtime-images.json' <(workflow_source "$workflow") || fail 'workflow does not use committed allowlist'
+grep -Fq 'docker buildx imagetools create' <(workflow_source "$workflow") || fail 'workflow does not mirror source manifests'
+grep -Fq 'ECR digest differs from reviewed source digest' <(workflow_source "$workflow") || fail 'workflow does not verify destination digest identity'
 grep -Fq 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' "$workflow" || fail 'workflow action is not pinned'
 jq -e '
   .schema_version == 1 and

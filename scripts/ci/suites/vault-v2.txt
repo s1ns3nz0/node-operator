@@ -1,0 +1,5 @@
+scripts/ci/test-vault-v2-secret-boundary-contract.sh
+scripts/ci/test-vault-v2-bootstrap-cleanup.py
+scripts/ci/test-validator-quiescence.py
+scripts/ci/test-validator-cutover-rendering.py
+scripts/ci/test-vault-v2-role-activation.py

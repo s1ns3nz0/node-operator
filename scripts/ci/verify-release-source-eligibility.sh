@@ -83,9 +83,9 @@ fetch_checks "$source_sha" "$checks"
 
 trusted_check_present "$checks" quality "$source_sha" '.github/workflows/ci-quality.yml' push true || { printf 'required trusted source check is absent or invalid: quality\n' >&2; exit 1; }
 trusted_check_present "$checks" scanners "$source_sha" '.github/workflows/ci-security.yml' push true || { printf 'required trusted source check is absent or invalid: scanners\n' >&2; exit 1; }
-trusted_check_present "$checks" policy "$source_sha" '.github/workflows/ci-policy.yml' push true || { printf 'required trusted source check is absent or invalid: policy\n' >&2; exit 1; }
-trusted_check_present "$checks" terraform "$source_sha" '.github/workflows/ci-terraform.yml' push true || { printf 'required trusted source check is absent or invalid: terraform\n' >&2; exit 1; }
-trusted_check_present "$checks" policy-foundation "$source_sha" '.github/workflows/policy-foundation.yml' push true || { printf 'required trusted source check is absent or invalid: policy-foundation\n' >&2; exit 1; }
+trusted_check_present "$checks" 'Policy Rules' "$source_sha" '.github/workflows/ci-policy.yml' push true || { printf 'required trusted source check is absent or invalid: policy\n' >&2; exit 1; }
+trusted_check_present "$checks" 'Terraform Validation' "$source_sha" '.github/workflows/ci-terraform.yml' push true || { printf 'required trusted source check is absent or invalid: terraform\n' >&2; exit 1; }
+trusted_check_present "$checks" 'Evidence Contracts' "$source_sha" '.github/workflows/ci-policy.yml' push true || { printf 'required trusted source check is absent or invalid: policy-foundation\n' >&2; exit 1; }
 
 pulls="$temporary_directory/pulls.json"
 gh api -H 'Accept: application/vnd.github+json' "repos/$GITHUB_REPOSITORY/commits/$source_sha/pulls" > "$pulls"

@@ -4,6 +4,7 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$script_dir/lib/workflow-contract.sh"
 root="$(cd "$script_dir/../.." && pwd)"
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
@@ -16,7 +17,12 @@ for dockerfile in "$root/.ci/toolchains/terraform-validation.Dockerfile" "$root/
   fi
 done
 grep -Fq 'ripgrep' "$root/.ci/toolchains/release-build.Dockerfile"
-grep -Fq 'test-build-release-bundle.sh' "$root/.github/workflows/toolchain-image-release.yml"
+workflow="$root/.github/workflows/toolchain-image-release.yml"
+grep -Fq 'test-build-release-bundle.sh' <(workflow_source "$workflow")
+grep -Fq 'DOCKERFILE: ${{ matrix.dockerfile }}' "$workflow"
+grep -Fq 'IMAGE_NAME: ${{ matrix.image }}' "$workflow"
+grep -Fq '"$DOCKERFILE"' <(workflow_source "$workflow")
+grep -Fq '"$IMAGE_NAME" = release-build' <(workflow_source "$workflow")
 
 for required in \
   'ARG CA_CERTIFICATES_VERSION=' \

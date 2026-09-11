@@ -14,7 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  scanners:
+  security-scans:
+    name: Security Scans
     runs-on: ubuntu-24.04
     env:
       SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:b224334bb3b86a086dea3b11c1e8ad6e3b619dc350af3f9f54c4a85ba576f4c9
@@ -29,21 +30,21 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Prepare | Pull pinned scanner image
+      - name: Pinned scanner image
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
         run: |
           echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
           docker pull "$SCANNER_IMAGE"
-      - name: Check | Test isolated Vault recovery boundaries
+      - name: Isolated Vault recovery boundaries
         run: >-
           docker run --rm --network none --read-only
           --tmpfs /tmp:rw,noexec,nosuid,nodev
           --volume "$GITHUB_WORKSPACE:/workspace:ro"
           --entrypoint python3 "$SCANNER_IMAGE"
           -B /workspace/scripts/ci/test-vault-recovery-boundary.py
-      - name: Evidence | Collect redacted scanner evidence
+      - name: Redacted scanner evidence
         run: >-
           docker run --rm
           --volume "$GITHUB_WORKSPACE:/workspace:ro"
@@ -51,7 +52,7 @@ jobs:
           "$SCANNER_IMAGE" /evidence
           "${{ github.event.pull_request.head.sha || github.sha }}"
           "${{ github.event.pull_request.base.sha || github.sha }}"
-      - name: Evidence | Upload non-sensitive security evidence
+      - name: Non-sensitive security evidence
         if: success()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
@@ -59,3 +60,14 @@ jobs:
           path: ${{ env.EVIDENCE_ROOT }}
           if-no-files-found: error
           retention-days: 30
+  scanners:
+    # Compatibility context required by main protection.
+    name: scanners
+    needs: [security-scans]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Security Gate
+        env:
+          SECURITY_RESULT: ${{ needs.security-scans.result }}
+        run: test "$SECURITY_RESULT" = success
