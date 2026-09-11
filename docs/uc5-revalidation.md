@@ -5,6 +5,13 @@ database and private Seoul cluster. This is not a new deployment or key ceremony
 Run the reviewed, merged revision only. Never use the legacy broad-bootstrap
 revocation wrapper for this procedure.
 
+Audit readiness requires the deployed relay's version-1 provenance envelopes.
+The relay preserves file and socket records but labels their input source; UC-5
+uses only `audit_source: socket`, matching the `validator-socket` HMAC device.
+Legacy unlabeled records cannot prove readiness or denial. Update the pinned
+relay image and verify ingestion before requesting another recovery ceremony.
+Do not relax conflicting-record checks to combine devices with different salts.
+
 ## 1. User-only recovery and role exercise
 
 Choose a new absolute directory whose parent exists:

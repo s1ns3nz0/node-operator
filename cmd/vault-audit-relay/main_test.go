@@ -1,9 +1,12 @@
 package main
 
 import (
+	"encoding/json"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -53,23 +56,95 @@ func TestRemoveStaleSocketAndRejectRegularFile(t *testing.T) {
 
 func TestEmitRecordRejectsNonJSONAndCopiesValidJSON(t *testing.T) {
 	records := make(chan []byte, 1)
-	emitRecord([]byte("not-json"), records)
+	emitRecord([]byte("not-json"), "socket", records)
 	select {
 	case record := <-records:
 		t.Fatalf("non-JSON record emitted: %q", record)
 	default:
 	}
 	input := []byte(`{"type":"audit","request":{"id":"safe"}}`)
-	emitRecord(input, records)
+	emitRecord(input, "socket", records)
 	for index := range input {
 		input[index] = 'x'
 	}
 	select {
 	case record := <-records:
-		if string(record) != `{"type":"audit","request":{"id":"safe"}}` {
+		var envelope struct {
+			SchemaVersion int    `json:"schema_version"`
+			AuditSource   string `json:"audit_source"`
+			Log           string `json:"log"`
+		}
+		if err := json.Unmarshal(record, &envelope); err != nil {
+			t.Fatal(err)
+		}
+		if envelope.SchemaVersion != 1 || envelope.AuditSource != "socket" || envelope.Log != `{"type":"audit","request":{"id":"safe"}}` {
 			t.Fatalf("valid JSON was not copied before enqueue: %q", record)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("valid JSON was not emitted")
+	}
+}
+
+func TestProvenanceCannotBeSuppliedByRecord(t *testing.T) {
+	for _, source := range []string{"file", "socket"} {
+		records := make(chan []byte, 1)
+		emitRecord([]byte(`{"audit_source":"spoofed","type":"request"}`), source, records)
+		var envelope map[string]interface{}
+		if err := json.Unmarshal(<-records, &envelope); err != nil {
+			t.Fatal(err)
+		}
+		if envelope["audit_source"] != source {
+			t.Fatal("input changed provenance")
+		}
+	}
+	records := make(chan []byte, 1)
+	emitRecord([]byte(`{}`), "unknown", records)
+	if len(records) != 0 {
+		t.Fatal("unknown provenance accepted")
+	}
+}
+
+func TestSocketReaderLabelsActualInput(t *testing.T) {
+	records := make(chan []byte, 1)
+	readRecords(io.NopCloser(strings.NewReader("{\"type\":\"request\"}\n")), records)
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(<-records, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope["audit_source"] != "socket" {
+		t.Fatal("socket input mislabeled")
+	}
+}
+
+func TestFileFollowerLabelsActualInput(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.json")
+	if err := os.WriteFile(path, []byte("{\"type\":\"request\"}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	records := make(chan []byte, 1)
+	done := make(chan struct{})
+	go func() { followFile(file, records); close(done) }()
+	select {
+	case record := <-records:
+		var envelope map[string]interface{}
+		if err := json.Unmarshal(record, &envelope); err != nil {
+			t.Fatal(err)
+		}
+		if envelope["audit_source"] != "file" {
+			t.Fatal("file input mislabeled")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("file record unavailable")
+	}
+	file.Close()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("file follower did not stop after close")
 	}
 }
