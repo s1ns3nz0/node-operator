@@ -41,6 +41,7 @@ def expected_inputs(destination: Path, discovery: dict, principal: str) -> dict:
         "foundation-network.tfvars.json": {"aws_region": region, "name": name, "network_mode": "fresh", "availability_zones": zones},
         "baseline.tfvars.json": {
             "aws_account_id": account, "aws_region": region, "name": name,
+            "terraform_apply_role_arn": principal,
             "audit_replica_region": "ap-northeast-2" if region == "ap-northeast-1" else "ap-northeast-1",
             "availability_zones": zones, "enable_gitops_client_ecr_publisher": True,
             "enable_temporary_ssm_ops_host": False, "temporary_ssm_ops_host_termination_at": "",

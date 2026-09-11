@@ -63,6 +63,8 @@ class InputBoundaries(unittest.TestCase):
                        "name": "installer-test", "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"]}
             paths = [root / (name + ".json") for name in ("manifest", "bootstrap", "foundation", "baseline")]
             phases = [dict(context) for _ in paths]
+            phases[1]["backend_principal_arns"] = ["arn:aws:iam::123456789012:role/apply"]
+            phases[3]["terraform_apply_role_arn"] = phases[1]["backend_principal_arns"][0]
             phases[2]["network_mode"] = "fresh"
 
             def execute():
@@ -76,6 +78,7 @@ class InputBoundaries(unittest.TestCase):
                                           (3, "aws_account_id", "999999999999"),
                                           (1, "name", "different"), (2, "aws_region", "ap-northeast-2"),
                                           (3, "availability_zones", ["ap-northeast-2a", "ap-northeast-2c"]),
+                                          (3, "terraform_apply_role_arn", "arn:aws:iam::123456789012:role/other"),
                                           (2, "network_mode", "existing")):
                 original = phases[index][field]
                 phases[index][field] = changed

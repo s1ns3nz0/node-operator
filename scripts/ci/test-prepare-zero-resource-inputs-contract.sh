@@ -16,6 +16,7 @@ jq -e '.aws_account_id == "106760547719" and .aws_region == "ap-northeast-2" and
 jq -e '.aws_region == "ap-northeast-2" and .backend_principal_arns == ["arn:aws:iam::106760547719:role/NodeOperatorTerraformApply"] and .state_bucket_name == null' "$output/bootstrap-state.tfvars.json" >/dev/null
 jq -e '.network_mode == "fresh" and .aws_region == "ap-northeast-2"' "$output/foundation-network.tfvars.json" >/dev/null
 jq -e '.enable_gitops_client_ecr_publisher == true and .enable_temporary_ssm_ops_host == false and .enable_argocd_bootstrap_runner == false and .enable_vault_bootstrap_runner == false' "$output/baseline.tfvars.json" >/dev/null
+jq -e '.terraform_apply_role_arn == "arn:aws:iam::106760547719:role/NodeOperatorTerraformApply"' "$output/baseline.tfvars.json" >/dev/null
 "$script" --aws-account-id 106760547719 --aws-region ap-northeast-1 --availability-zone ap-northeast-1a --availability-zone ap-northeast-1c --name hoodi-tokyo --backend-principal-arn arn:aws:iam::106760547719:role/NodeOperatorTerraformApply --output-dir "$scratch/tokyo" >/dev/null
 jq -e '.aws_region == "ap-northeast-1" and .availability_zones == ["ap-northeast-1a", "ap-northeast-1c"]' "$scratch/tokyo/zero-resource-inputs.json" >/dev/null
 jq -e '.aws_region == "ap-northeast-1" and .audit_replica_region == "ap-northeast-2" and .availability_zones == ["ap-northeast-1a", "ap-northeast-1c"]' "$scratch/tokyo/baseline.tfvars.json" >/dev/null

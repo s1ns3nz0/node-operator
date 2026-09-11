@@ -22,7 +22,9 @@ run() {
 }
 run_suite() {
   case "$1" in
-    root) run validate-terraform-offline.sh /workspace/infra/terraform /output ;;
+    root)
+      run validate-terraform-offline.sh /workspace/infra/terraform /output
+      run test-terraform-apply-role.sh /output/plan.json ;;
     runtime) run test-validator-runtime-mirror-enabled-plan.sh ;;
     modules)
       for module in bootstrap-state foundation-network ops-access vault-recovery; do

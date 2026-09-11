@@ -67,8 +67,8 @@ jq -n --arg account "$account" --arg name "$name" --arg region "$aws_region" --a
   '{aws_account_id:$account,aws_region:$region,name:$name,state_bucket_name:null,backend_principal_arns:$principals}' > "$bootstrap"
 jq -n --arg name "$name" --arg region "$aws_region" --argjson zones "$(printf '%s\n' "${availability_zones[@]}" | jq -R . | jq -s .)" '{aws_region:$region,name:$name,network_mode:"fresh",availability_zones:$zones}' > "$foundation"
 audit_replica_region='ap-northeast-1'; [ "$aws_region" = 'ap-northeast-1' ] && audit_replica_region='ap-northeast-2'
-jq -n --arg account "$account" --arg name "$name" --arg region "$aws_region" --arg audit_replica_region "$audit_replica_region" --argjson zones "$(printf '%s\n' "${availability_zones[@]}" | jq -R . | jq -s .)" '
-  {aws_account_id:$account,aws_region:$region,audit_replica_region:$audit_replica_region,availability_zones:$zones,name:$name,enable_gitops_client_ecr_publisher:true,
+jq -n --arg account "$account" --arg name "$name" --arg region "$aws_region" --arg apply_role "${principals[0]}" --arg audit_replica_region "$audit_replica_region" --argjson zones "$(printf '%s\n' "${availability_zones[@]}" | jq -R . | jq -s .)" '
+  {aws_account_id:$account,aws_region:$region,terraform_apply_role_arn:$apply_role,audit_replica_region:$audit_replica_region,availability_zones:$zones,name:$name,enable_gitops_client_ecr_publisher:true,
    enable_temporary_ssm_ops_host:false,temporary_ssm_ops_host_termination_at:"",
    enable_argocd_bootstrap_runner:false,enable_argocd_bootstrap_cluster_admin:false,
    enable_vault_bootstrap_runner:false,enable_vault_bootstrap_cluster_admin:false}

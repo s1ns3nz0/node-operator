@@ -78,7 +78,7 @@ data "aws_iam_policy_document" "audit_replica_key" {
 
     principals {
       type        = "AWS"
-      identifiers = ["arn:aws:iam::${var.aws_account_id}:role/NodeOperatorTerraformApply"]
+      identifiers = [local.terraform_apply_role_arn]
     }
 
     actions = [

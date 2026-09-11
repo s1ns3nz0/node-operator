@@ -1,3 +1,7 @@
+locals {
+  terraform_apply_role_arn = coalesce(var.terraform_apply_role_arn, "arn:aws:iam::${var.aws_account_id}:role/NodeOperatorTerraformApply")
+}
+
 data "aws_iam_policy_document" "kms_administrator_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -14,6 +18,13 @@ resource "aws_iam_role" "kms_administrator" {
   assume_role_policy = data.aws_iam_policy_document.kms_administrator_assume_role.json
 
   tags = local.common_tags
+
+  lifecycle {
+    precondition {
+      condition     = startswith(local.terraform_apply_role_arn, "arn:aws:iam::${var.aws_account_id}:role/")
+      error_message = "Terraform KMS lifecycle role must belong to the deployment account."
+    }
+  }
 }
 
 data "aws_iam_policy_document" "kms_key_administrator" {
@@ -57,7 +68,7 @@ data "aws_iam_policy_document" "kms_key_administrator" {
 
     principals {
       type        = "AWS"
-      identifiers = ["arn:aws:iam::${var.aws_account_id}:role/NodeOperatorTerraformApply"]
+      identifiers = [local.terraform_apply_role_arn]
     }
 
     actions = [

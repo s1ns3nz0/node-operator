@@ -33,6 +33,14 @@ trust, assume-role access or effective backend/provisioning permissions. A missi
 role or denied lookup stops preparation with an actionable message. No role is
 created or assumed, and Terraform is not run.
 `infrastructure_inputs_ready` is a preparation result, not a deployment result.
+Newly generated baseline inputs also set `terraform_apply_role_arn` to the
+selected role, eliminating the mandatory historical role name from new KMS
+lifecycle policies. Both primary and replica policies use it; cross-account
+roles fail Terraform preconditions. Omitted overrides preserve the historical
+role on existing deployments. This does not assume the role, attach its IAM
+permissions or prove that Terraform executes as that role. Old prepared inputs
+and old release bundles lack this field and need a new verified release/input
+set; the installer never silently edits them in place.
 Publishing the release and inputs uses the OS no-replace rename operation
 (macOS or Linux with supported libc/filesystem). Unsupported platforms fail
 without falling back to an operation that could replace an existing directory.

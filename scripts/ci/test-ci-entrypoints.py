@@ -64,7 +64,8 @@ class Entrypoints(unittest.TestCase):
         self.mock("docker")
         result = self.run_script("run-terraform-ci.sh", "all")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(len(self.calls()), 10)
+        self.assertEqual(len(self.calls()), 11)
+        self.assertEqual(sum("/workspace/scripts/ci/test-terraform-apply-role.sh" in args and args[-1] == "/output/plan.json" for args in self.calls()), 1)
         self.assertEqual(sum("/workspace/scripts/ci/test-bootstrap-backend-lifecycle.sh" in args for args in self.calls()), 1)
         for args in self.calls():
             self.assertEqual(args[:2], ["run", "--rm"])

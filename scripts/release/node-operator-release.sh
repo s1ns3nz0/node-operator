@@ -129,6 +129,8 @@ verify_generated_input_context() {
     all(.availability_zones[]; type == "string" and test("^" + $context.aws_region + "[a-z]$")) and
     ($bootstrap[0].aws_account_id == .aws_account_id) and
     ($baseline[0].aws_account_id == .aws_account_id) and
+    ($baseline[0].terraform_apply_role_arn == $bootstrap[0].backend_principal_arns[0]) and
+    ($baseline[0].terraform_apply_role_arn | type == "string" and startswith("arn:aws:iam::" + $context.aws_account_id + ":role/")) and
     all([$bootstrap[0], $foundation[0], $baseline[0]][];
       .name == $context.name and .aws_region == $context.aws_region) and
     ($foundation[0].availability_zones == .availability_zones) and

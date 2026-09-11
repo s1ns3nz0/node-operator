@@ -290,3 +290,14 @@ variable "ssm_ops_host_termination_at" {
     error_message = "ssm_ops_host_termination_at must be empty or Asia/Seoul local time formatted as YYYY-MM-DDTHH:MM:SS."
   }
 }
+variable "terraform_apply_role_arn" {
+  description = "Exact Terraform lifecycle role for KMS policies. Null preserves the historical role for existing deployments; new installers supply their selected role."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.terraform_apply_role_arn == null ? true : can(regex("^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$", var.terraform_apply_role_arn))
+    error_message = "terraform_apply_role_arn must be null or an exact IAM role ARN."
+  }
+}
