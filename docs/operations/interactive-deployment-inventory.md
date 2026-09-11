@@ -51,3 +51,12 @@ This inventory is source inspection, not a live-state verification. No deploymen
   output and Terraform state. Drift, invalid outputs, or missing original module
   directories stop before downstream apply. This does not repair legacy empty
   checkpoints or make interrupted resource creation automatically resumable.
+- Bootstrap remote-state migration is not yet functional: the migration branch
+  tests for an absent `.terraform` directory after initialization has created it,
+  and the bootstrap source has no S3 backend declaration. Fixing only the branch
+  condition is insufficient. The installer must explicitly preserve the initial
+  local backend, introduce the S3 backend at the migration boundary, compare
+  pre/post state identity, and verify a no-change plan before continuing. Merely
+  adding an S3 block before `init -backend=false` is not an adequate design:
+  disabling initialization does not configure a usable local backend for an
+  S3-declared module. A marker or successful command alone cannot prove migration.
