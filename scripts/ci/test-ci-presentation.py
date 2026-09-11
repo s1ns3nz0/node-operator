@@ -59,11 +59,13 @@ class Presentation(unittest.TestCase):
     def test_workflow_run_identity_bindings(self):
         for producer, consumer, title in (
             ("ci-security.yml", "opa-pr-gate.yml", "CI Security"),
-            ("ci-review-refresh.yml", "ci-review-refresh-handler.yml", "CI Evidence Review Signal"),
+            ("ci-review-refresh.yml", "opa-pr-gate.yml", "CI Evidence Review Signal"),
         ):
             with self.subTest(producer=producer):
                 self.assertIn("name: " + title + "\n", (WORKFLOWS / producer).read_text())
-                self.assertIn("workflows: [" + title + "]", (WORKFLOWS / consumer).read_text())
+                consumer_source = (WORKFLOWS / consumer).read_text()
+                triggers = re.search(r"workflows: \[([^\]]+)\]", consumer_source).group(1)
+                self.assertIn(title, [item.strip() for item in triggers.split(",")])
 
     def test_direct_check_entrypoints_document_their_objective(self):
         references = set()

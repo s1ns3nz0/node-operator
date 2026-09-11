@@ -326,15 +326,6 @@
       "rationale": "S3-LOG-ENCRYPTION",
       "issue": "docs/security/checkov-2026-09-08-disposition.md#s3-log-encryption",
       "expires_at": "2026-10-03T00:00:00Z"
-    },
-    {
-      "rule": "workflow.unsafe",
-      "check_id": "dangerous-triggers",
-      "subject": ".github/workflows/ci-review-refresh-handler.yml",
-      "owner": "fjybjinsu",
-      "rationale": "CI-REVIEW-REFRESH",
-      "issue": "docs/security/workflow-trigger-exception.md#ci-review-refresh",
-      "expires_at": "2026-10-03T00:00:00Z"
     }
   ]
 }

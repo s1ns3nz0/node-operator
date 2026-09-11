@@ -4,7 +4,7 @@ on:
   # Control code comes from the trusted default branch. PR source is read-only
   # scanner/Terraform input; scoped check publication stays in trusted steps.
   workflow_run:
-    workflows: [CI Security]
+    workflows: [CI Security, CI Evidence Review Signal]
     types: [completed]
 
 permissions:
@@ -12,10 +12,15 @@ permissions:
   pull-requests: read
   actions: read
 
+concurrency:
+  group: evidence-gate-${{ github.event.workflow_run.pull_requests[0].number || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   upstream-failure:
     name: Upstream Failure Gate
     if: >-
+      github.event.workflow_run.name == 'CI Security' &&
       github.event.workflow_run.conclusion != 'success' &&
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.pull_requests[0].number != null
@@ -50,6 +55,7 @@ jobs:
   evidence-gate:
     name: Pull Request Policy
     if: >-
+      github.event.workflow_run.name == 'CI Security' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.pull_requests[0].number != null
@@ -59,6 +65,7 @@ jobs:
       pull-requests: read
       packages: read
       checks: write
+      actions: read
     env:
       EVIDENCE_ROOT: ${{ github.workspace }}/.opa-evidence
       SUBJECT_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -132,7 +139,11 @@ jobs:
       - name: Safe JSON and SARIF outputs
         if: always()
         run: scripts/ci/publish-evidence.sh "$EVIDENCE_ROOT/normalized/evidence.json" "$EVIDENCE_ROOT/decision.json" "$EVIDENCE_ROOT/published"
+      - name: Evidence Cache Context
+        if: always()
+        run: bash scripts/ci/workflows/write-review-cache-context.sh
       - name: Normalized policy outputs
+        # Bound metadata is generated only after complete normalized evidence exists.
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
@@ -141,6 +152,7 @@ jobs:
             ${{ env.EVIDENCE_ROOT }}/published/evidence.json
             ${{ env.EVIDENCE_ROOT }}/published/decision.json
             ${{ env.EVIDENCE_ROOT }}/published/policy.sarif
+            ${{ env.EVIDENCE_ROOT }}/published/cache-context.json
             ${{ env.EVIDENCE_ROOT }}/policy-input/baseline-summary.json
           if-no-files-found: error
           retention-days: 90
@@ -153,3 +165,51 @@ jobs:
       - name: OPA decision
         if: always()
         run: scripts/ci/verify-policy-decision.sh "$EVIDENCE_ROOT/published/decision.json"
+  review-refresh:
+    name: Review Policy Refresh
+    if: >-
+      github.event.workflow_run.name == 'CI Evidence Review Signal' &&
+      github.event.workflow_run.event == 'pull_request_review' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      checks: write
+    env:
+      EVIDENCE_ROOT: ${{ github.workspace }}/review-evidence
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Trusted Exact-SHA Evidence Cache
+        id: cache
+        run: python3 scripts/ci/refresh-review-evidence.py
+      - uses: open-policy-agent/setup-opa@b2b258e089860efaadaaf71bf6e3aecb4a3eeff1
+        with:
+          version: v1.17.0
+      - name: Current Review Policy
+        id: review-policy
+        env:
+          SUBJECT_SHA: ${{ steps.cache.outputs.subject_sha }}
+          PR_NUMBER: ${{ steps.cache.outputs.pr_number }}
+        run: bash scripts/ci/workflows/evaluate-review-refresh.sh
+      - name: Review Decision and Evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: ci-review-decision-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_ROOT }}/published
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Exact-SHA Review Check
+        if: always() && steps.cache.outputs.subject_sha != ''
+        env:
+          SUBJECT_SHA: ${{ steps.cache.outputs.subject_sha }}
+          PR_NUMBER: ${{ steps.cache.outputs.pr_number }}
+          EVALUATION_RESULT: ${{ steps.review-policy.outcome }}
+          DETAILS_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash scripts/ci/workflows/publish-review-refresh.sh

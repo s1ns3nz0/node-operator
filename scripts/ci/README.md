@@ -68,7 +68,7 @@ publisher jobs. Signing-fence evidence recognizes the two exact historical and
 current workflow identities so already signed fence images remain verifiable;
 new publications use only the `image-release.yml` identity. `private-ecr-mirror.yml` and
 `release.yml` remain separate authority boundaries. `opa-pr-gate.yml` and
-the review-signal/handler split retain trusted/untrusted execution separation.
+the unprivileged review signal retain trusted/untrusted execution separation.
 Do not merge privileged publication into PR-controlled CI to reduce file count.
 
 On push, a read-only selector compares the push baseline with the checked-out
@@ -93,6 +93,16 @@ A read-only preflight rejects invalid combinations and non-main dispatches.
 Each selected job retains its own environment and IAM role; only signer gets
 `packages: read`. Target-specific source checks remain in the existing scripts.
 This workflow copies artifacts into ECR; it does not deploy them or run DAST.
+
+Review events now enter a dedicated job in `opa-pr-gate.yml`; the separate
+refresh handler and its Actions rerun permission are removed. The signal
+workflow still has no permissions and runs no repository code. The trusted gate
+reuses only its own evidence artifact bound to the current head, base, trusted
+control revision and successful originating security run, within 24 hours.
+It collects current SCM posture and reevaluates OPA without scanner or Terraform
+execution. Missing, expired or mismatched evidence fails closed: rerun CI Security
+for the current revision to trigger a fresh full CI Evidence Gate and cache. The first run
+after rollout must create this new cache metadata before review-only reuse works.
 
 Main branch protection currently requires `quality`, `scanners`, and
 `CI Evidence Decision`. `Code Quality` and `Security Scans` are the readable

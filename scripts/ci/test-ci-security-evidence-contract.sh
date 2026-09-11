@@ -9,7 +9,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 workflow="$script_dir/../../.github/workflows/ci-security.yml"
 gate_workflow="$script_dir/../../.github/workflows/opa-pr-gate.yml"
 review_workflow="$script_dir/../../.github/workflows/ci-review-refresh.yml"
-review_handler="$script_dir/../../.github/workflows/ci-review-refresh-handler.yml"
+review_handler="$gate_workflow"
 
 check_scanner_images() {
   local scanner_workflow="$1"
@@ -94,7 +94,7 @@ if grep -Fq 'include-hidden-files: true' <(workflow_source "$workflow"); then
   exit 1
 fi
 
-test "$(grep -Fc 'checks: write' <(workflow_source "$gate_workflow"))" -eq 2
+test "$(grep -Fc 'checks: write' <(workflow_source "$gate_workflow"))" -eq 3
 grep -Fq 'resolve-pr-evidence-context.sh' <(workflow_source "$gate_workflow")
 grep -Fq 'ref: ${{ steps.context.outputs.trusted_sha }}' <(workflow_source "$gate_workflow")
 grep -Fq 'run: bash scripts/ci/workflows/collect-head-security.sh' "$gate_workflow"
@@ -134,7 +134,10 @@ if grep -Eq '(actions|checks|contents|pull-requests): write|request-pr-evidence-
   printf 'review signal must not have write permissions or invoke repository code\n' >&2
   exit 1
 fi
-grep -Fq 'workflows: [CI Evidence Review Signal]' "$review_handler"
-grep -Fq 'actions: write' "$review_handler"
-grep -Fq 'request-pr-evidence-refresh.sh?ref=$GITHUB_SHA' "$review_handler"
-grep -Fq '"$trusted_script" "$GITHUB_EVENT_PATH"' "$review_handler"
+grep -Fq 'workflows: [CI Security, CI Evidence Review Signal]' "$review_handler"
+grep -Fq 'refresh-review-evidence.py' <(workflow_job_source "$review_handler" review-refresh)
+grep -Fq 'checks: write' <(workflow_job_source "$review_handler" review-refresh)
+if workflow_job_source "$review_handler" review-refresh | grep -Eq 'actions: write|docker run|collect-head-security|collect-trusted-terraform|/rerun'; then
+  printf 'review refresh must not rescan or request Actions write permission\n' >&2
+  exit 1
+fi

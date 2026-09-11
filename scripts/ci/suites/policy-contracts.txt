@@ -8,3 +8,5 @@ scripts/ci/test-ci-presentation.py
 scripts/ci/test-ci-entrypoints.py
 scripts/ci/test-image-release-selection.py
 scripts/ci/test-private-ecr-inputs.py
+scripts/ci/test-refresh-review-evidence.py
+scripts/ci/test-review-refresh-flow.py
