@@ -15,6 +15,14 @@ while [ "$#" -gt 0 ]; do
 done
 [[ "$manifest" = /* ]] && [ -f "$manifest" ] && [ ! -L "$manifest" ] || usage
 command -v kubectl >/dev/null 2>&1 || { printf '%s\n' 'missing command: kubectl' >&2; exit 69; }
+command -v sha256sum >/dev/null 2>&1 || { printf '%s\n' 'missing command: sha256sum' >&2; exit 69; }
+# Bind this helper to the release-reviewed four Issuer/Certificate objects.
+# Update this digest only alongside a reviewed change to the bundled manifest.
+expected_manifest_sha=1a916057897eed21b32c3101184eeaeb27ca709b72ee90d4a0866fad7fd4883a
+actual_manifest_sha="$(sha256sum "$manifest")"
+[ "${actual_manifest_sha%% *}" = "$expected_manifest_sha" ] || {
+  printf '%s\n' 'Vault TLS manifest differs from the reviewed release.' >&2; exit 65;
+}
 
 for deployment in cert-manager cert-manager-webhook cert-manager-cainjector; do
   kubectl -n cert-manager rollout status "deployment/$deployment" --timeout=10m
@@ -35,14 +43,9 @@ fi
 # Preserve a caller-managed namespace exactly; a fresh deployment may create
 # only this namespace, with the repository's restricted Pod Security labels.
 if [ -z "$namespace" ]; then
-  kubectl create namespace vault
-  kubectl label namespace vault \
-    pod-security.kubernetes.io/enforce=restricted \
-    pod-security.kubernetes.io/enforce-version=latest \
-    pod-security.kubernetes.io/audit=restricted \
-    pod-security.kubernetes.io/audit-version=latest \
-    pod-security.kubernetes.io/warn=restricted \
-    pod-security.kubernetes.io/warn-version=latest
+  # A single create prevents a failed label request leaving an unlabelled
+  # namespace. A concurrent creator causes a conflict, never an overwrite.
+  printf '%s\n' '{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"vault","labels":{"pod-security.kubernetes.io/enforce":"restricted","pod-security.kubernetes.io/enforce-version":"latest","pod-security.kubernetes.io/audit":"restricted","pod-security.kubernetes.io/audit-version":"latest","pod-security.kubernetes.io/warn":"restricted","pod-security.kubernetes.io/warn-version":"latest"}}}' | kubectl create -f -
 fi
 kubectl apply -f "$manifest"
 for certificate in vault-internal-ca vault-server-tls; do

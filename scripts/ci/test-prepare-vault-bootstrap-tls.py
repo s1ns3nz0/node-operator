@@ -9,14 +9,21 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/release/prepare-vault-bootstrap-tls.sh"
 MOCK = '''#!/usr/bin/env python3
-import os, sys
+import json, os, sys
 args = sys.argv[1:]
 with open(os.environ["CALLS"], "a") as f: f.write(" ".join(args) + "\\n")
 mode = os.environ["CASE"]
 if "rollout" in args and mode == "unready": sys.exit(1)
 if "namespace" in args and "get" in args:
     if mode == "api_error": sys.exit(1)
-    if mode != "new": print("namespace/vault")
+    if mode not in ("new", "create_denied"): print("namespace/vault")
+if args == ["create", "-f", "-"]:
+    namespace = json.load(sys.stdin)
+    assert namespace["kind"] == "Namespace" and namespace["metadata"]["name"] == "vault"
+    labels = namespace["metadata"]["labels"]
+    for key in ("enforce", "audit", "warn"):
+        assert labels["pod-security.kubernetes.io/" + key] == "restricted"
+    if mode == "create_denied": sys.exit(1)
 if "statefulset" in args:
     if mode == "stateful_error": sys.exit(1)
     if mode == "existing": print("statefulset.apps/vault")
@@ -34,7 +41,9 @@ class TLSBootstrapTests(unittest.TestCase):
             binary.write_text(MOCK)
             binary.chmod(0o755)
             manifest = directory / "certificates.yaml"
-            manifest.write_text("# trusted fixture\n")
+            manifest.write_bytes((ROOT / "docs/gitops/vault-tls-internal-ca.example.yaml").read_bytes())
+            if mode == "hostile":
+                manifest.write_text("apiVersion: v1\nkind: Secret\nmetadata: {name: hostile}\n")
             calls = directory / "calls"
             result = subprocess.run(
                 ["bash", str(SCRIPT), "--manifest", str(manifest)],
@@ -55,10 +64,19 @@ class TLSBootstrapTests(unittest.TestCase):
     def test_new_namespace_precedes_certificate_application(self):
         result, calls = self.invoke("new")
         self.assertEqual(result.returncode, 0, result.stderr)
-        create = next(i for i, command in enumerate(calls) if "create namespace vault" in command)
+        create = calls.index("create -f -")
         apply = next(i for i, command in enumerate(calls) if command.startswith("apply -f "))
         self.assertLess(create, apply)
-        self.assertTrue(any("label namespace vault" in command and "enforce=restricted" in command for command in calls))
+        self.assertFalse(any("label namespace" in command for command in calls))
+
+    def test_hostile_manifest_and_failed_atomic_create_never_apply_certificates(self):
+        for mode in ("hostile", "create_denied"):
+            result, calls = self.invoke(mode)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(any(command.startswith("apply ") for command in calls))
+            self.assertFalse(any(command.startswith("label ") for command in calls))
+            if mode == "hostile":
+                self.assertEqual(calls, [])
 
     def test_unready_existing_or_unreachable_never_mutates(self):
         for mode in ("unready", "existing", "api_error", "stateful_error"):

@@ -136,6 +136,9 @@ the Vault Helm install. The Vault CodeBuild project now invokes the bundled
 creates only a missing `vault` namespace, applies the bundled Certificate and
 Issuer manifest, waits for both Certificates and checks the Secret name only.
 API/RBAC failures and an existing Vault StatefulSet stop it before mutation.
+The helper pins the reviewed manifest SHA-256 and creates a missing Namespace
+with restricted Pod Security labels in a single request; arbitrary manifests
+and failed/concurrent namespace creation stop before Certificate application.
 This is a Task 8 platform prerequisite, not work that can wait until Task 10.
 Do not export the generated CA/private TLS Secret bytes. The first-init
 ceremony is still missing and must be integrated interactively; existing
