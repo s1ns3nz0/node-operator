@@ -131,11 +131,18 @@ place validator signing material in Kubernetes Secrets.
 
 Fresh-install ordering must provision the private cert-manager chart/images
 and reconcile `docs/gitops/vault-tls-internal-ca.example.yaml` before invoking
-the Vault CodeBuild project: its buildspec requires `vault/vault-tls` to exist.
+the Vault Helm install. The Vault CodeBuild project now invokes the bundled
+`prepare-vault-bootstrap-tls.sh` before Helm: it requires healthy cert-manager,
+creates only a missing `vault` namespace, applies the bundled Certificate and
+Issuer manifest, waits for both Certificates and checks the Secret name only.
+API/RBAC failures and an existing Vault StatefulSet stop it before mutation.
 This is a Task 8 platform prerequisite, not work that can wait until Task 10.
 Do not export the generated CA/private TLS Secret bytes. The first-init
 ceremony is still missing and must be integrated interactively; existing
 generate-root recovery wrappers cannot initialize a fresh Vault.
+Private cert-manager installation and the CodeBuild invocation/authority
+lifecycle still need installer orchestration; this TLS helper does not supply
+those dependencies or prove live deployment.
 
 Always pass Region, cluster and SSM instance from the verified handoff into
 private transport commands. Existing historical operator-auth scripts contain

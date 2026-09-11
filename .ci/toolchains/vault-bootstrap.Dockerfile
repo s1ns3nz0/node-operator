@@ -45,6 +45,9 @@ RUN curl --fail --location --silent --show-error --output /usr/local/bin/kubectl
 # Terraform-owned NO_SOURCE buildspec and never written back to Git.
 COPY release/vault-values.yaml.example /opt/node-operator/vault-values.template.yaml
 COPY scripts/release/render-private-vault-values.sh scripts/release/deploy-sealed-vault.sh /opt/node-operator/
+COPY scripts/release/prepare-vault-bootstrap-tls.sh /opt/node-operator/
+COPY docs/gitops/vault-tls-internal-ca.example.yaml /opt/node-operator/vault-tls.yaml
 RUN chmod 0755 /opt/node-operator/render-private-vault-values.sh /opt/node-operator/deploy-sealed-vault.sh
+RUN chmod 0755 /opt/node-operator/prepare-vault-bootstrap-tls.sh
 
 WORKDIR /workspace

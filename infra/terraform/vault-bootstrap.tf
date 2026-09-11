@@ -230,7 +230,7 @@ resource "aws_codebuild_project" "vault_bootstrap" {
           commands:
             - set -eu
             - aws eks update-kubeconfig --region ${var.aws_region} --name ${aws_eks_cluster.private.name}
-            - kubectl get secret vault-tls --namespace vault --ignore-not-found -o name | grep -Fx 'secret/vault-tls'
+            - /opt/node-operator/prepare-vault-bootstrap-tls.sh --manifest /opt/node-operator/vault-tls.yaml
             - aws ecr get-login-password --region ${var.aws_region} | helm registry login --username AWS --password-stdin ${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com
             - test -n "$VAULT_UNSEAL_KEY_ARN"
             - test -n "$VAULT_CHART_MANIFEST_DIGEST"

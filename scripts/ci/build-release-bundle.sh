@@ -36,6 +36,9 @@ mkdir -p "$stage_directory/source" "$stage_directory/rendered"
 
 path_is_in_release_boundary() {
   case "$1" in
+    docs/gitops/vault-tls-internal-ca.example.yaml)
+      return 0
+      ;;
     scripts/release/installer_state.py|scripts/release/installer_preflight.py|scripts/release/installer_bundle.py|scripts/release/installer_infrastructure.py|scripts/release/installer_ops_access.py|scripts/release/installer_ops_execution.py|scripts/release/installer_ops_verify.py|scripts/release/installer_vault_inputs.py|scripts/release/installer_vault_plan.py|scripts/release/installer_vault_workspace.py|scripts/release/installer_vault_execution.py|scripts/release/installer_vault_receipt.py|scripts/release/installer_files.py|scripts/release/interactive_deploy.py)
       return 0
       ;;

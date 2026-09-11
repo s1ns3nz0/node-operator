@@ -16,7 +16,7 @@ TOOLCHAINS = [
         ("terraform-validation", ""), ("release-build", ""), ("vault-release-signer", ""),
         ("gitops-oci-mirror", ""),
         ("argocd-bootstrap", "docs/gitops/argocd-private-values.example.yaml"),
-        ("vault-bootstrap", "release/vault-values.yaml.example scripts/release/render-private-vault-values.sh scripts/release/deploy-sealed-vault.sh"),
+        ("vault-bootstrap", "release/vault-values.yaml.example scripts/release/render-private-vault-values.sh scripts/release/deploy-sealed-vault.sh scripts/release/prepare-vault-bootstrap-tls.sh docs/gitops/vault-tls-internal-ca.example.yaml"),
     )
 ]
 SHARED = {".github/workflows/image-release.yml", "scripts/ci/select-image-release.py"}
