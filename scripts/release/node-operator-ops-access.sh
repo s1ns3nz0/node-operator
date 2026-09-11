@@ -38,6 +38,13 @@ if [ -n "$backend_profile$provider_profile$expected_backend_principal_arn$expect
     }
 fi
 
+# The wrapper owns Terraform's environment. Do not inherit a CLI config,
+# provider cache, state directory, workspace, prompt mode, log destination,
+# variable override, or any future TF_* execution control.
+for ops_terraform_environment_name in ${!TF_@}; do
+  unset "$ops_terraform_environment_name"
+done
+
 for variable in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_SECURITY_TOKEN; do
   [ -z "${!variable:-}" ] || {
     printf 'static or exported AWS credentials are not accepted; use short-lived named profiles\n' >&2
@@ -130,9 +137,17 @@ fi
 [ -z "$session_handoff" ] || { [ "$operation" = apply ] && [ -n "$inputs" ]; } || { printf '%s\n' '--session-handoff is supported only for apply with --inputs' >&2; exit 64; }
 [ -n "$plan_file" ] || { printf 'a private saved plan path is required\n' >&2; exit 64; }
 private_path "$plan_file" || exit 1
+[ -z "$session_handoff" ] || {
+  private_path "$session_handoff" || exit 1
+  [ ! -e "$session_handoff" ] && [ ! -L "$session_handoff" ] || {
+    printf '%s\n' 'refusing to overwrite session handoff'
+    exit 1
+  }
+}
 command -v terraform >/dev/null 2>&1 || { printf 'terraform is required\n' >&2; exit 127; }
 command -v jq >/dev/null 2>&1 || { printf 'jq is required\n' >&2; exit 127; }
 command -v shasum >/dev/null 2>&1 || { printf 'shasum is required\n' >&2; exit 127; }
+[ -z "$session_handoff" ] || command -v python3 >/dev/null 2>&1 || { printf 'python3 is required to publish a session handoff safely\n' >&2; exit 127; }
 if [ "$credential_boundary" = true ]; then
   command -v aws >/dev/null 2>&1 || { printf 'aws is required for credential identity verification\n' >&2; exit 127; }
   validate_profile "$backend_profile"; validate_profile "$provider_profile"
@@ -313,14 +328,37 @@ case "$operation" in
     actual_sha="$(shasum -a 256 "$plan_file" | awk '{print $1}')"; [ "$actual_sha" = "$expected_sha" ] || { printf 'saved plan changed during validation\n' >&2; exit 1; }
     terraform_scoped -chdir="$module" apply -input=false "$plan_file"
     if [ -n "$session_handoff" ]; then
-      [ ! -e "$session_handoff" ] && [ ! -L "$session_handoff" ] || { printf '%s\n' 'refusing to overwrite session handoff' >&2; exit 1; }
       instance_id="$(terraform_scoped -chdir="$module" output -raw instance_id)"
       [[ "$instance_id" =~ ^i-[0-9a-f]+$ ]] || { printf '%s\n' 'ops-access apply did not return a valid SSM instance ID' >&2; exit 70; }
       cluster_name="$(jq -er '.cluster_name' "$inputs")"
       aws_region="$(jq -er '.aws_region | select(test("^ap-northeast-(1|2)$"))' "$config")"
-      jq -n --arg cluster "$cluster_name" --arg region "$aws_region" --arg instance "$instance_id" \
-        '{schema_version:1,aws_region:$region,cluster_name:$cluster,ssm_ops_instance_id:$instance}' > "$session_handoff"
-      chmod 600 "$session_handoff"
+      private_path "$session_handoff" || exit 1
+      [ ! -e "$session_handoff" ] && [ ! -L "$session_handoff" ] || {
+        printf '%s\n' 'refusing to overwrite session handoff'
+        exit 1
+      }
+      session_temporary="$(mktemp "$(dirname "$session_handoff")/.node-operator-session-handoff.XXXXXX")" || { printf '%s\n' 'cannot allocate private session handoff' >&2; exit 1; }
+      chmod 600 "$session_temporary"
+      if ! jq -n --arg cluster "$cluster_name" --arg region "$aws_region" --arg instance "$instance_id" \
+        '{schema_version:1,aws_region:$region,cluster_name:$cluster,ssm_ops_instance_id:$instance}' > "$session_temporary"; then
+        rm -f "$session_temporary"
+        printf '%s\n' 'cannot write private session handoff' >&2
+        exit 1
+      fi
+      # os.link names the exact destination; unlike ln(1), it cannot treat a
+      # raced directory as a destination directory and publish inside it.
+      if ! python3 - "$session_temporary" "$session_handoff" <<'PY'
+import os
+import sys
+
+os.link(sys.argv[1], sys.argv[2], follow_symlinks=False)
+PY
+      then
+        rm -f "$session_temporary"
+        printf '%s\n' 'refusing to overwrite session handoff' >&2
+        exit 1
+      fi
+      rm -f "$session_temporary"
       printf 'PASS private EKS session handoff written to %s.\n' "$session_handoff"
     fi
     ;;
