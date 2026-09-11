@@ -118,7 +118,7 @@ func followFile(file *os.File, records chan<- []byte) {
 			continue
 		}
 		if len(line) > 0 && err == nil {
-			emitRecord(line[:len(line)-1], records)
+			emitRecord(line[:len(line)-1], "file", records)
 		}
 		if errors.Is(err, io.EOF) {
 			// Keep this descriptor open. Closing and seeking EOF again can miss a
@@ -138,20 +138,36 @@ func readRecords(reader io.ReadCloser, records chan<- []byte) {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 64*1024), maxAuditRecordBytes)
 	for scanner.Scan() {
-		emitRecord(scanner.Bytes(), records)
+		emitRecord(scanner.Bytes(), "socket", records)
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintf(os.Stderr, "audit record read failed: %v\n", err)
 	}
 }
 
-func emitRecord(line []byte, records chan<- []byte) {
-	line = append([]byte(nil), line...)
+func emitRecord(line []byte, source string, records chan<- []byte) {
+	if source != "socket" && source != "file" {
+		fmt.Fprintln(os.Stderr, "discarded unknown Vault audit source")
+		return
+	}
 	if !json.Valid(line) {
 		fmt.Fprintln(os.Stderr, "discarded non-JSON Vault audit record")
 		return
 	}
-	records <- line
+	// Provenance belongs to the input path, never to a field supplied by Vault.
+	// Distinct devices have distinct HMAC salts for the same request ID.
+	// Preserve both streams, but let consumers select one device for pairing.
+	envelope := struct {
+		SchemaVersion int    `json:"schema_version"`
+		AuditSource   string `json:"audit_source"`
+		Log           string `json:"log"`
+	}{1, source, string(line)}
+	encoded, err := json.Marshal(envelope)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "discarded unencodable Vault audit envelope")
+		return
+	}
+	records <- encoded
 }
 
 func writeRecords(records <-chan []byte) {

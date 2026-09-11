@@ -21,7 +21,7 @@ MAX_PAGES = 8
 MAX_EVENTS = 256
 MAX_EVENT_BYTES = 16384
 MAX_TOTAL_BYTES = 1048576
-CRI = re.compile(r"^\S+\s+(?:stdout|stderr)\s+[FP]\s+(.*)$")
+CRI = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,9})?Z\s+(?:stdout|stderr)\s+[FP]\s+(.*)$")
 STAMP = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,9})?Z$")
 
 
@@ -71,18 +71,41 @@ def _default_runner(args):
 def _decode(message):
     if not isinstance(message, str) or len(message.encode("utf-8")) > MAX_EVENT_BYTES:
         raise AuditReaderError("audit reader event is malformed or oversized")
-    payload = CRI.sub(r"\1", message)
     # Fluent/CRI relays can wrap JSON strings in one or two {log: ...} layers.
+    # Parse a structured Fluent Bit envelope before interpreting its ``log``
+    # field as CRI.  A compact outer JSON object may otherwise put ``stdout F``
+    # after its first whitespace and be mistaken for a CRI prefix.
+    payload, source = message, None
     for _ in range(3):
-        payload = CRI.sub(r"\1", payload)
         try:
             value = json.loads(payload)
         except json.JSONDecodeError:
+            stripped = CRI.sub(r"\1", payload)
+            if stripped == payload:
+                return None
+            try:
+                value = json.loads(stripped)
+            except json.JSONDecodeError:
+                return None
+        if not isinstance(value, dict):
             return None
-        if isinstance(value, dict) and isinstance(value.get("log"), str):
+        if "schema_version" in value or "audit_source" in value:
+            if (set(value) != {"schema_version", "audit_source", "log"} or
+                    type(value["schema_version"]) is not int or value["schema_version"] != 1 or
+                    value["audit_source"] not in ("socket", "file") or
+                    not isinstance(value["log"], str) or source is not None):
+                raise AuditReaderError("audit reader relay envelope is malformed")
+            # The file and socket devices can emit the same request ID with
+            # different device HMACs. UC5 binds only the socket device.
+            if value["audit_source"] != "socket":
+                return None
+            source, payload = "socket", value["log"]
+            continue
+        if isinstance(value.get("log"), str):
             payload = value["log"]
             continue
-        if isinstance(value, dict) and value.get("type") in ("request", "response") and isinstance(value.get("request"), dict):
+        if (source == "socket" and value.get("type") in ("request", "response") and
+                isinstance(value.get("request"), dict)):
             return value
         return None
     raise AuditReaderError("audit reader envelope nesting exceeded")
