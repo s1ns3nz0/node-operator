@@ -111,6 +111,17 @@ class AdapterTests(unittest.TestCase):
         with self.assertRaises(M.STATE.StateError): api.delete_runtime_role({})
         fake.assert_not_called()
 
+    def test_audit_raw_logging_and_wrong_device_refused(self):
+        device = {"type": "socket", "options": {"log_raw": "false", "socket_type": "unix", "address": "/vault/audit/validator-audit.sock"}}
+        self.response = (200, {"data": {"validator-socket/": device}})
+        self.assertTrue(self.api.audit_ready())
+        self.assertEqual(self.calls[-1], ("GET", M.AUDIT_CONFIG))
+        for key, value in (("log_raw", "true"), ("socket_type", "tcp"), ("address", "elsewhere")):
+            original = device["options"][key]
+            device["options"][key] = value
+            with self.assertRaises(M.AdapterError): self.api.audit_ready()
+            device["options"][key] = original
+
 
 class TransportTests(unittest.TestCase):
     def test_unsafe_configuration_does_not_create_tls_context(self):
