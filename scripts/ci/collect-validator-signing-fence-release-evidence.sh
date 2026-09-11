@@ -17,13 +17,21 @@ umask 077
 scratch="$(mktemp -d)"; temporary=''
 cleanup() { set +e; [ -z "$temporary" ] || [ ! -e "$temporary" ] || rm -f "$temporary"; rm -rf "$scratch"; }
 trap cleanup EXIT
-identity='https://github.com/s1ns3nz0/node-operator/.github/workflows/validator-signing-fence-image.yml@refs/heads/main'
+legacy_identity='https://github.com/s1ns3nz0/node-operator/.github/workflows/validator-signing-fence-image.yml@refs/heads/main'
+current_identity='https://github.com/s1ns3nz0/node-operator/.github/workflows/image-release.yml@refs/heads/main'
 issuer='https://token.actions.githubusercontent.com'
 digest="${image##*@}"
 
 # These commands perform the cryptographic verification against the exact OCI
 # digest. Their raw payloads remain in the private temporary directory.
-cosign verify --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$source_revision" "$image" > "$scratch/signature.json"
+identity=''
+for candidate_identity in "$legacy_identity" "$current_identity"; do
+  if cosign verify --certificate-identity "$candidate_identity" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$source_revision" "$image" > "$scratch/signature.json" 2> "$scratch/signature.err"; then
+    identity="$candidate_identity"
+    break
+  fi
+done
+[ -n "$identity" ] || { printf 'verified signature does not match an approved exact workflow identity\n' >&2; exit 1; }
 cosign verify-attestation --type slsaprovenance1 --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$source_revision" "$image" > "$scratch/attestation.json"
 cosign verify-attestation --type cyclonedx --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$source_revision" "$image" > "$scratch/sbom-attestation.json"
 cosign verify-attestation --type https://github.com/s1ns3nz0/node-operator/attestations/scan-summary/v1 --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$source_revision" "$image" > "$scratch/scan-attestation.json"

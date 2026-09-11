@@ -7,7 +7,7 @@ code was changed or an exception is narrowly justified.
 
 | Rule | Affected workflow(s) | Finding | Resolution |
 | --- | --- | --- | --- |
-| `template-injection` | `ci-security.yml`, `ci-terraform.yml`, `ci-release-integrity.yml`, `release.yml`, `scanner-image-release.yml`, `toolchain-image-release.yml`, `opa-pr-gate.yml` | `github.actor` was interpolated directly into a shell `run:` block during GHCR login. | Resolved by mapping `github.actor` and `github.token` to step-scoped environment variables, then expanding shell variables only. |
+| `template-injection` | `ci-security.yml`, `ci-terraform.yml`, `ci-release-integrity.yml`, `release.yml`, `image-release.yml`, `opa-pr-gate.yml` | `github.actor` was interpolated directly into a shell `run:` block during GHCR login. | Resolved by mapping `github.actor` and `github.token` to step-scoped environment variables, then expanding shell variables only. |
 | `dangerous-triggers` | `opa-pr-gate.yml` | `workflow_run` can become privileged if it checks out or executes PR-controlled code. | Narrow documented exception. The workflow resolves control-plane code from the exact default-branch workflow SHA, verifies the trigger identity/current PR head, and reruns the immutable trusted scanner instead of consuming the PR workflow's artifact. PR and base trees are read-only inputs; Terraform has no network. Only publisher jobs receive job-scoped `checks: write`, and no PR executable receives the token. |
 
 The evidence collector accepts both current `given_path` and legacy

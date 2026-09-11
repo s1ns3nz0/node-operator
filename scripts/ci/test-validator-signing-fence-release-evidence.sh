@@ -10,6 +10,7 @@ cat > "$scratch/bin/cosign" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$MOCK_TRACE"
 [ "${MOCK_COSIGN_FAIL:-false}" = false ] || exit 1
+if [ "${MOCK_CURRENT_ONLY:-false}" = true ] && printf '%s\n' "$*" | grep -Fq 'validator-signing-fence-image.yml@refs/heads/main'; then exit 1; fi
 case "$1" in
   verify)
     case "${MOCK_SIGNATURE_MODE:-valid}" in
@@ -47,6 +48,10 @@ expect_fail() { if "$@" >/dev/null 2>&1; then printf 'accepted %s\n' "$1" >&2; e
 : > "$scratch/trace"; run >/dev/null
 jq -e --arg d "$digest" --arg r "$revision" '.result == "PASS" and .artifact_digest == $d and .source_revision == $r and .cryptographic_verification.slsa_provenance == true and .vulnerability_scan.status == "passed"' "$scratch/result.json" >/dev/null
 grep -Fq 'verify --certificate-identity' "$scratch/trace"; grep -Fq 'verify-attestation --type slsaprovenance1' "$scratch/trace"; grep -Fq "registry:$image" "$scratch/trace"
+: > "$scratch/trace"
+PATH="$scratch/bin:$PATH" MOCK_CURRENT_ONLY=true MOCK_TRACE="$scratch/trace" MOCK_STATEMENT="$statement" MOCK_SBOM_STATEMENT="$sbom_statement" MOCK_SCAN_STATEMENT="$scan_statement" "$collector" "$image" "$revision" "$scratch/result-current.json" >/dev/null
+jq -e '.cryptographic_verification.identity == "https://github.com/s1ns3nz0/node-operator/.github/workflows/image-release.yml@refs/heads/main"' "$scratch/result-current.json" >/dev/null
+grep -Fq 'verify-attestation --type slsaprovenance1 --certificate-identity https://github.com/s1ns3nz0/node-operator/.github/workflows/image-release.yml@refs/heads/main' "$scratch/trace"
 base_env=(env PATH="$scratch/bin:$PATH" MOCK_TRACE="$scratch/trace" MOCK_STATEMENT="$statement" MOCK_SBOM_STATEMENT="$sbom_statement" MOCK_SCAN_STATEMENT="$scan_statement")
 expect_fail "${base_env[@]}" MOCK_COSIGN_FAIL=true "$collector" "$image" "$revision" "$scratch/fail.json"
 expect_fail "${base_env[@]}" MOCK_SIGNATURE_MODE=empty "$collector" "$image" "$revision" "$scratch/fail.json"

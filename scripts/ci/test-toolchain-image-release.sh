@@ -17,7 +17,21 @@ for dockerfile in "$root/.ci/toolchains/terraform-validation.Dockerfile" "$root/
   fi
 done
 grep -Fq 'ripgrep' "$root/.ci/toolchains/release-build.Dockerfile"
-workflow="$root/.github/workflows/toolchain-image-release.yml"
+workflow="$root/.github/workflows/image-release.yml"
+if ! ruby -ryaml -e '
+  jobs = YAML.load_file(ARGV[0]).fetch("jobs")
+  build = jobs.fetch("toolchain-build")
+  publish = jobs.fetch("toolchain-publish")
+  abort unless build.fetch("needs") == ["select"] && publish.fetch("needs") == ["select", "toolchain-build"]
+  abort unless build.dig("permissions", "packages") == "read" && publish.dig("permissions", "packages") == "write"
+  abort unless build.fetch("if") == "needs.select.outputs.toolchains == '\''true'\''"
+  abort unless publish.fetch("if") == "github.ref == '\''refs/heads/main'\'' && needs.select.outputs.toolchains == '\''true'\'' && needs.toolchain-build.result == '\''success'\''"
+  abort unless build.dig("strategy", "matrix") == "${{ fromJSON(needs.select.outputs.toolchain_matrix) }}"
+  abort unless publish.dig("strategy", "matrix") == "${{ fromJSON(needs.select.outputs.toolchain_matrix) }}"
+' "$workflow"; then
+  printf 'toolchain jobs must retain their selected matrix, read-build and main-only successful publication boundary\n' >&2
+  exit 1
+fi
 grep -Fq 'test-build-release-bundle.sh' <(workflow_source "$workflow")
 grep -Fq 'DOCKERFILE: ${{ matrix.dockerfile }}' "$workflow"
 grep -Fq 'IMAGE_NAME: ${{ matrix.image }}' "$workflow"

@@ -6,3 +6,4 @@ scripts/ci/test-dast-target-contract.sh
 scripts/ci/test-ci-suite-ownership.py
 scripts/ci/test-ci-presentation.py
 scripts/ci/test-ci-entrypoints.py
+scripts/ci/test-image-release-selection.py

@@ -7,7 +7,7 @@ docker_config="$(mktemp -d)"; token_file="$RUNNER_TEMP/vault-audit-relay-oidc-to
 cleanup() { rm -rf "$docker_config"; rm -f "$token_file" "$curl_config" "$response" "$creds"; }; trap cleanup EXIT
 export DOCKER_CONFIG="$docker_config"
 repository=node-operator-baseline-vault-audit-relay
-identity='https://github.com/s1ns3nz0/node-operator/.github/workflows/vault-audit-relay-image-release.yml@refs/heads/main'
+identity='https://github.com/s1ns3nz0/node-operator/.github/workflows/image-release.yml@refs/heads/main'
 issuer='https://token.actions.githubusercontent.com'
 input_sha="$({ sha256sum .ci/vault-audit-relay/Dockerfile go.mod cmd/vault-audit-relay/main.go cmd/vault-audit-relay/main_test.go; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
 local_image="$repository:local-${GITHUB_SHA}-${GITHUB_RUN_ID}"

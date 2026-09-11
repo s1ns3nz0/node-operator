@@ -63,12 +63,24 @@ share `ci-policy.yml` but keep distinct named jobs. Fence Security and Release
 Integrity are reusable workflows; they remain at the top level of
 `.github/workflows/` (GitHub does not support workflow subdirectories).
 
-Historical publisher filenames such as `validator-signing-fence-image.yml`,
-`vault-audit-relay-image-release.yml`, `*-mirror.yml`, and `release.yml` are
-intentional compatibility exceptions: OIDC, Cosign certificate identities,
-release evidence or deployment contracts refer to them. `opa-pr-gate.yml` and
+`image-release.yml` owns the scanner, toolchain, signing-fence and audit-relay
+publisher jobs. Signing-fence evidence recognizes the two exact historical and
+current workflow identities so already signed fence images remain verifiable;
+new publications use only the `image-release.yml` identity. `*-mirror.yml` and
+`release.yml` remain separate authority boundaries. `opa-pr-gate.yml` and
 the review-signal/handler split retain trusted/untrusted execution separation.
 Do not merge privileged publication into PR-controlled CI to reduce file count.
+
+On push, a read-only selector compares the push baseline with the checked-out
+commit. Only affected image families run; toolchains use a selected matrix rather
+than rebuilding all six images. Missing baselines conservatively select all.
+Publication requires main and successful prerequisites. Fence changes now also
+trigger automatic security checks and protected publication on main, replacing
+the previous manual-only Fence entrypoint. Existing protected environments remain.
+Manual dispatch accepts `target=all`, `scanner`, `toolchains`, `fence`, `relay`,
+or an individual toolchain name. The signed deployment bundle still uses
+`release.yml`; combining image publishers does not publish a deployment bundle
+or update running workloads.
 
 Main branch protection currently requires `quality`, `scanners`, and
 `CI Evidence Decision`. `Code Quality` and `Security Scans` are the readable
