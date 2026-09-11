@@ -70,8 +70,9 @@ class InstallerCommandTests(unittest.TestCase):
             role = "arn:aws:iam::123456789012:role/backend"
             options = ["--release-dir", temporary, "--aws-profile", "test", "--aws-region", "ap-northeast-1", "--name", "test-node",
                        "--prepare-infrastructure", "--backend-principal-arn", role]
-            with patch.dict(sys.modules, {"installer_bundle": bundle_module}), patch.object(cli, "discover", return_value=discovery), patch.object(cli, "prepare_inputs") as prepare:
+            with patch.dict(sys.modules, {"installer_bundle": bundle_module}), patch.object(cli, "discover", return_value=discovery), patch.object(cli, "verify_backend_role", return_value={"existence": "verified"}) as verify_role, patch.object(cli, "prepare_inputs") as prepare:
                 _, result = self.invoke(directory, "start", options)
+            verify_role.assert_called_once_with(discovery, role)
             materialize.assert_called_once_with(Path(temporary), directory / "release", RELEASE["release_sha"], RELEASE["bundle_digest"])
             prepare.assert_called_once_with(directory / "release", directory / "infrastructure-inputs", discovery, role)
             self.assertEqual(result["result"], "infrastructure_inputs_ready")
@@ -87,6 +88,18 @@ class InstallerCommandTests(unittest.TestCase):
             options = ["--release-dir", temporary, "--aws-profile", "test", "--aws-region", "ap-northeast-1", "--name", "test-node",
                        "--prepare-infrastructure", "--backend-principal-arn", "arn:aws:iam::999999999999:role/backend"]
             with patch.dict(sys.modules, {"installer_bundle": bundle_module}), patch.object(cli, "discover", return_value=discovery), patch.object(cli, "prepare_inputs") as prepare, self.assertRaises(cli.InfrastructureError):
+                self.invoke(Path(temporary).resolve() / "state", "start", options)
+            materialize.assert_not_called()
+            prepare.assert_not_called()
+
+    def test_unavailable_role_prevents_release_execution(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            materialize = Mock()
+            bundle_module = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=materialize)
+            discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"]}
+            options = ["--release-dir", temporary, "--aws-profile", "test", "--aws-region", "ap-northeast-1", "--name", "test-node",
+                       "--prepare-infrastructure", "--backend-principal-arn", "arn:aws:iam::123456789012:role/missing"]
+            with patch.dict(sys.modules, {"installer_bundle": bundle_module}), patch.object(cli, "discover", return_value=discovery), patch.object(cli, "verify_backend_role", side_effect=cli.PreflightError("unavailable")), patch.object(cli, "prepare_inputs") as prepare, self.assertRaises(cli.PreflightError):
                 self.invoke(Path(temporary).resolve() / "state", "start", options)
             materialize.assert_not_called()
             prepare.assert_not_called()

@@ -13,6 +13,28 @@ spec.loader.exec_module(module)
 
 
 class PreflightTests(unittest.TestCase):
+    def test_backend_role_lookup_checks_exact_identity_not_permissions(self):
+        context = {"aws_profile": "test", "aws_region": "ap-northeast-1", "aws_account_id": "123456789012"}
+        arn = "arn:aws:iam::123456789012:role/path/backend"
+        with patch.object(module, "aws_read", return_value={"Arn": arn, "RoleId": "AROA" + "A" * 17}) as read:
+            result = module.verify_backend_role(context, arn)
+        self.assertEqual(read.call_args.args, ("test", "ap-northeast-1", ["iam", "get-role", "--role-name", "backend", "--query", "Role.{Arn:Arn,RoleId:RoleId}"]))
+        self.assertEqual(result["existence"], "verified")
+        self.assertEqual(result["backend_permissions"], "not_verified")
+
+    def test_backend_role_missing_wrong_account_or_malformed_is_rejected(self):
+        context = {"aws_profile": "test", "aws_region": "ap-northeast-1", "aws_account_id": "123456789012"}
+        arn = "arn:aws:iam::123456789012:role/backend"
+        for observed in (None, {}, {"Arn": arn, "RoleId": "invalid"}, {"Arn": arn + "wrong", "RoleId": "AROA" + "A" * 17}):
+            with patch.object(module, "aws_read", return_value=observed), self.assertRaises(module.PreflightError):
+                module.verify_backend_role(context, arn)
+        with patch.object(module, "aws_read") as read, self.assertRaises(module.PreflightError):
+            module.verify_backend_role(context, arn.replace("123456789012", "999999999999"))
+        read.assert_not_called()
+        with patch.object(module, "aws_read", side_effect=module.PreflightError("sensitive raw error")), self.assertRaisesRegex(module.PreflightError, "iam:GetRole") as caught:
+            module.verify_backend_role(context, arn)
+        self.assertNotIn("sensitive", str(caught.exception))
+
     def test_missing_tools_are_aggregated_without_executing_or_installing(self):
         with patch.object(module.shutil, "which", side_effect=lambda tool: "/bin/" + tool if tool in {"aws", "jq"} else None), patch.object(module.subprocess, "run") as run:
             result = module.local_prerequisites()

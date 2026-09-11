@@ -11,7 +11,7 @@ from pathlib import Path
 import stat
 import sys
 
-from installer_preflight import PreflightError, discover, validate_inputs
+from installer_preflight import PreflightError, discover, validate_inputs, verify_backend_role
 from installer_state import CheckpointStore, StateError, STAGE_NAMES
 from installer_infrastructure import InfrastructureError, prepare_inputs
 
@@ -103,6 +103,7 @@ def run(argv: list[str] | None = None) -> int:
             from installer_infrastructure import expected_inputs
             inputs_dir = args.state_dir / "infrastructure-inputs"
             expected_inputs(inputs_dir, discovery, principal)
+            discovery["backend_role"] = verify_backend_role(discovery, principal)
             bundle_root = materialize_release(args.release_dir, args.state_dir / "release",
                                               release["release_sha"], release["bundle_digest"])
             prepare_inputs(bundle_root, inputs_dir, discovery, principal)

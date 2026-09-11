@@ -45,6 +45,36 @@ def validate_inputs(profile: str, region: str, name: str) -> None:
         raise PreflightError("Deployment name must be 3-20 lowercase DNS characters.")
 
 
+def verify_backend_role(discovery: dict, principal: str) -> dict:
+    """Read the exact IAM role identity, without assuming it or reading secrets.
+
+    Existence is not proof of trust, backend access or provisioning authority.
+    Keep policy documents and credential material out of the returned evidence.
+    """
+    account = discovery["aws_account_id"]
+    if not isinstance(account, str) or not re.fullmatch(r"[0-9]{12}", account):
+        raise PreflightError("Backend role account is invalid.")
+    prefix = f"arn:aws:iam::{account}:role/"
+    if not isinstance(principal, str) or not principal.startswith(prefix):
+        raise PreflightError("Backend role must belong to the selected AWS account.")
+    role_name = principal.rsplit("/", 1)[-1]
+    if not re.fullmatch(r"[A-Za-z0-9+=,.@_-]{1,64}", role_name):
+        raise PreflightError("Backend role name is invalid.")
+    try:
+        observed = aws_read(discovery["aws_profile"], discovery["aws_region"],
+                            ["iam", "get-role", "--role-name", role_name,
+                             "--query", "Role.{Arn:Arn,RoleId:RoleId}"])
+    except PreflightError as error:
+        raise PreflightError("Backend role could not be verified. Check that it exists and the selected profile permits iam:GetRole; no role was created or assumed.") from error
+    if (not isinstance(observed, dict) or observed.get("Arn") != principal
+            or not isinstance(observed.get("RoleId"), str)
+            or not re.fullmatch(r"AROA[A-Z0-9]{12,124}", observed["RoleId"])):
+        raise PreflightError("AWS backend role identity does not match the selected role.")
+    return {"arn": principal, "role_id": observed["RoleId"],
+            "existence": "verified", "assume_role": "not_verified",
+            "backend_permissions": "not_verified", "provisioning_permissions": "not_verified"}
+
+
 def backend_collisions(profile: str, region: str, name: str, account: str) -> dict:
     """Check deterministic backend names; never treat foreign S3 names as free.
 

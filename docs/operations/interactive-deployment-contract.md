@@ -26,8 +26,12 @@ Add `--prepare-infrastructure` to `start` or `resume`. Supply
 the role prompt. This creates `release/` and `infrastructure-inputs/` under the
 private state directory. Existing release bytes, file permissions and input
 values must still match on reuse; changed files are not overwritten. The role
-is checked for same-account ARN syntax only at this stage, not existence or
-effective permissions. No role is created or assumed, and Terraform is not run.
+is checked for same-account ARN syntax and then queried with `iam:GetRole` using
+the selected profile. Its exact ARN and unique role ID must be returned before
+release materialization or input generation. This verifies existence, not role
+trust, assume-role access or effective backend/provisioning permissions. A missing
+role or denied lookup stops preparation with an actionable message. No role is
+created or assumed, and Terraform is not run.
 `infrastructure_inputs_ready` is a preparation result, not a deployment result.
 Publishing the release and inputs uses the OS no-replace rename operation
 (macOS or Linux with supported libc/filesystem). Unsupported platforms fail
