@@ -9,24 +9,28 @@ set -euo pipefail
 # policy/IaC source needed to review them.  Fixtures, raw scanner evidence,
 # credentials, and release-tool reports are outside this boundary.
 
-if [ "$#" -ne 1 ] && [ "$#" -ne 5 ]; then
-  printf 'usage: %s OUTPUT_DIRECTORY [--vault-bootstrap-record FILE --audit-relay-record FILE]\n' "$0" >&2
+if [ "$#" -ne 1 ] && [ "$#" -ne 7 ]; then
+  printf 'usage: %s OUTPUT_DIRECTORY [--vault-bootstrap-record FILE --audit-relay-record FILE --gitops-oci-mirror-record FILE]\n' "$0" >&2
   exit 64
 fi
 
 output_directory="$1"
 vault_bootstrap_record=''
 audit_relay_record=''
+gitops_oci_mirror_record=''
 shift
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --vault-bootstrap-record) [ -z "$vault_bootstrap_record" ] || exit 64; vault_bootstrap_record="${2:-}"; shift 2 ;;
     --audit-relay-record) [ -z "$audit_relay_record" ] || exit 64; audit_relay_record="${2:-}"; shift 2 ;;
+    --gitops-oci-mirror-record) [ -z "$gitops_oci_mirror_record" ] || exit 64; gitops_oci_mirror_record="${2:-}"; shift 2 ;;
     *) exit 64 ;;
   esac
 done
-if { [ -n "$vault_bootstrap_record" ] && [ -z "$audit_relay_record" ]; } || { [ -z "$vault_bootstrap_record" ] && [ -n "$audit_relay_record" ]; }; then
-  printf 'both exact publication records are required to build an installer artifact index\n' >&2
+record_count=0
+for record in "$vault_bootstrap_record" "$audit_relay_record" "$gitops_oci_mirror_record"; do [ -z "$record" ] || record_count=$((record_count + 1)); done
+if [ "$record_count" -ne 0 ] && [ "$record_count" -ne 3 ]; then
+  printf 'all three exact publication records are required to build an installer artifact index\n' >&2
   exit 64
 fi
 
@@ -91,6 +95,7 @@ if [ -n "$vault_bootstrap_record" ]; then
     --approved-catalog "$root/.ci/gitops/approved-oci-artifacts.json" \
     --vault-bootstrap-record "$vault_bootstrap_record" \
     --audit-relay-record "$audit_relay_record" \
+    --gitops-oci-mirror-record "$gitops_oci_mirror_record" \
     --output "$stage_directory/rendered/installer-artifact-index.json"
 fi
 

@@ -110,7 +110,7 @@ def _catalog_chart(catalog: dict[str, Any], component: str, name: str) -> dict[s
     return {"kind": "helm-chart", "approved_url": item["source"], "archive_sha256": item["sha256"], "expected_oci_manifest_digest": item["ecrManifestDigest"], "version": item["version"], "destination": item["destination"], "tag": item["ecrTag"]}
 
 
-def build_index(release_sha: str, catalog_path: Path, bootstrap_path: Path, relay_path: Path) -> dict[str, Any]:
+def build_index(release_sha: str, catalog_path: Path, bootstrap_path: Path, relay_path: Path, gitops_oci_mirror_path: Path) -> dict[str, Any]:
     if not SHA40.fullmatch(release_sha):
         raise ArtifactIndexError("release SHA must be an exact lowercase 40-hex revision")
     catalog = _exact(_json_file(catalog_path), {"version", "helm_archives", "artifacts"}, "approved catalog")
@@ -118,9 +118,11 @@ def build_index(release_sha: str, catalog_path: Path, bootstrap_path: Path, rela
         raise ArtifactIndexError("approved catalog is invalid")
     bootstrap = _record(bootstrap_path, "vault-bootstrap", release_sha, "input-hash-and-registry-digest")
     relay = _record(relay_path, "vault-audit-relay", release_sha, "cosign-and-slsa")
+    gitops_oci_mirror = _record(gitops_oci_mirror_path, "gitops-oci-mirror", release_sha, "input-hash-and-registry-digest")
     components = {
         "vault-bootstrap": {"kind": "image", "build_revision": bootstrap["build_revision"], "third_party_source_revision": bootstrap["third_party_source_revision"], "image_ref": bootstrap["image_ref"], "manifest_digest": bootstrap["manifest_digest"], "input_sha256": bootstrap["input_sha256"], "publication": bootstrap["publication"], "verification": bootstrap["verification"]},
         "vault-audit-relay": {"kind": "image", "build_revision": relay["build_revision"], "third_party_source_revision": relay["third_party_source_revision"], "image_ref": relay["image_ref"], "manifest_digest": relay["manifest_digest"], "input_sha256": relay["input_sha256"], "publication": relay["publication"], "verification": relay["verification"]},
+        "gitops-oci-mirror": {"kind": "image", "build_revision": gitops_oci_mirror["build_revision"], "third_party_source_revision": gitops_oci_mirror["third_party_source_revision"], "image_ref": gitops_oci_mirror["image_ref"], "manifest_digest": gitops_oci_mirror["manifest_digest"], "input_sha256": gitops_oci_mirror["input_sha256"], "publication": gitops_oci_mirror["publication"], "verification": gitops_oci_mirror["verification"]},
         "vault-server": _catalog_image(catalog, "vault-server", "docker.io/hashicorp/vault@"),
         "vault-injector": _catalog_image(catalog, "vault-injector", "docker.io/hashicorp/vault-k8s@"),
         "cert-manager-controller": _catalog_image(catalog, "cert-manager-controller", "quay.io/jetstack/cert-manager-controller@"),
@@ -170,10 +172,11 @@ def main() -> int:
     parser.add_argument("--approved-catalog", required=True, type=Path)
     parser.add_argument("--vault-bootstrap-record", required=True, type=Path)
     parser.add_argument("--audit-relay-record", required=True, type=Path)
+    parser.add_argument("--gitops-oci-mirror-record", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     try:
-        _publish(args.output, build_index(args.release_sha, args.approved_catalog, args.vault_bootstrap_record, args.audit_relay_record))
+        _publish(args.output, build_index(args.release_sha, args.approved_catalog, args.vault_bootstrap_record, args.audit_relay_record, args.gitops_oci_mirror_record))
     except ArtifactIndexError as error:
         parser.error(str(error))
     return 0

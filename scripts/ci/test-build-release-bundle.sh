@@ -25,7 +25,9 @@ jq -n --arg component vault-bootstrap --arg revision "$source_revision" --arg me
   '{schema_version:1,component:$component,kind:"image",release_revision:$revision,build_revision:$revision,third_party_source_revision:null,image_ref:("ghcr.io/example/"+$component+"@sha256:"+("a"*64)),manifest_digest:("sha256:"+("a"*64)),input_sha256:("b"*64),publication:{workflow:"fixture",run_id:"1",invocation:"fixture"},verification:{method:$method,status:"passed"}}' > "$private_records/vault-bootstrap.json"
 jq -n --arg component vault-audit-relay --arg revision "$source_revision" --arg method cosign-and-slsa \
   '{schema_version:1,component:$component,kind:"image",release_revision:$revision,build_revision:$revision,third_party_source_revision:null,image_ref:("private.example/"+$component+"@sha256:"+("c"*64)),manifest_digest:("sha256:"+("c"*64)),input_sha256:("d"*64),publication:{workflow:"fixture",run_id:"2",invocation:"fixture"},verification:{method:$method,status:"passed"}}' > "$private_records/vault-audit-relay.json"
-bundle_record_args=(--vault-bootstrap-record "$private_records/vault-bootstrap.json" --audit-relay-record "$private_records/vault-audit-relay.json")
+jq -n --arg component gitops-oci-mirror --arg revision "$source_revision" --arg method input-hash-and-registry-digest \
+  '{schema_version:1,component:$component,kind:"image",release_revision:$revision,build_revision:$revision,third_party_source_revision:null,image_ref:("ghcr.io/example/"+$component+"@sha256:"+("e"*64)),manifest_digest:("sha256:"+("e"*64)),input_sha256:("f"*64),publication:{workflow:"fixture",run_id:"3",invocation:"fixture"},verification:{method:$method,status:"passed"}}' > "$private_records/gitops-oci-mirror.json"
+bundle_record_args=(--vault-bootstrap-record "$private_records/vault-bootstrap.json" --audit-relay-record "$private_records/vault-audit-relay.json" --gitops-oci-mirror-record "$private_records/gitops-oci-mirror.json")
 "$script_dir/build-release-bundle.sh" "$first" "${bundle_record_args[@]}" >/dev/null
 "$script_dir/build-release-bundle.sh" "$temporary_directory/second" "${bundle_record_args[@]}" >/dev/null
 
@@ -125,7 +127,7 @@ rg -F 'name: prysm-hoodi-gp3-kms' "$extract_directory/rendered/prysm.yaml" >/dev
 rg -F 'name: nethermind-hoodi-gp3-kms' "$extract_directory/rendered/nethermind.yaml" >/dev/null
 cmp <(git show HEAD:deploy/prysm/kustomization.yaml) "$extract_directory/source/deploy/prysm/kustomization.yaml"
 cmp <(git show HEAD:policy/decision.rego) "$extract_directory/source/policy/decision.rego"
-jq -e --arg revision "$source_revision" '.schema_version == 1 and .release_revision == $revision and (.components | length == 10)' "$extract_directory/rendered/installer-artifact-index.json" >/dev/null
+jq -e --arg revision "$source_revision" '.schema_version == 1 and .release_revision == $revision and (.components | length == 11) and .components["gitops-oci-mirror"].kind == "image"' "$extract_directory/rendered/installer-artifact-index.json" >/dev/null
 "$extract_directory/source/scripts/release/node-operator-release.sh" verify --bundle-root "$extract_directory" >/dev/null
 prepared="$temporary_directory/prepared-validator"
 "$extract_directory/source/scripts/release/prepare-hoodi-validator-deployment.sh" \
