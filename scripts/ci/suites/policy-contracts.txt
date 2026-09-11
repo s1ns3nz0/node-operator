@@ -13,3 +13,6 @@ scripts/ci/test-review-refresh-flow.py
 scripts/ci/test-workflow-consolidation.py
 scripts/ci/test-mirror-digest-integrity.py
 scripts/ci/test-installer-state.py
+scripts/ci/test-installer-preflight.py
+scripts/ci/test-installer-bundle.py
+scripts/ci/test-interactive-deploy.py

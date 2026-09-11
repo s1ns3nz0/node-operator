@@ -58,6 +58,10 @@ for required_path in \
   source/release/hoodi-release-contract.json \
   source/scripts/release/node-operator-release.sh \
   source/scripts/release/installer_state.py \
+  source/scripts/release/installer_preflight.py \
+  source/scripts/release/installer_bundle.py \
+  source/scripts/release/interactive_deploy.py \
+  source/scripts/release/node-operator-install.sh \
   source/scripts/release/prepare-zero-resource-inputs.sh \
   source/scripts/release/prepare-hoodi-zero-release-inputs.sh \
   source/scripts/release/hoodi-validator-release.sh \

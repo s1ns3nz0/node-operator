@@ -2,7 +2,22 @@
 
 ## Commands
 
-The planned public interface provides `start`, `status`, `resume`, and `ops-access` commands. These are design contracts, not a claim that all commands exist yet. `start` collects minimal input and preflights; `resume` revalidates identity and reconciles the interrupted phase; `status` reads local state without contacting Vault; `ops-access` owns a separate Terraform apply and confirmation.
+The public entrypoint is `scripts/release/node-operator-install.sh`. Its current implementation provides `start`, `status` and `resume` for release consistency checks, read-only AWS discovery and private checkpoints. `ops-access` and provisioning adapters are not implemented yet. `resume` revalidates identity and rejects running stages pending reconciliation; it does not automatically reconcile or retry cloud mutations. `status` reads local state without contacting AWS or Vault. The future `ops-access` command owns a separate Terraform apply and confirmation.
+
+Current local/discovery invocation (not a deployment):
+
+```sh
+scripts/release/node-operator-install.sh start \
+  --release-dir /absolute/downloaded-release-assets \
+  --state-dir /absolute/new-private-checkpoint \
+  --aws-profile default --aws-region ap-northeast-1 --name test-node
+scripts/release/node-operator-install.sh status --state-dir /absolute/new-private-checkpoint
+scripts/release/node-operator-install.sh resume \
+  --release-dir /absolute/downloaded-release-assets \
+  --state-dir /absolute/new-private-checkpoint
+```
+
+Missing initial profile/Region/name values are prompted only in a terminal. Release assets must come from the trusted release workflow; self-consistent manifests are not standalone public-key signature verification. Permission, quota and non-EKS resource collision checks remain explicitly `not_verified`.
 
 ## Input boundaries
 
