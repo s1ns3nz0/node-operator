@@ -69,6 +69,15 @@ These tests do not prove real Helm deployment, KMS auto-unseal, Pod Identity
 or first-init behavior. Installer orchestration and the operator-held
 initialization ceremony remain required before this task can be completed.
 
+The entrypoint now accepts `resume --prepare-vault --vault-artifacts FILE`
+alongside its normal state/release options, after infrastructure and private
+access stages have completed. This operation only prepares private local
+inputs. The reviewed artifact file binds account, Region and deployment name
+to five digest-pinned images and a chart version/digest. It is not proof of
+registry availability, image signature verification, TLS readiness or actual
+Vault deployment. Prepared runner inputs deliberately keep cluster-admin
+access disabled. Artifact mirroring and guarded execution remain pending.
+
 Task 8 cannot be fulfilled by calling a recovery script on an uninitialized
 Vault. Existing bootstrap-runner automation deliberately installs sealed Vault
 without initialization. The installer must implement a distinct first-init

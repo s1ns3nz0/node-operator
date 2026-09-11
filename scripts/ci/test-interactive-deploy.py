@@ -18,6 +18,38 @@ DISCOVERY = {"aws_profile": "test", "aws_account_id": "123456789012", "aws_regio
 
 
 class InstallerCommandTests(unittest.TestCase):
+    def test_vault_preparation_requires_completed_access_and_never_claims_ready(self):
+        for ready in (False, True):
+            with tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary).resolve() / "state"
+                store = cli.CheckpointStore(directory, {**DISCOVERY, **RELEASE})
+                with store.lock():
+                    store.resume()
+                    store.set_stage("infrastructure", "complete")
+                    store.set_stage("ops_access", "complete" if ready else "pending")
+                prepare = Mock()
+                bundle = types.SimpleNamespace(verify_release=lambda _: RELEASE)
+                with patch.dict(sys.modules, {"installer_bundle": bundle, "installer_vault_inputs": types.SimpleNamespace(prepare_vault_inputs=prepare)}), patch.object(cli, "discover", return_value=DISCOVERY):
+                    options = ["--release-dir", temporary, "--prepare-vault", "--vault-artifacts", str(directory / "artifacts.json")]
+                    if not ready:
+                        with self.assertRaises(cli.StateError):
+                            self.invoke(directory, "resume", options)
+                        prepare.assert_not_called()
+                    else:
+                        _, result = self.invoke(directory, "resume", options)
+                        self.assertEqual(result["result"], "vault_bootstrap_inputs_ready")
+                        self.assertFalse(result["deployment_complete"])
+                        prepare.assert_called_once_with(directory, DISCOVERY, directory / "artifacts.json")
+                        _, state = self.invoke(directory, "status")
+                        self.assertEqual(state["stages"]["vault"]["status"], "awaiting_input")
+
+    def test_vault_preparation_rejects_mixed_operations_before_discovery(self):
+        for options in (["--prepare-vault"], ["--vault-artifacts", "/unused"],
+                        ["--prepare-vault", "--vault-artifacts", "/unused", "--plan-ops-access"]):
+            with patch.object(cli, "discover") as discover, self.assertRaises(cli.StateError):
+                cli.run(["resume", "--state-dir", "/unused", *options])
+            discover.assert_not_called()
+
     def test_missing_materializer_downgrades_completed_recheck(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary).resolve() / "state"

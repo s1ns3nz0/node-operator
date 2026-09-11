@@ -7,6 +7,7 @@ scripts/ci/test-ci-suite-ownership.py
 scripts/ci/test-ci-presentation.py
 scripts/ci/test-ci-entrypoints.py
 scripts/ci/test-image-release-selection.py
+scripts/ci/test-toolchain-input-hash.py
 scripts/ci/test-private-ecr-inputs.py
 scripts/ci/test-refresh-review-evidence.py
 scripts/ci/test-review-refresh-flow.py
@@ -18,6 +19,7 @@ scripts/ci/test-installer-infrastructure.py
 scripts/ci/test-installer-ops-access.py
 scripts/ci/test-installer-ops-execution.py
 scripts/ci/test-installer-ops-verify.py
+scripts/ci/test-installer-vault-inputs.py
 scripts/ci/test-render-private-vault-values.py
 scripts/ci/test-private-vault-bootstrap-transport.py
 scripts/ci/test-deploy-sealed-vault.py
