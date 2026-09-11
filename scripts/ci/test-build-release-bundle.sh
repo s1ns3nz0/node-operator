@@ -64,6 +64,9 @@ for required_path in \
   source/scripts/release/installer_ops_execution.py \
   source/scripts/release/installer_ops_verify.py \
   source/scripts/release/installer_vault_inputs.py \
+  source/scripts/release/installer_vault_plan.py \
+  source/scripts/release/installer_vault_workspace.py \
+  source/scripts/release/installer_vault_execution.py \
   source/scripts/release/render-private-vault-values.sh \
   source/scripts/release/deploy-sealed-vault.sh \
   source/release/vault-values.yaml.example \

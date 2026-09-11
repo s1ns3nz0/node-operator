@@ -8,10 +8,11 @@ temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
 fail() { printf 'FAIL Vault bootstrap enabled plan: %s\n' "$*" >&2; exit 1; }
 
+for fixture in offline-vault-bootstrap.tfvars offline-vault-bootstrap-tokyo.tfvars; do
 "$script_dir/validate-terraform-offline.sh" \
   "$root/infra/terraform" \
   "$temporary_directory" \
-  fixtures/offline-vault-bootstrap.tfvars
+  "fixtures/$fixture"
 
 plan="$temporary_directory/plan.json"
 jq -e '
@@ -26,3 +27,4 @@ jq -e '
 ' "$plan" >/dev/null || fail 'enabled plan introduces public network infrastructure'
 
 printf 'PASS Vault bootstrap enabled offline plan is private-boundary compliant.\n'
+done

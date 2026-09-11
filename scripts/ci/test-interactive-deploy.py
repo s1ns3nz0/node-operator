@@ -18,6 +18,29 @@ DISCOVERY = {"aws_profile": "test", "aws_account_id": "123456789012", "aws_regio
 
 
 class InstallerCommandTests(unittest.TestCase):
+    def test_vault_plan_returns_hash_without_readiness_and_recovers_failed_stage(self):
+        for failure in (False, True):
+            with tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary).resolve() / "state"
+                store = cli.CheckpointStore(directory, {**DISCOVERY, **RELEASE})
+                with store.lock():
+                    store.resume()
+                    store.set_stage("infrastructure", "complete")
+                    store.set_stage("ops_access", "complete")
+                plan = Mock(return_value="c" * 64, side_effect=cli.InfrastructureError("drift") if failure else None)
+                bundle = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=Mock(return_value=directory / "release"))
+                with patch.dict(sys.modules, {"installer_bundle": bundle, "installer_vault_execution": types.SimpleNamespace(plan_vault_prepare=plan)}), patch.object(cli, "discover", return_value=DISCOVERY):
+                    args = ["--release-dir", temporary, "--plan-vault", "--vault-artifacts", str(directory / "artifacts.json")]
+                    if failure:
+                        with self.assertRaises(cli.InfrastructureError): self.invoke(directory, "resume", args)
+                    else:
+                        _, result = self.invoke(directory, "resume", args)
+                        self.assertEqual(result["vault_plan_sha256"], "c" * 64)
+                        self.assertEqual(result["result"], "vault_bootstrap_plan_ready")
+                        self.assertFalse(result["deployment_complete"])
+                _, status = self.invoke(directory, "status")
+                self.assertEqual(status["stages"]["vault"]["status"], "awaiting_input")
+
     def test_vault_preparation_requires_completed_access_and_never_claims_ready(self):
         for ready in (False, True):
             with tempfile.TemporaryDirectory() as temporary:

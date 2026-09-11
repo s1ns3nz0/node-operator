@@ -78,14 +78,28 @@ registry availability, image signature verification, TLS readiness or actual
 Vault deployment. Prepared runner inputs deliberately keep cluster-admin
 access disabled. Artifact mirroring and guarded execution remain pending.
 
-The pending Vault executor must reuse `terraform-work/baseline`, its original
-`baseline.backend.hcl` and `node-operator/baseline/terraform.tfstate` key.
+The pending Vault executor must validate `terraform-work/baseline` and retain
+its original `node-operator/baseline/terraform.tfstate` backend identity.
+It must not execute providers from the retained original cache: initialize
+a fresh verified module copy with the reviewed lockfile and only the validated
+backend settings, retaining the same remote state and preserving the original
+directory. This needs at least 2 GiB free local space for provider installation.
 It must compare the derived foundation network file against the original
 handoff and compose the original baseline config with a separate Vault delta.
 Do not repurpose `zero apply`, which intentionally rejects temporary Vault
 cluster-admin access. Prepare, temporary authority, deployment and revocation
 need explicit phase handling and reviewed saved-plan hashes; neither a new
 Terraform state nor a silently changed original config is acceptable.
+
+A pure plan-scope validator now distinguishes prepare, grant and revoke.
+It rejects unrelated managed mutations, replacements, drift and unresolved
+checks. The `--plan-vault` source path now connects it to saved preparation
+planning after baseline reconciliation; apply remains unimplemented and the
+plan check is not operator authorization. Independent review verified the
+fresh-provider-cache boundary and pinned Terraform 1.5.7 JSON compatibility.
+Live saved-plan execution is not yet verified. Tokyo and Seoul bootstrap fixtures have both passed actual
+network-disabled Terraform validation and plan generation; this is not live
+deployment evidence.
 
 Task 8 cannot be fulfilled by calling a recovery script on an uninitialized
 Vault. Existing bootstrap-runner automation deliberately installs sealed Vault

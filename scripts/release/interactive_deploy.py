@@ -54,6 +54,7 @@ def run(argv: list[str] | None = None) -> int:
     parser.add_argument("--prepare-infrastructure", action="store_true", help="Materialize verified release and generate local Terraform inputs; does not apply")
     parser.add_argument("--prepare-ops-access", action="store_true", help="Prepare separate SSM inputs after infrastructure completion; never plans, applies or opens a session")
     parser.add_argument("--prepare-vault", action="store_true", help="Prepare local Vault bootstrap inputs from reviewed artifacts; no apply or initialization")
+    parser.add_argument("--plan-vault", action="store_true", help="Reconcile the baseline and save a Vault runner preparation plan; never apply")
     parser.add_argument("--vault-artifacts", type=Path, help="Private reviewed Vault image/chart manifest; required with --prepare-vault")
     parser.add_argument("--plan-ops-access", action="store_true", help="Create a separate private SSM saved plan; does not apply")
     parser.add_argument("--apply-ops-access", action="store_true", help="Apply the separately reviewed SSM plan after terminal confirmation")
@@ -64,10 +65,11 @@ def run(argv: list[str] | None = None) -> int:
     parser.add_argument("--execution-profile", help="Optional existing AWS role profile to verify and use for infrastructure execution")
     args = parser.parse_args(argv)
     ops_requested = args.prepare_ops_access or args.plan_ops_access or args.apply_ops_access or args.verify_ops_access
-    if args.prepare_vault and (args.command != "resume" or ops_requested or args.prepare_infrastructure or args.apply_infrastructure or args.backend_principal_arn or args.execution_profile or args.vault_artifacts is None):
+    vault_requested = args.prepare_vault or args.plan_vault
+    if vault_requested and (args.command != "resume" or ops_requested or args.prepare_infrastructure or args.apply_infrastructure or args.backend_principal_arn or args.execution_profile or args.vault_artifacts is None or (args.prepare_vault and args.plan_vault)):
         raise StateError("Vault preparation is a separate resume operation requiring --vault-artifacts.")
-    if args.vault_artifacts is not None and not args.prepare_vault:
-        raise StateError("--vault-artifacts requires --prepare-vault.")
+    if args.vault_artifacts is not None and not vault_requested:
+        raise StateError("--vault-artifacts requires --prepare-vault or --plan-vault.")
     if ops_requested and (args.command != "resume" or args.prepare_infrastructure or args.apply_infrastructure or args.backend_principal_arn or args.execution_profile or sum((args.prepare_ops_access, args.plan_ops_access, args.apply_ops_access, args.verify_ops_access)) != 1):
         raise StateError("SSM is a separate resume operation; choose one preparation, plan or apply step without infrastructure options.")
     if args.ops_plan_sha and not args.apply_ops_access:
@@ -115,6 +117,7 @@ def run(argv: list[str] | None = None) -> int:
     store = CheckpointStore(args.state_dir, context)
     ops_result = None
     ops_plan_sha = None
+    vault_plan_sha = None
     with store.lock():
         checkpoint = store.resume()
         if any(stage["status"] == "running" for stage in checkpoint["stages"].values()):
@@ -125,17 +128,28 @@ def run(argv: list[str] | None = None) -> int:
                     store.set_stage(stage, "pending")
         # Read-only discovery is useful but does not prove permissions, quotas,
         # all-resource collision safety or provisioning readiness.
-        if not ops_requested and not args.prepare_vault:
+        if not ops_requested and not vault_requested:
             store.set_stage("preflight", "awaiting_input")
-        if args.prepare_vault:
+        if vault_requested:
             if any(checkpoint["stages"].get(stage, {}).get("status") != "complete" for stage in ("infrastructure", "ops_access")):
                 raise StateError("Vault preparation requires completed infrastructure and verified private access.")
             if checkpoint["stages"].get("vault", {}).get("status") == "complete":
                 raise StateError("Vault is already complete; preparation cannot reset its status.")
-            from installer_vault_inputs import prepare_vault_inputs
-            prepare_vault_inputs(args.state_dir, discovery, args.vault_artifacts)
+            if args.prepare_vault:
+                from installer_vault_inputs import prepare_vault_inputs
+                prepare_vault_inputs(args.state_dir, discovery, args.vault_artifacts)
+                ops_result = "vault_bootstrap_inputs_ready"
+            else:
+                from installer_bundle import materialize_release
+                bundle_root = materialize_release(args.release_dir, args.state_dir / "release", release["release_sha"], release["bundle_digest"])
+                from installer_vault_execution import plan_vault_prepare
+                store.set_stage("vault", "running")
+                try:
+                    vault_plan_sha = plan_vault_prepare(bundle_root, args.state_dir, discovery, profile, args.vault_artifacts)
+                finally:
+                    store.set_stage("vault", "awaiting_input")
+                ops_result = "vault_bootstrap_plan_ready"
             store.set_stage("vault", "awaiting_input")
-            ops_result = "vault_bootstrap_inputs_ready"
         if ops_requested:
             if checkpoint["stages"].get("infrastructure", {}).get("status") != "complete":
                 raise StateError("SSM operations require completed infrastructure in this original state directory.")
@@ -218,10 +232,11 @@ def run(argv: list[str] | None = None) -> int:
         remaining = "SSM session/private EKS readiness, Vault, secrets, GitOps, workloads, custody, deposit, activation, duty and E2E remain required."
     if args.verify_ops_access:
         remaining = "Vault, secrets, GitOps, workloads, custody, deposit, activation, duty and E2E remain required."
-    if args.prepare_vault:
+    if vault_requested:
         remaining = "Vault inputs are prepared only. Artifact mirroring, TLS, deployment, initialization, secrets, workloads and E2E remain required."
     print(json.dumps({"result": ops_result or ("infrastructure_ready" if args.apply_infrastructure else ("infrastructure_inputs_ready" if args.prepare_infrastructure else "discovery_complete")), "discovery": discovery,
                       "ops_plan_sha256": ops_plan_sha,
+                      "vault_plan_sha256": vault_plan_sha,
                       "deployment_complete": False,
                       "remaining": remaining}, sort_keys=True))
     return 0
