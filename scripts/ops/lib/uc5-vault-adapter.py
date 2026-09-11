@@ -23,6 +23,7 @@ MAX_RESPONSE = 65536
 LOOKUP_SELF = "auth/token/lookup-self"
 REVOKE_SELF = "auth/token/revoke-self"
 AUDIT_HASH = "sys/audit-hash/validator-socket"
+AUDIT_CONFIG = "sys/audit"
 
 
 class AdapterError(RuntimeError):
@@ -54,7 +55,7 @@ class TunnelTransport:
         self._token = None
 
     def __call__(self, method, path, payload=None):
-        if not ((method == "GET" and path in ROLES | POLICIES | {LOOKUP_SELF} and payload is None) or
+        if not ((method == "GET" and path in ROLES | POLICIES | {LOOKUP_SELF, AUDIT_CONFIG} and payload is None) or
                 (method == "POST" and path == STATE.RUNTIME_ROLE) or
                 (method == "DELETE" and path == STATE.RUNTIME_ROLE and payload is None) or
                 (method == "POST" and path == REVOKE_SELF and payload is None) or
@@ -163,6 +164,23 @@ class VaultAdapter:
         if not isinstance(value, str) or re.fullmatch(r"hmac-sha256:[0-9a-f]{64}", value) is None:
             raise AdapterError("runtime role audit hash malformed")
         return value
+
+    def audit_ready(self):
+        status, response = self.transport("GET", AUDIT_CONFIG)
+        if status != 200 or not isinstance(response, dict):
+            raise AdapterError("Vault audit configuration unavailable")
+        devices = response.get("data")
+        if not isinstance(devices, dict):
+            raise AdapterError("Vault audit configuration malformed")
+        device = devices.get("validator-socket/")
+        if not isinstance(device, dict) or device.get("type") != "socket":
+            raise AdapterError("reviewed Vault audit device absent")
+        options = device.get("options")
+        if (not isinstance(options, dict) or options.get("log_raw") != "false" or
+                options.get("socket_type") != "unix" or
+                options.get("address") != "/vault/audit/validator-audit.sock"):
+            raise AdapterError("Vault audit device differs from reviewed configuration")
+        return True
 
     def revoke_administrator(self):
         status, _ = self.transport("POST", REVOKE_SELF)

@@ -20,7 +20,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 case "$validator_set" in hoodi-[a-z0-9][a-z0-9-]*) ;; *) usage ;; esac
-case "$public_key" in 0x????????????????????????????????????????????????????????????????????????????????????????????????) ;; *) usage ;; esac
+[[ "$public_key" =~ ^0x[0-9a-fA-F]{96}$ ]] || usage
 case "$withdrawal_address" in 0x????????????????????????????????????????) ;; *) usage ;; esac
 case "$deposit_attestation" in /*) ;; *) usage ;; esac
 case "$public_deposit_verification" in /*) ;; *) usage ;; esac
@@ -102,6 +102,7 @@ jq -e --arg namespace validator-operations --arg client "$client" --arg set "$va
   (.items[0].spec.template.spec.containers[0].image | type == "string")
 ' <<<"$client_statefulsets" >/dev/null || { printf '%s\n' 'expected exactly one exact, zero-replica staged validator client StatefulSet cluster-wide' >&2; exit 65; }
 client_image="$(jq -er '.items[0].spec.template.spec.containers[0].image' <<<"$client_statefulsets")"
+client_uid="$(jq -er '.items[0].metadata.uid | strings | select(length>0)' <<<"$client_statefulsets")"
 jq -e --arg image "$client_image" '.schema_version == 2 and any(.images[]; .private_image == $image and .activation_approved == true and (.release_channel == "upstream-mirror" or .release_channel == "manual-native-mtls"))' "$allowlist" >/dev/null || { printf '%s\n' 'staged validator client image is not an exact activation-approved reviewed artifact' >&2; exit 65; }
 [ "$(jq -r '.items | if type == "array" then length else -1 end' <<<"$client_pods")" -eq 0 ] || { printf '%s\n' 'validator client Pods exist cluster-wide; refuse activation' >&2; exit 65; }
 jq -e --arg namespace validator-operations --arg fence "$fence" --arg set "$validator_set" '
@@ -110,21 +111,38 @@ jq -e --arg namespace validator-operations --arg fence "$fence" --arg set "$vali
   .items[0].spec.template.metadata.labels["node-operator.io/validator-set"] == $set and .items[0].spec.replicas == 0 and
   (.items[0].spec.template.spec.containers[0].image | test("/node-operator-baseline-validator-fence@sha256:[a-f0-9]{64}$"))
 ' <<<"$fences" >/dev/null || { printf '%s\n' 'expected exactly one exact, zero-replica digest-pinned signing fence' >&2; exit 65; }
+fence_controller_uid="$(jq -er '.items[0].metadata.uid | strings | select(length>0)' <<<"$fences")"
 public_service="$(kubectl -n validator-operations get service "$signer" -o json)"
 direct_service="$(kubectl -n validator-operations get service "${signer}-direct" -o json)"
 jq -e --arg set "$validator_set" '.spec.selector["app.kubernetes.io/component"] == "validator-signing-fence" and .spec.selector["node-operator.io/validator-set"] == $set and any(.spec.ports[]; .port == 9000 and .targetPort == "fence-proxy")' <<<"$public_service" >/dev/null || { printf '%s\n' 'public signer Service does not enforce the signing fence' >&2; exit 65; }
 jq -e --arg set "$validator_set" '.spec.selector["app.kubernetes.io/component"] == "validator-remote-signer" and .spec.selector["node-operator.io/validator-set"] == $set and any(.spec.ports[]; .port == 9000 and .targetPort == "signer-api")' <<<"$direct_service" >/dev/null || { printf '%s\n' 'direct signer Service is missing or mis-scoped' >&2; exit 65; }
 signer_replicas="$(kubectl -n validator-operations get deployment "$signer" -o jsonpath='{.spec.replicas}')"
 [ "$signer_replicas" = 1 ] || { printf '%s\n' 'signer is not fenced and running at exactly one replica' >&2; exit 65; }
+marker="$(kubectl -n validator-operations get configmap uc5-hoodi-001-maintenance --ignore-not-found -o json)"
+[ -z "$marker" ] || { printf '%s\n' 'UC5 maintenance marker remains; activation refused' >&2; exit 65; }
 if [ "$dry_run" = true ]; then printf '%s\n' 'PASS: activation preflight passed; client and signing fence remain at zero because --dry-run was set.'; exit 0; fi
+
+cas_scale() {
+  local kind="$1" name="$2" expected_uid="$3" replicas="$4" current uid rv old patch
+  marker="$(kubectl -n validator-operations get configmap uc5-hoodi-001-maintenance --ignore-not-found -o json)" || return 1
+  [ -z "$marker" ] || return 1
+  current="$(kubectl -n validator-operations get "$kind" "$name" -o json)" || return 1
+  uid="$(jq -er --arg name "$name" --arg expected "$expected_uid" '.metadata.uid | select(. == $expected) | strings | select(length>0)' <<<"$current")" || return 1
+  jq -e --arg name "$name" '.metadata.name == $name and .metadata.namespace == "validator-operations" and (.metadata.deletionTimestamp | not)' <<<"$current" >/dev/null || return 1
+  rv="$(jq -er '.metadata.resourceVersion | strings | select(length>0)' <<<"$current")" || return 1
+  old="$(jq -er '.spec.replicas | select(type=="number" and (.==0 or .==1))' <<<"$current")" || return 1
+  [ "$replicas" = 0 ] || [ "$old" = 0 ] || return 1
+  patch="$(jq -cn --arg uid "$uid" --arg rv "$rv" --argjson old "$old" --argjson new "$replicas" '[{op:"test",path:"/metadata/uid",value:$uid},{op:"test",path:"/metadata/resourceVersion",value:$rv},{op:"test",path:"/spec/replicas",value:$old},{op:"replace",path:"/spec/replicas",value:$new}]')" || return 1
+  kubectl -n validator-operations patch "$kind" "$name" --type=json -p "$patch" -o json >/dev/null
+}
 
 activation_complete=false
 rollback() {
   status=$?; trap - EXIT INT TERM HUP
   if [ "$activation_complete" != true ]; then
     cleanup_failed=false
-    kubectl -n validator-operations scale deployment "$fence" --replicas=0 >/dev/null 2>&1 || cleanup_failed=true
-    kubectl -n validator-operations scale statefulset "$client" --replicas=0 >/dev/null 2>&1 || cleanup_failed=true
+    cas_scale deployment "$fence" "$fence_controller_uid" 0 >/dev/null 2>&1 || cleanup_failed=true
+    cas_scale statefulset "$client" "$client_uid" 0 >/dev/null 2>&1 || cleanup_failed=true
     fence_after="$(kubectl -n validator-operations get deployment "$fence" -o jsonpath='{.spec.replicas}' 2>/dev/null)" || cleanup_failed=true
     client_after="$(kubectl -n validator-operations get statefulset "$client" -o jsonpath='{.spec.replicas}' 2>/dev/null)" || cleanup_failed=true
     [ "${fence_after:-}" = 0 ] && [ "${client_after:-}" = 0 ] || cleanup_failed=true
@@ -142,7 +160,7 @@ trap 'exit 129' HUP
 # The public signer Service has no endpoints while the fence is zero, and
 # direct signer ingress accepts only the fence. Starting the fixed-name client
 # first therefore cannot sign; it only establishes the Pod UID/IP to bind.
-kubectl -n validator-operations scale statefulset "$client" --replicas=1
+cas_scale statefulset "$client" "$client_uid" 1 || { printf '%s\n' 'client identity-pinned scale-up failed' >&2; exit 65; }
 kubectl -n validator-operations rollout status statefulset "$client" --timeout=120s
 client_json="$(kubectl -n validator-operations get pod "$client_pod" -o json)"
 jq -e --arg set "$validator_set" --arg name "$client_pod" '
@@ -151,7 +169,7 @@ jq -e --arg set "$validator_set" --arg name "$client_pod" '
   (.metadata.uid | type == "string" and length > 0) and (.status.podIP | type == "string" and length > 0) and
   .status.phase == "Running" and any(.status.conditions[]; .type == "Ready" and .status == "True")
 ' <<<"$client_json" >/dev/null || { printf '%s\n' 'fixed client Pod identity is not Ready for fence binding' >&2; exit 65; }
-kubectl -n validator-operations scale deployment "$fence" --replicas=1
+cas_scale deployment "$fence" "$fence_controller_uid" 1 || { printf '%s\n' 'fence identity-pinned scale-up failed' >&2; exit 65; }
 kubectl -n validator-operations rollout status deployment "$fence" --timeout=120s
 fence_pod="$(kubectl -n validator-operations get pods -l "app.kubernetes.io/component=validator-signing-fence,node-operator.io/validator-set=${validator_set}" -o json)"
 fence_uid="$(jq -er 'select(.items | length == 1) | .items[0].metadata.uid' <<<"$fence_pod")"

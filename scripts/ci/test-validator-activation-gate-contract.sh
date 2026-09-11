@@ -36,9 +36,9 @@ write_valid_evidence() {
 
 write_valid_inventory() {
   printf '%s\n' '{"items":[]}' > "$scratch/deployments.json"
-  jq -n --arg client "$client" --arg set "$validator_set" --arg image "$client_image" '{items:[{metadata:{namespace:"validator-operations",name:$client,labels:{"node-operator.io/validator-set":$set}},spec:{replicas:0,serviceName:("validator-"+$set+"-client-headless"),template:{metadata:{labels:{"node-operator.io/validator-set":$set}},spec:{containers:[{name:"validator",image:$image}]}}}}]}' > "$scratch/statefulsets.json"
+  jq -n --arg client "$client" --arg set "$validator_set" --arg image "$client_image" '{items:[{metadata:{namespace:"validator-operations",name:$client,uid:"client-controller",resourceVersion:"1",labels:{"node-operator.io/validator-set":$set}},spec:{replicas:0,serviceName:("validator-"+$set+"-client-headless"),template:{metadata:{labels:{"node-operator.io/validator-set":$set}},spec:{containers:[{name:"validator",image:$image}]}}}}]}' > "$scratch/statefulsets.json"
   jq -n --arg fence "$fence" --arg set "$validator_set" '{items:[{
-    metadata:{namespace:"validator-operations",name:$fence,labels:{"node-operator.io/validator-set":$set}},
+    metadata:{namespace:"validator-operations",name:$fence,uid:"fence-controller",resourceVersion:"1",labels:{"node-operator.io/validator-set":$set}},
     spec:{replicas:0,template:{metadata:{labels:{"node-operator.io/validator-set":$set}},spec:{containers:[{image:"106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-fence@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}}}
   }]}' > "$scratch/fences.json"
   printf '%s\n' '{"items":[]}' > "$scratch/pods.json"
@@ -50,6 +50,9 @@ cat > "$scratch/bin/kubectl" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 case "$*" in
+  '-n validator-operations get configmap uc5-hoodi-001-maintenance --ignore-not-found -o json')
+    [ "${MOCK_MARKER_ERROR:-false}" = false ] || exit 1
+    if [ "${MOCK_MARKER_PRESENT:-false}" = true ]; then printf '%s' '{"metadata":{"uid":"owned-by-other"}}'; fi ;;
   'get deployments --all-namespaces -l app.kubernetes.io/component=validator-client -o json') cat "$MOCK_DEPLOYMENTS" ;;
   'get pods --all-namespaces -l app.kubernetes.io/component=validator-client -o json') cat "$MOCK_PODS" ;;
   'get statefulsets --all-namespaces -l app.kubernetes.io/component=validator-client -o json') cat "$MOCK_STATEFULSETS" ;;
@@ -57,11 +60,18 @@ case "$*" in
   '-n validator-operations get service validator-hoodi-001-remote-signer -o json') cat "$MOCK_PUBLIC_SERVICE" ;;
   '-n validator-operations get service validator-hoodi-001-remote-signer-direct -o json') cat "$MOCK_DIRECT_SERVICE" ;;
   '-n validator-operations get deployment validator-hoodi-001-remote-signer -o jsonpath={.spec.replicas}') printf '%s' 1 ;;
+  '-n validator-operations get statefulset validator-hoodi-001-client -o json')
+    replacement="${MOCK_REPLACE_CLIENT:-client-controller}"
+    if [ "${MOCK_REPLACE_ON_ROLLBACK:-false}" = true ] && [ -f "${MOCK_TRACE}.rollback" ]; then replacement=replaced; fi
+    jq --arg uid "$replacement" '.items[0].metadata.uid=$uid | .items[0]' "$MOCK_STATEFULSETS" ;;
+  '-n validator-operations get deployment validator-hoodi-001-signing-fence -o json') jq '.items[0]' "$MOCK_FENCES" ;;
+  *' patch statefulset validator-hoodi-001-client --type=json -p '*|*' patch deployment validator-hoodi-001-signing-fence --type=json -p '*) printf '%s\n' "scale $*" >> "$MOCK_TRACE" ;;
   '-n validator-operations scale statefulset validator-hoodi-001-client --replicas=1'|'-n validator-operations scale deployment validator-hoodi-001-signing-fence --replicas=1') printf '%s\n' "scale $*" >> "$MOCK_TRACE" ;;
   '-n validator-operations scale statefulset validator-hoodi-001-client --replicas=0'|'-n validator-operations scale deployment validator-hoodi-001-signing-fence --replicas=0') printf '%s\n' "rollback $*" >> "$MOCK_TRACE" ;;
   '-n validator-operations get deployment validator-hoodi-001-signing-fence -o jsonpath={.spec.replicas}'|'-n validator-operations get statefulset validator-hoodi-001-client -o jsonpath={.spec.replicas}') [ "${MOCK_ROLLBACK_VERIFY_FAIL:-false}" = false ] && printf '%s' 0 ;;
   '-n validator-operations rollout status statefulset validator-hoodi-001-client --timeout=120s') ;;
-  '-n validator-operations rollout status deployment validator-hoodi-001-signing-fence --timeout=120s') [ "${MOCK_FENCE_ROLLOUT_FAIL:-false}" = false ] ;;
+  '-n validator-operations rollout status deployment validator-hoodi-001-signing-fence --timeout=120s')
+    if [ "${MOCK_FENCE_ROLLOUT_FAIL:-false}" = true ]; then touch "${MOCK_TRACE}.rollback"; exit 1; fi ;;
   '-n validator-operations get pod validator-hoodi-001-client-0 -o json') cat "$MOCK_CLIENT_POD" ;;
   '-n validator-operations get pods -l app.kubernetes.io/component=validator-signing-fence,node-operator.io/validator-set=hoodi-001 -o json') cat "$MOCK_FENCE_PODS" ;;
   '-n validator-operations get lease validator-hoodi-001-primary -o json') cat "$MOCK_LEASE" ;;
@@ -84,6 +94,7 @@ reset_fixture() {
   jq -n '{items:[{metadata:{uid:"fence-uid"}}]}' > "$scratch/fence-pods.json"
   jq -n --arg observed "$observed" '{spec:{holderIdentity:"fence-uid",leaseDurationSeconds:60,renewTime:$observed}}' > "$scratch/lease.json"
   : > "$scratch/trace"
+  rm -f "$scratch/trace.rollback"
 }
 expect_rejected() {
   local name="$1" status
@@ -98,9 +109,25 @@ test ! -s "$scratch/trace" || fail 'happy dry-run reached a scale request'
 
 reset_fixture
 run_gate_actual | grep -Fq 'PASS: one fixed-identity client and its signing fence are Ready.' || fail 'valid actual activation sequence did not complete'
-test "$(grep -c '^scale ' "$scratch/trace")" -eq 2 || fail 'actual activation did not perform exactly two scale-up operations'
-test "$(sed -n '1p' "$scratch/trace")" = 'scale -n validator-operations scale statefulset validator-hoodi-001-client --replicas=1' || fail 'client identity was not established before fence startup'
-test "$(sed -n '2p' "$scratch/trace")" = 'scale -n validator-operations scale deployment validator-hoodi-001-signing-fence --replicas=1' || fail 'signing fence did not start second'
+test "$(grep -c '^scale ' "$scratch/trace")" -eq 2 || fail 'actual activation did not perform exactly two identity-pinned patches'
+grep -Fq 'patch statefulset validator-hoodi-001-client --type=json' "$scratch/trace" || fail 'client UID/resourceVersion patch was not used'
+grep -Fq 'patch deployment validator-hoodi-001-signing-fence --type=json' "$scratch/trace" || fail 'fence UID/resourceVersion patch was not used'
+
+reset_fixture
+if MOCK_REPLACE_CLIENT=replaced run_gate_actual >/dev/null 2>&1; then fail 'replacement client activated'; fi
+if grep -Fq 'patch statefulset validator-hoodi-001-client' "$scratch/trace"; then fail 'replacement client was mutated'; fi
+
+reset_fixture
+if MOCK_FENCE_ROLLOUT_FAIL=true MOCK_REPLACE_ON_ROLLBACK=true run_gate_actual >/dev/null 2>&1; then fail 'replacement rollback reported success'; fi
+test "$(grep -c 'patch statefulset validator-hoodi-001-client' "$scratch/trace")" -eq 1 || fail 'replacement client was mutated during rollback'
+
+reset_fixture
+if MOCK_MARKER_PRESENT=true run_gate_actual >/dev/null 2>&1; then fail 'maintenance marker did not block activation'; fi
+test ! -s "$scratch/trace" || fail 'maintenance marker allowed a patch'
+
+reset_fixture
+if MOCK_MARKER_ERROR=true run_gate_actual >/dev/null 2>&1; then fail 'failed marker lookup allowed activation'; fi
+test ! -s "$scratch/trace" || fail 'failed marker lookup allowed a patch'
 
 reset_fixture
 jq '.source = "vault-injected-mtls-get-only-probe" | .vault_agent_init_succeeded = true' "$scratch/signer.json" > "$scratch/signer.next"
@@ -120,8 +147,8 @@ expect_rejected 'unrecognized signer evidence source'
 
 reset_fixture
 if MOCK_FENCE_ROLLOUT_FAIL=true run_gate_actual >/dev/null 2>&1; then fail 'failed fence rollout unexpectedly activated'; fi
-grep -Fq 'rollback -n validator-operations scale deployment validator-hoodi-001-signing-fence --replicas=0' "$scratch/trace" || fail 'failed fence rollout did not rollback fence'
-grep -Fq 'rollback -n validator-operations scale statefulset validator-hoodi-001-client --replicas=0' "$scratch/trace" || fail 'failed fence rollout did not rollback client'
+grep -Fq 'patch deployment validator-hoodi-001-signing-fence --type=json' "$scratch/trace" || fail 'failed fence rollout did not use identity-pinned rollback'
+grep -Fq 'patch statefulset validator-hoodi-001-client --type=json' "$scratch/trace" || fail 'failed fence rollout did not use identity-pinned rollback'
 
 reset_fixture
 status=0

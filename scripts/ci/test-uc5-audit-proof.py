@@ -15,6 +15,8 @@ def context():
             "pod_uid": uid(8), "pod_ip": "10.80.1.2", "pod_created_at": time(3),
             "deployment_uid": uid(9), "deployment_generation": 10,
             "delete_after": time(0), "restore_before": time(20)}
+def denial_context():
+    value = context(); value.pop("restore_before"); value["observation_before"] = time(7); return value
 def records():
     rows = []
     for n, path, op, a, b in ((1, M.PATH, "delete", 1, 2), (2, "auth/kubernetes/login", "update", 4, 5), (3, M.PATH, "update", 8, 9)):
@@ -58,5 +60,23 @@ class AuditTests(unittest.TestCase):
             with self.assertRaises(M.AuditProofError): M.prove(records(), c)
         x = records(); duplicate = copy.deepcopy(x[0]); duplicate["time"] = time(2)
         with self.assertRaises(M.AuditProofError): M.prove(x + [duplicate], context())
+
+    def test_pre_restore_denial_binding_is_paired_and_metadata_only(self):
+        result = M.prove_denial(records()[:4], denial_context())
+        self.assertEqual(result["result"], "PASS_DENIAL_BINDING")
+        self.assertEqual([event["kind"] for event in result["events"]], ["role_deleted", "fresh_pod_denied"])
+        self.assertNotIn(SECRET, str(result))
+        self.assertNotIn(denial_context()["role_hmac"], str(result))
+
+    def test_pre_restore_denial_rejects_role_ip_order_and_malformed_pairs(self):
+        cases = []
+        x = records()[:4]; x[2]["request"]["data"]["role"] = "hmac-sha256:" + "b" * 64; cases.append(x)
+        x = records()[:4]; x[2]["request"]["remote_address"] = "10.80.9.9"; cases.append(x)
+        x = records()[:4]; x[2]["time"] = time(2); cases.append(x)
+        x = records()[:4]; x.append(copy.deepcopy(x[0])); x[-1]["time"] = time(6); cases.append(x)
+        for case in cases:
+            with self.assertRaises(M.AuditProofError): M.prove_denial(case, denial_context())
+        restored = denial_context(); restored["observation_before"] = time(20)
+        with self.assertRaises(M.AuditProofError): M.prove_denial(records(), restored)
 
 if __name__ == "__main__": unittest.main()

@@ -49,6 +49,14 @@ jobs:
           python3 scripts/ci/test-uc5-kube-control.py
           python3 scripts/ci/test-uc5-kube-state.py
           python3 scripts/ci/test-uc5-audit-proof.py
+          python3 scripts/ci/test-uc5-audit-reader.py
+          python3 scripts/ci/test-uc5-live-actions.py
+          python3 scripts/ci/test-uc5-probes.py
+          python3 scripts/ci/test-uc5-beacon-reader.py
+          python3 scripts/ci/test-uc5-continuity.py
+          python3 scripts/ci/test-uc5-entrypoint.py
+          python3 scripts/ci/test-uc5-recovery-wrapper.py
+          python3 scripts/ci/test-uc5-activation-evidence.py
       - name: Test project Kyverno admission policies
         env:
           KYVERNO_BIN: ${{ runner.temp }}/kyverno-policy-tools/kyverno

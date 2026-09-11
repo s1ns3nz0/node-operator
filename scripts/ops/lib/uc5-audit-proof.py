@@ -24,9 +24,9 @@ def timestamp(value):
         raise AuditProofError("audit timestamp malformed") from None
     return Decimal(seconds) + (Decimal("0." + fraction) if fraction else 0)
 
-def prove(records, context):
+def _context(context, end_name):
     required = {"runtime_role_path", "role_hmac", "pod_uid", "pod_ip", "pod_created_at",
-                "deployment_uid", "deployment_generation", "delete_after", "restore_before"}
+                "deployment_uid", "deployment_generation", "delete_after", end_name}
     if not isinstance(context, dict) or set(context) != required or context["runtime_role_path"] != PATH:
         raise AuditProofError("audit context malformed")
     for key in ("pod_uid", "deployment_uid"):
@@ -41,9 +41,12 @@ def prove(records, context):
         ipaddress.ip_address(context["pod_ip"])
     except ValueError:
         raise AuditProofError("Pod IP malformed") from None
-    start, created, end = (timestamp(context[k]) for k in ("delete_after", "pod_created_at", "restore_before"))
+    start, created, end = (timestamp(context[k]) for k in ("delete_after", "pod_created_at", end_name))
     if not start <= created < end or end - start > 900:
         raise AuditProofError("ceremony window invalid")
+    return start, created, end
+
+def _paired(records, start, end):
     if not isinstance(records, list) or not 1 <= len(records) <= 256:
         raise AuditProofError("audit record count invalid")
     try:
@@ -72,6 +75,11 @@ def prove(records, context):
             raise AuditProofError("request response identity mismatch")
         a, b = timestamp(req["time"]), timestamp(res["time"])
         if start <= a <= b <= end: valid.append((ident, req, res, a, b))
+    return valid
+
+def prove(records, context):
+    start, created, end = _context(context, "restore_before")
+    valid = _paired(records, start, end)
     deleted = [x for x in valid if x[1]["request"].get("path") == PATH and
                x[1]["request"].get("operation") == "delete" and not x[2].get("error")]
     restored = [x for x in valid if x[1]["request"].get("path") == PATH and
@@ -102,3 +110,43 @@ def prove(records, context):
             "deployment_generation": context["deployment_generation"],
             "events": [output(k, x) for k, x in zip(("role_deleted", "fresh_pod_denied", "role_restored"),
                                                     (deletion, selected, restoration))]}
+
+
+def prove_denial(records, context):
+    """Bind deletion to a fresh Pod's denied login before any restoration.
+
+    This deliberately has no restore event: it is safe to call only while the
+    fixed runtime role remains absent, then hand its metadata-only result to a
+    later full-chain proof.
+    """
+    start, created, end = _context(context, "observation_before")
+    valid = _paired(records, start, end)
+    deleted = [item for item in valid if item[1]["request"].get("path") == PATH and
+               item[1]["request"].get("operation") == "delete" and not item[2].get("error")]
+    if len(deleted) != 1:
+        raise AuditProofError("role deletion pair absent or ambiguous")
+    deletion = deleted[0]
+    if any(item[1]["request"].get("path") == PATH and item[1]["request"].get("operation") in ("create", "update") and not item[2].get("error") for item in valid):
+        raise AuditProofError("runtime role restoration observed before denial proof")
+    if deletion[4] > created:
+        raise AuditProofError("new Pod predates completed role deletion")
+    denied = []
+    for item in valid:
+        request, response = item[1]["request"], item[2]
+        data, reply, error = request.get("data"), response.get("response") or {}, response.get("error")
+        if (request.get("path") == "auth/kubernetes/login" and request.get("operation") == "update" and
+                request.get("remote_address") == context["pod_ip"] and isinstance(data, dict) and
+                data.get("role") == context["role_hmac"] and isinstance(error, str) and
+                len(error) <= 512 and error.startswith("invalid role name") and not response.get("auth") and
+                isinstance(reply, dict) and not reply.get("auth") and created <= item[3] <= item[4] <= end):
+            denied.append(item)
+    if not denied:
+        raise AuditProofError("new Pod role-specific denial absent")
+    selected = min(denied, key=lambda item: item[3])
+    def output(kind, item):
+        return {"kind": kind, "request_id_sha256": hashlib.sha256(item[0].encode()).hexdigest(),
+                "request_timestamp": item[1]["time"], "response_timestamp": item[2]["time"]}
+    return {"result": "PASS_DENIAL_BINDING", "scope": "denial binding only; before restoration",
+            "pod_uid": context["pod_uid"], "deployment_uid": context["deployment_uid"],
+            "deployment_generation": context["deployment_generation"],
+            "events": [output(kind, item) for kind, item in (("role_deleted", deletion), ("fresh_pod_denied", selected))]}
