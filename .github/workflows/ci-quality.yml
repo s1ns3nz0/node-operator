@@ -40,6 +40,11 @@ jobs:
           python3 scripts/ci/test-validator-runtime-probe-renderer.py
           python3 scripts/ci/test-web3signer-audit-contract.py
           docker build --platform linux/amd64 -f .ci/validator-runtime-probe/Dockerfile -t node-operator-runtime-probe:ci .
+      - name: Test UC-5 role restoration and pre-delete guards (offline only)
+        run: |
+          python3 scripts/ci/test-uc5-runtime-role-state.py
+          python3 scripts/ci/test-uc5-live-guards.py
+          python3 scripts/ci/test-uc5-vault-adapter.py
       - name: Test project Kyverno admission policies
         env:
           KYVERNO_BIN: ${{ runner.temp }}/kyverno-policy-tools/kyverno
