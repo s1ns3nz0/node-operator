@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify Vault runtime candidate evidence matches the approved component digest and allowlist.
 set -euo pipefail
 test "$#" = 2 || { echo 'usage: verify-vault-runtime-candidate.sh COMPONENT EVIDENCE_DIRECTORY' >&2; exit 64; }
 component="$1"; evidence="$2"

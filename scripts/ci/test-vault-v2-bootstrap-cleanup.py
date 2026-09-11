@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify Vault v2 bootstrap cleanup outcomes with synthetic CLI responses.
 """Exercise cleanup outcomes using synthetic CLI responses, without live access."""
 import os
 import json

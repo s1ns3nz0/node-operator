@@ -2,8 +2,9 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$root/scripts/ci/lib/workflow-contract.sh"
 allowlist="$root/.ci/gitops/approved-oci-artifacts.json"
-workflow="$root/.github/workflows/cert-manager-chart-mirror.yml"
+workflow="$root/.github/workflows/private-ecr-mirror.yml"
 terraform_file="$root/infra/terraform/private-gitops.tf"
 
 jq -e '
@@ -31,12 +32,16 @@ for required in \
   'existing_manifest_digest' \
   "test \"\$ecr_manifest_digest\" = \"\$chart_manifest_digest\"" \
   "helm push \"\$RUNNER_TEMP/cert-manager-\$chart_version.tgz\""; do
-  grep -Fq "$required" "$workflow"
+  grep -Fq "$required" <(workflow_job_source "$workflow" cert-manager-chart)
 done
+
+grep -Fq "needs: [preflight]" <(workflow_job_source "$workflow" cert-manager-chart)
+grep -Fq "inputs.target == 'cert-manager-chart'" <(workflow_job_source "$workflow" cert-manager-chart)
+grep -Fq "github.ref == 'refs/heads/main'" <(workflow_job_source "$workflow" cert-manager-chart)
 
 grep -Fq "cert_manager_chart = \"\${local.name_prefix}-gitops-cert-manager/cert-manager\"" "$terraform_file"
 
-if grep -Fq 'helm pull cert-manager --repo' "$workflow"; then
+if grep -Fq 'helm pull cert-manager --repo' <(workflow_job_source "$workflow" cert-manager-chart); then
   printf 'cert-manager chart mirror must not bypass the approved archive record.\n' >&2
   exit 1
 fi

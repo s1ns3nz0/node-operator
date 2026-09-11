@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Prove release-bundle generation is deterministic and contains required reviewed inputs.
 set -euo pipefail
 
 if [ "$#" -gt 1 ]; then

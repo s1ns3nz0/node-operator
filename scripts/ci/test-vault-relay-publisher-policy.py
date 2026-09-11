@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Enforce the restricted Vault audit-relay publisher IAM source contract.
 """Strict source contract, not an HCL parser or proof of live IAM permissions."""
 import re
 from pathlib import Path

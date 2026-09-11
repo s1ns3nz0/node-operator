@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
+# Check objective: Enforce pinned toolchain-image dependencies and restricted publication contracts.
 # shellcheck disable=SC2016
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$script_dir/lib/workflow-contract.sh"
 root="$(cd "$script_dir/../.." && pwd)"
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
@@ -15,7 +17,26 @@ for dockerfile in "$root/.ci/toolchains/terraform-validation.Dockerfile" "$root/
   fi
 done
 grep -Fq 'ripgrep' "$root/.ci/toolchains/release-build.Dockerfile"
-grep -Fq 'test-build-release-bundle.sh' "$root/.github/workflows/toolchain-image-release.yml"
+workflow="$root/.github/workflows/image-release.yml"
+if ! ruby -ryaml -e '
+  jobs = YAML.load_file(ARGV[0]).fetch("jobs")
+  build = jobs.fetch("toolchain-build")
+  publish = jobs.fetch("toolchain-publish")
+  abort unless build.fetch("needs") == ["select"] && publish.fetch("needs") == ["select", "toolchain-build"]
+  abort unless build.dig("permissions", "packages") == "read" && publish.dig("permissions", "packages") == "write"
+  abort unless build.fetch("if") == "needs.select.outputs.toolchains == '\''true'\''"
+  abort unless publish.fetch("if") == "github.ref == '\''refs/heads/main'\'' && needs.select.outputs.toolchains == '\''true'\'' && needs.toolchain-build.result == '\''success'\''"
+  abort unless build.dig("strategy", "matrix") == "${{ fromJSON(needs.select.outputs.toolchain_matrix) }}"
+  abort unless publish.dig("strategy", "matrix") == "${{ fromJSON(needs.select.outputs.toolchain_matrix) }}"
+' "$workflow"; then
+  printf 'toolchain jobs must retain their selected matrix, read-build and main-only successful publication boundary\n' >&2
+  exit 1
+fi
+grep -Fq 'test-build-release-bundle.sh' <(workflow_source "$workflow")
+grep -Fq 'DOCKERFILE: ${{ matrix.dockerfile }}' "$workflow"
+grep -Fq 'IMAGE_NAME: ${{ matrix.image }}' "$workflow"
+grep -Fq '"$DOCKERFILE"' <(workflow_source "$workflow")
+grep -Fq '"$IMAGE_NAME" = release-build' <(workflow_source "$workflow")
 
 for required in \
   'ARG CA_CERTIFICATES_VERSION=' \

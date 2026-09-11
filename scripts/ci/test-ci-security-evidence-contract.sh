@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
+# Check objective: Preserve immutable scanner-image and evidence-gate contracts across security workflows.
 # shellcheck disable=SC2016
 set -euo pipefail
+# shellcheck source=scripts/ci/lib/workflow-contract.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/workflow-contract.sh"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-workflow="$script_dir/../../.github/workflows/ci-security.yml"
+workflow="$script_dir/../../.github/workflows/ci.yml"
 gate_workflow="$script_dir/../../.github/workflows/opa-pr-gate.yml"
 review_workflow="$script_dir/../../.github/workflows/ci-review-refresh.yml"
-review_handler="$script_dir/../../.github/workflows/ci-review-refresh-handler.yml"
+review_handler="$gate_workflow"
 
 check_scanner_images() {
   local scanner_workflow="$1"
@@ -41,7 +44,7 @@ run_scanner_image_guard_tests() {
   local valid_image='ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 
   test_dir="$(mktemp -d)"
-  ci_fixture="$test_dir/ci-security.yml"
+  ci_fixture="$test_dir/ci.yml"
   gate_fixture="$test_dir/opa-pr-gate.yml"
   trap 'rm -rf "$test_dir"' RETURN
 
@@ -82,42 +85,42 @@ check_scanner_images "$workflow" "$gate_workflow"
 # rather than a hidden checkout path. This preserves upload-artifact's safe
 # default (hidden files excluded) and prevents an accidental workspace-wide
 # upload. The scanner mounts the workspace read-only and /evidence separately.
-grep -Fq 'EVIDENCE_ROOT: ${{ github.workspace }}/security-evidence' "$workflow"
-grep -Fq 'path: ${{ env.EVIDENCE_ROOT }}' "$workflow"
-grep -Fq -- '--volume "$GITHUB_WORKSPACE:/workspace:ro"' "$workflow"
-grep -Fq -- '--volume "$EVIDENCE_ROOT:/evidence"' "$workflow"
-if grep -Fq 'include-hidden-files: true' "$workflow"; then
+grep -Fq 'EVIDENCE_ROOT: ${{ github.workspace }}/security-evidence' <(workflow_job_source "$workflow" security-scans)
+grep -Fq 'path: ${{ env.EVIDENCE_ROOT }}' <(workflow_job_source "$workflow" security-scans)
+grep -Fq -- '--volume "$GITHUB_WORKSPACE:/workspace:ro"' <(workflow_job_source "$workflow" security-scans)
+grep -Fq -- '--volume "$EVIDENCE_ROOT:/evidence"' <(workflow_job_source "$workflow" security-scans)
+if grep -Fq 'include-hidden-files: true' <(workflow_job_source "$workflow" security-scans); then
   printf 'security evidence upload must not include hidden files\n' >&2
   exit 1
 fi
 
-test "$(grep -Fc 'checks: write' "$gate_workflow")" -eq 2
-grep -Fq 'resolve-pr-evidence-context.sh' "$gate_workflow"
-grep -Fq 'ref: ${{ steps.context.outputs.trusted_sha }}' "$gate_workflow"
-grep -Fq 'Collect trusted security evidence from untrusted source' "$gate_workflow"
-grep -Fq -- '--volume "$GITHUB_WORKSPACE/.pr-source:/workspace:ro"' "$gate_workflow"
-grep -Fq -- '--volume "$RUNNER_TEMP/head-security-evidence:/evidence"' "$gate_workflow"
-grep -Fq -- '--env SEMGREP_RULES=/trusted-config/semgrep.yml' "$gate_workflow"
-grep -Fq -- '--env GITLEAKS_CONFIG=/trusted-config/gitleaks.toml' "$gate_workflow"
-grep -Fq -- '--volume "$GITHUB_WORKSPACE/.semgrep/ci.yml:/trusted-config/semgrep.yml:ro"' "$gate_workflow"
-grep -Fq -- '--volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaks.toml:/trusted-config/gitleaks.toml:ro"' "$gate_workflow"
-grep -Fq 'Reject pull-request scanner policy replacement' "$gate_workflow"
-grep -Fq '*:osv-scanner.toml|*:.osv-scanner.toml' "$gate_workflow"
-grep -Fq 'git -C .pr-source diff --name-only -z' "$gate_workflow"
-grep -Fq 'read -r -d' "$gate_workflow"
-grep -Fq -- '--env CHECKOV_CONFIG_FILE=/trusted-config/checkov.yml' "$gate_workflow"
-grep -Fq -- '--env OSV_CONFIG_FILE=/trusted-config/osv-scanner.toml' "$gate_workflow"
+test "$(grep -Fc 'checks: write' <(workflow_source "$gate_workflow"))" -eq 3
+grep -Fq 'resolve-pr-evidence-context.sh' <(workflow_source "$gate_workflow")
+grep -Fq 'ref: ${{ steps.context.outputs.trusted_sha }}' <(workflow_source "$gate_workflow")
+grep -Fq 'run: bash scripts/ci/workflows/collect-head-security.sh' "$gate_workflow"
+grep -Fq -- '--volume "$GITHUB_WORKSPACE/.pr-source:/workspace:ro"' <(workflow_source "$gate_workflow")
+grep -Fq -- '--volume "$RUNNER_TEMP/head-security-evidence:/evidence"' <(workflow_source "$gate_workflow")
+grep -Fq -- '--env SEMGREP_RULES=/trusted-config/semgrep.yml' <(workflow_source "$gate_workflow")
+grep -Fq -- '--env GITLEAKS_CONFIG=/trusted-config/gitleaks.toml' <(workflow_source "$gate_workflow")
+grep -Fq -- '--volume "$GITHUB_WORKSPACE/.semgrep/ci.yml:/trusted-config/semgrep.yml:ro"' <(workflow_source "$gate_workflow")
+grep -Fq -- '--volume "$GITHUB_WORKSPACE/scripts/ci/trusted-scanner/gitleaks.toml:/trusted-config/gitleaks.toml:ro"' <(workflow_source "$gate_workflow")
+grep -Fq 'run: bash scripts/ci/workflows/reject-scanner-policy-replacement.sh' "$gate_workflow"
+grep -Fq '*:osv-scanner.toml|*:.osv-scanner.toml' <(workflow_source "$gate_workflow")
+grep -Fq 'git -C .pr-source diff --name-only -z' <(workflow_source "$gate_workflow")
+grep -Fq 'read -r -d' <(workflow_source "$gate_workflow")
+grep -Fq -- '--env CHECKOV_CONFIG_FILE=/trusted-config/checkov.yml' <(workflow_source "$gate_workflow")
+grep -Fq -- '--env OSV_CONFIG_FILE=/trusted-config/osv-scanner.toml' <(workflow_source "$gate_workflow")
 grep -Fq -- 'osv-scanner scan source --config="$OSV_CONFIG_FILE" --no-ignore' "$script_dir/collect-pr-evidence.sh"
 grep -Fq -- '--disable-nosem --no-git-ignore' "$script_dir/collect-pr-evidence.sh"
 grep -Fq -- 'zizmor --offline --no-config' "$script_dir/collect-pr-evidence.sh"
 grep -Fq 'untrusted-zizmor-suppression' "$script_dir/collect-pr-evidence.sh"
-if grep -Fq 'Download scanner evidence from the completed PR run' "$gate_workflow"; then
+if grep -Fq 'Download scanner evidence from the completed PR run' <(workflow_source "$gate_workflow"); then
   printf 'trusted decision must not consume a pull-request-controlled scanner artifact\n' >&2
   exit 1
 fi
-grep -Fq 'Publish exact-SHA evidence check' "$gate_workflow"
-grep -Fq 'Publish failed exact-SHA evidence check' "$gate_workflow"
-grep -Fq 'publish-pr-evidence-check.sh "$SUBJECT_SHA"' "$gate_workflow"
+grep -Fq 'run: scripts/ci/publish-pr-evidence-check.sh "$SUBJECT_SHA" "$EVIDENCE_ROOT/published/decision.json"' "$gate_workflow"
+grep -Fq 'run: scripts/ci/publish-pr-evidence-check.sh "$SUBJECT_SHA" - "$DETAILS_URL"' "$gate_workflow"
+grep -Fq 'publish-pr-evidence-check.sh "$SUBJECT_SHA"' <(workflow_source "$gate_workflow")
 
 printf 'PASS: scanner evidence is confined to a non-hidden dedicated directory.\n'
 
@@ -131,7 +134,10 @@ if grep -Eq '(actions|checks|contents|pull-requests): write|request-pr-evidence-
   printf 'review signal must not have write permissions or invoke repository code\n' >&2
   exit 1
 fi
-grep -Fq 'workflows: [CI Evidence Review Signal]' "$review_handler"
-grep -Fq 'actions: write' "$review_handler"
-grep -Fq 'request-pr-evidence-refresh.sh?ref=$GITHUB_SHA' "$review_handler"
-grep -Fq '"$trusted_script" "$GITHUB_EVENT_PATH"' "$review_handler"
+grep -Fq 'workflows: [CI, CI Evidence Review Signal]' "$review_handler"
+grep -Fq 'refresh-review-evidence.py' <(workflow_job_source "$review_handler" review-refresh)
+grep -Fq 'checks: write' <(workflow_job_source "$review_handler" review-refresh)
+if workflow_job_source "$review_handler" review-refresh | grep -Eq 'actions: write|docker run|collect-head-security|collect-trusted-terraform|/rerun'; then
+  printf 'review refresh must not rescan or request Actions write permission\n' >&2
+  exit 1
+fi

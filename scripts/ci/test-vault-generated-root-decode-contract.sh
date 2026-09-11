@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify generated-root decoding accepts only canonical recovery material.
 # shellcheck disable=SC2016 # literal source-contract fragments
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"

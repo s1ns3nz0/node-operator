@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Purpose: Install the pinned Linux/amd64 Go security scanner used by Fence checks.
+# Inputs: One installation directory and reviewed tool version/checksum configuration.
+# Outputs: Verified scanner executable in the installation directory.
+# Side effects: Downloads one pinned public archive and writes local tool files only.
 set -euo pipefail
 
 [ "$#" -eq 1 ] || { printf 'usage: %s INSTALL_DIRECTORY\n' "$0" >&2; exit 64; }

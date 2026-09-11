@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify unsigned Vault runtime verification statements obey their evidence boundary.
 """Synthetic boundary tests for the unsigned runtime verification statement."""
 import hashlib
 import importlib.util

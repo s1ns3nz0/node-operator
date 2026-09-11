@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify pinned offline SBOM vulnerability scanning and its release evidence contract.
 # shellcheck disable=SC2016 # Fixtures intentionally write literal shell variables for the fake Grype executable.
 set -euo pipefail
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify Vault runtime scan evidence acceptance and rejection without registry access.
 """Offline positive/negative evidence checks; no registry or AWS access."""
 import copy
 import importlib.util

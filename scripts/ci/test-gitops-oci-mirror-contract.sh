@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
+# Check objective: Verify the GitOps mirror's exact OIDC subject, approved digest input and restricted ECR publication contract.
 # shellcheck disable=SC2016 # Literal Terraform and workflow fragments intentionally contain $ expressions.
 set -euo pipefail
+# shellcheck source=scripts/ci/lib/workflow-contract.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/workflow-contract.sh"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/lib/common.sh"
@@ -8,12 +11,13 @@ root="$(repo_root)"
 fail() { printf 'FAIL GitOps OCI mirror contract: %s\n' "$*" >&2; exit 1; }
 
 terraform_file="$root/infra/terraform/private-gitops.tf"
-workflow="$root/.github/workflows/gitops-oci-mirror.yml"
+workflow="$root/.github/workflows/private-ecr-mirror.yml"
 allowlist="$root/.ci/gitops/approved-oci-artifacts.json"
 dockerfile="$root/.ci/toolchains/gitops-oci-mirror.Dockerfile"
 for file in "$terraform_file" "$workflow" "$allowlist" "$dockerfile"; do
   test -f "$file" || fail "missing required file: $file"
 done
+
 
 jq -e '.version == 1 and (.artifacts | type == "array") and all(.artifacts[]; (.source | type == "string") and (.destination | type == "string") and (.ecrTag | type == "string"))' "$allowlist" >/dev/null || fail 'approved artifact allowlist has an invalid schema'
 grep -Fqx 'ENTRYPOINT ["skopeo"]' "$dockerfile" || fail 'mirror toolchain must invoke skopeo'
@@ -33,7 +37,7 @@ for required in \
   'vault_chart = "${local.name_prefix}-gitops-vault/vault"' \
   'cert_manager_chart = "${local.name_prefix}-gitops-cert-manager/cert-manager"' \
   'token.actions.githubusercontent.com:repository' \
-  'repo:${split("/", var.github_repository)[0]}@*/${split("/", var.github_repository)[1]}@*:environment:gitops-oci-mirror' \
+  '${var.github_oidc_subject_prefix}:environment:gitops-oci-mirror' \
   '"ecr:BatchGetImage"' \
   '"ecr:DescribeImages"' \
   '"ecr:PutImage"' \
@@ -47,7 +51,6 @@ fi
 
 for required in \
   'environment: gitops-oci-mirror' \
-  'options: [argocd, charts, nodes, vault, cert-manager]' \
   'id-token: write' \
   'source must be an OCI reference pinned to a 64-character sha256 digest' \
   'reviewed GitOps artifact allowlist' \
@@ -60,10 +63,14 @@ for required in \
   'aws ecr describe-images' \
   'test "$destination_digest" = "$source_digest"' \
   'GITHUB_STEP_SUMMARY'; do
-  grep -Fq "$required" "$workflow" || fail "workflow contract omits: $required"
+  grep -Fq "$required" <(workflow_job_source "$workflow" gitops) || fail "workflow contract omits: $required"
 done
 
-if grep -Fq 'docker buildx imagetools create' "$workflow"; then
+grep -Fq 'options: [none, argocd, charts, nodes, vault, cert-manager]' "$workflow" || fail 'workflow omits the approved GitOps destination choices'
+grep -Fq "needs: [preflight]" <(workflow_job_source "$workflow" gitops) || fail 'GitOps job does not require input preflight'
+grep -Fq "inputs.target == 'gitops'" <(workflow_job_source "$workflow" gitops) || fail 'GitOps job is not target-selected'
+grep -Fq "github.ref == 'refs/heads/main'" <(workflow_job_source "$workflow" gitops) || fail 'GitOps job is not main-only'
+if grep -Fq 'docker buildx imagetools create' <(workflow_job_source "$workflow" gitops); then
   fail 'workflow uses manifest-only imagetools instead of a blob-copying OCI client'
 fi
 

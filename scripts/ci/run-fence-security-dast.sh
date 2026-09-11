@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Purpose: Run the isolated Fence black-box security fixture and collect its report.
+# Inputs: Docker, the local Fence source/fixture, and configured report paths.
+# Outputs: Bounded DAST report artifacts for later validation.
+# Side effects: Builds or runs only local test containers; no cloud target or production traffic.
+# Check objective: Require isolated Fence black-box checks and a valid loopback-health ZAP report with no HIGH findings.
 set -euo pipefail
 
 [ "$#" -eq 1 ] || { printf 'usage: %s OUTPUT_DIRECTORY\n' "$0" >&2; exit 64; }

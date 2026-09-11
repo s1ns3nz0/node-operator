@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Purpose: Run the bounded static Fence security scan with the supplied scanner binary.
+# Inputs: GOSEC_BIN and the validator-signing-fence source tree.
+# Outputs: Fence SAST report files in the configured runner path.
+# Side effects: Local static analysis and report writes only; no network, cloud, or image publication.
+# Check objective: Scan the signing-fence source with pinned gosec and reject HIGH findings or scan errors.
 set -euo pipefail
 
 [ "$#" -eq 1 ] || { printf 'usage: %s OUTPUT_DIRECTORY\n' "$0" >&2; exit 64; }

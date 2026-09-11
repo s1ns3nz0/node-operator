@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify Web3Signer audit patch and hardened image build remain linked.
 """Offline patch/build linkage; full signer Java tests run inside image build."""
 import hashlib
 import json

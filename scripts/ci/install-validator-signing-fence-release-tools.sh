@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Purpose: Install checksum-verified Cosign, Syft, and Grype for Fence and Vault evidence operations.
+# Inputs: One reviewed Linux/amd64 installation directory.
+# Outputs: Verified tool executables in that directory.
+# Side effects: Downloads pinned public release artifacts and writes local tool files only.
 set -euo pipefail
 
 if [ "$#" -ne 1 ]; then printf 'usage: %s INSTALL_DIRECTORY\n' "$0" >&2; exit 64; fi

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Exercise Kyverno project coverage installation and reject incomplete applied policy evidence.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

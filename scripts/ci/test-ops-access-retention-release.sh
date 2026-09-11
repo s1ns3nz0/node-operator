@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify the saved-plan release wrapper preserves approved SSM retention changes only.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

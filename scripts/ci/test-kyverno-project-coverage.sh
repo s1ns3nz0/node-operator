@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify Kyverno workload coverage rejects project policy bypasses.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

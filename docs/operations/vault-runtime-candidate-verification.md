@@ -25,7 +25,7 @@ is still read-only verification without signing. See
    Adding an environment changes the token subject and must fail authentication.
    Other workflows on main with OIDC permission can assume this read-only role;
    it is branch-bound, not an exact-workflow identity or code-review guarantee.
-3. Dispatch `Vault Runtime Candidate Verification` from `main`. The workflow
+3. Dispatch `CI Operations` with the `vault-runtime` target from `main`. The workflow
    itself also rejects every other branch. Its role can pull only these three
    repositories; it cannot publish images, access EKS or read secrets.
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify UC5 audit reader accepts only bounded, provenance-labeled synthetic audit records.
 """Synthetic-only tests for fixed UC5 CloudWatch audit reader."""
 import copy, importlib.util, json, pathlib, unittest
 

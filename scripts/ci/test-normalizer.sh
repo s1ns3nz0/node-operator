@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify evidence normalization rejects malformed scanner and SCM inputs.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

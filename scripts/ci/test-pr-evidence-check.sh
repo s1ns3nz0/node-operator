@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify PR evidence collection binds GitHub workflow data to the reviewed commit.
 # shellcheck disable=SC2016 # The fake gh fixture intentionally expands variables only when executed.
 set -euo pipefail
 
@@ -40,7 +41,7 @@ if GH_TOKEN=fixture GITHUB_REPOSITORY=owner/repo GH_CAPTURE="$temporary_director
   exit 1
 fi
 
-printf '%s\n' '{"repository":{"default_branch":"main"},"workflow_run":{"event":"pull_request","name":"CI Security","path":".github/workflows/ci-security.yml","repository":{"full_name":"owner/repo"},"head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","pull_requests":[{"number":7}]}}' > "$temporary_directory/event.json"
+printf '%s\n' '{"repository":{"default_branch":"main"},"workflow_run":{"event":"pull_request","name":"CI","path":".github/workflows/ci.yml","repository":{"full_name":"owner/repo"},"head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","pull_requests":[{"number":7}]}}' > "$temporary_directory/event.json"
 printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' \
   'case "$2" in repos/owner/repo/pulls/7) printf "%s\n" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ;; *) exit 1 ;; esac' > "$temporary_directory/bin/gh"
 chmod +x "$temporary_directory/bin/gh"
@@ -56,7 +57,7 @@ if GH_TOKEN=fixture GITHUB_REPOSITORY=owner/repo TRUSTED_WORKFLOW_SHA=bbbbbbbbbb
 fi
 printf 'PASS: trusted evidence publishes a fail-closed check on the exact PR head SHA.\n'
 
-# The transition accepts two exact pairs, never a cross-product of names and paths.
+# The consolidated producer accepts only the new exact pair.
 jq '.workflow_run.name = "CI" | .workflow_run.path = ".github/workflows/ci.yml"' "$temporary_directory/event.json" > "$temporary_directory/new-ci.json"
 GH_TOKEN=fixture GITHUB_REPOSITORY=owner/repo TRUSTED_WORKFLOW_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb PATH="$temporary_directory/bin:$PATH" \
   "$script_dir/resolve-pr-evidence-context.sh" "$temporary_directory/new-ci.json" "$temporary_directory/new-ci.out"
@@ -70,4 +71,10 @@ for name in 'CI' 'CI Security'; do
     exit 1
   fi
 done
-printf 'PASS: old and new exact CI pairs accepted; crossed identities rejected.\n'
+jq '.workflow_run.name = "CI Security" | .workflow_run.path = ".github/workflows/ci-security.yml"' "$temporary_directory/event.json" > "$temporary_directory/legacy-ci.json"
+if GH_TOKEN=fixture GITHUB_REPOSITORY=owner/repo TRUSTED_WORKFLOW_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb PATH="$temporary_directory/bin:$PATH" \
+  "$script_dir/resolve-pr-evidence-context.sh" "$temporary_directory/legacy-ci.json" "$temporary_directory/legacy-ci.out" 2>/dev/null; then
+  printf 'resolver accepted the retired CI workflow\n' >&2
+  exit 1
+fi
+printf 'PASS: consolidated CI identity accepted; legacy and crossed identities rejected.\n'

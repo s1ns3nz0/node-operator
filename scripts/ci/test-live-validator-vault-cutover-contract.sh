@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2016 # literal source-contract fragments
+# Check objective: Enforce guarded validator runtime Vault cutover sequencing and evidence boundaries.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 script="$root/scripts/ops/apply-live-validator-vault-cutover.sh"

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Ensure legacy validator TLS mounts are removed without broadening runtime access.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Run Terraform security-policy fixtures through the reviewed OPA policy suite.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

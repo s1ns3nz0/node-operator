@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Validate formatting and configuration, then enforce plan boundaries using synthetic credentials and a non-refreshing offline plan.
 set -euo pipefail
 
 if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then

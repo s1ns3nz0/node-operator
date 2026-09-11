@@ -8,7 +8,7 @@ for file in \
   "$root/cmd/vault-audit-relay/main_test.go" \
   "$root/.ci/vault-audit-relay/Dockerfile" \
   "$root/infra/terraform/vault-audit-relay-ecr.tf" \
-  "$root/.github/workflows/vault-audit-relay-image-release.yml"; do
+  "$root/.github/workflows/image-release.yml"; do
   test -f "$file" || { printf 'missing Vault audit relay asset: %s\n' "$file" >&2; exit 1; }
 done
 
@@ -26,8 +26,25 @@ grep -Fq 'image_tag_mutability = "IMMUTABLE"' "$root/infra/terraform/vault-audit
 grep -Fq 'scan_on_push = true' "$root/infra/terraform/vault-audit-relay-ecr.tf"
 grep -Fq 'vault-audit-relay-ecr-publish' "$root/infra/terraform/vault-audit-relay-ecr.tf"
 grep -Fq 'ecr:PutImage' "$root/infra/terraform/vault-audit-relay-ecr.tf"
-grep -Fq 'environment: vault-audit-relay-ecr-publish' "$root/.github/workflows/vault-audit-relay-image-release.yml"
-workflow="$root/.github/workflows/vault-audit-relay-image-release.yml"
+workflow="$root/.github/workflows/image-release.yml"
+source "$root/scripts/ci/lib/workflow-contract.sh"
+relay_source() {
+  workflow_source "$workflow" | awk '
+    /run: scripts\/release\/publish-vault-audit-relay\.sh$/{found=1; next}
+    found && /^      - name:/{exit}
+    found {sub(/^          /, ""); print}
+  '
+}
+if ! ruby -ryaml -e '
+  job = YAML.load_file(ARGV[0]).fetch("jobs").fetch("relay-publish")
+  abort unless job.fetch("needs") == ["select"]
+  abort unless job.fetch("if") == "github.ref == '\''refs/heads/main'\'' && needs.select.outputs.relay == '\''true'\''"
+  abort unless job.fetch("environment") == "vault-audit-relay-ecr-publish"
+  abort unless job.dig("permissions", "id-token") == "write"
+' "$workflow"; then
+  printf 'relay publication must remain main-only, selected, OIDC-enabled, and bound to its protected environment\n' >&2
+  exit 1
+fi
 # shellcheck disable=SC2016 # Workflow snippets intentionally contain shell variables literally.
 for required in \
   'install-validator-signing-fence-release-tools.sh' \
@@ -51,13 +68,16 @@ for required in \
   'test-release-scan-cosign-roundtrip.sh' \
   'retention-days: 30' \
   'if: always()'; do
-  grep -Fq "$required" "$workflow" || { printf 'missing audit relay release gate: %s\n' "$required" >&2; exit 1; }
+  case "$required" in
+    'retention-days: 30'|'if: always()') grep -Fq "$required" "$workflow" ;;
+    *) grep -Fq "$required" <(relay_source) ;;
+  esac || { printf 'missing audit relay release gate: %s\n' "$required" >&2; exit 1; }
 done
 # shellcheck disable=SC2016 # This grep intentionally matches workflow shell syntax.
-local_scan_line="$(grep -n 'scan "docker:\$local_image"' "$workflow" | cut -d: -f1)"
-aws_line="$(grep -n 'assume-role-with-web-identity' "$workflow" | cut -d: -f1)"
+local_scan_line="$(relay_source | grep -n 'scan "docker:\$local_image"' | cut -d: -f1)"
+aws_line="$(relay_source | grep -n 'assume-role-with-web-identity' | cut -d: -f1)"
 [ "$local_scan_line" -lt "$aws_line" ] || { printf '%s\n' 'AWS credentials precede local scan gate' >&2; exit 1; }
-label_format="$(grep -F 'label_format=' "$workflow" | sed -e "s/.*label_format='//" -e "s/'$//")"
+label_format="$(relay_source | grep -F 'label_format=' | sed -e "s/.*label_format='//" -e "s/'$//")"
 test -n "$label_format" || { printf '%s\n' 'image label format is absent' >&2; exit 1; }
 docker image inspect --format "$label_format" node-operator-vault-audit-relay:hardened-local >/dev/null
 # shellcheck disable=SC2016 # jq receives $digest as a jq variable, not a shell variable.

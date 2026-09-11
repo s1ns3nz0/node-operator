@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Purpose: Publish an exact-head CI Evidence Decision check from a validated policy decision or fail-closed dash.
+# Inputs: Head SHA, decision path or '-', Actions details URL, GH_TOKEN, and GITHUB_REPOSITORY.
+# Outputs: One completed CI Evidence Decision check and a concise local status line.
+# Side effects: Creates a scoped GitHub check; does not alter code, reviews, releases, or environments.
 set -euo pipefail
 
 if [ "$#" -ne 3 ]; then

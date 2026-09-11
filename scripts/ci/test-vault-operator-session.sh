@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify Vault operator sessions contain credentials and clean up mocked processes.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 scratch="$(mktemp -d)"

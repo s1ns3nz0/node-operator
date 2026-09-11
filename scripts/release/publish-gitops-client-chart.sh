@@ -26,6 +26,7 @@ run_id=''; artifact_id=''
 for _ in $(seq 1 90); do
   matches=''
   while IFS= read -r candidate; do
+    # shellcheck disable=SC2016 # $name is a jq variable, not a shell expansion.
     candidate_artifact="$(github api "repos/$repository/actions/runs/$candidate/artifacts?per_page=100" --jq --arg name "$artifact_name" '.artifacts[] | select(.name == $name and .expired == false) | .id')"
     [ -z "$candidate_artifact" ] || matches="${matches}${candidate}:${candidate_artifact}"$'\n'
   done < <(github run list --repo "$repository" --workflow publish-oci.yml --branch main --limit 100 --json databaseId --jq '.[].databaseId')

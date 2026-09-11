@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Check objective: Verify a release source commit is eligible under reviewed GitHub provenance.
+# Purpose: Require exact trusted CI checks, merged-main ancestry, and policy evidence before release use.
+# Inputs: Source SHA, local origin/main history, GH_TOKEN, GITHUB_REPOSITORY, and unzip.
+# Outputs: Exit status and a non-sensitive provenance confirmation.
+# Side effects: Read-only GitHub/Git/artifact access and temporary local files; no release publication.
 set -euo pipefail
 
 if [ "$#" -ne 1 ]; then
@@ -61,8 +66,8 @@ trusted_check_present() {
   if [ "$custom_check" = true ]; then
     artifacts="$temporary_directory/artifacts-$run_id.json"
     gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" > "$artifacts" || return 1
-    artifact_id="$(jq -er --arg name "ci-evidence-gate-$sha" --argjson run_id "$run_id" '
-      [.artifacts[] | select(.name == $name and .expired == false and .workflow_run.id == $run_id)] |
+    artifact_id="$(jq -er --arg name "ci-evidence-gate-$sha" --arg review_name "ci-review-decision-$run_id" --argjson run_id "$run_id" '
+      [.artifacts[] | select((.name == $name or .name == $review_name) and .expired == false and .workflow_run.id == $run_id)] |
       select(length == 1) | .[0].id
     ' "$artifacts")" || return 1
     [[ "$artifact_id" =~ ^[1-9][0-9]*$ ]] || return 1
@@ -80,11 +85,11 @@ trusted_check_present() {
 }
 fetch_checks "$source_sha" "$checks"
 
-trusted_check_present "$checks" quality "$source_sha" '.github/workflows/ci-quality.yml' push true || { printf 'required trusted source check is absent or invalid: quality\n' >&2; exit 1; }
-trusted_check_present "$checks" scanners "$source_sha" '.github/workflows/ci-security.yml' push true || { printf 'required trusted source check is absent or invalid: scanners\n' >&2; exit 1; }
-trusted_check_present "$checks" policy "$source_sha" '.github/workflows/ci-policy.yml' push true || { printf 'required trusted source check is absent or invalid: policy\n' >&2; exit 1; }
-trusted_check_present "$checks" terraform "$source_sha" '.github/workflows/ci-terraform.yml' push true || { printf 'required trusted source check is absent or invalid: terraform\n' >&2; exit 1; }
-trusted_check_present "$checks" policy-foundation "$source_sha" '.github/workflows/policy-foundation.yml' push true || { printf 'required trusted source check is absent or invalid: policy-foundation\n' >&2; exit 1; }
+trusted_check_present "$checks" quality "$source_sha" '.github/workflows/ci.yml' push true || { printf 'required trusted source check is absent or invalid: quality\n' >&2; exit 1; }
+trusted_check_present "$checks" scanners "$source_sha" '.github/workflows/ci.yml' push true || { printf 'required trusted source check is absent or invalid: scanners\n' >&2; exit 1; }
+trusted_check_present "$checks" 'Policy Rules' "$source_sha" '.github/workflows/ci.yml' push true || { printf 'required trusted source check is absent or invalid: policy\n' >&2; exit 1; }
+trusted_check_present "$checks" 'Terraform Validation' "$source_sha" '.github/workflows/ci.yml' push true || { printf 'required trusted source check is absent or invalid: terraform\n' >&2; exit 1; }
+trusted_check_present "$checks" 'Evidence Contracts' "$source_sha" '.github/workflows/ci.yml' push true || { printf 'required trusted source check is absent or invalid: policy-foundation\n' >&2; exit 1; }
 
 pulls="$temporary_directory/pulls.json"
 gh api -H 'Accept: application/vnd.github+json' "repos/$GITHUB_REPOSITORY/commits/$source_sha/pulls" > "$pulls"

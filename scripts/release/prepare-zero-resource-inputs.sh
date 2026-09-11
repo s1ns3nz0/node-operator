@@ -46,7 +46,7 @@ if [ "${#principals[@]}" -eq 0 ]; then
   observed_arn="$(jq -er '.Arn | strings' <<<"$identity")" || { printf '%s\n' 'AWS identity response lacks an ARN' >&2; exit 65; }
   case "$observed_arn" in
     "arn:aws:sts::${account}:assumed-role/"*/*)
-      role_path="${observed_arn#arn:aws:sts::${account}:assumed-role/}"
+      role_path="${observed_arn#arn:aws:sts::"${account}":assumed-role/}"
       principals=("arn:aws:iam::${account}:role/${role_path%/*}")
       ;;
     "arn:aws:iam::${account}:role/"*) principals=("$observed_arn") ;;

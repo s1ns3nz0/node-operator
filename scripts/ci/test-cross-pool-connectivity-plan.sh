@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Reject Terraform plans that widen or misdirect cross-pool connectivity.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 checker="$root/scripts/ci/check-cross-pool-connectivity-plan.sh"

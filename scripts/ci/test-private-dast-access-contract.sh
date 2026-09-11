@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Enforce private DAST reachability and reject retired or overbroad proxy access.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

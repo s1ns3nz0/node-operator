@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify validator runtime probe rendering with a synthetic public identity.
 import importlib.util, json, pathlib, subprocess, sys, unittest
 
 ROOT = pathlib.Path(__file__).parents[2]

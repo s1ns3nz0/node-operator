@@ -1,36 +1,125 @@
-name: Release
+# Purpose: Verify a release bundle or explicitly publish it; manual dispatch defaults to verification only.
+name: Release Bundle
 
 on:
   push:
     tags: ['v*.*.*']
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Verify the bundle only, or verify and publish
+        type: choice
+        required: true
+        default: verify-only
+        options: [verify-only, publish]
 
 permissions:
   contents: read
 
 jobs:
+  # Role: Require reviewed main ancestry and exact-revision CI evidence before publication.
   eligibility:
+    name: Release Eligibility
+    if: github.event_name == 'push' || inputs.mode == 'publish'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       checks: read
+      actions: read
     steps:
+      # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Verify exact source release eligibility
+      # Role: Check main ancestry, required CI provenance and the merged PR evidence decision before release.
+      - name: Exact source release eligibility
         env:
           GH_TOKEN: ${{ github.token }}
         run: scripts/ci/verify-release-source-eligibility.sh "$GITHUB_SHA"
+  # Role: Build reproducibility evidence, scan the exact SBOM and export the approved artifact digest; no publication authority.
   reproducibility:
+    name: Release Integrity
     needs: eligibility
-    uses: ./.github/workflows/ci-release-integrity.yml
+    if: >-
+      ${{ !cancelled() && (needs.eligibility.result == 'success' ||
+          (github.event_name == 'workflow_dispatch' && inputs.mode == 'verify-only')) }}
     permissions:
       contents: read
-      checks: read
+      packages: read
+    runs-on: ubuntu-24.04
+    outputs:
+      artifact_digest: ${{ steps.sca-binding.outputs.artifact_digest }}
+    env:
+      RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:f6b2550a3bf8a5b2e8bbdbb301120136d01bc38963d1a70d0d7ff3008acb70be
+    steps:
+      # Role: Retrieve the configured source revision without persisting checkout credentials.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Role: Build the bundle with the pinned toolchain and compare repeat builds for deterministic output.
+      - name: Reproducible Release Bundle
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USERNAME: ${{ github.actor }}
+        run: |
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
+          docker pull "$RELEASE_BUILD_IMAGE"
+          docker run --rm --user "$(id -u):$(id -g)" --volume "$GITHUB_WORKSPACE:/workspace:ro" --volume "$RUNNER_TEMP:/output" --workdir /workspace "$RELEASE_BUILD_IMAGE" bash scripts/ci/test-build-release-bundle.sh /output/current
+      # Role: Install the pinned SCA tool and scan the SBOM belonging to this bundle.
+      - name: Exact release SBOM
+        run: |
+          scripts/ci/install-release-sca-tool.sh "$RUNNER_TEMP/release-sca-bin"
+          PATH="$RUNNER_TEMP/release-sca-bin:$PATH" scripts/ci/scan-release-sbom.sh \
+            "$RUNNER_TEMP/current/sbom.cyclonedx.json" \
+            "$RUNNER_TEMP/current/sbom-sca.json"
+      # Role: Upload the scan summary as release evidence, not as an approval by itself.
+      - name: Release SBOM SCA evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: release-sbom-sca-${{ github.sha }}
+          path: ${{ runner.temp }}/current/sbom-sca.json
+          if-no-files-found: error
+          retention-days: 90
+      # Role: Reject failed scans or Critical, High and Unknown findings.
+      - name: Release SBOM SCA decision
+        run: jq -e '.status == "passed" and .findings.critical == 0 and .findings.high == 0 and .findings.unknown == 0' "$RUNNER_TEMP/current/sbom-sca.json" >/dev/null
+      # Role: Export the scanned artifact digest for the publishing job's exact-artifact checks.
+      - name: Approved release binding
+        id: sca-binding
+        run: |
+          artifact_digest="$(jq -er '.artifact_digest' "$RUNNER_TEMP/current/sbom-sca.json")"
+          printf 'artifact_digest=%s\n' "$artifact_digest" >> "$GITHUB_OUTPUT"
+      # Role: Fetch a prior release when available for integrity comparison.
+      - name: Previous Release
+        id: previous
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/workflows/fetch-previous-release.sh
+      # Role: Compare current and previous release integrity metadata.
+      - name: Release Comparison
+        if: steps.previous.outputs.available == 'true'
+        run: scripts/ci/compare-release-integrity.sh "$RUNNER_TEMP/previous" "$RUNNER_TEMP/current" "$RUNNER_TEMP/current/integrity.json"
+      # Role: Record an explicit baseline when there is no previous release to compare.
+      - name: Initial Release Baseline
+        if: steps.previous.outputs.available != 'true'
+        run: |
+          jq -n --arg sha "$GITHUB_SHA" '{schema_version:"v1",status:"baseline",source_revision:$sha}' \
+            > "$RUNNER_TEMP/current/integrity.json"
+      # Role: Upload the comparison or initial-baseline result for later inspection.
+      - name: Integrity evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: release-integrity-${{ github.sha }}
+          path: ${{ runner.temp }}/current/integrity.json
+          retention-days: 90
+  # Role: Rebuild the approved bundle, hand off signing and publish release assets using the protected private runner.
   build-and-publish:
+    name: Signed Release
     needs: [eligibility, reproducibility]
+    if: >-
+      (github.event_name == 'push' || inputs.mode == 'publish') &&
+      needs.eligibility.result == 'success' && needs.reproducibility.result == 'success'
     # A CodeBuild-hosted runner is ephemeral per workflow job and is bound to
     # the dedicated private project by its name plus run identity. A
     # GitHub-hosted or broadly shared runner must never acquire this path.
@@ -42,85 +131,26 @@ jobs:
     env:
       RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:f6b2550a3bf8a5b2e8bbdbb301120136d01bc38963d1a70d0d7ff3008acb70be
     steps:
+      # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Build release bundle and evidence
+      # Role: Rebuild the release and verify it matches the approved bundle and SBOM digest.
+      - name: Release Bundle
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
           APPROVED_ARTIFACT_DIGEST: ${{ needs.reproducibility.outputs.artifact_digest }}
-        run: |
-          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
-          docker pull "$RELEASE_BUILD_IMAGE"
-          mkdir -p "$RUNNER_TEMP/release"
-          docker run --rm --user "$(id -u):$(id -g)" --volume "$GITHUB_WORKSPACE:/workspace:ro" --volume "$RUNNER_TEMP:/output" --workdir /workspace "$RELEASE_BUILD_IMAGE" bash scripts/ci/build-release-bundle.sh /output/release
-          actual_artifact_digest="sha256:$(sha256sum "$RUNNER_TEMP/release/node-operator-release-bundle.tar" | awk '{print $1}')"
-          test "$actual_artifact_digest" = "$APPROVED_ARTIFACT_DIGEST"
-          test "$(jq -er '.metadata.component.version' "$RUNNER_TEMP/release/sbom.cyclonedx.json")" = "$APPROVED_ARTIFACT_DIGEST"
-      - name: Upload signer input to S3
+        run: scripts/release/build-release-bundle.sh
+      # Role: Stage inputs for the private signing path and obtain signed release outputs.
+      - name: Release Signing Handoff
         env:
           AWS_ROLE_ARN: ${{ vars.RELEASE_RUNNER_ROLE_ARN }}
           AWS_REGION: ap-northeast-2
           INPUT_BUCKET: ${{ vars.RELEASE_ARTIFACT_BUCKET }}
-        run: |
-          test -n "$AWS_ROLE_ARN"; test -n "$INPUT_BUCKET"
-          token_file="$RUNNER_TEMP/oidc-token"
-          curl --fail --silent --show-error -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" > "$token_file"
-          web_token="$(jq -r .value "$token_file")"
-          creds="$(aws sts assume-role-with-web-identity --role-arn "$AWS_ROLE_ARN" --role-session-name "release-${GITHUB_RUN_ID}" --web-identity-token "$web_token" --duration-seconds 900)"
-          export AWS_ACCESS_KEY_ID="$(jq -r .Credentials.AccessKeyId <<<"$creds")" AWS_SECRET_ACCESS_KEY="$(jq -r .Credentials.SecretAccessKey <<<"$creds")" AWS_SESSION_TOKEN="$(jq -r .Credentials.SessionToken <<<"$creds")"
-          source_revision="$(jq -er '.predicate.buildDefinition.resolvedDependencies[] | select(.uri == "git+node-operator") | .digest.gitCommit' "$RUNNER_TEMP/release/provenance-input.json")"
-          test "$source_revision" = "$GITHUB_SHA"
-          cp "$GITHUB_WORKSPACE/deploy/vault/buildspec-release-sign.yml" "$RUNNER_TEMP/release/buildspec-release-sign.yml"
-          input_archive="$RUNNER_TEMP/${GITHUB_SHA}.zip"
-          input_key="release-input/sha256/${GITHUB_SHA}.zip"
-          zip -q -j "$input_archive" \
-            "$RUNNER_TEMP/release/node-operator-release-bundle.tar" \
-            "$RUNNER_TEMP/release/node-operator-release-bundle.sha256" \
-            "$RUNNER_TEMP/release/provenance-input.json" \
-            "$RUNNER_TEMP/release/buildspec-release-sign.yml"
-          if ! aws s3api put-object --bucket "$INPUT_BUCKET" --key "$input_key" --body "$input_archive" --if-none-match '*' --region "$AWS_REGION" >/dev/null; then
-            existing_input_dir="$(mktemp -d)"
-            trap 'rm -rf "$existing_input_dir"' EXIT
-            aws s3 cp "s3://${INPUT_BUCKET}/${input_key}" "$existing_input_dir/input.zip" --region "$AWS_REGION"
-            test "$(unzip -Z1 "$existing_input_dir/input.zip" | sort)" = "$(printf '%s\n' buildspec-release-sign.yml node-operator-release-bundle.sha256 node-operator-release-bundle.tar provenance-input.json | sort)"
-            unzip -q "$existing_input_dir/input.zip" -d "$existing_input_dir"
-            cmp "$RUNNER_TEMP/release/node-operator-release-bundle.sha256" "$existing_input_dir/node-operator-release-bundle.sha256"
-            cmp "$RUNNER_TEMP/release/provenance-input.json" "$existing_input_dir/provenance-input.json"
-            cmp "$RUNNER_TEMP/release/buildspec-release-sign.yml" "$existing_input_dir/buildspec-release-sign.yml"
-          fi
-          input_version="$(aws s3api head-object --bucket "$INPUT_BUCKET" --key "$input_key" --query VersionId --output text --region "$AWS_REGION")"
-          test -n "$input_version"; test "$input_version" != "None"
-          aws codebuild start-build --project-name "node-operator-baseline-release-signer" --source-version "$input_version" --source-location-override "${INPUT_BUCKET}/${input_key}" --region "$AWS_REGION" > "$RUNNER_TEMP/codebuild.json"
-          build_id="$(jq -r .build.id "$RUNNER_TEMP/codebuild.json")"
-          for _ in $(seq 1 60); do
-            status="$(aws codebuild batch-get-builds --ids "$build_id" --region "$AWS_REGION" | jq -r '.builds[0].buildStatus')"
-            case "$status" in SUCCEEDED) break;; FAILED|FAULT|STOPPED|TIMED_OUT) echo "CodeBuild signer failed: $status" >&2; exit 1;; esac
-            sleep 10
-          done
-          [ "$status" = SUCCEEDED ] || { echo 'CodeBuild signer timed out' >&2; exit 1; }
-          output_location="$(aws codebuild batch-get-builds --ids "$build_id" --region "$AWS_REGION" | jq -er '.builds[0].artifacts.location')"
-          case "$output_location" in
-            arn:aws:s3:::*) output_key="${output_location#arn:aws:s3:::}" ;;
-            *) echo "unexpected CodeBuild output location: $output_location" >&2; exit 1 ;;
-          esac
-          aws s3 cp "s3://${output_key}" "$RUNNER_TEMP/release-signer-output.zip" --region "$AWS_REGION"
-          signer_output="$RUNNER_TEMP/release/signer-output"
-          unzip -oq "$RUNNER_TEMP/release-signer-output.zip" -d "$signer_output"
-          test -f "$signer_output/release-verification.json"
-          scripts/ci/verify-release-signature.sh "$signer_output"
-          jq -e --arg sha "$source_revision" '.provenance.source_revision == $sha' "$signer_output/release-verification.json" >/dev/null
-      - name: Create GitHub Release
+        run: scripts/release/sign-release-bundle.sh
+      # Role: Create or update the GitHub release and attach its verified assets.
+      - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="${GITHUB_REF_NAME}"
-          gh release create "$tag" \
-            "$RUNNER_TEMP/release/node-operator-release-bundle.tar" \
-            "$RUNNER_TEMP/release/node-operator-release-bundle.sha256" \
-            "$RUNNER_TEMP/release/manifest.json" \
-            "$RUNNER_TEMP/release/sbom.cyclonedx.json" \
-            "$RUNNER_TEMP/release/provenance-input.json" \
-            "$RUNNER_TEMP/release/signer-output/release-verification.json" \
-            --title "$tag" --generate-notes
+        run: scripts/release/create-github-release.sh

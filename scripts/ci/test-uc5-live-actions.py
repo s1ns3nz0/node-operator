@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify UC5 ceremony actions bind only to approved concrete operations.
 """Synthetic execution tests for concrete UC5 ceremony action bindings."""
 import copy
 import importlib.util

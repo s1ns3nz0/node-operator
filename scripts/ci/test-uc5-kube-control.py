@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify UC5 Kubernetes mutation controls reject unbounded or unsafe actions.
 """Synthetic-only mutation-boundary tests; no kubectl is invoked."""
 import copy
 import importlib.util

@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Purpose: Copy validated evidence and decision JSON and derive a bounded SARIF representation.
+# Inputs: Normalized evidence JSON, decision JSON, and a new output directory.
+# Outputs: evidence.json, decision.json, and policy.sarif beneath the output directory.
+# Side effects: Creates local evidence files only; it does not upload or publish them.
 set -euo pipefail
 
 if [ "$#" -ne 3 ]; then printf 'usage: %s NORMALIZED_JSON DECISION_JSON OUTPUT_DIRECTORY\n' "$0" >&2; exit 64; fi
