@@ -4,6 +4,12 @@ Baseline: v0.1.20, source a87b02f9422d33e75a20879e5916ff73fe036df5. Status: impl
 
 ## Verified delivery status
 
+- PR #221 head `9b3e93ef174c60f9079a74391d9bb069127d0980`: CI run
+  `34580874828` and Release Images run `34580870792` passed. The Vault
+  bootstrap image built successfully; publication was skipped on this branch.
+  Local saved-plan, workspace, scope and entrypoint tests passed (34 tests),
+  and the committed-source release bundle test passed. This does not prove
+  live Vault deployment or authorize applying a plan.
 - PR #221 head `54609648a14a2b0c2ed4ac37d0066857d7821f36`: CI run
   `34572077991` passed, including Evidence Contracts after installing the
   missing ripgrep dependency. The trusted decision reported `block=0` and
@@ -97,6 +103,10 @@ checks. The `--plan-vault` source path now connects it to saved preparation
 planning after baseline reconciliation; apply remains unimplemented and the
 plan check is not operator authorization. Independent review verified the
 fresh-provider-cache boundary and pinned Terraform 1.5.7 JSON compatibility.
+Preparation receipts also validate their exact schema, selected deployment,
+reviewed hash and type-sensitive scope before publication. Apply still needs
+fresh provider initialization, source/backend bindings, terminal confirmation
+and post-apply reconciliation; receipt validation alone is not authorization.
 Live saved-plan execution is not yet verified. Tokyo and Seoul bootstrap fixtures have both passed actual
 network-disabled Terraform validation and plan generation; this is not live
 deployment evidence.

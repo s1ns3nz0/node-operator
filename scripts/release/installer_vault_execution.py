@@ -7,6 +7,7 @@ from installer_ops_execution import _environment, _private, _safe_state, _identi
 from installer_files import publish_directory
 from installer_vault_inputs import prepare_vault_inputs
 from installer_vault_plan import validate_vault_plan, VaultPlanError
+from installer_vault_receipt import validate_prepare_receipt, VaultReceiptError
 from installer_vault_workspace import validate_vault_workspace
 
 class VaultExecutionError(InfrastructureError): pass
@@ -67,14 +68,16 @@ def plan_vault_prepare(bundle_root,state_dir,discovery,profile,artifacts_path):
   saved.chmod(0o600);digest=_hash(saved)
   result=_run(terraform+["show","-json",str(saved)],environment,output=True)
   if result.returncode: raise VaultExecutionError("Saved Vault plan could not be inspected.")
-  scope=validate_vault_plan(json.loads(result.stdout),"prepare")
+  inspected=json.loads(result.stdout)
+  scope=validate_vault_plan(inspected,"prepare")
   if scope["result"]=="nochange": raise VaultExecutionError("No preparation changes; reconcile readiness instead of applying an empty plan.")
   if _hash(saved)!=digest: raise VaultExecutionError("Saved plan changed during inspection; no plan was published.")
   receipt=stage/"receipt.json"
   receipt.write_text(json.dumps({"schema_version":1,"phase":"prepare","plan_sha256":digest,"aws_account_id":discovery["aws_account_id"],"aws_region":discovery["aws_region"],"deployment_name":discovery["deployment_name"],"scope":scope,"applied":False},sort_keys=True));receipt.chmod(0o600)
+  validate_prepare_receipt(_read_object(receipt),inspected,discovery,digest)
   publish_directory(stage,destination)
   return digest
- except (ValueError,VaultPlanError) as error:
+ except (ValueError,VaultPlanError,VaultReceiptError) as error:
   raise VaultExecutionError("Saved Vault plan is malformed or outside preparation scope.") from error
  finally:
   if stage.exists():

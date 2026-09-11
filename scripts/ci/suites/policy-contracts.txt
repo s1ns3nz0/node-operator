@@ -23,6 +23,7 @@ scripts/ci/test-installer-vault-inputs.py
 scripts/ci/test-installer-vault-plan.py
 scripts/ci/test-installer-vault-workspace.py
 scripts/ci/test-installer-vault-execution.py
+scripts/ci/test-installer-vault-receipt.py
 scripts/ci/test-render-private-vault-values.py
 scripts/ci/test-private-vault-bootstrap-transport.py
 scripts/ci/test-deploy-sealed-vault.py
