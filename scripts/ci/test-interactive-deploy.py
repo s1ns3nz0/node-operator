@@ -18,6 +18,45 @@ DISCOVERY = {"aws_profile": "test", "aws_account_id": "123456789012", "aws_regio
 
 
 class InstallerCommandTests(unittest.TestCase):
+    def test_ops_apply_requires_terminal_sha_and_separate_operation(self):
+        for options in (["--apply-ops-access"], ["--plan-ops-access", "--apply-ops-access"], ["--ops-plan-sha", "a" * 64]):
+            with patch.object(cli.sys.stdin, "isatty", return_value=False), patch.object(cli, "discover") as discover, self.assertRaises(cli.StateError):
+                cli.run(["resume", "--state-dir", "/unused", *options])
+            discover.assert_not_called()
+
+    def test_ops_plan_and_apply_never_claim_session_ready(self):
+        for operation in ("plan", "apply", "cancel", "failure"):
+            with tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary).resolve() / "state"
+                store = cli.CheckpointStore(directory, {**DISCOVERY, **RELEASE})
+                with store.lock():
+                    store.resume()
+                    store.set_stage("infrastructure", "complete")
+                    store.set_stage("preflight", "complete")
+                original = (directory / "checkpoint.json").read_bytes()
+                bundle = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=Mock(return_value=directory / "release"))
+                execution = types.SimpleNamespace(plan_ops_access=Mock(return_value="a" * 64), apply_ops_access=Mock())
+                options = ["--release-dir", temporary, "--plan-ops-access"] if operation == "plan" else ["--release-dir", temporary, "--apply-ops-access", "--ops-plan-sha", "a" * 64]
+                confirmation = "APPLY SSM 123456789012 ap-northeast-1 test-node node-operator/ops-access/terraform.tfstate " + "a" * 64
+                if operation == "failure":
+                    execution.apply_ops_access.side_effect = cli.InfrastructureError("partial apply")
+                with patch.dict(sys.modules, {"installer_bundle": bundle, "installer_ops_execution": execution}), patch.object(cli, "discover", return_value=DISCOVERY), patch.object(cli.sys.stdin, "isatty", return_value=True), patch("builtins.input", return_value="cancel" if operation == "cancel" else confirmation):
+                    if operation in ("cancel", "failure"):
+                        with self.assertRaises(cli.StateError if operation == "cancel" else cli.InfrastructureError):
+                            self.invoke(directory, "resume", options)
+                    else:
+                        _, result = self.invoke(directory, "resume", options)
+                        self.assertFalse(result["deployment_complete"])
+                        self.assertEqual(result["result"], "ops_access_plan_ready" if operation == "plan" else "ops_access_provisioned")
+                        self.assertEqual(result["ops_plan_sha256"], "a" * 64 if operation == "plan" else None)
+                if operation == "cancel":
+                    execution.apply_ops_access.assert_not_called()
+                    self.assertEqual((directory / "checkpoint.json").read_bytes(), original)
+                else:
+                    _, status = self.invoke(directory, "status")
+                    self.assertEqual(status["stages"]["preflight"]["status"], "complete")
+                    self.assertEqual(status["stages"]["ops_access"]["status"], "failed" if operation == "failure" else "awaiting_input")
+
     def test_ops_preparation_is_separate_and_never_claims_access_ready(self):
         for infrastructure_status in ("pending", "complete"):
             with tempfile.TemporaryDirectory() as temporary:

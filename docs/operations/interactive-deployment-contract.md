@@ -2,7 +2,7 @@
 
 ## Commands
 
-The public entrypoint is `scripts/release/node-operator-install.sh`. It provides `start`, `status` and `resume` for release checks, AWS discovery and private checkpoints. `--prepare-infrastructure` only generates local inputs. `--apply-infrastructure` additionally invokes the verified release's guarded Terraform path after explicit terminal confirmation. Separate `resume --prepare-ops-access` prepares SSM inputs only; SSM apply, connection readiness and later deployment adapters remain unimplemented. `resume` rejects running stages pending reconciliation; a failed apply can be retried through the release wrapper's existing-state checks, but residual changes still stop for review. `status` is local only. SSM retains a separate apply and confirmation.
+The public entrypoint is `scripts/release/node-operator-install.sh`. It provides `start`, `status` and `resume` for release checks, AWS discovery and private checkpoints. `--prepare-infrastructure` only generates local inputs. `--apply-infrastructure` additionally invokes the verified release's guarded Terraform path after explicit terminal confirmation. Separate SSM preparation, plan and apply operations retain their own state and confirmation. SSM connection readiness and later deployment adapters remain unimplemented. `resume` rejects running stages pending reconciliation; a failed infrastructure apply can be retried through the release wrapper's existing-state checks, but residual changes still stop for review. `status` is local only.
 
 ## Separate operations-access preparation
 
@@ -14,7 +14,32 @@ preparation, not for Terraform apply. The original infrastructure handoff and
 the live private EKS context must match before private SSM inputs are prepared.
 The result is `ops_access_inputs_ready`, with `ops_access` awaiting input:
 no instance is created, no session is opened and deployment remains incomplete.
-SSM plan/apply and connection verification are still separate pending work.
+SSM plan/apply are separate operations; connection verification remains pending.
+
+## Separate SSM plan and apply
+
+Use `resume --plan-ops-access` to prepare and save a private plan. The result
+includes `ops_plan_sha256`; review the saved plan privately before applying it.
+Then use `resume --apply-ops-access --ops-plan-sha <reviewed-sha256>` with the
+same release assets and state directory. The terminal confirmation binds the
+account, Region, deployment name, isolated ops state key and exact plan hash.
+These flags cannot be combined with each other or with infrastructure actions.
+The discovery profile is used for both backend and provider in this initial
+adapter; it must already have the necessary permissions. No role or permission
+is silently created to satisfy that requirement.
+
+The verified release advertises `bootstrap.interactive_ops_access_schema: 1`.
+Terraform runs in a private `ops-access-work` copy, never in the immutable
+materialized release. Source files are checked again on reuse. Saved plans
+live in `ops-access-plans`; an existing plan is not overwritten. Failed or
+interrupted operations retain their original work and state for reconciliation.
+Inherited Terraform controls and alternate AWS credential sources are removed.
+
+Successful apply returns `ops_access_provisioned` only after validating the
+new private session handoff. The ops stage remains `awaiting_input` until
+SSM Online and private EKS connectivity are verified; no Vault, signer or
+validator readiness is inferred. Current adapter tests use mocked cloud and
+Terraform behavior; they are not evidence of a successful fresh deployment.
 
 ## Explicit infrastructure apply
 

@@ -1,12 +1,13 @@
-"""Interactive deployment entrypoint: release discovery and local input preparation.
+"""Interactive deployment entrypoint: discovery and guarded infrastructure/SSM steps.
 
-Infrastructure apply requires explicit terminal confirmation; later adapters remain unimplemented.
+Infrastructure and separate SSM apply require terminal confirmation; later adapters remain unimplemented.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 import stat
 import sys
@@ -43,7 +44,7 @@ def prompt(value: str | None, label: str, default: str | None = None) -> str:
 
 
 def run(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Start/status/resume discovery, preparation and explicitly confirmed infrastructure apply.")
+    parser = argparse.ArgumentParser(description="Start/status/resume discovery and separately confirmed infrastructure/SSM execution.")
     parser.add_argument("command", choices=("start", "status", "resume"))
     parser.add_argument("--state-dir", required=True, type=Path)
     parser.add_argument("--release-dir", type=Path, help="Downloaded release asset directory; required for start/resume")
@@ -52,12 +53,20 @@ def run(argv: list[str] | None = None) -> int:
     parser.add_argument("--name")
     parser.add_argument("--prepare-infrastructure", action="store_true", help="Materialize verified release and generate local Terraform inputs; does not apply")
     parser.add_argument("--prepare-ops-access", action="store_true", help="Prepare separate SSM inputs after infrastructure completion; never plans, applies or opens a session")
+    parser.add_argument("--plan-ops-access", action="store_true", help="Create a separate private SSM saved plan; does not apply")
+    parser.add_argument("--apply-ops-access", action="store_true", help="Apply the separately reviewed SSM plan after terminal confirmation")
+    parser.add_argument("--ops-plan-sha", help="Exact SHA-256 from the reviewed SSM plan; required for SSM apply")
     parser.add_argument("--apply-infrastructure", action="store_true", help="Prepare and apply infrastructure after terminal confirmation; does not set up SSM/Vault/workloads")
     parser.add_argument("--backend-principal-arn", help="Exact same-account backend IAM role for infrastructure preparation")
     parser.add_argument("--execution-profile", help="Optional existing AWS role profile to verify and use for infrastructure execution")
     args = parser.parse_args(argv)
-    if args.prepare_ops_access and (args.command != "resume" or args.prepare_infrastructure or args.apply_infrastructure or args.backend_principal_arn or args.execution_profile):
-        raise StateError("SSM preparation is a separate resume operation; do not combine it with infrastructure or execution-role options.")
+    ops_requested = args.prepare_ops_access or args.plan_ops_access or args.apply_ops_access
+    if ops_requested and (args.command != "resume" or args.prepare_infrastructure or args.apply_infrastructure or args.backend_principal_arn or args.execution_profile or sum((args.prepare_ops_access, args.plan_ops_access, args.apply_ops_access)) != 1):
+        raise StateError("SSM is a separate resume operation; choose one preparation, plan or apply step without infrastructure options.")
+    if args.ops_plan_sha and not args.apply_ops_access:
+        raise StateError("--ops-plan-sha is accepted only with --apply-ops-access.")
+    if args.apply_ops_access and (not sys.stdin.isatty() or not re.fullmatch(r"[0-9a-f]{64}", args.ops_plan_sha or "")):
+        raise StateError("SSM apply requires an interactive terminal and the reviewed 64-character plan SHA-256.")
     if args.apply_infrastructure:
         if not sys.stdin.isatty():
             raise StateError("Infrastructure apply requires an interactive terminal and deployment-scope confirmation.")
@@ -97,29 +106,53 @@ def run(argv: list[str] | None = None) -> int:
     context = {key: discovery[key] for key in ("aws_profile", "aws_region", "aws_account_id", "deployment_name")}
     context.update(release_sha=release["release_sha"], bundle_digest=release["bundle_digest"])
     store = CheckpointStore(args.state_dir, context)
+    ops_result = None
+    ops_plan_sha = None
     with store.lock():
         checkpoint = store.resume()
         if any(stage["status"] == "running" for stage in checkpoint["stages"].values()):
             raise StateError("An interrupted stage requires reconciliation. No stage was retried or marked complete.")
-        if not args.prepare_ops_access:
+        if not ops_requested:
             for stage in sorted(STAGE_NAMES):
                 if stage not in checkpoint["stages"]:
                     store.set_stage(stage, "pending")
         # Read-only discovery is useful but does not prove permissions, quotas,
         # all-resource collision safety or provisioning readiness.
-        if not args.prepare_ops_access:
+        if not ops_requested:
             store.set_stage("preflight", "awaiting_input")
-        if args.prepare_ops_access:
+        if ops_requested:
             if checkpoint["stages"].get("infrastructure", {}).get("status") != "complete":
-                raise StateError("SSM preparation requires completed infrastructure in this original state directory.")
+                raise StateError("SSM operations require completed infrastructure in this original state directory.")
             if checkpoint["stages"].get("ops_access", {}).get("status") == "complete":
                 raise StateError("SSM access is already complete; preparation cannot reset its status.")
             from installer_bundle import materialize_release
             from installer_ops_access import prepare_ops_access
             bundle_root = materialize_release(args.release_dir, args.state_dir / "release",
                                               release["release_sha"], release["bundle_digest"])
-            prepare_ops_access(bundle_root, args.state_dir, discovery, profile)
-            store.set_stage("ops_access", "awaiting_input")
+            if args.prepare_ops_access:
+                prepare_ops_access(bundle_root, args.state_dir, discovery, profile)
+                store.set_stage("ops_access", "awaiting_input")
+                ops_result = "ops_access_inputs_ready"
+            else:
+                from installer_ops_execution import plan_ops_access, apply_ops_access
+                if args.apply_ops_access:
+                    confirmation = f"APPLY SSM {discovery['aws_account_id']} {region} {name} node-operator/ops-access/terraform.tfstate {args.ops_plan_sha}"
+                    print("This applies only the separately reviewed SSM access plan. A successful apply does not prove session or private EKS readiness.", file=sys.stderr)
+                    if prompt(None, "Type exactly " + confirmation) != confirmation:
+                        raise StateError("SSM apply cancelled; no resource changes requested.")
+                store.set_stage("ops_access", "running")
+                try:
+                    if args.plan_ops_access:
+                        ops_plan_sha = plan_ops_access(bundle_root, args.state_dir, discovery, profile)
+                        ops_result = "ops_access_plan_ready"
+                    else:
+                        apply_ops_access(bundle_root, args.state_dir, discovery, profile, args.ops_plan_sha)
+                        ops_result = "ops_access_provisioned"
+                except (InfrastructureError, PreflightError):
+                    store.set_stage("ops_access", "failed")
+                    raise
+                # Provisioning alone does not prove SSM Online or private EKS access.
+                store.set_stage("ops_access", "awaiting_input")
         if args.prepare_infrastructure:
             from installer_bundle import materialize_release
             principal = prompt(args.backend_principal_arn, "Same-account Terraform backend IAM role ARN")
@@ -150,9 +183,10 @@ def run(argv: list[str] | None = None) -> int:
                     store.set_stage("infrastructure", "failed")
                     raise
                 store.set_stage("infrastructure", "complete")
-    print(json.dumps({"result": "ops_access_inputs_ready" if args.prepare_ops_access else ("infrastructure_ready" if args.apply_infrastructure else ("infrastructure_inputs_ready" if args.prepare_infrastructure else "discovery_complete")), "discovery": discovery,
+    print(json.dumps({"result": ops_result or ("infrastructure_ready" if args.apply_infrastructure else ("infrastructure_inputs_ready" if args.prepare_infrastructure else "discovery_complete")), "discovery": discovery,
+                      "ops_plan_sha256": ops_plan_sha,
                       "deployment_complete": False,
-                      "remaining": "SSM, Vault, secrets, GitOps, workloads, custody, deposit, activation, duty and E2E remain required." if args.apply_infrastructure else "Infrastructure apply and later deployment stages remain required."}, sort_keys=True))
+                      "remaining": "SSM session/private EKS readiness, Vault, secrets, GitOps, workloads, custody, deposit, activation, duty and E2E remain required." if ops_requested or args.apply_infrastructure else "Infrastructure apply and later deployment stages remain required."}, sort_keys=True))
     return 0
 
 

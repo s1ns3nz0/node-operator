@@ -10,8 +10,8 @@ Baseline: v0.1.20, source a87b02f9422d33e75a20879e5916ff73fe036df5. Status: impl
   `require_approval=1`; passing CI alone does not authorize merge or release.
 - Infrastructure preparation/apply adapters have local contract evidence;
   a downloaded-release live infrastructure deployment is not yet verified.
-- Task 7 is being connected as a separate input-preparation operation.
-  SSM plan/apply, private-session readiness and tasks 8-14 remain incomplete.
+- Task 7 has separate input preparation and guarded plan/apply source adapters.
+  Live provisioning, private-session readiness and tasks 8-14 remain incomplete.
 - No live deployment, Vault ceremony, validator activation or resource
   deletion is evidenced by these local tests.
 
@@ -52,3 +52,19 @@ Baseline: v0.1.20, source a87b02f9422d33e75a20879e5916ff73fe036df5. Status: impl
 - E: Fault injection, clean release download deployment, UC1-4 and signed installer release (tasks 13-14).
 
 Each slice must demonstrate real behavior through tests. Mock tests do not prove live deployment. Real cloud operations, destructive replacement, credential ceremonies and wallet actions are recorded separately and performed only with the corresponding approval/input.
+
+## Fresh Vault integration prerequisite
+
+Task 8 cannot be fulfilled by calling a recovery script on an uninitialized
+Vault. Existing bootstrap-runner automation deliberately installs sealed Vault
+without initialization. The installer must implement a distinct first-init
+ceremony with recovery material held by the operator, followed by temporary
+administrator revocation and post-init verification. The TLS Secret required
+before Vault can serve its own PKI is a bootstrap dependency, not a reason to
+place validator signing material in Kubernetes Secrets.
+
+Always pass Region, cluster and SSM instance from the verified handoff into
+private transport commands. Existing historical operator-auth scripts contain
+Seoul/account-specific defaults and must not be reused unchanged for a fresh
+Region. Audit PVC/relay readiness must precede enabling audit devices; key
+custody remains a separate interactive ceremony after Vault initialization.
