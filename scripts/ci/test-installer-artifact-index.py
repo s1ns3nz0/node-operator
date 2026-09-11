@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Check objective: release artifact indexes are deterministic, release-bound, private, and never overwrite staged evidence.
+# Check objective: Release artifact indexes are deterministic, release-bound, private, and never overwrite staged evidence.
 from __future__ import annotations
 
 import json
