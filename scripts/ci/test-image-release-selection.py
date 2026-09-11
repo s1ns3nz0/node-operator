@@ -23,7 +23,7 @@ class Selection(unittest.TestCase):
 
     def test_each_toolchain_is_selected_individually(self):
         for item in M.TOOLCHAINS:
-            for path in (item["dockerfile"], item["input_file"]):
+            for path in (item["dockerfile"], *item["input_file"].split()):
                 if not path:
                     continue
                 with self.subTest(path=path):

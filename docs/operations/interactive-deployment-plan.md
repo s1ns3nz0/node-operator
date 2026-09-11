@@ -58,6 +58,17 @@ Each slice must demonstrate real behavior through tests. Mock tests do not prove
 
 ## Fresh Vault integration prerequisite
 
+Task 8 implementation is in progress, not live-verified. Regional values
+rendering, pre-initialization private transport and a sealed-install helper
+have 13 passing local mock tests. The 30-check policy-contracts suite and
+harness verification passed. The bootstrap image built locally, and its
+packaged scripts, template and commands passed a network-disabled smoke check.
+Linux rendering and all three network-disabled Terraform bootstrap phase
+plans passed. Independent startup/TLS review findings were corrected.
+These tests do not prove real Helm deployment, KMS auto-unseal, Pod Identity
+or first-init behavior. Installer orchestration and the operator-held
+initialization ceremony remain required before this task can be completed.
+
 Task 8 cannot be fulfilled by calling a recovery script on an uninitialized
 Vault. Existing bootstrap-runner automation deliberately installs sealed Vault
 without initialization. The installer must implement a distinct first-init

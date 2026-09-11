@@ -18,6 +18,9 @@ scripts/ci/test-installer-infrastructure.py
 scripts/ci/test-installer-ops-access.py
 scripts/ci/test-installer-ops-execution.py
 scripts/ci/test-installer-ops-verify.py
+scripts/ci/test-render-private-vault-values.py
+scripts/ci/test-private-vault-bootstrap-transport.py
+scripts/ci/test-deploy-sealed-vault.py
 scripts/ci/test-installer-files.py
 scripts/ci/test-installer-bundle.py
 scripts/ci/test-interactive-deploy.py

@@ -10,6 +10,7 @@ ARG CA_CERTIFICATES_VERSION=20260601~24.04.1
 ARG CURL_VERSION=8.5.0-2ubuntu10.13
 ARG TAR_VERSION=1.35+dfsg-3ubuntu0.4
 ARG UNZIP_VERSION=6.0-28ubuntu4.1
+ARG JQ_VERSION=1.7.1-3ubuntu0.24.04.2
 ARG TOOLCHAIN_INPUT_SHA
 
 LABEL io.node-operator.toolchain-input-sha="${TOOLCHAIN_INPUT_SHA}"
@@ -24,6 +25,7 @@ RUN apt-get update \
       curl=${CURL_VERSION} \
       tar=${TAR_VERSION} \
       unzip=${UNZIP_VERSION} \
+      jq=${JQ_VERSION} \
  && rm -rf /var/lib/apt/lists/*
 RUN curl --fail --location --silent --show-error --output /tmp/awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip" \
  && echo "${AWSCLI_SHA256}  /tmp/awscliv2.zip" | sha256sum --check --status \
@@ -41,6 +43,8 @@ RUN curl --fail --location --silent --show-error --output /usr/local/bin/kubectl
 
 # This is non-secret deployment input. The KMS key ARN is rendered by the
 # Terraform-owned NO_SOURCE buildspec and never written back to Git.
-COPY docs/gitops/vault-values.example.yaml /opt/node-operator/vault-values.template.yaml
+COPY release/vault-values.yaml.example /opt/node-operator/vault-values.template.yaml
+COPY scripts/release/render-private-vault-values.sh scripts/release/deploy-sealed-vault.sh /opt/node-operator/
+RUN chmod 0755 /opt/node-operator/render-private-vault-values.sh /opt/node-operator/deploy-sealed-vault.sh
 
 WORKDIR /workspace

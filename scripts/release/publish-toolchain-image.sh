@@ -6,7 +6,13 @@
 # Side effects: Loads a Docker image, authenticates to GHCR, and pushes two tags.
 set -euo pipefail
 
-expected="$({ sha256sum "$DOCKERFILE" ${INPUT_FILE:+"$INPUT_FILE"}; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
+# Use the same ordered input list as the unprivileged build job.
+input_files=("$DOCKERFILE")
+if [ -n "${INPUT_FILE:-}" ]; then
+  read -r -a extra_inputs <<< "$INPUT_FILE"
+  input_files+=("${extra_inputs[@]}")
+fi
+expected="$({ sha256sum "${input_files[@]}"; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
 test "$expected" = "$(cat /tmp/toolchain-image/toolchain-input.sha256)"
 docker load --input /tmp/toolchain-image/toolchain-image.tar
 build_image="$IMAGE:build-${GITHUB_SHA}"

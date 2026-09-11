@@ -13,3 +13,9 @@ vault_bootstrap_subnet_ids           = ["subnet-0123456789abcdef0", "subnet-0123
 vault_bootstrap_image                = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault@sha256:3674b70a8c02a7fd0734e8e0d7c7f4f33fe7701f30b4c6f21569877721d55d07"
 vault_chart_version                  = "0.31.0"
 vault_chart_manifest_digest          = "sha256:85cfa6b40396a198a104fbf06c7cccaf75428db7201394f9061c272441bcd0e4"
+vault_runtime_images = {
+  server      = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/vault-server@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  agent       = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/vault-agent@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  injector    = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/vault-injector@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  audit_relay = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/vault-audit-relay@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+}

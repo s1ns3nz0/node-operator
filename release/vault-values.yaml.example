@@ -1,0 +1,88 @@
+# Non-secret reviewed Vault values. Renderer replaces every deployment token.
+global:
+  tlsDisable: false
+server:
+  serviceAccount: {create: true, name: vault}
+  image:
+    repository: __VAULT_SERVER_REPOSITORY__
+    tag: "__VAULT_SERVER_TAG__"
+  ha:
+    enabled: true
+    replicas: 3
+    raft:
+      enabled: true
+      setNodeId: true
+      config: |
+        ui = false
+        disable_mlock = true
+        listener "tcp" {
+          address = "[::]:8200"
+          cluster_address = "[::]:8201"
+          tls_disable = 0
+          tls_cert_file = "/vault/userconfig/vault-tls/tls.crt"
+          tls_key_file = "/vault/userconfig/vault-tls/tls.key"
+          tls_client_ca_file = "/vault/userconfig/vault-tls/ca.crt"
+        }
+        storage "raft" {
+          path = "/vault/data"
+          retry_join {
+            leader_api_addr = "https://vault-0.vault-internal:8200"
+            leader_ca_cert_file = "/vault/userconfig/vault-tls/ca.crt"
+            leader_client_cert_file = "/vault/userconfig/vault-tls/tls.crt"
+            leader_client_key_file = "/vault/userconfig/vault-tls/tls.key"
+          }
+        }
+        service_registration "kubernetes" {}
+        seal "awskms" {
+          region = "__VAULT_AWS_REGION__"
+          kms_key_id = "__VAULT_UNSEAL_KEY_ARN__"
+        }
+  dataStorage: {enabled: true, size: 20Gi, storageClass: gp3-encrypted}
+  resources:
+    requests: {cpu: "500m", memory: "1Gi"}
+    limits: {cpu: "2", memory: "2Gi"}
+  statefulSet:
+    securityContext:
+      pod: {runAsNonRoot: true, runAsUser: 100, runAsGroup: 1000, fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+      container: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}, runAsNonRoot: true}
+  auditStorage:
+    enabled: true
+    size: 20Gi
+    storageClass: gp3-encrypted
+    accessMode: ReadWriteOnce
+    labels:
+      node-operator.io/encryption-policy: baseline-ebs-kms
+      node-operator.io/purpose: vault-validator-audit
+  service: {type: ClusterIP}
+  ingress: {enabled: false}
+  volumes:
+    - name: userconfig-vault-tls
+      secret: {secretName: vault-tls, defaultMode: 420}
+    - name: tmp
+      emptyDir: {}
+  volumeMounts:
+    - {name: userconfig-vault-tls, mountPath: /vault/userconfig/vault-tls, readOnly: true}
+    - {name: tmp, mountPath: /tmp}
+  extraContainers:
+    - name: vault-validator-audit-relay
+      image: __VAULT_AUDIT_RELAY_IMAGE__
+      args: [--file-path=/vault/audit/validator-audit.json, --socket-path=/vault/audit/validator-audit.sock]
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}, runAsNonRoot: true}
+      resources:
+        requests: {cpu: "100m", memory: "128Mi"}
+        limits: {cpu: "250m", memory: "256Mi"}
+      volumeMounts: [{name: audit, mountPath: /vault/audit}]
+injector:
+  enabled: true
+  agentImage:
+    repository: __VAULT_AGENT_REPOSITORY__
+    tag: "__VAULT_AGENT_TAG__"
+  image:
+    repository: __VAULT_INJECTOR_REPOSITORY__
+    tag: "__VAULT_INJECTOR_TAG__"
+  resources:
+    requests: {cpu: "100m", memory: "128Mi"}
+    limits: {cpu: "500m", memory: "512Mi"}
+  securityContext:
+    pod: {runAsNonRoot: true, runAsUser: 100, runAsGroup: 1000, fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+    container: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}, runAsNonRoot: true}

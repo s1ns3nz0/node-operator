@@ -27,6 +27,12 @@ variable "vault_bootstrap_image" {
   }
 }
 
+variable "vault_runtime_images" {
+  description = "Digest-pinned private ECR runtime images for the sealed Vault release."
+  type        = map(string)
+  default     = {}
+}
+
 variable "vault_chart_version" {
   description = "Approved Vault Helm chart version stored in private ECR."
   type        = string
@@ -186,6 +192,26 @@ resource "aws_codebuild_project" "vault_bootstrap" {
       value = aws_kms_key.vault.arn
     }
     environment_variable {
+      name  = "VAULT_SERVER_IMAGE"
+      value = var.vault_runtime_images["server"]
+    }
+    environment_variable {
+      name  = "VAULT_AGENT_IMAGE"
+      value = var.vault_runtime_images["agent"]
+    }
+    environment_variable {
+      name  = "VAULT_INJECTOR_IMAGE"
+      value = var.vault_runtime_images["injector"]
+    }
+    environment_variable {
+      name  = "VAULT_AUDIT_RELAY_IMAGE"
+      value = var.vault_runtime_images["audit_relay"]
+    }
+    environment_variable {
+      name  = "AWS_ACCOUNT_ID"
+      value = var.aws_account_id
+    }
+    environment_variable {
       name  = "VAULT_CHART_MANIFEST_DIGEST"
       value = var.vault_chart_manifest_digest
     }
@@ -209,15 +235,14 @@ resource "aws_codebuild_project" "vault_bootstrap" {
             - test -n "$VAULT_UNSEAL_KEY_ARN"
             - test -n "$VAULT_CHART_MANIFEST_DIGEST"
             - test "$(aws ecr describe-images --region ${var.aws_region} --repository-name ${local.private_gitops_repositories.vault_chart} --image-ids imageTag=${var.vault_chart_version} --query 'imageDetails[0].imageDigest' --output text)" = "$VAULT_CHART_MANIFEST_DIGEST"
-            - sed "s|REPLACE_WITH_VAULT_UNSEAL_KEY_ARN|$VAULT_UNSEAL_KEY_ARN|g" /opt/node-operator/vault-values.template.yaml > /tmp/vault-values.yaml
-            - grep -Fq 'REPLACE_WITH_VAULT_UNSEAL_KEY_ARN' /tmp/vault-values.yaml && exit 1 || true
-            - helm upgrade --install vault oci://${aws_ecr_repository.private_gitops["vault_chart"].repository_url}@${var.vault_chart_manifest_digest} --namespace vault --values /tmp/vault-values.yaml --atomic --timeout 15m
-            - kubectl wait --namespace vault --for=condition=Ready pod --selector=app.kubernetes.io/name=vault --timeout=15m
+            - vault_values_dir=$(mktemp -d /tmp/node-operator-vault-values.XXXXXX)
+            - /opt/node-operator/render-private-vault-values.sh --template /opt/node-operator/vault-values.template.yaml --output "$vault_values_dir/values.yaml" --aws-account-id "$AWS_ACCOUNT_ID" --aws-region ${var.aws_region} --unseal-key-arn "$VAULT_UNSEAL_KEY_ARN" --server-image "$VAULT_SERVER_IMAGE" --agent-image "$VAULT_AGENT_IMAGE" --injector-image "$VAULT_INJECTOR_IMAGE" --audit-relay-image "$VAULT_AUDIT_RELAY_IMAGE"
+            - /opt/node-operator/deploy-sealed-vault.sh --chart "oci://${aws_ecr_repository.private_gitops["vault_chart"].repository_url}@${var.vault_chart_manifest_digest}" --values "$vault_values_dir/values.yaml"
     YAML
   }
   lifecycle {
     precondition {
-      condition     = var.enable_private_gitops_foundation && var.vault_chart_version != "" && can(regex("^sha256:[a-f0-9]{64}$", var.vault_chart_manifest_digest)) && can(regex("^${var.aws_account_id}\\.dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/${local.private_gitops_repositories.vault}@sha256:[a-f0-9]{64}$", var.vault_bootstrap_image)) && length(var.vault_bootstrap_subnet_ids) > 0 && alltrue([for subnet_id in var.vault_bootstrap_subnet_ids : can(regex("^subnet-[a-z0-9]+$", subnet_id))])
+      condition     = var.enable_private_gitops_foundation && var.vault_chart_version != "" && can(regex("^sha256:[a-f0-9]{64}$", var.vault_chart_manifest_digest)) && can(regex("^${var.aws_account_id}\\.dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/${local.private_gitops_repositories.vault}@sha256:[a-f0-9]{64}$", var.vault_bootstrap_image)) && length(var.vault_runtime_images) == 4 && alltrue([for key in ["server", "agent", "injector", "audit_relay"] : can(regex("^${var.aws_account_id}\\.dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", try(var.vault_runtime_images[key], "")))]) && length(var.vault_bootstrap_subnet_ids) > 0 && alltrue([for subnet_id in var.vault_bootstrap_subnet_ids : can(regex("^subnet-[a-z0-9]+$", subnet_id))])
       error_message = "Enabled Vault bootstrap requires the private GitOps Vault ECR repository, pinned toolchain and chart manifest digests, a pinned chart version, and explicit private subnets. EKS cluster-admin is a separately gated deploy-stage association."
     }
   }

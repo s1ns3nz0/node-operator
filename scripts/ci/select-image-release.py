@@ -16,7 +16,7 @@ TOOLCHAINS = [
         ("terraform-validation", ""), ("release-build", ""), ("vault-release-signer", ""),
         ("gitops-oci-mirror", ""),
         ("argocd-bootstrap", "docs/gitops/argocd-private-values.example.yaml"),
-        ("vault-bootstrap", "docs/gitops/vault-values.example.yaml"),
+        ("vault-bootstrap", "release/vault-values.yaml.example scripts/release/render-private-vault-values.sh scripts/release/deploy-sealed-vault.sh"),
     )
 ]
 SHARED = {".github/workflows/image-release.yml", "scripts/ci/select-image-release.py"}
@@ -45,7 +45,7 @@ def select(paths=(), target=None, all_inputs=False):
         ".ci/toolchains/release-toolchain-image.sh",
     })
     selected = [item for item in TOOLCHAINS if toolchain_all or target == item["image"] or
-                item["dockerfile"] in paths or (item["input_file"] and item["input_file"] in paths)]
+                item["dockerfile"] in paths or bool(set(item["input_file"].split()) & paths)]
     common_go = bool(paths & {"go.mod", "go.sum"})
     fence = all_inputs or target == "fence" or common_go or bool(paths & SIGNING) or any(
         path.startswith(("cmd/validator-signing-fence/", ".ci/validator-signing-fence/", ".ci/fence-security/")) or
