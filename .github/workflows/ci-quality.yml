@@ -45,6 +45,10 @@ jobs:
           python3 scripts/ci/test-uc5-runtime-role-state.py
           python3 scripts/ci/test-uc5-live-guards.py
           python3 scripts/ci/test-uc5-vault-adapter.py
+          python3 scripts/ci/test-uc5-ceremony.py
+          python3 scripts/ci/test-uc5-kube-control.py
+          python3 scripts/ci/test-uc5-kube-state.py
+          python3 scripts/ci/test-uc5-audit-proof.py
       - name: Test project Kyverno admission policies
         env:
           KYVERNO_BIN: ${{ runner.temp }}/kyverno-policy-tools/kyverno

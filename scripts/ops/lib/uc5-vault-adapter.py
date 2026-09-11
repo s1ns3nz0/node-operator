@@ -20,6 +20,9 @@ SPEC.loader.exec_module(STATE)
 ROLES = frozenset((STATE.RUNTIME_ROLE, STATE.DB_ROLE, STATE.CLIENT_ROLE))
 POLICIES = frozenset((STATE.RUNTIME_POLICY, STATE.DB_POLICY, STATE.CLIENT_POLICY))
 MAX_RESPONSE = 65536
+LOOKUP_SELF = "auth/token/lookup-self"
+REVOKE_SELF = "auth/token/revoke-self"
+AUDIT_HASH = "sys/audit-hash/validator-socket"
 
 
 class AdapterError(RuntimeError):
@@ -51,10 +54,13 @@ class TunnelTransport:
         self._token = None
 
     def __call__(self, method, path, payload=None):
-        if not ((method == "GET" and path in ROLES | POLICIES and payload is None) or
-                (method == "POST" and path == STATE.RUNTIME_ROLE)):
+        if not ((method == "GET" and path in ROLES | POLICIES | {LOOKUP_SELF} and payload is None) or
+                (method == "POST" and path == STATE.RUNTIME_ROLE) or
+                (method == "DELETE" and path == STATE.RUNTIME_ROLE and payload is None) or
+                (method == "POST" and path == REVOKE_SELF and payload is None) or
+                (method == "POST" and path == AUDIT_HASH and payload == {"input": "hoodi-hoodi-001-runtime"})):
             raise AdapterError("Vault operation outside UC-5 configuration boundary")
-        if method == "POST":
+        if method == "POST" and path == STATE.RUNTIME_ROLE:
             STATE._role(payload)
         if self._token is None:
             raise AdapterError("Vault transport is closed")
@@ -118,3 +124,51 @@ class VaultAdapter:
         if status != 204:
             raise AdapterError("runtime role write not acknowledged; readback required")
         # STATE.restore performs exact readback and non-target drift checks.
+
+    def administrator_ready(self):
+        status, response = self.transport("GET", LOOKUP_SELF)
+        if status != 200 or not isinstance(response, dict) or not isinstance(response.get("data"), dict):
+            raise AdapterError("administrator metadata lookup failed")
+        if response["data"].get("policies") != ["root"]:
+            raise AdapterError("recovery-generated root credential required")
+        # Do not retain token id/accessor or copy lookup body into evidence.
+        return True
+
+    def delete_runtime_role(self, snapshot):
+        """Caller must hold maintenance coordination and pass fresh live guards.
+
+        This pre-read/write/readback sequence is NOT atomic against other admins.
+        The caller must mark deletion attempted before invoking this method so
+        even a lost HTTP response triggers exact restoration.
+        """
+        target = STATE._validate_snapshot(snapshot)
+        STATE.verify(self, snapshot)
+        current = self.read_role(STATE.RUNTIME_ROLE)
+        if current is None or STATE._hash(current) != STATE._hash(target):
+            raise AdapterError("runtime role drift before deletion")
+        status, _ = self.transport("DELETE", STATE.RUNTIME_ROLE)
+        if status != 204:
+            raise AdapterError("runtime role deletion outcome unconfirmed")
+        if self.read_role(STATE.RUNTIME_ROLE) is not None:
+            raise AdapterError("runtime role absence not confirmed")
+        return True
+
+    def runtime_role_audit_hash(self):
+        # Device-specific HMAC permits matching only the known role in audit logs.
+        status, response = self.transport("POST", AUDIT_HASH, {"input": "hoodi-hoodi-001-runtime"})
+        if status != 200 or not isinstance(response, dict):
+            raise AdapterError("runtime role audit hash unavailable")
+        value = response.get("data", response)
+        value = value.get("hash") if isinstance(value, dict) else None
+        if not isinstance(value, str) or re.fullmatch(r"hmac-sha256:[0-9a-f]{64}", value) is None:
+            raise AdapterError("runtime role audit hash malformed")
+        return value
+
+    def revoke_administrator(self):
+        status, _ = self.transport("POST", REVOKE_SELF)
+        if status != 204:
+            raise AdapterError("administrator revocation unconfirmed")
+        status, _ = self.transport("GET", LOOKUP_SELF)
+        if status != 403:
+            raise AdapterError("revoked administrator rejection unconfirmed")
+        return "revoked"
