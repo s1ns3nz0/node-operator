@@ -4,7 +4,8 @@ on:
   # Control code comes from the trusted default branch. PR source is read-only
   # scanner/Terraform input; scoped check publication stays in trusted steps.
   workflow_run:
-    workflows: [CI Security]
+    # Temporary consumer-first bridge; the consolidated producer removes the legacy pair.
+    workflows: [CI Security, CI]
     types: [completed]
 
 permissions:
