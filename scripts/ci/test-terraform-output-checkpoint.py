@@ -1,3 +1,4 @@
+# Check objective: Prevent failed Terraform output queries from publishing completion checkpoints.
 """Verify that failed Terraform output never publishes a completion checkpoint."""
 import os
 from pathlib import Path

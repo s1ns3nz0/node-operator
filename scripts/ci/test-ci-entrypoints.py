@@ -64,7 +64,8 @@ class Entrypoints(unittest.TestCase):
         self.mock("docker")
         result = self.run_script("run-terraform-ci.sh", "all")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(len(self.calls()), 9)
+        self.assertEqual(len(self.calls()), 10)
+        self.assertEqual(sum("/workspace/scripts/ci/test-bootstrap-backend-lifecycle.sh" in args for args in self.calls()), 1)
         for args in self.calls():
             self.assertEqual(args[:2], ["run", "--rm"])
             self.assertEqual(args[args.index("--network") + 1], "none")

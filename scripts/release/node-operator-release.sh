@@ -2,6 +2,14 @@
 set -euo pipefail
 umask 077
 
+# This wrapper owns command flags, the default workspace, and per-module state
+# paths. Inherited Terraform options must not force migration, skip refresh,
+# redirect state, or enable raw sensitive logging. Only this process is changed.
+for terraform_environment_name in ${!TF_CLI_ARGS@}; do
+  unset "$terraform_environment_name"
+done
+unset TF_DATA_DIR TF_WORKSPACE TF_INPUT TF_LOG TF_LOG_PATH TF_LOG_CORE TF_LOG_PROVIDER
+
 usage() {
   cat <<'USAGE'
 usage:
@@ -94,6 +102,208 @@ write_backend_config() {
     "encrypt = true\n" + "kms_key_id = \"\(.kms_key_id)\"\n"
   ' "$backend_json" > "$destination"
   chmod 600 "$destination"
+}
+
+write_runtime_s3_backend() {
+  # The bootstrap root deliberately has no checked-in backend block: its first
+  # apply must use local state while it creates the S3 backend.  Add this only
+  # at the hand-off boundary, never to the archived module.
+  local module="$1"
+  local destination="$module/node-operator-runtime-backend.tf"
+  [ ! -L "$destination" ] || fail "bootstrap runtime backend configuration must not be a symlink"
+  cat > "$destination" <<'HCL'
+terraform {
+  backend "s3" {}
+}
+HCL
+  chmod 600 "$destination"
+}
+
+verify_s3_backend_identity() {
+  # Terraform records the configured backend independently of a checkpoint.
+  # Check every destination selector before treating a work directory as
+  # resumable; a state file named "bootstrap-output.json" proves nothing.
+  local module="$1" backend_json="$2" state_key="$3"
+  local metadata="$module/.terraform/terraform.tfstate"
+  [ -f "$metadata" ] && [ ! -L "$metadata" ] || fail "bootstrap is not configured for the expected remote backend"
+  jq -e --arg key "$state_key" --slurpfile expected "$backend_json" '
+    $expected[0] as $expected |
+    .backend.type == "s3" and
+    .backend.config.bucket == $expected.bucket and
+    .backend.config.key == $key and
+    .backend.config.region == $expected.region and
+    .backend.config.dynamodb_table == $expected.dynamodb_table and
+    .backend.config.kms_key_id == $expected.kms_key_id and
+    .backend.config.encrypt == true
+  ' "$metadata" >/dev/null 2>&1 || fail "bootstrap backend identity does not match the generated S3 destination"
+}
+
+capture_state() {
+  local module="$1" destination="$2" allow_empty="${3:-false}"
+  [ ! -L "$destination" ] || fail "state backup must not be a symlink"
+  [ ! -e "$destination" ] || [ -f "$destination" ] || fail "state backup must be a regular file"
+  local temporary
+  temporary="$(mktemp "${destination}.pending.XXXXXX")" || fail "cannot allocate private state backup"
+  chmod 600 "$temporary"
+  if ! terraform -chdir="$module" state pull > "$temporary"; then
+    unlink "$temporary"
+    fail "could not read Terraform state for bootstrap migration"
+  fi
+  if [ ! -s "$temporary" ] && [ "$allow_empty" = true ]; then
+    # Terraform state pull returns successful empty output when the configured
+    # backend has no object.  Record a canonical empty state privately so the
+    # foreign-state guard can distinguish it from a pull failure.
+    printf '%s\n' '{"version":4,"resources":[],"outputs":{}}' > "$temporary"
+  fi
+  jq -se 'length == 1 and (.[0] | type == "object" and .version == 4 and (.resources | type == "array") and (.outputs | type == "object"))' "$temporary" >/dev/null 2>&1 || {
+    unlink "$temporary"; fail "Terraform returned an invalid bootstrap state";
+  }
+  mv -f "$temporary" "$destination"
+  chmod 600 "$destination"
+}
+
+assert_empty_remote_state() {
+  local state_file="$1"
+  jq -se 'length == 1 and (.[0] | type == "object" and .version == 4 and (.resources | type == "array" and length == 0) and (.outputs | type == "object" and length == 0))' "$state_file" >/dev/null 2>&1 || fail "target S3 backend already contains state; refusing to overwrite a foreign remote state"
+}
+
+assert_migration_state_transition() {
+  local before="$1" after="$2" receipt="$3" allow_reset="${4:-false}" temporary
+  [ ! -L "$receipt" ] || fail "migration receipt must not be a symlink"
+  temporary="$(mktemp "${receipt}.pending.XXXXXX")" || fail "cannot allocate private migration receipt"
+  chmod 600 "$temporary"
+  # Terraform 1.5.7 has a documented empty-remote path that resets only
+  # lineage and serial.  Every other state field must remain exact.  This is
+  # deliberately narrow: it is not permission to ignore arbitrary metadata.
+  if ! jq -S -e -s --argjson allow_reset "$allow_reset" '
+    def valid_state:
+      type == "object" and .version == 4 and
+      (.serial | type == "number" and . >= 0 and floor == .) and
+      (.lineage | type == "string" and test("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")) and
+      (.resources | type == "array") and (.outputs | type == "object");
+    .[0] as $before | .[1] as $after |
+    if length != 2 or ($before | valid_state | not) or ($after | valid_state | not) then error("invalid state")
+    elif $before == $after then
+      {mode:"identical",version:$after.version,serial_before:$before.serial,serial_after:$after.serial,lineage_before:$before.lineage,lineage_after:$after.lineage}
+    elif ($allow_reset and ($before | del(.lineage, .serial)) == ($after | del(.lineage, .serial)) and
+          $before.lineage != $after.lineage and $after.serial == 1) then
+      {mode:"terraform-1.5-empty-remote-metadata-reset",version:$after.version,serial_before:$before.serial,serial_after:$after.serial,lineage_before:$before.lineage,lineage_after:$after.lineage}
+    else error("unexpected state transition") end
+  ' "$before" "$after" > "$temporary" 2>/dev/null; then
+    unlink "$temporary"
+    fail "bootstrap state/resources differ after remote migration; no downstream phase was started"
+  fi
+  mv -f "$temporary" "$receipt"
+  chmod 600 "$receipt"
+}
+
+assert_no_change_plan() {
+  local module="$1" config="$2" result=0
+  terraform -chdir="$module" plan -input=false -detailed-exitcode -var-file="$config" >/dev/null || result=$?
+  case "$result" in
+    0) ;;
+    2) fail "bootstrap migration has a non-empty reconciliation plan; no downstream phase was started" ;;
+    *) fail "bootstrap migration reconciliation plan failed; no downstream phase was started" ;;
+  esac
+}
+
+capture_pre_migration_local_state() {
+  local module="$1" destination="$2"
+  local runtime_backend="$module/node-operator-runtime-backend.tf"
+  local disabled_backend="$module/.node-operator-runtime-backend.tf.local-only"
+  # A hard process termination can occur between the private rename and its
+  # restoration below.  Recover only the exact file this script generated;
+  # unknown recovery artifacts remain a fail-closed operator investigation.
+  if [ ! -e "$runtime_backend" ] && [ -e "$disabled_backend" ]; then
+    [ -f "$disabled_backend" ] && [ ! -L "$disabled_backend" ] || fail "bootstrap local backend recovery artifact is not a regular file"
+    cmp -s "$disabled_backend" <(printf 'terraform {\n  backend "s3" {}\n}\n') || fail "bootstrap local backend recovery artifact is not the generated migration boundary"
+    mv "$disabled_backend" "$runtime_backend"
+  fi
+  if [ ! -e "$runtime_backend" ]; then
+    [ ! -e "$disabled_backend" ] && [ ! -L "$disabled_backend" ] || fail "bootstrap local backend recovery path already exists"
+    capture_state "$module" "$destination"
+    return
+  fi
+  [ -f "$runtime_backend" ] && [ ! -L "$runtime_backend" ] || fail "bootstrap runtime backend configuration is not a regular file"
+  cmp -s "$runtime_backend" <(printf 'terraform {\n  backend "s3" {}\n}\n') || fail "bootstrap runtime backend configuration is not the generated migration boundary"
+  [ ! -e "$disabled_backend" ] && [ ! -L "$disabled_backend" ] || fail "bootstrap local backend recovery path already exists"
+  # An interrupted interactive init leaves the generated S3 declaration in
+  # place while Terraform remains configured locally.  Hide only our exact
+  # generated declaration long enough to read and verify the local recovery
+  # state, then restore it before probing or retrying migration.
+  if ! (
+    # Invoked indirectly by the scoped restoration traps below.
+    # shellcheck disable=SC2329
+    restore_runtime_backend() {
+      if [ -f "$disabled_backend" ] && [ ! -e "$runtime_backend" ]; then
+        mv "$disabled_backend" "$runtime_backend"
+      fi
+    }
+    trap restore_runtime_backend EXIT INT TERM
+    mv "$runtime_backend" "$disabled_backend"
+    capture_state "$module" "$destination"
+  ); then
+    fail "could not recover local bootstrap state after interrupted migration"
+  fi
+}
+
+migrate_bootstrap_state() {
+  local module="$1" config="$2" backend_json="$3" state_key="$4" work="$5"
+  local local_backup="$work/bootstrap.local-state.pre-migration.json"
+  local remote_probe="$work/bootstrap-remote-probe"
+  local remote_probe_backend="$remote_probe/node-operator-runtime-backend.tf"
+  local remote_before="$work/bootstrap.remote-state.pre-migration.json"
+  local remote_after="$work/bootstrap.remote-state.post-migration.json"
+
+  [ -d "$module" ] && [ ! -L "$module" ] || fail "bootstrap module directory is unavailable for state migration"
+
+  if [ -f "$module/.terraform/terraform.tfstate" ] && jq -e '.backend.type == "s3"' "$module/.terraform/terraform.tfstate" >/dev/null 2>&1; then
+    [ -f "$local_backup" ] && [ ! -L "$local_backup" ] || fail "bootstrap checkpoint is not migration proof; the private pre-migration state backup is required to resume"
+    [ -f "$remote_before" ] && [ ! -L "$remote_before" ] || fail "bootstrap migration requires its original empty-target observation"
+    assert_empty_remote_state "$remote_before"
+    verify_s3_backend_identity "$module" "$backend_json" "$state_key"
+    capture_state "$module" "$remote_after"
+    assert_migration_state_transition "$local_backup" "$remote_after" "$work/bootstrap.migration-state-transition.json" true
+    assert_no_change_plan "$module" "$config"
+    return
+  fi
+
+  # Preserve the local state before adding the backend declaration.  If an
+  # interrupted run already left the backup, confirm that local state still
+  # matches it instead of silently replacing the only recovery copy.
+  if [ -f "$local_backup" ]; then
+    local current_local="$work/bootstrap.local-state.resume-check.json"
+    capture_pre_migration_local_state "$module" "$current_local"
+    assert_migration_state_transition "$local_backup" "$current_local" "$work/bootstrap.local-state.resume-transition.json"
+  else
+    capture_pre_migration_local_state "$module" "$local_backup"
+  fi
+
+  # Probe the exact S3 identity from an independent, empty Terraform root.
+  # This prevents init -migrate-state from being the first operation to touch
+  # an existing remote object.
+  [ ! -L "$remote_probe" ] || fail "bootstrap remote probe directory must not be a symlink"
+  mkdir -p "$remote_probe"; chmod 700 "$remote_probe"
+  [ ! -L "$remote_probe_backend" ] || fail "bootstrap remote probe backend configuration must not be a symlink"
+  cat > "$remote_probe_backend" <<'HCL'
+terraform {
+  backend "s3" {}
+}
+HCL
+  chmod 600 "$remote_probe_backend"
+  terraform -chdir="$remote_probe" init -input=false -backend-config="$work/bootstrap.backend.hcl"
+  verify_s3_backend_identity "$remote_probe" "$backend_json" "$state_key"
+  capture_state "$remote_probe" "$remote_before" true
+  assert_empty_remote_state "$remote_before"
+
+  write_runtime_s3_backend "$module"
+  # Intentionally interactive: Terraform presents its migration confirmation.
+  # Do not add -force-copy, -reconfigure, -input=false, or a piped affirmative.
+  terraform -chdir="$module" init -migrate-state -input=true -backend-config="$work/bootstrap.backend.hcl"
+  verify_s3_backend_identity "$module" "$backend_json" "$state_key"
+  capture_state "$module" "$remote_after"
+  assert_migration_state_transition "$local_backup" "$remote_after" "$work/bootstrap.migration-state-transition.json" true
+  assert_no_change_plan "$module" "$config"
 }
 
 copy_module() {
@@ -212,15 +422,14 @@ zero_apply() {
     terraform -chdir="$bootstrap_module" plan -input=false -var-file="$bootstrap_config" -out="$work_dir/bootstrap.tfplan"
     terraform -chdir="$bootstrap_module" apply -input=false "$work_dir/bootstrap.tfplan"
     capture_terraform_output "$bootstrap_module" "$bootstrap_output" backend
-  else
-    verify_completed_phase "$bootstrap_module" "$bootstrap_config" "$bootstrap_output" backend
   fi
   write_backend_config "$bootstrap_output" "node-operator/bootstrap-state/terraform.tfstate" "$bootstrap_backend"
-  if [ -d "$bootstrap_module" ] && [ ! -d "$bootstrap_module/.terraform" ]; then
-    # Bootstrap begins in local state because the remote backend is being made.
-    # Migration is explicit and never uses force-copy.
-    terraform -chdir="$bootstrap_module" init -input=false -migrate-state -backend-config="$bootstrap_backend"
-  fi
+  # A bootstrap output checkpoint alone does not prove where Terraform state is
+  # configured.  Always prove the configured backend and semantic state before
+  # allowing foundation or baseline work to begin.
+  migrate_bootstrap_state "$bootstrap_module" "$bootstrap_config" "$bootstrap_output" \
+    "node-operator/bootstrap-state/terraform.tfstate" "$work_dir"
+  verify_completed_phase "$bootstrap_module" "$bootstrap_config" "$bootstrap_output" backend
 
   write_backend_config "$bootstrap_output" "node-operator/foundation-network/terraform.tfstate" "$foundation_backend"
   if [ ! -f "$foundation_output" ]; then

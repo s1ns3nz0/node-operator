@@ -1,3 +1,4 @@
+# Check objective: Verify read-only discovery, capacity observations and sanitized failures.
 """Check read-only AWS discovery, identity binding and sanitized failures."""
 import importlib.util
 import os

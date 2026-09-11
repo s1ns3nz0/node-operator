@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify private checkpoint storage, context binding and exclusive execution.
 """Offline tests for the future installer's strict local checkpoint store."""
 from __future__ import annotations
 

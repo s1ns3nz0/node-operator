@@ -1,3 +1,4 @@
+# Check objective: Require drift-free Terraform plans and matching outputs before phase reuse.
 """Prove resumed completed phases are checked without applying resource changes."""
 import os
 from pathlib import Path

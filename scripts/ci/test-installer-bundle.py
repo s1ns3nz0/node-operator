@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Reject malformed release assets and verify bundle evidence binding offline.
 """Synthetic, offline tests for scripts/release/installer_bundle.py."""
 
 import hashlib

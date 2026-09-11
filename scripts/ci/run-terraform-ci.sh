@@ -3,7 +3,7 @@
 # Purpose: Run one allowlisted Terraform validation group in the pinned, network-isolated container.
 # Inputs: Optional suite selector, digest-pinned TERRAFORM_IMAGE, repository checkout, and optional output directory.
 # Outputs: Suite status and local validation artifacts beneath CI_OUTPUT_DIR or a temporary directory.
-# Side effects: Runs local Docker containers with read-only source and --network none; no Terraform apply or cloud mutation.
+# Side effects: Runs local Docker containers with read-only source and --network none; backend fixtures apply only disposable local outputs, never cloud resources.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 suite="${1:-all}"
@@ -28,7 +28,9 @@ run_suite() {
       for module in bootstrap-state foundation-network ops-access vault-recovery; do
         run validate-terraform-module-offline.sh "/workspace/infra/$module" "/output/$module"
       done ;;
-    foundation) run test-foundation-backend-contract.sh ;;
+    foundation)
+      run test-foundation-backend-contract.sh
+      run test-bootstrap-backend-lifecycle.sh ;;
     monitoring)
       run test-ops-access-basic-monitoring.sh
       run test-ops-access-ebs-binding.sh ;;

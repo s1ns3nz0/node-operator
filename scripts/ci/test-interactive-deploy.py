@@ -1,3 +1,4 @@
+# Check objective: Exercise installer start, status and resume without cloud calls or credentials.
 """Exercise the installer command path without cloud calls or credentials."""
 import contextlib
 import importlib
