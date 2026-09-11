@@ -17,6 +17,7 @@ for dockerfile in "$root/.ci/toolchains/terraform-validation.Dockerfile" "$root/
   fi
 done
 grep -Fq 'ripgrep' "$root/.ci/toolchains/release-build.Dockerfile"
+grep -Fq 'python3' "$root/.ci/toolchains/release-build.Dockerfile"
 workflow="$root/.github/workflows/image-release.yml"
 if ! ruby -ryaml -e '
   jobs = YAML.load_file(ARGV[0]).fetch("jobs")
