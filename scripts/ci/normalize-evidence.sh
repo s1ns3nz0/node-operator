@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Validate scanner envelopes and assemble the bounded OPA policy input.
 set -euo pipefail
 
 if [ "$#" -ne 4 ]; then printf 'usage: %s RAW_EVIDENCE_DIR COMMIT_SHA SCM_JSON OUTPUT_JSON\n' "$0" >&2; exit 64; fi

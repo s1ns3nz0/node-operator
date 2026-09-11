@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Require Conftest to admit secure fixtures and reject insecure workload and Nethermind fixtures.
 set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/lib/common.sh"

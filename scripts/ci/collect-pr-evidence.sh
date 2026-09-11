@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Collect commit-bound secret, dependency, workflow, IaC and optional Terraform findings as non-sensitive policy evidence.
 set -euo pipefail
 
 # Collect scanner results into compact, non-sensitive envelopes. The five scanner

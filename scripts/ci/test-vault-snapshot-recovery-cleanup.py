@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify local Vault snapshot recovery cleans up without exposing credentials or shares.
 """Regression tests for the local-only Vault snapshot recovery wrapper.
 
 All dependencies are copied or mocked inside a temporary directory.  The

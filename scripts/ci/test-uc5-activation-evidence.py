@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify UC5 activation evidence binds restored signer identity and cleanup outcome.
 import importlib.util, pathlib, unittest
 P=pathlib.Path(__file__).resolve().parents[2]/"scripts/ops/lib/uc5-activation-evidence.py"; S=importlib.util.spec_from_file_location("a",P); M=importlib.util.module_from_spec(S); S.loader.exec_module(M)
 K="0x"+"ab"*48; T="2026-09-11T00:00:00Z"

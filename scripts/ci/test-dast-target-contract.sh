@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Reject private DAST contracts with public, credentialed, unsafe, or unbounded targets.
 set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/lib/common.sh"

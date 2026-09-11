@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify validator cutover renderers reject unsafe manifest modifications.
 """Exercise the actual shell renderers, then reject modified manifests."""
 import importlib.util
 import json

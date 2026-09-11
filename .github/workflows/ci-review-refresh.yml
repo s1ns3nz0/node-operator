@@ -10,5 +10,5 @@ jobs:
   signal:
     runs-on: ubuntu-24.04
     steps:
-      - name: Emit unprivileged review signal
+      - name: Publish | Emit unprivileged review signal
         run: echo 'Review state changed; trusted workflow_run handler will refresh evidence.'

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Enforce the reviewed remote-state backend and foundation Terraform boundary.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 module="$root/infra/foundation-network"

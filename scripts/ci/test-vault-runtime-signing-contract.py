@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Enforce Vault runtime signing workflow and crypto-before-content boundaries.
 """Scoped signing workflow and crypto-before-content boundary regressions."""
 from pathlib import Path
 import os

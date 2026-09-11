@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Enforce the disabled Vault runtime verifier IAM role source contract.
 """Strict source contract for the disabled Vault runtime verifier IAM role."""
 import re
 from pathlib import Path

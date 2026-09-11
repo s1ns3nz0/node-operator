@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify the Fence SAST runner preserves its pinned scanner and failure policy.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

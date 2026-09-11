@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Bind changed files and reviewers' latest approvals to the exact pull-request head SHA for policy evaluation.
 set -euo pipefail
 
 if [ "$#" -ne 2 ] && [ "$#" -ne 3 ]; then printf 'usage: %s COMMIT_SHA OUTPUT_JSON [PULL_REQUEST_NUMBER]\n' "$0" >&2; exit 64; fi

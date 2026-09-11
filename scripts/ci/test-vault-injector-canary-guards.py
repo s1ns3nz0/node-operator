@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify Vault injector canary execution and rejection guards without a cluster.
 """No-cluster tests for live canary execution and rejection guards."""
 import contextlib
 import copy

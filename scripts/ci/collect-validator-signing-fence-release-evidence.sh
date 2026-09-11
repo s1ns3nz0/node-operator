@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify the exact Fence image's signatures, source provenance, SBOM and scan attestations, then rescan before emitting promotion evidence.
 set -euo pipefail
 
 if [ "$#" -ne 3 ]; then

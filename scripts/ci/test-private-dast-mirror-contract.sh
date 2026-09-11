@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify private DAST mirror uses the approved scanner digest and restricted publication path.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify release source eligibility accepts only approved workflow provenance.
 # shellcheck disable=SC2016 # Fixtures intentionally write scripts with runtime variables.
 set -euo pipefail
 

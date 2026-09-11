@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Enforce the baseline infrastructure contract without external replacement resources.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 contract="$root/infra/baseline/variables.tf"

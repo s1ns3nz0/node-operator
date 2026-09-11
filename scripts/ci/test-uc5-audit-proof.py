@@ -1,3 +1,4 @@
+# Check objective: Verify UC5 audit proof rejects malformed, conflicting, or secret-bearing evidence.
 import copy
 import importlib.util
 import pathlib

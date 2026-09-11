@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify signed Vault runtime evidence has trusted identity and required semantics.
 # Consumer entrypoint: require both cryptographic identity and evidence semantics.
 set -euo pipefail
 test "$#" = 4 || { echo 'usage: verify-vault-runtime-signed-evidence.sh EVIDENCE_ROOT TRUSTED_REVISION RUN_ID RUN_ATTEMPT' >&2; exit 64; }

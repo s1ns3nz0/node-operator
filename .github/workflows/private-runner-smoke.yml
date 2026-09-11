@@ -1,4 +1,4 @@
-name: Private Runner Smoke
+name: CI Private Runner Smoke
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Verify ephemeral runner boundary
+      - name: Check | Verify ephemeral runner boundary
         env:
           RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:f6b2550a3bf8a5b2e8bbdbb301120136d01bc38963d1a70d0d7ff3008acb70be
           REGISTRY_TOKEN: ${{ github.token }}
@@ -29,7 +29,7 @@ jobs:
           docker version --format '{{.Server.Version}}' >/dev/null
           echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
           docker pull "$RELEASE_BUILD_IMAGE" >/dev/null
-      - name: Verify private AWS service paths
+      - name: Check | Verify private AWS service paths
         run: |
           set -eu
           aws sts get-caller-identity --query Account --output text >/dev/null

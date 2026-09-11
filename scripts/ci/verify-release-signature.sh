@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify release signature evidence is bound to the exact bundle and provenance.
 set -euo pipefail
 
 # Validate non-sensitive release evidence. Transit verifies cryptography inside

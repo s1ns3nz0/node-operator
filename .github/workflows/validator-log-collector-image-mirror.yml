@@ -1,4 +1,4 @@
-name: Validator Log Collector Image Mirror
+name: Mirror Validator Log Collector Image
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-24.04
     environment: validator-log-collector-ecr-mirror
     steps:
-      - name: Mirror reviewed Fluent Bit digest to private ECR
+      - name: Publish | Mirror reviewed Fluent Bit digest to private ECR
         env:
           SOURCE_IMAGE: ${{ inputs.source_image }}
           AWS_REGION: ap-northeast-2

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify private Vault operator authentication configuration with mocked commands only.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 script="$root/scripts/ops/configure-private-vault-operator-auth.sh"

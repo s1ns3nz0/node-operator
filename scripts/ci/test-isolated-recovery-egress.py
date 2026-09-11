@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify isolated recovery egress guards without invoking host firewall commands.
 """Mocked tests for the isolated recovery egress guard; never call iptables."""
 from __future__ import annotations
 

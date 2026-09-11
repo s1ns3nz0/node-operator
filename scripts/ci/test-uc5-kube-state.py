@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify the bounded UC5 Kubernetes state collector with synthetic fixtures.
 """Synthetic-only contract tests for the bounded UC5 Kubernetes collector."""
 import copy
 import importlib.util

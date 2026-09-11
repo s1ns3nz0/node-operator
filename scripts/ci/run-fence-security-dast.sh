@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Require isolated Fence black-box checks and a valid loopback-health ZAP report with no HIGH findings.
 set -euo pipefail
 
 [ "$#" -eq 1 ] || { printf 'usage: %s OUTPUT_DIRECTORY\n' "$0" >&2; exit 64; }

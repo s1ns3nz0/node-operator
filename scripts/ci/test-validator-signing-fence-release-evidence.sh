@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Require release evidence to bind the signing-fence image to its reviewed build inputs.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"; collector="$root/scripts/ci/collect-validator-signing-fence-release-evidence.sh"
 installer="$root/scripts/ci/install-validator-signing-fence-release-tools.sh"

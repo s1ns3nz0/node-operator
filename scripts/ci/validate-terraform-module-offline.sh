@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Validate standalone module formatting and configuration with a read-only provider lock and no remote backend.
 set -euo pipefail
 
 if [ "$#" -ne 2 ]; then

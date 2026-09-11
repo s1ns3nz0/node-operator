@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify the UC5 Vault adapter rejects unsafe configuration transport boundaries.
 """Offline configuration transport boundary tests; no credentials or sockets."""
 import importlib.util
 import pathlib

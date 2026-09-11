@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Ensure image publishers have isolated, digest-scoped permissions and release paths.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

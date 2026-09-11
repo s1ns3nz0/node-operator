@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Ensure signer identity evidence is a disposable Vault-injected mTLS GET-only probe.
 # shellcheck disable=SC2016 # literal source-contract fragments
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"

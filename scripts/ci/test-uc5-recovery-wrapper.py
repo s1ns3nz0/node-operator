@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify the UC5 recovery wrapper protocol with fake Vault and synthetic keys.
 """PTY recovery-wrapper protocol with synthetic keys and fake Vault only."""
 import base64
 import errno

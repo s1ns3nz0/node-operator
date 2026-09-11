@@ -1,4 +1,4 @@
-name: Policy Foundation
+name: CI Policy Foundation
 on:
   pull_request:
   push:
@@ -12,15 +12,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install pinned policy adapter tools
+      - name: Prepare | Install pinned policy adapter tools
         run: scripts/ci/install-policy-tools.sh "$RUNNER_TEMP/node-operator-policy-tools"
-      - name: Test evidence normalizer
+      - name: Check | Test evidence normalizer
         run: scripts/ci/test-normalizer.sh
-      - name: Test PR gate scripts
+      - name: Check | Test PR gate scripts
         run: scripts/ci/test-pr-gate.sh
-      - name: Test actionable PR baseline filtering
+      - name: Check | Test actionable PR baseline filtering
         run: scripts/ci/test-pr-baseline-findings.sh
-      - name: Test private DAST target contract
+      - name: Check | Test private DAST target contract
         run: scripts/ci/test-dast-target-contract.sh
-      - name: Test CI suite ownership
+      - name: Check | Test CI suite ownership
         run: python3 scripts/ci/test-ci-suite-ownership.py
+      - name: Check | Test CI presentation conventions
+        run: python3 scripts/ci/test-ci-presentation.py

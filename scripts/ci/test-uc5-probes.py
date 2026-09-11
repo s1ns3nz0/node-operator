@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify bounded UC5 probe interpretation against synthetic Kubernetes responses.
 """Offline tests of actual bounded UC5 Kubernetes probe interpretation."""
 import copy
 import importlib.util

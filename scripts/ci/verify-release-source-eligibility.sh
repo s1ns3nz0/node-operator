@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify a release source commit is eligible under reviewed GitHub provenance.
 set -euo pipefail
 
 if [ "$#" -ne 1 ]; then

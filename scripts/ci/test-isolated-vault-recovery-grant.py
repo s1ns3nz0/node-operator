@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify the isolated Vault recovery KMS grant helper with synthetic dependencies.
 """Mocked unit tests for the isolated vault recovery KMS grant helper."""
 from __future__ import annotations
 

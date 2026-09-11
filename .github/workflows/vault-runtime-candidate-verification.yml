@@ -1,4 +1,4 @@
-name: Vault Runtime Candidate Verification
+name: CI Vault Runtime Candidate Verification
 
 on:
   workflow_dispatch:
@@ -31,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
-      - name: Verify frozen candidate without rebuilding or publishing
+      - name: Check | Verify frozen candidate without rebuilding or publishing
         env:
           COMPONENT: ${{ matrix.component }}
           AWS_REGION: ap-northeast-2
@@ -66,7 +66,7 @@ jobs:
             --arg run_id "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg component "$COMPONENT" \
             '{repository:$repository,source_revision:$revision,run_id:$run_id,run_attempt:$attempt,component:$component,ref:"refs/heads/main"}' \
             > "$RUNNER_TEMP/vault-runtime-evidence/verification-run.json"
-      - name: Report scan-only outcome
+      - name: Evidence | Report scan-only outcome
         if: always()
         run: |
           echo '### Frozen candidate verification (not a release or deployment)' >> "$GITHUB_STEP_SUMMARY"
@@ -79,7 +79,7 @@ jobs:
             echo 'Separate exact-candidate applicability decision (raw scan above is unchanged):' >> "$GITHUB_STEP_SUMMARY"
             cat "$RUNNER_TEMP/vault-runtime-evidence/applicability-decision.json" >> "$GITHUB_STEP_SUMMARY"
           fi
-      - name: Retain non-sensitive verification evidence
+      - name: Evidence | Retain non-sensitive verification evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -106,7 +106,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false, fetch-depth: 0}
-      - name: Download only this run's completed verification artifacts
+      - name: Prepare | Download only this run's completed verification artifacts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -117,7 +117,7 @@ jobs:
               --name "vault-runtime-$component-verification" \
               --dir "$RUNNER_TEMP/vault-signed-evidence/vault-runtime-$component-verification"
           done
-      - name: Revalidate and keyless-sign the exact verification statement
+      - name: Check | Revalidate and keyless-sign the exact verification statement
         run: |
           set -euo pipefail
           umask 077
@@ -131,7 +131,7 @@ jobs:
           cosign sign-blob --yes --bundle "$evidence/verification-statement.sigstore.json" "$evidence/verification-statement.json"
           bash scripts/ci/verify-vault-runtime-signed-evidence.sh "$evidence" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
           echo 'PASS: signed digest-bound verification evidence; not CI build provenance, image registry signature, or deployment authorization.' >> "$GITHUB_STEP_SUMMARY"
-      - name: Retain the verified signature bundle and complete public evidence
+      - name: Evidence | Retain the verified signature bundle and complete public evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: vault-runtime-signed-evidence-${{ github.run_attempt }}

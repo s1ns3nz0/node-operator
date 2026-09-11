@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify the Raft snapshot S3 upload integrity boundary with mocked dependencies.
 """Mocked regression tests for the Raft snapshot S3 integrity boundary."""
 
 from __future__ import annotations

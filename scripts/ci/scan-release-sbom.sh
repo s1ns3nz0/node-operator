@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Scan a release SBOM and bind a validated vulnerability summary to its artifact digest.
 set -euo pipefail
 
 if [ "$#" -ne 2 ]; then

@@ -1,4 +1,4 @@
-name: ECR Signer Mirror
+name: Mirror Signer Image
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Validate approved signer source
+      - name: Check | Validate approved signer source
         env:
           SOURCE: ${{ inputs.source }}
         run: |
@@ -31,7 +31,7 @@ jobs:
             exit 1
           }
           echo "SOURCE_DIGEST=${SOURCE##*@}" >> "$GITHUB_ENV"
-      - name: Assume private ECR mirror role
+      - name: Prepare | Assume private ECR mirror role
         env:
           AWS_REGION: ap-northeast-2
           AWS_ROLE_ARN: ${{ vars.ECR_SIGNER_MIRROR_ROLE_ARN }}
@@ -49,7 +49,7 @@ jobs:
             printf 'AWS_SECRET_ACCESS_KEY=%s\n' "$secret_key"
             printf 'AWS_SESSION_TOKEN=%s\n' "$session_token"
           } >> "$GITHUB_ENV"
-      - name: Mirror approved image to private ECR
+      - name: Publish | Mirror approved image to private ECR
         env:
           AWS_REGION: ap-northeast-2
           ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}

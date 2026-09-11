@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify UC5 restores only the bounded signer runtime role state.
 """Contract tests for the UC-5 single-role restoration boundary."""
 import importlib.util
 import copy

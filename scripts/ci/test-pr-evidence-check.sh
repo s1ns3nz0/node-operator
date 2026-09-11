@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify PR evidence collection binds GitHub workflow data to the reviewed commit.
 # shellcheck disable=SC2016 # The fake gh fixture intentionally expands variables only when executed.
 set -euo pipefail
 

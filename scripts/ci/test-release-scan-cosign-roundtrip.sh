@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify synthetic release-scan attestations survive a local Cosign signing round trip.
 # Synthetic keys and offline bundles only. Never use these flags for releases.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"

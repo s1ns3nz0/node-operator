@@ -1,4 +1,4 @@
-name: GitOps OCI Mirror
+name: Mirror GitOps OCI Artifact
 
 on:
   workflow_dispatch:
@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
-      - name: Validate approved digest input
+      - name: Check | Validate approved digest input
         env:
           SOURCE: ${{ inputs.source }}
           DESTINATION: ${{ inputs.destination }}
@@ -42,7 +42,7 @@ jobs:
           }
           [[ "$ecr_tag" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo 'approved ECR tag is invalid' >&2; exit 1; }
           echo "ECR_TAG=$ecr_tag" >> "$GITHUB_ENV"
-      - name: Assume ECR mirror role
+      - name: Prepare | Assume ECR mirror role
         env:
           AWS_ROLE_ARN: ${{ vars.GITOPS_OCI_MIRROR_ROLE_ARN }}
           AWS_REGION: ap-northeast-2
@@ -61,7 +61,7 @@ jobs:
             printf 'AWS_SECRET_ACCESS_KEY=%s\n' "$secret_key"
             printf 'AWS_SESSION_TOKEN=%s\n' "$session_token"
           } >> "$GITHUB_ENV"
-      - name: Copy approved OCI digest to private ECR
+      - name: Publish | Copy approved OCI digest to private ECR
         env:
           SOURCE: ${{ inputs.source }}
           DESTINATION: ${{ inputs.destination }}

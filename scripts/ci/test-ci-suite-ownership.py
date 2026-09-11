@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Keep each required CI suite assigned exactly once to its workflow owner.
 """Keep common required CI suites present exactly once across their owners."""
 from pathlib import Path
 import unittest

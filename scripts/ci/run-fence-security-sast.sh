@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Scan the signing-fence source with pinned gosec and reject HIGH findings or scan errors.
 set -euo pipefail
 
 [ "$#" -eq 1 ] || { printf 'usage: %s OUTPUT_DIRECTORY\n' "$0" >&2; exit 64; }

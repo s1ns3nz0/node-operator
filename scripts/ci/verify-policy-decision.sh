@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Reject OPA decision documents containing blocking policy results.
 set -euo pipefail
 
 if [ "$#" -ne 1 ]; then printf 'usage: %s DECISION_JSON\n' "$0" >&2; exit 64; fi

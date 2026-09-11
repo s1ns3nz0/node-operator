@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Enforce Vault v2 secret inventory and recovery scripts remain within the reviewed boundary.
 # shellcheck disable=SC2016 # literal source-contract assertions
 set -euo pipefail
 

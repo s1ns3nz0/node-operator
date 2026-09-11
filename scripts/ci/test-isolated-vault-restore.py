@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify interactive isolated Vault restoration guards with offline fixtures.
 """Offline contract tests for the interactive isolated recovery helper."""
 import importlib.util
 import io

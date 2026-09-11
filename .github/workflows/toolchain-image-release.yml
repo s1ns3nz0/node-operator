@@ -1,4 +1,4 @@
-name: Toolchain Image Release
+name: Release Toolchain Images
 on:
   workflow_dispatch:
   push:

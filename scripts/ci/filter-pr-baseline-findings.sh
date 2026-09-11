@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Retain scanner evidence while deriving an actionable, reviewed PR baseline.
 set -euo pipefail
 
 # Preserve full scanner results as baseline evidence, but make the trusted PR

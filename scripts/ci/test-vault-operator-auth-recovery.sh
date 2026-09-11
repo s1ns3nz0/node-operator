@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify the Vault operator recovery wrapper preserves its bounded authentication protocol.
 # Mock-only lifecycle contract for the recovery wrapper; it does not prove AWS login.
 set -euo pipefail
 

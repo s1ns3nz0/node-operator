@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify UC5 restored-signer continuity gates with synthetic Kubernetes state.
 """Synthetic checks of real UC5 restored-signer identity gates; no cluster."""
 import copy, importlib.util, os, pathlib, tempfile, unittest
 P=pathlib.Path(__file__).resolve().parents[2]/"scripts/ops/lib/uc5-probes.py"; S=importlib.util.spec_from_file_location("p",P); M=importlib.util.module_from_spec(S); S.loader.exec_module(M)

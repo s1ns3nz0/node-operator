@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Evaluate a normalized evidence subject with OPA and fail on blocking decisions.
 set -euo pipefail
 if [ "$#" -ne 2 ]; then printf 'usage: %s INPUT_JSON OUTPUT_JSON\n' "$0" >&2; exit 64; fi
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

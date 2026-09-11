@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Enforce the Vault runtime verification source contract without deployment actions.
 """Focused source contract with negative mutations, not an end-to-end CI test."""
 import json
 import re

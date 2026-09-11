@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify expiring exact Vault runtime scan applicability decisions with synthetic inputs.
 """Synthetic tests for the expiring, exact Vault scan applicability decision."""
 import copy
 import hashlib

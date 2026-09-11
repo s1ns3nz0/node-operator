@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Collect commit-bound security evidence using the image's trusted collector before exposing reports to the artifact uploader.
 set -euo pipefail
 
 if [ "$#" -ne 3 ]; then

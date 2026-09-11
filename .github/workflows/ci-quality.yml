@@ -22,25 +22,25 @@ jobs:
     if: always()
     runs-on: ubuntu-24.04
     steps:
-      - name: Require successful fence security (never skip the required check)
+      - name: Check | Require successful fence security (never skip the required check)
         env:
           FENCE_SECURITY_RESULT: ${{ needs.fence-security.result }}
         run: test "$FENCE_SECURITY_RESULT" = success
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install pinned policy adapter tools
+      - name: Prepare | Install pinned policy adapter tools
         run: scripts/ci/install-policy-tools.sh "$RUNNER_TEMP/node-operator-policy-tools"
-      - name: Validate harness structure
+      - name: Check | Validate harness structure
         run: npm run harness:check
-      - name: Test shell scripts
+      - name: Check | Test shell scripts
         run: scripts/ci/test-script-quality.sh
-      - name: Test bounded runtime diagnostics and signer audit source contract
+      - name: Check | Test bounded runtime diagnostics and signer audit source contract
         run: |
           python3 scripts/ci/test-validator-runtime-probe-renderer.py
           python3 scripts/ci/test-web3signer-audit-contract.py
           docker build --platform linux/amd64 -f .ci/validator-runtime-probe/Dockerfile -t node-operator-runtime-probe:ci .
-      - name: Test UC-5 role restoration and pre-delete guards (offline only)
+      - name: Check | Test UC-5 role restoration and pre-delete guards (offline only)
         run: |
           python3 scripts/ci/test-uc5-runtime-role-state.py
           python3 scripts/ci/test-uc5-live-guards.py
@@ -57,7 +57,7 @@ jobs:
           python3 scripts/ci/test-uc5-entrypoint.py
           python3 scripts/ci/test-uc5-recovery-wrapper.py
           python3 scripts/ci/test-uc5-activation-evidence.py
-      - name: Test project Kyverno admission policies
+      - name: Check | Test project Kyverno admission policies
         env:
           KYVERNO_BIN: ${{ runner.temp }}/kyverno-policy-tools/kyverno
         run: |
@@ -71,63 +71,63 @@ jobs:
           bash scripts/ci/test-kyverno-workload-baseline.sh
           bash scripts/ci/test-kyverno-project-coverage.sh
           bash scripts/ci/test-apply-kyverno-project-coverage.sh
-      - name: Test recovery authentication preflight (mock CLI)
+      - name: Check | Test recovery authentication preflight (mock CLI)
         run: bash scripts/ci/test-vault-recovery-auth.sh
-      - name: Test generated-root decoder process-boundary contract
+      - name: Check | Test generated-root decoder process-boundary contract
         run: bash scripts/ci/test-vault-generated-root-decode-contract.sh
-      - name: Test live Vault runtime secret migration contract
+      - name: Check | Test live Vault runtime secret migration contract
         run: bash scripts/ci/test-live-runtime-secret-migration-contract.sh
-      - name: Test live Vault cutover preflight contract
+      - name: Check | Test live Vault cutover preflight contract
         run: bash scripts/ci/test-live-vault-cutover-preflight-contract.sh
-      - name: Test live Engine Vault cutover contract
+      - name: Check | Test live Engine Vault cutover contract
         run: bash scripts/ci/test-live-engine-vault-cutover-contract.sh
-      - name: Test live validator Vault cutover contract
+      - name: Check | Test live validator Vault cutover contract
         run: bash scripts/ci/test-live-validator-vault-cutover-contract.sh
-      - name: Validate legacy TLS mount pruning
+      - name: Check | Validate legacy TLS mount pruning
         run: bash scripts/ci/test-prune-legacy-validator-tls-mounts.sh
-      - name: Test signer public-key evidence contract
+      - name: Check | Test signer public-key evidence contract
         run: bash scripts/ci/test-collect-hoodi-signer-public-key-evidence-contract.sh
-      - name: Test live Vault legacy-secret finalization contract
+      - name: Check | Test live Vault legacy-secret finalization contract
         run: bash scripts/ci/test-live-vault-secret-finalization-contract.sh
-      - name: Test live Vault cutover convergence contract
+      - name: Check | Test live Vault cutover convergence contract
         run: bash scripts/ci/test-live-vault-cutover-convergence-contract.sh
-      - name: Test snapshot recovery cleanup lifecycle (mock CLI)
+      - name: Check | Test snapshot recovery cleanup lifecycle (mock CLI)
         run: python3 scripts/ci/test-vault-snapshot-recovery-cleanup.py
-      - name: Test isolated recovery grant lifecycle (mock AWS only)
+      - name: Check | Test isolated recovery grant lifecycle (mock AWS only)
         run: python3 scripts/ci/test-isolated-vault-recovery-grant.py
-      - name: Test isolated recovery session and restore boundaries (mocks only)
+      - name: Check | Test isolated recovery session and restore boundaries (mocks only)
         run: |
           python3 scripts/ci/test-isolated-vault-grant-admin.py
           python3 scripts/ci/test-isolated-recovery-egress.py
           python3 scripts/ci/test-isolated-vault-restore.py
-      - name: Test snapshot upload full-object integrity boundary (mock CLI)
+      - name: Check | Test snapshot upload full-object integrity boundary (mock CLI)
         run: python3 scripts/ci/test-vault-snapshot-upload-integrity.py
-      - name: Test operator authentication configuration and recovery lifecycle (mock CLI)
+      - name: Check | Test operator authentication configuration and recovery lifecycle (mock CLI)
         run: |
           bash scripts/ci/test-vault-operator-auth-config.sh
           bash scripts/ci/test-vault-operator-auth-recovery.sh
           bash scripts/ci/test-vault-operator-session.sh
           python3 scripts/ci/test-vault-injector-canary-guards.py
-      - name: Test Vault v2 runtime secret boundary
+      - name: Check | Test Vault v2 runtime secret boundary
         run: |
           bash scripts/ci/test-vault-v2-secret-boundary-contract.sh
           python3 scripts/ci/test-vault-v2-bootstrap-cleanup.py
           python3 scripts/ci/test-validator-quiescence.py
           python3 scripts/ci/test-validator-cutover-rendering.py
           python3 scripts/ci/test-vault-v2-role-activation.py
-      - name: Test scanner image release deduplication
+      - name: Check | Test scanner image release deduplication
         run: scripts/ci/test-scanner-image-release.sh
-      - name: Test scanner evidence upload boundary
+      - name: Check | Test scanner evidence upload boundary
         run: scripts/ci/test-ci-security-evidence-contract.sh
-      - name: Test evidence-gate Terraform contract
+      - name: Check | Test evidence-gate Terraform contract
         run: scripts/ci/test-evidence-gate-terraform-contract.sh
-      - name: Test toolchain image release deduplication
+      - name: Check | Test toolchain image release deduplication
         run: scripts/ci/test-toolchain-image-release.sh
-      - name: Test image publisher isolation
+      - name: Check | Test image publisher isolation
         run: scripts/ci/test-image-publisher-isolation.sh
-      - name: Test audit relay publisher repository scope
+      - name: Check | Test audit relay publisher repository scope
         run: python3 scripts/ci/test-vault-relay-publisher-policy.py
-      - name: Test frozen Vault runtime verification boundary
+      - name: Check | Test frozen Vault runtime verification boundary
         run: |
           python3 scripts/ci/test-vault-runtime-verifier-policy.py
           python3 scripts/ci/test-vault-runtime-scan.py
@@ -136,34 +136,34 @@ jobs:
           python3 scripts/ci/test-vault-grpc-patch-contract.py
           python3 scripts/ci/test-vault-runtime-verification-statement.py
           python3 scripts/ci/test-vault-runtime-signing-contract.py
-      - name: Test pinned Cosign detached blob tamper rejection (synthetic keys only)
+      - name: Check | Test pinned Cosign detached blob tamper rejection (synthetic keys only)
         run: |
           scripts/ci/install-validator-signing-fence-release-tools.sh "$RUNNER_TEMP/vault-blob-test-tools"
           COSIGN_BIN="$RUNNER_TEMP/vault-blob-test-tools/cosign" bash scripts/ci/test-vault-runtime-blob-roundtrip.sh
-      - name: Test release scan attestation content contract
+      - name: Check | Test release scan attestation content contract
         run: |
           bash scripts/ci/test-validator-signing-fence-image-contract.sh
           bash scripts/ci/test-release-scan-attestation.sh
           bash scripts/ci/test-validator-signing-fence-release-evidence.sh
-      - name: Test private DAST mirror boundary
+      - name: Check | Test private DAST mirror boundary
         run: scripts/ci/test-private-dast-mirror-contract.sh
-      - name: Test private DAST target access boundary
+      - name: Check | Test private DAST target access boundary
         run: scripts/ci/test-private-dast-access-contract.sh
-      - name: Test cross-pool connectivity plan boundary
+      - name: Check | Test cross-pool connectivity plan boundary
         run: scripts/ci/test-cross-pool-connectivity-plan.sh
-      - name: Test validator runtime mirror boundary
+      - name: Check | Test validator runtime mirror boundary
         run: scripts/ci/test-validator-runtime-mirror-contract.sh
-      - name: Test release reproducibility gate
+      - name: Check | Test release reproducibility gate
         run: scripts/ci/test-release-reproducibility-gate-contract.sh
-      - name: Test release SBOM SCA gate
+      - name: Check | Test release SBOM SCA gate
         run: scripts/ci/test-release-sbom-sca.sh
-      - name: Test release source eligibility
+      - name: Check | Test release source eligibility
         run: scripts/ci/test-release-source-eligibility.sh
-      - name: Test exact-SHA PR evidence check
+      - name: Check | Test exact-SHA PR evidence check
         run: scripts/ci/test-pr-evidence-check.sh
-      - name: Test zero-resource foundation contract
+      - name: Check | Test zero-resource foundation contract
         run: scripts/ci/test-zero-resource-contract.sh
-      - name: Test retained SSM plan boundary
+      - name: Check | Test retained SSM plan boundary
         run: scripts/ci/test-ops-access-ssm-retention.sh
-      - name: Test saved-plan SSM release wrapper
+      - name: Check | Test saved-plan SSM release wrapper
         run: scripts/ci/test-ops-access-retention-release.sh

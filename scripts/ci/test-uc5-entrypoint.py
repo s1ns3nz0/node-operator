@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify the UC5 lifecycle entrypoint without credentials or live API access.
 """Offline lifecycle tests; no credentials, CLI processes or live API access."""
 import contextlib
 import importlib.util

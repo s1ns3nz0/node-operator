@@ -1,4 +1,4 @@
-name: cert-manager Chart Mirror
+name: Mirror cert-manager Chart
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ jobs:
         with: {persist-credentials: false}
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with: {version: v3.17.3}
-      - name: Verify and push approved cert-manager chart
+      - name: Check | Verify and push approved cert-manager chart
         env:
           AWS_REGION: ap-northeast-2
           ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Enforce pinned scanner-image dependencies and its restricted release workflow contract.
 # shellcheck disable=SC2016
 set -euo pipefail
 

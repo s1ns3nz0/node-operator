@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Enforce the reviewed Vault Server and Agent gRPC patch source lock.
 """Offline source lock contract for the Vault Server and Agent gRPC patch."""
 import json
 from pathlib import Path

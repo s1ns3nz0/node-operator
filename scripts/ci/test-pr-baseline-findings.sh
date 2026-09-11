@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify baseline filtering preserves findings unless a reviewed exception applies.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

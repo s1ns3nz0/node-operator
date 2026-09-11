@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Reject enabled validator-runtime mirror plans that exceed the approved scope.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

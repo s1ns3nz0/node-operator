@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Reject Vault recovery isolation and IAM boundary regressions without AWS calls.
 """Parse recovery HCL and reject isolation/IAM regressions; no AWS calls.
 
 Uses python-hcl2 supplied by the pinned security-scanner image. Terraform's

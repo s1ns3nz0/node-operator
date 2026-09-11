@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify UC5 immediate pre-delete guards reject unsafe live state.
 """Synthetic-only contract tests for UC-5 immediate pre-delete guards."""
 import copy
 import importlib.util

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify validator quiescence detection against synthetic Kubernetes fixtures.
 """Synthetic Kubernetes fixtures; no cluster access or secret material."""
 import json
 import os

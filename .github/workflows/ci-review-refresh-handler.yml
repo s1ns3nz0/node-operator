@@ -18,7 +18,7 @@ jobs:
       actions: write
       pull-requests: read
     steps:
-      - name: Load trusted refresh handler from the default branch
+      - name: Prepare | Load trusted refresh handler from the default branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

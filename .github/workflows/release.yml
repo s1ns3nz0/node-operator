@@ -1,4 +1,4 @@
-name: Release
+name: Release Bundle
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Verify exact source release eligibility
+      - name: Check | Verify exact source release eligibility
         env:
           GH_TOKEN: ${{ github.token }}
         run: scripts/ci/verify-release-source-eligibility.sh "$GITHUB_SHA"
@@ -45,7 +45,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Build release bundle and evidence
+      - name: Build | Build release bundle and evidence
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
@@ -58,7 +58,7 @@ jobs:
           actual_artifact_digest="sha256:$(sha256sum "$RUNNER_TEMP/release/node-operator-release-bundle.tar" | awk '{print $1}')"
           test "$actual_artifact_digest" = "$APPROVED_ARTIFACT_DIGEST"
           test "$(jq -er '.metadata.component.version' "$RUNNER_TEMP/release/sbom.cyclonedx.json")" = "$APPROVED_ARTIFACT_DIGEST"
-      - name: Upload signer input to S3
+      - name: Evidence | Upload signer input to S3
         env:
           AWS_ROLE_ARN: ${{ vars.RELEASE_RUNNER_ROLE_ARN }}
           AWS_REGION: ap-northeast-2
@@ -111,7 +111,7 @@ jobs:
           test -f "$signer_output/release-verification.json"
           scripts/ci/verify-release-signature.sh "$signer_output"
           jq -e --arg sha "$source_revision" '.provenance.source_revision == $sha' "$signer_output/release-verification.json" >/dev/null
-      - name: Create GitHub Release
+      - name: Publish | Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

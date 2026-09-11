@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify caller-authenticated release scan evidence is bound to the requested artifact digest.
 # Content validation for Cosign DSSE output that a caller has already verified.
 set -euo pipefail
 

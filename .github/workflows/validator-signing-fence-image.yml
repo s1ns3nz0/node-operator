@@ -1,4 +1,4 @@
-name: Validator Signing Fence Image
+name: Release Validator Signing Fence Image
 
 on: {workflow_dispatch: {}}
 
@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
-      - name: Test, build, and publish reviewed fence source
+      - name: Check | Test, build, and publish reviewed fence source
         env:
           AWS_REGION: ap-northeast-2
           ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
@@ -64,7 +64,7 @@ jobs:
           cosign attest --yes --type https://github.com/s1ns3nz0/node-operator/attestations/scan-summary/v1 --predicate "$RUNNER_TEMP/fence-scan.json" "$subject"
           scripts/ci/collect-validator-signing-fence-release-evidence.sh "$subject" "$GITHUB_SHA" "$RUNNER_TEMP/fence-release-verification.json"
           printf 'private_image=%s\nsource_revision=%s\ninput_sha256=%s\nrelease_verification=PASS\n' "$subject" "$GITHUB_SHA" "$input_sha" >> "$GITHUB_STEP_SUMMARY"
-      - name: Retain sanitized release verification
+      - name: Evidence | Retain sanitized release verification
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: validator-signing-fence-release-verification

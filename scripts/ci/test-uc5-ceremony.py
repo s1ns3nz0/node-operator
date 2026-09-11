@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify every UC5 ceremony transition rejects unsafe failure paths.
 """Failure-injection tests for every ceremony transition; no live APIs."""
 import importlib.util
 import pathlib

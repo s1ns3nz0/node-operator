@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2016 # literal source-contract fragments
+# Check objective: Reject live Vault cutover unless its preflight guards and approvals remain intact.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 script="$root/scripts/ops/preflight-live-vault-cutover.sh"

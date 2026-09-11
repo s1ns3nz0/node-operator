@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify UC5 beacon reader validates bounded private-beacon observations.
 import importlib.util, pathlib, unittest
 PATH=pathlib.Path(__file__).resolve().parents[2]/"scripts/ops/lib/uc5-beacon-reader.py"; S=importlib.util.spec_from_file_location("b",PATH); M=importlib.util.module_from_spec(S); S.loader.exec_module(M)
 KEY="0x"+"ab"*48

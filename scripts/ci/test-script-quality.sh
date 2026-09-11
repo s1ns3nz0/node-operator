@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Enforce ShellCheck static analysis of CI shell scripts.
 set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/lib/common.sh"

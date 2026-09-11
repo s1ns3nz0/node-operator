@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Enforce the hardened signing-fence image build and release contract.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 dockerfile="$root/.ci/validator-signing-fence/Dockerfile"

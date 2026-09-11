@@ -1,4 +1,4 @@
-name: Vault Audit Relay Image Release
+name: Release Vault Audit Relay Image
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
-      - name: Docker test, scan, publish, and verify relay
+      - name: Publish | Docker test, scan, publish, and verify relay
         env:
           AWS_REGION: ap-northeast-2
           ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
@@ -62,7 +62,7 @@ jobs:
           jq -s -e --arg digest "$digest" 'map(.payload|@base64d|fromjson)|any(.[]; (.subject|any(.digest.sha256 == ($digest|sub("^sha256:";"")))) and .predicate.bomFormat == "CycloneDX" and .predicate.metadata.component.version == $digest)' "$evidence/sbom-verification.json" >/dev/null
           bash scripts/ci/verify-release-scan-attestation.sh "$evidence/scan-verification.json" "$digest" "$evidence/registry-scan-summary.json"
           printf 'private_image=%s\nsource_revision=%s\nreproducibility_input_sha256=%s\nrelease_verification=PASS\n' "$subject" "$GITHUB_SHA" "$input_sha" >> "$GITHUB_STEP_SUMMARY"
-      - name: Retain non-secret release evidence
+      - name: Evidence | Retain non-secret release evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

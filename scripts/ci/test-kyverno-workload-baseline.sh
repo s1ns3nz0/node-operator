@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify Kyverno baseline policies enforce hardened workload requirements.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

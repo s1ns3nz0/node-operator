@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Preserve immutable scanner-image and evidence-gate contracts across security workflows.
 # shellcheck disable=SC2016
 set -euo pipefail
 

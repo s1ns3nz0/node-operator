@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Reject Terraform plans that weaken reviewed SSM access-log retention.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

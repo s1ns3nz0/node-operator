@@ -29,21 +29,21 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Pull pinned scanner image
+      - name: Prepare | Pull pinned scanner image
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
         run: |
           echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
           docker pull "$SCANNER_IMAGE"
-      - name: Test isolated Vault recovery boundaries
+      - name: Check | Test isolated Vault recovery boundaries
         run: >-
           docker run --rm --network none --read-only
           --tmpfs /tmp:rw,noexec,nosuid,nodev
           --volume "$GITHUB_WORKSPACE:/workspace:ro"
           --entrypoint python3 "$SCANNER_IMAGE"
           -B /workspace/scripts/ci/test-vault-recovery-boundary.py
-      - name: Collect redacted scanner evidence
+      - name: Evidence | Collect redacted scanner evidence
         run: >-
           docker run --rm
           --volume "$GITHUB_WORKSPACE:/workspace:ro"
@@ -51,7 +51,7 @@ jobs:
           "$SCANNER_IMAGE" /evidence
           "${{ github.event.pull_request.head.sha || github.sha }}"
           "${{ github.event.pull_request.base.sha || github.sha }}"
-      - name: Upload non-sensitive security evidence
+      - name: Evidence | Upload non-sensitive security evidence
         if: success()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:

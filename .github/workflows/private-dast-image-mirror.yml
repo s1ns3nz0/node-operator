@@ -1,4 +1,4 @@
-name: Private DAST Image Mirror
+name: Mirror Private DAST Image
 
 on:
   workflow_dispatch:
@@ -14,14 +14,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false}
-      - name: Verify reviewed scanner allowlist
+      - name: Check | Verify reviewed scanner allowlist
         run: scripts/ci/verify-private-dast-scanner.sh .ci/dast/approved-scanner.json
-      - name: Assume private DAST mirror identity
+      - name: Prepare | Assume private DAST mirror identity
         env:
           AWS_REGION: ap-northeast-2
           AWS_ROLE_ARN: ${{ vars.PRIVATE_DAST_ECR_MIRROR_ROLE_ARN }}
         run: scripts/ci/assume-private-dast-mirror-role.sh
-      - name: Copy approved scanner digest into immutable private ECR
+      - name: Publish | Copy approved scanner digest into immutable private ECR
         env:
           AWS_REGION: ap-northeast-2
           ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}

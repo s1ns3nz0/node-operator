@@ -1,4 +1,4 @@
-name: Validator Client Image Mirror
+name: Mirror Validator Client Image
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
-      - name: Mirror reviewed Prysm digest to private ECR
+      - name: Publish | Mirror reviewed Prysm digest to private ECR
         env:
           SOURCE_IMAGE: ${{ inputs.source_image }}
           AWS_REGION: ap-northeast-2

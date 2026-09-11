@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Enforce reusable release-integrity workflow and reproducibility gate contracts.
 # shellcheck disable=SC2016 # The workflow contract must match the literal GitHub runner variable.
 set -euo pipefail
 

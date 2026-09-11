@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify the isolated Vault recovery-grant administration session with mocks.
 """Mocked tests for the isolated vault recovery-grant session wrapper."""
 from __future__ import annotations
 

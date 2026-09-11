@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Keep PR evidence Terraform validation bound to the deployable root module.
 # shellcheck disable=SC2016
 set -euo pipefail
 

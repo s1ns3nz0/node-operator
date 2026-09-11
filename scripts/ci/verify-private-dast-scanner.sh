@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify the private DAST scanner allowlist pins an approved passive scanner digest.
 set -euo pipefail
 
 contract="${1:-}"

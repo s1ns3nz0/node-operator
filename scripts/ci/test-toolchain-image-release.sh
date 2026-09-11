@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Enforce pinned toolchain-image dependencies and restricted publication contracts.
 # shellcheck disable=SC2016
 set -euo pipefail
 

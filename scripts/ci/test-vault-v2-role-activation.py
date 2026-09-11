@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify Vault v2 role activation cannot bypass preparation and quiescence gates.
 """Verify policy changes cannot precede preparation and live quiescence gates."""
 import json
 import os

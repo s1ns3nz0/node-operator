@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Reject malformed, target-mismatched, or high-risk Fence ZAP reports.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

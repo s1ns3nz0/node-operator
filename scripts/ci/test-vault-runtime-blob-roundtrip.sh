@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify synthetic Vault runtime evidence can complete an offline Cosign blob round trip.
 # Synthetic offline key only. These options are forbidden in the real verifier.
 set -euo pipefail
 cosign="${COSIGN_BIN:-cosign}"

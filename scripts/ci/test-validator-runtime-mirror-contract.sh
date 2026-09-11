@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Enforce digest-pinned validator runtime mirror allowlist and publisher constraints.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"

@@ -22,7 +22,7 @@ automatic publisher; lack of a workflow reference alone does not imply disuse.
 ## Required workflow ownership
 
 - `CI Policy / policy`: Rego, Terraform policy and rendered manifest tests.
-- `Policy Foundation / policy-foundation`: evidence normalization, PR gate and
+- `CI Policy Foundation / policy-foundation`: evidence normalization, PR gate and
   baseline filtering contracts, private target contract and suite ownership.
 - `CI Quality / quality`: script quality and remaining implementation tests;
   still requires the Fence security workflow to succeed.
@@ -30,3 +30,18 @@ automatic publisher; lack of a workflow reference alone does not imply disuse.
 Workflow paths and required job identities remain stable: release eligibility
 validates their provenance. All three workflows still execute on PRs and main
 pushes. No signing, scan, approval or release gate is removed by deduplication.
+
+## English presentation conventions
+
+Workflow display titles use `CI <Subject>`, `Release <Artifact>` or
+`Mirror <Artifact>`. Named steps use `<Phase> | <Description>`, with `Prepare`,
+`Check`, `Build`, `Evidence` or `Publish` as the phase. Descriptions retain the
+specific check or action; these labels do not imply that a step has passed.
+
+Keep workflow filenames, job IDs, and published required-check contexts stable.
+`CI Security` and `CI Evidence Review Signal` are also event-routing identities,
+so their exact titles must remain aligned with workflow-run consumers.
+
+Workflow-referenced test, verification and scan entrypoints describe their
+scope in an English `Check objective:` header. These comments distinguish
+offline contract tests from runtime scans; they are not execution evidence.

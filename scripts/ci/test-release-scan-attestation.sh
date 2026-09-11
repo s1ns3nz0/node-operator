@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify release scan attestations bind the reviewed artifact and scanner summary.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
