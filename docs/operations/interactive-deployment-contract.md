@@ -19,6 +19,16 @@ scripts/release/node-operator-install.sh resume \
 
 Missing initial profile/Region/name values are prompted only in a terminal. Release assets must come from the trusted release workflow; self-consistent manifests are not standalone public-key signature verification. Discovery reports missing local commands by infrastructure, private-access, Vault and optional custody stages; command presence does not prove supported versions or runtime health. It checks account-owned backend bucket names, regional DynamoDB lock-table names, and account-wide IAM role names under the deployment's foundation/baseline namespaces without authorizing adoption. Global S3 name availability, IAM policy attachments, provisioning permissions, quotas and remaining resource collisions are still explicitly unverified. Inventory failures stop discovery instead of being treated as empty inventories.
 
+## Capacity observation
+
+Discovery compares the regional EC2 Elastic IP quota (`L-0263D0A3`) with
+allocated addresses and the fresh foundation's one required NAT address.
+It reports a lower bound on remaining capacity, not a reservation or complete
+quota clearance. All allocations are conservatively counted: AWS excludes
+some customer-owned pools from the limit ([AWS Elastic IP documentation](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html)).
+A shortfall requires capacity review, never automatic address deletion.
+vCPU, NAT gateway, VPC, endpoint and other quotas remain unverified.
+
 ## Input boundaries
 
 | Input | Timing | Source |

@@ -30,7 +30,8 @@ class PreflightTests(unittest.TestCase):
     def test_discovery_does_not_claim_apply_permission(self):
         responses = [{"Account": "123456789012", "Arn": "arn:aws:sts::123456789012:assumed-role/operator/session"},
                      {"AvailabilityZones": [{"ZoneName": "ap-northeast-1c", "State": "available"}, {"ZoneName": "ap-northeast-1a", "State": "available"}]},
-                     {"clusters": ["test-node"]}, [], [], ["test-node-foundation-flow-logs", "test-node-baseline-eks-cluster", "unrelated-role"]]
+                     {"clusters": ["test-node"]}, [], [], ["test-node-foundation-flow-logs", "test-node-baseline-eks-cluster", "unrelated-role"],
+                     {"Quota": {"QuotaCode": "L-0263D0A3", "ServiceCode": "ec2", "Value": 5}}, []]
         with patch.object(module, "aws_read", side_effect=responses) as read:
             result = module.discover("test", "ap-northeast-1", "test-node")
         self.assertEqual(result["availability_zones"], ["ap-northeast-1a", "ap-northeast-1c"])
@@ -38,7 +39,30 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(result["provisioning_permissions"], "not_verified")
         self.assertEqual(result["iam_role_collisions"]["deployment_role_name_conflicts"], ["test-node-baseline-eks-cluster", "test-node-foundation-flow-logs"])
         self.assertEqual(result["iam_role_collisions"]["iam_permissions"], "not_verified")
-        self.assertEqual([c.args[2][0] for c in read.call_args_list], ["sts", "ec2", "eks", "s3api", "dynamodb", "iam"])
+        self.assertEqual([c.args[2][0] for c in read.call_args_list], ["sts", "ec2", "eks", "s3api", "dynamodb", "iam", "service-quotas", "ec2"])
+
+    def test_elastic_ip_headroom_and_exhaustion_never_mutate(self):
+        for allocated, expected in [(0, "sufficient_at_observation"), (4, "sufficient_at_observation"), (5, "requires_capacity_review")]:
+            quota = {"Quota": {"QuotaCode": "L-0263D0A3", "ServiceCode": "ec2", "Value": 5.0}}
+            with patch.object(module, "aws_read", side_effect=[quota, [f"eipalloc-{i:08x}" for i in range(allocated)]]) as read:
+                result = module.elastic_ip_headroom("test", "ap-northeast-1")
+            self.assertEqual(result["result"], expected)
+            self.assertEqual(result["headroom_lower_bound"], 5 - allocated)
+            self.assertFalse(result["reservation_created"])
+            self.assertEqual([call.args[2][1] for call in read.call_args_list], ["get-service-quota", "describe-addresses"])
+
+    def test_malformed_quota_or_inventory_is_not_capacity(self):
+        for quota in ({}, {"Quota": []}, {"Quota": {"Value": 5}}, {"Quota": {"QuotaCode": "other", "ServiceCode": "ec2", "Value": 5}}):
+            with patch.object(module, "aws_read", return_value=quota), self.assertRaises(module.PreflightError):
+                module.elastic_ip_headroom("test", "ap-northeast-1")
+        for value in (None, True, -1, 1.5, float("nan"), float("inf"), "5"):
+            quota = {"Quota": {"QuotaCode": "L-0263D0A3", "ServiceCode": "ec2", "Value": value}}
+            with patch.object(module, "aws_read", return_value=quota), self.assertRaises(module.PreflightError):
+                module.elastic_ip_headroom("test", "ap-northeast-1")
+        quota = {"Quota": {"QuotaCode": "L-0263D0A3", "ServiceCode": "ec2", "Value": 5}}
+        for addresses in (None, {}, [None], ["eipalloc-1", "eipalloc-1"]):
+            with patch.object(module, "aws_read", side_effect=[quota, addresses]), self.assertRaises(module.PreflightError):
+                module.elastic_ip_headroom("test", "ap-northeast-1")
 
     def test_iam_role_collisions_keep_only_deployment_namespaces(self):
         roles = ["test-node-foundation-flow-logs", "test-node-baseline-vault", "test-node-baseline", "test-node-foundation-flow-logs-extra", "another-baseline-vault"]

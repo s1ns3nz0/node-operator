@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import math
 import os
 import re
 import shutil
@@ -95,6 +96,36 @@ def iam_role_collisions(profile: str, region: str, name: str) -> dict:
     }
 
 
+def elastic_ip_headroom(profile: str, region: str) -> dict:
+    """Check capacity for the fresh foundation's one NAT Elastic IP.
+
+    Conservatively count every allocated EIP, including customer pools that AWS
+    may exclude from this quota. A shortfall therefore requires operator review,
+    not automatic deletion or a quota-increase request. No address is printed.
+    """
+    quota = aws_read(profile, region, ["service-quotas", "get-service-quota",
+                     "--service-code", "ec2", "--quota-code", "L-0263D0A3"])
+    value = quota.get("Quota", {}) if isinstance(quota, dict) else {}
+    if not isinstance(value, dict):
+        raise PreflightError("Elastic IP quota response is incomplete; capacity was not verified.")
+    limit = value.get("Value")
+    if (value.get("QuotaCode") != "L-0263D0A3" or value.get("ServiceCode") != "ec2"
+            or type(limit) not in (int, float) or not math.isfinite(limit)
+            or limit < 0 or int(limit) != limit):
+        raise PreflightError("Elastic IP quota response is incomplete; capacity was not verified.")
+    addresses = aws_read(profile, region, ["ec2", "describe-addresses", "--query", "Addresses[].AllocationId"])
+    if (not isinstance(addresses, list)
+            or not all(isinstance(item, str) and re.fullmatch(r"eipalloc-[0-9a-f]+", item) for item in addresses)
+            or len(set(addresses)) != len(addresses)):
+        raise PreflightError("Elastic IP allocation inventory is incomplete; capacity was not verified.")
+    remaining = int(limit) - len(addresses)
+    return {"quota_code": "L-0263D0A3", "limit": int(limit),
+            "allocated_upper_bound": len(addresses), "required_for_fresh_foundation": 1,
+            "headroom_lower_bound": remaining,
+            "result": "sufficient_at_observation" if remaining >= 1 else "requires_capacity_review",
+            "reservation_created": False, "other_quotas": "not_verified"}
+
+
 def aws_read(profile: str, region: str, arguments: list[str]) -> object:
     if shutil.which("aws") is None:
         raise PreflightError("AWS CLI is missing; install it before target discovery.")
@@ -149,5 +180,6 @@ def discover(profile: str, region: str, name: str) -> dict:
             "local_prerequisites": local_prerequisites(),
             "backend_collisions": backend_collisions(profile, region, name, account),
             "iam_role_collisions": iam_role_collisions(profile, region, name),
+            "elastic_ip_headroom": elastic_ip_headroom(profile, region),
             "provisioning_permissions": "not_verified", "quotas": "not_verified",
             "other_resource_collisions": "not_verified"}
