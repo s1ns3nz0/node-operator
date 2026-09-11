@@ -97,5 +97,75 @@ class InfrastructurePreparationTests(unittest.TestCase):
         self.assertEqual(list(self.directory.glob(".infrastructure-inputs-*")), [])
 
 
+class InfrastructureApplyTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.directory = Path(self.temporary.name).resolve()
+        self.directory.chmod(0o700)
+        self.bundle = self.directory / "release"
+        self.contract = self.bundle / "source/release/hoodi-release-contract.json"
+        self.contract.parent.mkdir(parents=True)
+        self.write(self.contract, {"bootstrap": {"interactive_infrastructure_schema": 1}})
+        self.inputs = self.directory / "infrastructure-inputs"
+        self.inputs.mkdir(mode=0o700)
+        self.discovery = {**DISCOVERY, "principal_arn": "arn:aws:iam::123456789012:user/operator",
+            "cluster_name_present": False,
+            "backend_collisions": {"account_owned_bucket_conflicts": [], "regional_table_conflicts": []},
+            "iam_role_collisions": {"deployment_role_name_conflicts": []},
+            "elastic_ip_headroom": {"result": "sufficient_at_observation"},
+            "local_prerequisites": {"missing_by_stage": {"infrastructure": []}}}
+        for name, value in infra.expected_inputs(self.inputs, self.discovery, ROLE).items():
+            self.write(self.inputs / name, value)
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def write(self, path, value):
+        path.write_text(json.dumps(value))
+        path.chmod(0o600)
+
+    def invoke(self, code=0, account="123456789012"):
+        def command(args, **kwargs):
+            self.assertEqual(args[2:4], ["zero", "apply"])
+            self.assertEqual(kwargs["env"]["AWS_PROFILE"], "operator")
+            self.assertNotIn("AWS_SECRET_ACCESS_KEY", kwargs["env"])
+            for key in infra.AWS_CREDENTIAL_OVERRIDES:
+                self.assertNotIn(key, kwargs["env"])
+            self.assertEqual(kwargs["env"]["AWS_EC2_METADATA_DISABLED"], "true")
+            self.assertNotIn("TF_VAR_name", kwargs["env"])
+            self.assertEqual(kwargs["env"]["GITHUB_TOKEN"], "sentinel")
+            work = self.directory / "terraform-work"
+            work.mkdir(mode=0o700, exist_ok=True)
+            self.write(work / "baseline-output.json", {"deployment_account_id": {"value": account}, "cluster_name": {"value": "test-node"}})
+            return subprocess.CompletedProcess(args, code)
+        with patch.dict(os.environ, {**dict.fromkeys(infra.AWS_CREDENTIAL_OVERRIDES, "unexpected-provider"), "GITHUB_TOKEN": "sentinel", "AWS_SECRET_ACCESS_KEY": "private", "TF_VAR_name": "wrong"}), patch.object(infra, "aws_read", return_value={"Account": "123456789012", "Arn": self.discovery["principal_arn"]}), patch.object(infra.subprocess, "run", side_effect=command) as run:
+            infra.apply_infrastructure(self.bundle, self.directory, self.discovery, ROLE, "operator")
+        return run
+
+    def test_apply_uses_selected_profile_and_checks_completion_output(self):
+        self.assertEqual(self.invoke().call_count, 1)
+
+    def test_failed_apply_or_wrong_account_never_reports_completion(self):
+        for options in ({"code": 1}, {"account": "999999999999"}):
+            with self.assertRaises(infra.InfrastructureError):
+                self.invoke(**options)
+
+    def test_old_bundle_and_collisions_never_start_command(self):
+        self.write(self.contract, {"bootstrap": {}})
+        with patch.object(infra.subprocess, "run") as run, self.assertRaises(infra.InfrastructureError):
+            infra.apply_infrastructure(self.bundle, self.directory, self.discovery, ROLE, "operator")
+        run.assert_not_called()
+        self.write(self.contract, {"bootstrap": {"interactive_infrastructure_schema": 1}})
+        self.discovery["cluster_name_present"] = True
+        with patch.object(infra.subprocess, "run") as run, self.assertRaises(infra.InfrastructureError):
+            infra.apply_infrastructure(self.bundle, self.directory, self.discovery, ROLE, "operator")
+        run.assert_not_called()
+
+    def test_changed_execution_identity_never_starts_command(self):
+        with patch.object(infra, "aws_read", return_value={"Account": "999999999999", "Arn": "other"}), patch.object(infra.subprocess, "run") as run, self.assertRaises(infra.InfrastructureError):
+            infra.apply_infrastructure(self.bundle, self.directory, self.discovery, ROLE, "operator")
+        run.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

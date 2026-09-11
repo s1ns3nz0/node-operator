@@ -18,6 +18,45 @@ DISCOVERY = {"aws_profile": "test", "aws_account_id": "123456789012", "aws_regio
 
 
 class InstallerCommandTests(unittest.TestCase):
+    def test_apply_requires_terminal_before_any_discovery(self):
+        with patch.object(cli.sys.stdin, "isatty", return_value=False), patch.object(cli, "discover") as discovery, self.assertRaises(cli.StateError):
+            cli.run(["start", "--state-dir", "/unused", "--apply-infrastructure"])
+        discovery.assert_not_called()
+
+    def test_cancelled_confirmation_never_applies(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary).resolve() / "state"
+            bundle = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=Mock(return_value=directory / "release"))
+            discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"]}
+            options = ["--release-dir", temporary, "--aws-profile", "test", "--aws-region", "ap-northeast-1", "--name", "test-node",
+                       "--apply-infrastructure", "--backend-principal-arn", "arn:aws:iam::123456789012:role/backend"]
+            with patch.dict(sys.modules, {"installer_bundle": bundle}), patch.object(cli, "discover", return_value=discovery), patch.object(cli, "verify_backend_role", return_value={}), patch.object(cli, "prepare_inputs"), patch.object(cli, "apply_infrastructure") as apply, patch.object(cli.sys.stdin, "isatty", return_value=True), patch("builtins.input", return_value="yes"), self.assertRaises(cli.StateError):
+                self.invoke(directory, "start", options)
+            apply.assert_not_called()
+            _, status = self.invoke(directory, "status")
+            self.assertEqual(status["stages"]["infrastructure"]["status"], "awaiting_input")
+
+    def test_confirmed_apply_completes_only_infrastructure_and_failure_is_preserved(self):
+        for outcome in (None, cli.InfrastructureError("partial apply")):
+            with tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary).resolve() / "state"
+                bundle = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=Mock(return_value=directory / "release"))
+                discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"]}
+                options = ["--release-dir", temporary, "--aws-profile", "test", "--aws-region", "ap-northeast-1", "--name", "test-node",
+                           "--apply-infrastructure", "--backend-principal-arn", "arn:aws:iam::123456789012:role/backend"]
+                with patch.dict(sys.modules, {"installer_bundle": bundle}), patch.object(cli, "discover", return_value=discovery), patch.object(cli, "verify_backend_role", return_value={}), patch.object(cli, "prepare_inputs"), patch.object(cli, "apply_infrastructure", side_effect=outcome) as apply, patch.object(cli.sys.stdin, "isatty", return_value=True), patch("builtins.input", return_value="APPLY 123456789012 ap-northeast-1 test-node AUDIT ap-northeast-2"):
+                    if outcome:
+                        with self.assertRaises(cli.InfrastructureError):
+                            self.invoke(directory, "start", options)
+                    else:
+                        _, result = self.invoke(directory, "start", options)
+                        self.assertEqual(result["result"], "infrastructure_ready")
+                        self.assertFalse(result["deployment_complete"])
+                apply.assert_called_once()
+                _, status = self.invoke(directory, "status")
+                self.assertEqual(status["stages"]["infrastructure"]["status"], "failed" if outcome else "complete")
+                self.assertEqual(status["stages"]["vault"]["status"], "pending")
+
     def invoke(self, directory, command, extra=()):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):

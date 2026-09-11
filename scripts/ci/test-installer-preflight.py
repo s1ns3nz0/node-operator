@@ -175,13 +175,16 @@ class PreflightTests(unittest.TestCase):
                 module.discover("test", "ap-northeast-1", "test-node")
 
     def test_profile_is_explicit_and_errors_do_not_leak(self):
-        with patch.dict(os.environ, {"GITHUB_TOKEN": "sentinel", "AWS_SECRET_ACCESS_KEY": "private"}), patch.object(module.shutil, "which", return_value="aws"), patch.object(module.subprocess, "run", return_value=subprocess.CompletedProcess([], 1, "secret", "private")) as run:
+        with patch.dict(os.environ, {**dict.fromkeys(module.AWS_CREDENTIAL_OVERRIDES, "unexpected-provider"), "GITHUB_TOKEN": "sentinel", "AWS_SECRET_ACCESS_KEY": "private"}), patch.object(module.shutil, "which", return_value="aws"), patch.object(module.subprocess, "run", return_value=subprocess.CompletedProcess([], 1, "secret", "private")) as run:
             with self.assertRaises(module.PreflightError) as error:
                 module.aws_read("test", "ap-northeast-1", ["sts", "get-caller-identity"])
             self.assertNotIn("secret", str(error.exception))
             self.assertNotIn("private", str(error.exception))
             self.assertEqual(run.call_args.kwargs["env"]["GITHUB_TOKEN"], "sentinel")
             self.assertNotIn("AWS_SECRET_ACCESS_KEY", run.call_args.kwargs["env"])
+            for key in module.AWS_CREDENTIAL_OVERRIDES:
+                self.assertNotIn(key, run.call_args.kwargs["env"])
+            self.assertEqual(run.call_args.kwargs["env"]["AWS_EC2_METADATA_DISABLED"], "true")
             self.assertEqual(os.environ["AWS_SECRET_ACCESS_KEY"], "private")
             self.assertEqual(run.call_args.args[0][1:5], ["--profile", "test", "--region", "ap-northeast-1"])
 

@@ -15,6 +15,15 @@ class PreflightError(RuntimeError):
     """A non-sensitive actionable preflight failure."""
 
 
+AWS_CREDENTIAL_OVERRIDES = (
+    "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN",
+    "AWS_ACCESS_KEY", "AWS_SECRET_KEY", "AWS_DEFAULT_PROFILE", "AWS_WEB_IDENTITY_TOKEN_FILE",
+    "AWS_ROLE_ARN", "AWS_ROLE_SESSION_NAME", "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+    "AWS_CONTAINER_CREDENTIALS_FULL_URI", "AWS_CONTAINER_AUTHORIZATION_TOKEN",
+    "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE",
+)
+
+
 def local_prerequisites() -> dict:
     """Report missing stage tools together, without installing or executing them.
 
@@ -231,8 +240,9 @@ def aws_read(profile: str, region: str, arguments: list[str]) -> object:
     environment = os.environ.copy()
     # Explicit profile must not silently inherit a different credential pair.
     # GitHub credentials and the caller's environment are never modified.
-    for key in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN"):
+    for key in AWS_CREDENTIAL_OVERRIDES:
         environment.pop(key, None)
+    environment["AWS_EC2_METADATA_DISABLED"] = "true"
     environment["AWS_PAGER"] = ""
     environment["AWS_CLI_AUTO_PROMPT"] = "off"
     try:
@@ -274,6 +284,7 @@ def discover(profile: str, region: str, name: str) -> dict:
     if not isinstance(clusters, dict) or not isinstance(clusters.get("clusters"), list) or not all(isinstance(c, str) for c in clusters["clusters"]):
         raise PreflightError("AWS cluster inventory is incomplete.")
     return {"aws_account_id": account, "aws_profile": profile, "aws_region": region,
+            "principal_arn": arn,
             "deployment_name": name, "availability_zones": available[:2],
             "cluster_name_present": name in clusters["clusters"],
             "local_prerequisites": local_prerequisites(),

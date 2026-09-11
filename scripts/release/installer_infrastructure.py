@@ -1,7 +1,7 @@
-"""Prepare context-bound infrastructure inputs using the verified release.
+"""Prepare and explicitly apply infrastructure through the verified release.
 
-No Terraform, cluster, registry, or Vault operations occur in this module.
-Prepared files are not evidence of permissions or successful provisioning.
+Preparation is local only. Apply creates infrastructure but never performs
+Vault ceremonies, SSM setup or validator activation.
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import stat
 import subprocess
 import tempfile
 
-from installer_preflight import validate_inputs
+from installer_preflight import validate_inputs, aws_read, verify_execution_profile, AWS_CREDENTIAL_OVERRIDES
 from installer_files import publish_directory
 
 
@@ -131,3 +131,62 @@ def prepare_inputs(bundle_root: Path, destination: Path, discovery: dict, princi
     finally:
         shutil.rmtree(stage)
     return destination / "zero-resource-inputs.json"
+
+
+def apply_infrastructure(bundle_root: Path, state_dir: Path, discovery: dict,
+                         principal: str, execution_profile: str) -> None:
+    """Invoke only a capable verified release; caller owns lock and approval.
+
+    Do not use an old release's unguarded migration implementation. The local
+    preparation and release verification must be repeated immediately before
+    this call. The release wrapper owns Terraform-state reconciliation.
+    """
+    validate_inputs(execution_profile, discovery["aws_region"], discovery["deployment_name"])
+    inputs_dir = state_dir / "infrastructure-inputs"
+    _validate_tree(inputs_dir, expected_inputs(inputs_dir, discovery, principal))
+    contract = _read_object(bundle_root / "source/release/hoodi-release-contract.json")
+    bootstrap = contract.get("bootstrap")
+    if not isinstance(bootstrap, dict) or type(bootstrap.get("interactive_infrastructure_schema")) is not int or bootstrap["interactive_infrastructure_schema"] != 1:
+        raise InfrastructureError("This release does not support guarded installer apply; download a new verified installer release.")
+    work_dir = state_dir / "terraform-work"
+    if work_dir.is_symlink() or (work_dir.exists() and (not work_dir.is_dir() or stat.S_IMODE(work_dir.stat().st_mode) != 0o700)):
+        raise InfrastructureError("Terraform work directory must be an original private directory.")
+    # An empty/pre-created directory is not ownership evidence for collisions.
+    continuation = any(path.is_file() and not path.is_symlink() for path in
+                       (work_dir / "bootstrap-output.json", work_dir / "bootstrap-state/terraform.tfstate"))
+    if not continuation:
+        if (discovery["cluster_name_present"]
+                or discovery["backend_collisions"]["account_owned_bucket_conflicts"]
+                or discovery["backend_collisions"]["regional_table_conflicts"]
+                or discovery["iam_role_collisions"]["deployment_role_name_conflicts"]):
+            raise InfrastructureError("Fresh infrastructure names collide with existing resources; no adoption or apply was authorized.")
+        if discovery["elastic_ip_headroom"]["result"] != "sufficient_at_observation":
+            raise InfrastructureError("Fresh infrastructure lacks observed Elastic IP capacity; no apply was started.")
+    if discovery["local_prerequisites"]["missing_by_stage"]["infrastructure"]:
+        raise InfrastructureError("Infrastructure prerequisites are missing; install the reported tools before apply.")
+    if "execution_identity" in discovery:
+        verify_execution_profile(discovery, discovery["backend_role"], execution_profile)
+    else:
+        identity = aws_read(execution_profile, discovery["aws_region"], ["sts", "get-caller-identity"])
+        if (not isinstance(identity, dict) or identity.get("Account") != discovery["aws_account_id"]
+                or identity.get("Arn") != discovery.get("principal_arn") or str(identity.get("Arn", "")).endswith(":root")):
+            raise InfrastructureError("Execution identity changed after discovery; no apply was started.")
+    environment = os.environ.copy()
+    for key in list(environment):
+        if key.startswith("TF_VAR_") or key in AWS_CREDENTIAL_OVERRIDES or key in ("BASH_ENV", "ENV"):
+            environment.pop(key, None)
+    environment.update(AWS_PROFILE=execution_profile, AWS_REGION=discovery["aws_region"], AWS_DEFAULT_REGION=discovery["aws_region"], AWS_PAGER="", AWS_CLI_AUTO_PROMPT="off", AWS_EC2_METADATA_DISABLED="true")
+    script = bundle_root / "source/scripts/release/node-operator-release.sh"
+    try:
+        result = subprocess.run(["bash", str(script), "zero", "apply", "--bundle-root", str(bundle_root),
+                                 "--inputs", str(inputs_dir / "zero-resource-inputs.json"), "--work-dir", str(work_dir)],
+                                env=environment, check=False)
+    except OSError as error:
+        raise InfrastructureError("Infrastructure command could not start; preserve the original state directory.") from error
+    if result.returncode:
+        raise InfrastructureError("Infrastructure apply did not complete. Preserve this state directory and reconcile before resuming; do not deploy into a new directory.")
+    output = _read_object(work_dir / "baseline-output.json")
+    if (not isinstance(output.get("deployment_account_id"), dict) or not isinstance(output.get("cluster_name"), dict)
+            or output["deployment_account_id"].get("value") != discovery["aws_account_id"]
+            or output["cluster_name"].get("value") != discovery["deployment_name"]):
+        raise InfrastructureError("Infrastructure output does not match the selected deployment; completion was not recorded.")

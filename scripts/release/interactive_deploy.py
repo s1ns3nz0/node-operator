@@ -1,6 +1,6 @@
 """Interactive deployment entrypoint: release discovery and local input preparation.
 
-Provisioning adapters are not yet connected. Never report discovery as deployment.
+Infrastructure apply requires explicit terminal confirmation; later adapters remain unimplemented.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import sys
 
 from installer_preflight import PreflightError, discover, validate_inputs, verify_backend_role, verify_execution_profile, bootstrap_permission_probe
 from installer_state import CheckpointStore, StateError, STAGE_NAMES
-from installer_infrastructure import InfrastructureError, prepare_inputs
+from installer_infrastructure import InfrastructureError, prepare_inputs, apply_infrastructure
 
 
 def load_context(directory: Path) -> dict:
@@ -43,7 +43,7 @@ def prompt(value: str | None, label: str, default: str | None = None) -> str:
 
 
 def run(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Start/status/resume release discovery and optional local infrastructure preparation. No provisioning is performed in this version.")
+    parser = argparse.ArgumentParser(description="Start/status/resume discovery, preparation and explicitly confirmed infrastructure apply.")
     parser.add_argument("command", choices=("start", "status", "resume"))
     parser.add_argument("--state-dir", required=True, type=Path)
     parser.add_argument("--release-dir", type=Path, help="Downloaded release asset directory; required for start/resume")
@@ -51,9 +51,14 @@ def run(argv: list[str] | None = None) -> int:
     parser.add_argument("--aws-region")
     parser.add_argument("--name")
     parser.add_argument("--prepare-infrastructure", action="store_true", help="Materialize verified release and generate local Terraform inputs; does not apply")
+    parser.add_argument("--apply-infrastructure", action="store_true", help="Prepare and apply infrastructure after terminal confirmation; does not set up SSM/Vault/workloads")
     parser.add_argument("--backend-principal-arn", help="Exact same-account backend IAM role for infrastructure preparation")
-    parser.add_argument("--execution-profile", help="Optional existing AWS role profile to verify against the selected backend role; preparation only")
+    parser.add_argument("--execution-profile", help="Optional existing AWS role profile to verify and use for infrastructure execution")
     args = parser.parse_args(argv)
+    if args.apply_infrastructure:
+        if not sys.stdin.isatty():
+            raise StateError("Infrastructure apply requires an interactive terminal and deployment-scope confirmation.")
+        args.prepare_infrastructure = True
     if not args.state_dir.is_absolute():
         raise StateError("Use an absolute state directory.")
     if args.command == "status":
@@ -114,9 +119,24 @@ def run(argv: list[str] | None = None) -> int:
                                               release["release_sha"], release["bundle_digest"])
             prepare_inputs(bundle_root, inputs_dir, discovery, principal)
             store.set_stage("infrastructure", "awaiting_input")
-    print(json.dumps({"result": "infrastructure_inputs_ready" if args.prepare_infrastructure else "discovery_complete", "discovery": discovery,
+            if args.apply_infrastructure:
+                if args.execution_profile and discovery["bootstrap_permission_probe"]["result"] != "limited_checks_passed":
+                    raise StateError("Execution role prerequisites need permission review; no infrastructure apply was started.")
+                replica_region = "ap-northeast-2" if region == "ap-northeast-1" else "ap-northeast-1"
+                confirmation = f"APPLY {discovery['aws_account_id']} {region} {name} AUDIT {replica_region}"
+                print("This provisions infrastructure and audit-replica resources in the displayed Regions. Full permission/quota clearance is not proven. Existing state is preserved on failure.", file=sys.stderr)
+                if prompt(None, "Type exactly " + confirmation) != confirmation:
+                    raise StateError("Infrastructure apply cancelled; no resource changes requested.")
+                store.set_stage("infrastructure", "running")
+                try:
+                    apply_infrastructure(bundle_root, args.state_dir, discovery, principal, args.execution_profile or profile)
+                except (InfrastructureError, PreflightError):
+                    store.set_stage("infrastructure", "failed")
+                    raise
+                store.set_stage("infrastructure", "complete")
+    print(json.dumps({"result": "infrastructure_ready" if args.apply_infrastructure else ("infrastructure_inputs_ready" if args.prepare_infrastructure else "discovery_complete"), "discovery": discovery,
                       "deployment_complete": False,
-                      "remaining": "Still required: full permission/quota/collision preflight and infrastructure apply integration."}, sort_keys=True))
+                      "remaining": "SSM, Vault, secrets, GitOps, workloads, custody, deposit, activation, duty and E2E remain required." if args.apply_infrastructure else "Infrastructure apply and later deployment stages remain required."}, sort_keys=True))
     return 0
 
 
@@ -127,5 +147,5 @@ if __name__ == "__main__":
         print(str(error), file=sys.stderr)
         raise SystemExit(1)
     except (OSError, ValueError, KeyError, KeyboardInterrupt):
-        print("Installer input or local state could not be read safely. No automatic cleanup or deployment was performed.", file=sys.stderr)
+        print("Installer input/state failed or execution was interrupted. Preserve this state directory; resources may exist and must be reconciled before retrying.", file=sys.stderr)
         raise SystemExit(1)

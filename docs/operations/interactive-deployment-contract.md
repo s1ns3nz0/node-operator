@@ -2,7 +2,31 @@
 
 ## Commands
 
-The public entrypoint is `scripts/release/node-operator-install.sh`. Its current implementation provides `start`, `status` and `resume` for release consistency checks, read-only AWS discovery and private checkpoints. `start` and `resume` additionally accept `--prepare-infrastructure` to materialize the trusted release and generate private Terraform input files, without applying infrastructure. `ops-access` and cloud provisioning adapters are not implemented yet. `resume` revalidates identity and rejects running stages pending reconciliation; it does not automatically reconcile or retry cloud mutations. `status` reads local state without contacting AWS or Vault. The future `ops-access` command owns a separate Terraform apply and confirmation.
+The public entrypoint is `scripts/release/node-operator-install.sh`. It provides `start`, `status` and `resume` for release checks, AWS discovery and private checkpoints. `--prepare-infrastructure` only generates local inputs. `--apply-infrastructure` additionally invokes the verified release's guarded Terraform path after explicit terminal confirmation. SSM and later deployment adapters remain unimplemented. `resume` rejects running stages pending reconciliation; a failed apply can be retried through the release wrapper's existing-state checks, but residual changes still stop for review. `status` is local only. Future `ops-access` owns a separate apply and confirmation.
+
+## Explicit infrastructure apply
+
+`start` or `resume --apply-infrastructure` implies preparation and requires a
+terminal. Confirmation names the account, deployment Region, deployment name
+and audit-replica Region; both Regions may receive new resources. Do not run it
+without approval for that complete scope. With no execution-profile override,
+the discovery profile executes Terraform and its exact STS ARN/account are
+rechecked. With an override, the verified role session is rechecked and the
+limited prerequisite simulation must pass. Neither path claims exhaustive
+permission/quota clearance; the confirmation explicitly states that limit.
+
+The bundle must advertise `bootstrap.interactive_infrastructure_schema: 1`.
+Older releases such as v0.1.20 cannot be used for this apply adapter. It rejects
+fresh naming collisions, missing tools and observed EIP shortage, validates
+generated inputs, removes inherited TF_VAR/static, Web Identity and container
+credential overrides, disables metadata fallback in both STS checks and the
+Terraform child, and invokes `zero apply` with the selected profile. Shared
+AWS config/credential file locations are retained consistently for both
+processes; credential profiles remain locally trusted operator configuration.
+Only matching completed baseline outputs allow `infrastructure_ready`.
+`deployment_complete` remains false. Errors preserve state and mark the phase
+failed; abrupt interruption retains the running marker for manual reconciliation.
+This source path has mock integration evidence only, not a live deployment test.
 
 Current local/discovery invocation (not a deployment):
 
@@ -38,9 +62,9 @@ profile and compares its account, assumed-role ARN and unique role ID with
 the IAM identity returned by the inventory profile. The execution profile
 does not need `iam:GetRole`; the inventory profile still does. The CLI may
 use its normal profile credential cache, but the installer never receives or
-stores access-key/session-token values. This option verifies identity only:
-no IAM policies are attached, no Terraform command runs, and no permission
-success is claimed. The execution profile is not persisted as an apply
+stores access-key/session-token values. This option alone verifies identity:
+without `--apply-infrastructure`, no IAM policies are attached and no Terraform
+command runs. No permission success is claimed. The execution profile is not persisted as an apply
 authorization; it must be supplied and reverified on a later execution path.
 With an execution profile selected, preparation also runs three read-only IAM
 simulations for the generated state bucket, lock table and foundation role
