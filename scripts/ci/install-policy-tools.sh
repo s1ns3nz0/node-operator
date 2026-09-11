@@ -16,18 +16,18 @@ case "$platform" in
     opa_sha256="7d7debaf10bba97d32b7e67b7f8ce128c92e911b82e3c6cec24b95c34f8a5003"
     conftest_url="https://github.com/open-policy-agent/conftest/releases/download/v0.69.0/conftest_0.69.0_Darwin_arm64.tar.gz"
     conftest_sha256="78302d045f0ec52e9786a06c6c621ac4516b4c5dd1e54efc8050c86c29b964d9"
-    shellcheck_url="https://github.com/koalaman/shellcheck/releases/download/v0.10.0/shellcheck-v0.10.0.darwin.aarch64.tar.xz"
-    shellcheck_sha256="bbd2f14826328eee7679da7221f2bc3afb011f6a928b848c80c321f6046ddf81"
-    shellcheck_member="shellcheck-v0.10.0/shellcheck"
+    shellcheck_url="https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.aarch64.tar.xz"
+    shellcheck_sha256="56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79"
+    shellcheck_member="shellcheck-v0.11.0/shellcheck"
     ;;
   Linux_x86_64)
     opa_url="https://github.com/open-policy-agent/opa/releases/download/v1.17.0/opa_linux_amd64_static"
     opa_sha256="e83da46804832578e9d9e1733dffbe4d3b5f8cc9c26eb124da9ceea4abfe189f"
     conftest_url="https://github.com/open-policy-agent/conftest/releases/download/v0.69.0/conftest_0.69.0_Linux_x86_64.tar.gz"
     conftest_sha256="96fc2fbf11f0afde51256647127e6f00a64ce839a4d9a0a1aef2426c0e6f4b3f"
-    shellcheck_url="https://github.com/koalaman/shellcheck/releases/download/v0.10.0/shellcheck-v0.10.0.linux.x86_64.tar.xz"
-    shellcheck_sha256="6c881ab0698e4e6ea235245f22832860544f17ba386442fe7e9d629f8cbedf87"
-    shellcheck_member="shellcheck-v0.10.0/shellcheck"
+    shellcheck_url="https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz"
+    shellcheck_sha256="8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"
+    shellcheck_member="shellcheck-v0.11.0/shellcheck"
     ;;
   *) printf 'unsupported policy-tool platform: %s\n' "$platform" >&2; exit 64 ;;
 esac
@@ -52,4 +52,4 @@ tar -xJf "$temporary_directory/shellcheck.tar.xz" -C "$temporary_directory" "$sh
 install -m 0755 "$temporary_directory/$shellcheck_member" "$destination/shellcheck"
 
 if [ -n "${GITHUB_PATH:-}" ]; then printf '%s\n' "$destination" >> "$GITHUB_PATH"; fi
-printf 'Installed pinned OPA 1.17.0, Conftest 0.69.0, and ShellCheck 0.10.0 in %s\n' "$destination"
+printf 'Installed pinned OPA 1.17.0, Conftest 0.69.0, and ShellCheck 0.11.0 in %s\n' "$destination"
