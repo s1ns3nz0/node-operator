@@ -14,19 +14,13 @@ jobs:
           persist-credentials: false
       - name: Install pinned policy adapter tools
         run: scripts/ci/install-policy-tools.sh "$RUNNER_TEMP/node-operator-policy-tools"
-      - name: Test Rego policy
-        run: scripts/ci/test-policy.sh
-      - name: Test Terraform security policy
-        run: scripts/ci/test-terraform-policy.sh
       - name: Test evidence normalizer
         run: scripts/ci/test-normalizer.sh
       - name: Test PR gate scripts
         run: scripts/ci/test-pr-gate.sh
-      - name: Test rendered manifests
-        run: scripts/ci/test-conftest.sh
       - name: Test actionable PR baseline filtering
         run: scripts/ci/test-pr-baseline-findings.sh
       - name: Test private DAST target contract
         run: scripts/ci/test-dast-target-contract.sh
-      - name: Test shell scripts
-        run: scripts/ci/test-script-quality.sh
+      - name: Test CI suite ownership
+        run: python3 scripts/ci/test-ci-suite-ownership.py

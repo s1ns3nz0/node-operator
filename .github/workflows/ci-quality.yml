@@ -159,10 +159,6 @@ jobs:
         run: scripts/ci/test-release-sbom-sca.sh
       - name: Test release source eligibility
         run: scripts/ci/test-release-source-eligibility.sh
-      - name: Test evidence normalizer
-        run: scripts/ci/test-normalizer.sh
-      - name: Test PR gate scripts
-        run: scripts/ci/test-pr-gate.sh
       - name: Test exact-SHA PR evidence check
         run: scripts/ci/test-pr-evidence-check.sh
       - name: Test zero-resource foundation contract
