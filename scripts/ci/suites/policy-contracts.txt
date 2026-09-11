@@ -12,3 +12,4 @@ scripts/ci/test-refresh-review-evidence.py
 scripts/ci/test-review-refresh-flow.py
 scripts/ci/test-workflow-consolidation.py
 scripts/ci/test-mirror-digest-integrity.py
+scripts/ci/test-installer-state.py

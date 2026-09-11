@@ -57,6 +57,7 @@ for required_path in \
   source/infra/baseline/variables.tf \
   source/release/hoodi-release-contract.json \
   source/scripts/release/node-operator-release.sh \
+  source/scripts/release/installer_state.py \
   source/scripts/release/prepare-zero-resource-inputs.sh \
   source/scripts/release/prepare-hoodi-zero-release-inputs.sh \
   source/scripts/release/hoodi-validator-release.sh \

@@ -36,6 +36,9 @@ mkdir -p "$stage_directory/source" "$stage_directory/rendered"
 
 path_is_in_release_boundary() {
   case "$1" in
+    scripts/release/installer_state.py)
+      return 0
+      ;;
     deploy/kyverno/kustomization.yaml|deploy/kyverno/policies/*.yaml)
       return 0
       ;;
