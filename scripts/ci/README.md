@@ -66,7 +66,7 @@ Integrity are reusable workflows; they remain at the top level of
 `image-release.yml` owns the scanner, toolchain, signing-fence and audit-relay
 publisher jobs. Signing-fence evidence recognizes the two exact historical and
 current workflow identities so already signed fence images remain verifiable;
-new publications use only the `image-release.yml` identity. `*-mirror.yml` and
+new publications use only the `image-release.yml` identity. `private-ecr-mirror.yml` and
 `release.yml` remain separate authority boundaries. `opa-pr-gate.yml` and
 the review-signal/handler split retain trusted/untrusted execution separation.
 Do not merge privileged publication into PR-controlled CI to reduce file count.
@@ -81,6 +81,18 @@ Manual dispatch accepts `target=all`, `scanner`, `toolchains`, `fence`, `relay`,
 or an individual toolchain name. The signed deployment bundle still uses
 `release.yml`; combining image publishers does not publish a deployment bundle
 or update running workloads.
+
+`private-ecr-mirror.yml` consolidates eight manual mirror entrypoints. Dispatch
+from main with exactly one `target`: `signer`, `gitops`, `private-dast`,
+`validator-client`, `validator-log-collector`, `validator-runtime`, `vault-chart`
+or `cert-manager-chart`. The first, second, fourth and fifth targets require
+`source` with an immutable digest (formerly `source_image` for client/collector).
+Only `gitops` accepts and requires `destination`; leave it as `none` otherwise.
+Targets without a source input use their existing reviewed repository inputs.
+A read-only preflight rejects invalid combinations and non-main dispatches.
+Each selected job retains its own environment and IAM role; only signer gets
+`packages: read`. Target-specific source checks remain in the existing scripts.
+This workflow copies artifacts into ECR; it does not deploy them or run DAST.
 
 Main branch protection currently requires `quality`, `scanners`, and
 `CI Evidence Decision`. `Code Quality` and `Security Scans` are the readable

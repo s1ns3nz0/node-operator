@@ -1,0 +1,220 @@
+name: Mirror Private ECR
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Approved artifact family to mirror
+        required: true
+        type: choice
+        options: [signer, gitops, private-dast, validator-client, validator-log-collector, validator-runtime, vault-chart, cert-manager-chart]
+      source:
+        description: Immutable source reference (required for signer, gitops, validator-client and validator-log-collector)
+        required: false
+        type: string
+      destination:
+        description: Destination for gitops only
+        required: false
+        type: choice
+        options: [none, argocd, charts, nodes, vault, cert-manager]
+        default: none
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Mirror Input Contract
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - name: Target and Input Validation
+        env:
+          MIRROR_TARGET: ${{ inputs.target }}
+          SOURCE: ${{ inputs.source }}
+          DESTINATION: ${{ inputs.destination }}
+        run: python3 scripts/ci/validate-private-ecr-inputs.py
+  validator-client:
+    name: Validator Client Mirror
+    needs: [preflight]
+    if: github.ref == 'refs/heads/main' && inputs.target == 'validator-client' && needs.preflight.result == 'success'
+    runs-on: ubuntu-24.04
+    environment: validator-client-ecr-mirror
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - name: Reviewed Prysm digest to private ECR
+        env:
+          SOURCE_IMAGE: ${{ inputs.source }}
+          AWS_REGION: ap-northeast-2
+          ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          AWS_ROLE_ARN: ${{ vars.VALIDATOR_CLIENT_ECR_MIRROR_ROLE_ARN }}
+        run: bash scripts/release/mirror-validator-client.sh
+  gitops:
+    name: Gitops Mirror
+    needs: [preflight]
+    if: github.ref == 'refs/heads/main' && inputs.target == 'gitops' && needs.preflight.result == 'success'
+    runs-on: ubuntu-24.04
+    environment: gitops-oci-mirror
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - name: Approved digest input
+        env:
+          SOURCE: ${{ inputs.source }}
+          DESTINATION: ${{ inputs.destination }}
+        run: bash scripts/release/validate-gitops-source.sh
+      - name: ECR mirror role
+        env:
+          AWS_ROLE_ARN: ${{ vars.GITOPS_OCI_MIRROR_ROLE_ARN }}
+          AWS_REGION: ap-northeast-2
+        run: bash scripts/release/assume-gitops-mirror-role.sh
+      - name: Approved OCI digest to private ECR
+        env:
+          SOURCE: ${{ inputs.source }}
+          DESTINATION: ${{ inputs.destination }}
+          ECR_TAG: ${{ env.ECR_TAG }}
+          AWS_REGION: ap-northeast-2
+          ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          MIRROR_TOOL_IMAGE: ${{ vars.GITOPS_OCI_MIRROR_TOOL_IMAGE }}
+        run: bash scripts/release/mirror-gitops-artifact.sh
+  validator-runtime:
+    name: Validator Runtime Mirror
+    needs: [preflight]
+    if: github.ref == 'refs/heads/main' && inputs.target == 'validator-runtime' && needs.preflight.result == 'success'
+    runs-on: ubuntu-24.04
+    environment: validator-runtime-ecr-mirror
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Reviewed runtime digests to private ECR
+        env:
+          AWS_REGION: ap-northeast-2
+          ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          AWS_ROLE_ARN: ${{ vars.VALIDATOR_RUNTIME_ECR_MIRROR_ROLE_ARN }}
+        run: bash scripts/release/mirror-validator-runtime.sh
+  vault-chart:
+    name: Vault Chart Mirror
+    needs: [preflight]
+    if: github.ref == 'refs/heads/main' && inputs.target == 'vault-chart' && needs.preflight.result == 'success'
+    runs-on: ubuntu-24.04
+    environment: gitops-oci-mirror
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with: {version: v3.17.3}
+      - name: Vault Chart Integrity and Mirror
+        env:
+          AWS_REGION: ap-northeast-2
+          ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          AWS_ROLE_ARN: ${{ vars.GITOPS_OCI_MIRROR_ROLE_ARN }}
+        run: bash scripts/release/mirror-vault-chart.sh
+  private-dast:
+    name: Private Dast Mirror
+    needs: [preflight]
+    if: github.ref == 'refs/heads/main' && inputs.target == 'private-dast' && needs.preflight.result == 'success'
+    runs-on: ubuntu-24.04
+    environment: private-dast-ecr-mirror
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - name: Reviewed scanner allowlist
+        run: scripts/ci/verify-private-dast-scanner.sh .ci/dast/approved-scanner.json
+      - name: Private DAST mirror identity
+        env:
+          AWS_REGION: ap-northeast-2
+          AWS_ROLE_ARN: ${{ vars.PRIVATE_DAST_ECR_MIRROR_ROLE_ARN }}
+        run: scripts/ci/assume-private-dast-mirror-role.sh
+      - name: Approved scanner digest into immutable private ECR
+        env:
+          AWS_REGION: ap-northeast-2
+          ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+        run: scripts/ci/mirror-private-dast-scanner.sh .ci/dast/approved-scanner.json
+  cert-manager-chart:
+    name: Cert Manager Chart Mirror
+    needs: [preflight]
+    if: github.ref == 'refs/heads/main' && inputs.target == 'cert-manager-chart' && needs.preflight.result == 'success'
+    runs-on: ubuntu-24.04
+    environment: gitops-oci-mirror
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with: {version: v3.17.3}
+      - name: cert-manager Chart Integrity and Mirror
+        env:
+          AWS_REGION: ap-northeast-2
+          ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          AWS_ROLE_ARN: ${{ vars.GITOPS_OCI_MIRROR_ROLE_ARN }}
+        run: bash scripts/release/mirror-cert-manager-chart.sh
+  validator-log-collector:
+    name: Validator Log Collector Mirror
+    needs: [preflight]
+    if: github.ref == 'refs/heads/main' && inputs.target == 'validator-log-collector' && needs.preflight.result == 'success'
+    runs-on: ubuntu-24.04
+    environment: validator-log-collector-ecr-mirror
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - name: Reviewed Fluent Bit digest to private ECR
+        env:
+          SOURCE_IMAGE: ${{ inputs.source }}
+          AWS_REGION: ap-northeast-2
+          ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          AWS_ROLE_ARN: ${{ vars.VALIDATOR_LOG_COLLECTOR_ECR_MIRROR_ROLE_ARN }}
+        run: bash scripts/release/mirror-validator-log-collector.sh
+  signer:
+    name: Signer Mirror
+    needs: [preflight]
+    if: github.ref == 'refs/heads/main' && inputs.target == 'signer' && needs.preflight.result == 'success'
+    runs-on: ubuntu-24.04
+    environment: ecr-signer-mirror
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Approved signer source
+        env:
+          SOURCE: ${{ inputs.source }}
+        run: bash scripts/release/validate-signer-source.sh
+      - name: Private ECR mirror role
+        env:
+          AWS_REGION: ap-northeast-2
+          AWS_ROLE_ARN: ${{ vars.ECR_SIGNER_MIRROR_ROLE_ARN }}
+        run: bash scripts/release/assume-signer-mirror-role.sh
+      - name: Approved image to private ECR
+        env:
+          AWS_REGION: ap-northeast-2
+          ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          SOURCE: ${{ inputs.source }}
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USERNAME: ${{ github.actor }}
+        run: bash scripts/release/mirror-signer-image.sh

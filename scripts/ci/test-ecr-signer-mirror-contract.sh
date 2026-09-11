@@ -11,10 +11,11 @@ ecr_file="$root/infra/terraform/ecr-signer-mirror.tf"
 signer_file="$root/infra/terraform/vault-signer.tf"
 endpoints_file="$root/infra/terraform/endpoints.tf"
 fixture="$root/infra/terraform/fixtures/offline-release-signer.tfvars"
-workflow="$root/.github/workflows/ecr-signer-mirror.yml"
+workflow="$root/.github/workflows/private-ecr-mirror.yml"
 for file in "$ecr_file" "$signer_file" "$endpoints_file" "$fixture" "$workflow"; do
   test -f "$file" || fail "missing required file: $file"
 done
+
 
 for required in \
   'variable "enable_release_signer_ecr_mirror"' \
@@ -75,10 +76,13 @@ for required in \
   'docker push' \
   'describe-images' \
   '::add-mask::'; do
-  grep -Fq "$required" <(workflow_source "$workflow") || fail "mirror workflow omits contract fragment: $required"
+  grep -Fq "$required" <(workflow_job_source "$workflow" signer) || fail "mirror workflow omits contract fragment: $required"
 done
 
-if grep -Eq '^[[:space:]]*packages:[[:space:]]*write' "$workflow" || grep -Fq 'ecr:*' <(workflow_source "$workflow"); then
+grep -Fq "needs: [preflight]" <(workflow_job_source "$workflow" signer) || fail 'signer job does not require input preflight'
+grep -Fq "inputs.target == 'signer'" <(workflow_job_source "$workflow" signer) || fail 'signer job is not target-selected'
+grep -Fq "github.ref == 'refs/heads/main'" <(workflow_job_source "$workflow" signer) || fail 'signer job is not main-only'
+if grep -Eq '^[[:space:]]*packages:[[:space:]]*write' "$workflow" || grep -Fq 'ecr:*' <(workflow_job_source "$workflow" signer); then
   fail 'mirror workflow requests broad package or ECR permission'
 fi
 
