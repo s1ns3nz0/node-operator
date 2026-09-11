@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Upload immutable release signer input and verify the CodeBuild signing result.
+# Purpose: Submit the approved bundle to the CodeBuild signer and verify its returned signing evidence.
+# Inputs: AWS_ROLE_ARN, AWS_REGION, INPUT_BUCKET, GitHub OIDC variables, GITHUB_RUN_ID, GITHUB_SHA, GITHUB_WORKSPACE, and RUNNER_TEMP/release assets.
+# Outputs: Signer output extracted to RUNNER_TEMP/release/signer-output and CodeBuild metadata under RUNNER_TEMP.
+# Side effects: Calls GitHub OIDC/AWS STS, writes an immutable S3 input object, starts/polls CodeBuild, and reads its S3 output.
 set -euo pipefail
 
 test -n "$AWS_ROLE_ARN"; test -n "$INPUT_BUCKET"

@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Purpose: Bind a trusted CI workflow_run event to the current unchanged pull-request head.
+# Inputs: Event JSON, GITHUB_OUTPUT, GITHUB_REPOSITORY, GH_TOKEN, and TRUSTED_WORKFLOW_SHA.
+# Outputs: subject_sha, pr_number, and trusted_sha in GITHUB_OUTPUT.
+# Side effects: Read-only GitHub pull-request lookup and local output append; no check publication.
 set -euo pipefail
 
 if [ "$#" -ne 2 ]; then

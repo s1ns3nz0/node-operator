@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Verify the private DAST scanner allowlist pins an approved passive scanner digest.
+# Purpose: Validate the reviewed private DAST scanner allowlist before any mirror operation.
+# Inputs: One allowlist JSON path.
+# Outputs: Exit status and a non-sensitive confirmation line.
+# Side effects: Read-only local JSON validation; no registry, cloud, or scan action.
 set -euo pipefail
 
 contract="${1:-}"

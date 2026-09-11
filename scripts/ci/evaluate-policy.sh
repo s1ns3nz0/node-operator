@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Purpose: Evaluate normalized evidence with the repository policy bundle.
+# Inputs: Normalized evidence JSON, destination decision path, and local OPA tooling.
+# Outputs: Policy decision JSON, including blocking and approval counts.
+# Side effects: Local policy evaluation and file write only; no GitHub, cloud, or deployment action.
 # Check objective: Evaluate a normalized evidence subject with OPA and fail on blocking decisions.
 set -euo pipefail
 if [ "$#" -ne 2 ]; then printf 'usage: %s INPUT_JSON OUTPUT_JSON\n' "$0" >&2; exit 64; fi

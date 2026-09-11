@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
+# Limitation: The destination digest is format-checked, not compared with SOURCE_DIGEST.
 # Check objective: Mirror approved image to private ECR.
+# Purpose: Copy the approved release-signer image from GHCR to the private signer ECR repository.
+# Inputs: ACCOUNT_ID, AWS_REGION, SOURCE, SOURCE_DIGEST, REGISTRY_TOKEN, REGISTRY_USERNAME, and inherited AWS credentials.
+# Outputs: ecr_image in GITHUB_OUTPUT and source/destination information in GITHUB_STEP_SUMMARY.
+# Side effects: Pulls from GHCR and pushes a tagged image to private ECR.
 set -euo pipefail
 
 test -n "$ACCOUNT_ID"

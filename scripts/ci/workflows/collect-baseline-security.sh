@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Collect baseline findings under trusted configuration and retain actionable policy evidence.
+# Purpose: Scan the trusted base checkout and isolate findings newly introduced by the PR.
+# Inputs: Pinned SCANNER_IMAGE, registry credentials, base/subject SHAs, trusted configs, and evidence paths.
+# Outputs: Filtered baseline policy input beneath EVIDENCE_ROOT.
+# Side effects: Pulls a scanner image and writes runner-local evidence; source mounts remain read-only.
 set -euo pipefail
 
 echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin

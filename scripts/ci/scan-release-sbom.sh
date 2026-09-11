@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Scan a release SBOM and bind a validated vulnerability summary to its artifact digest.
+# Purpose: Scan one release SBOM and produce a digest-bound vulnerability summary with a valid scanner database.
+# Inputs: SBOM JSON, summary destination, and locally installed grype/jq/shasum.
+# Outputs: Summary JSON with findings counts, digest binding, database metadata, and pass/block status.
+# Side effects: Local vulnerability database use and temporary/output file writes; no release publication.
 set -euo pipefail
 
 if [ "$#" -ne 2 ]; then

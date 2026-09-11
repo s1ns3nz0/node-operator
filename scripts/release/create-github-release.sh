@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Publish exactly the reviewed release bundle and signer verification assets.
+# Purpose: Create the GitHub Release for the current tag with the signed bundle assets.
+# Inputs: GITHUB_REF_NAME, GH_TOKEN, and the required files under RUNNER_TEMP/release.
+# Outputs: A GitHub Release containing the named bundle, SBOM, provenance, and signer verification assets.
+# Side effects: Writes a GitHub Release and uploads its assets.
 set -euo pipefail
 tag="${GITHUB_REF_NAME}"
 gh release create "$tag" \

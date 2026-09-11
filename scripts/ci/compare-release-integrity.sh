@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Purpose: Compare required current release metadata against the previous approved release.
+# Inputs: Previous directory, current directory, and output JSON path.
+# Outputs: Integrity JSON containing bounded diffs and identical|changed status.
+# Side effects: Read-only local comparisons plus temporary and output-file writes; no release mutation.
 set -euo pipefail
 
 if [ "$#" -ne 3 ]; then

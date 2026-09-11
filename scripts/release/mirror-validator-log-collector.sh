@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
+# Limitation: The destination digest is format-checked, not compared with the source digest.
 # Check objective: Mirror reviewed Fluent Bit digest to private ECR.
+# Purpose: Mirror the reviewed Fluent Bit image to its private ECR repository.
+# Inputs: SOURCE_IMAGE, ACCOUNT_ID, AWS_ROLE_ARN, AWS_REGION, GitHub OIDC variables, GITHUB_RUN_ID, and RUNNER_TEMP.
+# Outputs: The private image digest in GITHUB_STEP_SUMMARY; temporary STS credential file.
+# Side effects: Calls GitHub OIDC/AWS STS and creates an image in private ECR.
 set -euo pipefail
 
 [[ "$SOURCE_IMAGE" =~ ^cr.fluentbit.io/fluent/fluent-bit@sha256:[a-f0-9]{64}$ ]] || { echo 'source must be a reviewed immutable Fluent Bit digest' >&2; exit 1; }

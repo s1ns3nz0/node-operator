@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Build the toolchain image release.
+# Purpose: Build a reviewed toolchain image and stage it for publishing.
+# Inputs: DOCKERFILE, IMAGE, IMAGE_NAME, GITHUB_SHA, GITHUB_WORKSPACE, and optional INPUT_FILE.
+# Outputs: toolchain-image.tar and toolchain-input.sha256 in the working directory.
+# Side effects: Builds and saves a local Docker image; release-build also runs its bundle contract.
 set -euo pipefail
 
 input_sha="$({ sha256sum "$DOCKERFILE" ${INPUT_FILE:+"$INPUT_FILE"}; } | awk '{print $1}' | sha256sum | awk '{print $1}')"

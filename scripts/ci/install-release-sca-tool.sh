@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Purpose: Download and checksum-verify the pinned Grype binary for release SBOM scanning.
+# Inputs: One Linux/amd64 installation directory.
+# Outputs: A verified grype executable in that directory.
+# Side effects: Downloads a pinned public archive and writes local tool files only.
 set -euo pipefail
 
 if [ "$#" -ne 1 ]; then

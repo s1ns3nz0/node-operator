@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # Check objective: Select only images affected by changed inputs, with explicit manual targets and conservative missing-baseline handling.
+# Purpose: Determine which release-image jobs are eligible from trusted event inputs and changed paths.
+# Inputs: GitHub event, checkout SHA, git history, and optional workflow_dispatch target.
+# Outputs: Boolean family flags and a bounded toolchain matrix in GITHUB_OUTPUT.
+# Side effects: Read-only local Git inspection and GITHUB_OUTPUT append; never builds or publishes images.
 import json
 import os
 from pathlib import Path

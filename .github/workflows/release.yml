@@ -1,3 +1,4 @@
+# Purpose: Verify a release bundle or explicitly publish it; manual dispatch defaults to verification only.
 name: Release Bundle
 
 on:
@@ -16,6 +17,7 @@ permissions:
   contents: read
 
 jobs:
+  # Role: Require reviewed main ancestry and exact-revision CI evidence before publication.
   eligibility:
     name: Release Eligibility
     if: github.event_name == 'push' || inputs.mode == 'publish'
@@ -25,14 +27,17 @@ jobs:
       checks: read
       actions: read
     steps:
+      # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+      # Role: Check main ancestry, required CI provenance and the merged PR evidence decision before release.
       - name: Exact source release eligibility
         env:
           GH_TOKEN: ${{ github.token }}
         run: scripts/ci/verify-release-source-eligibility.sh "$GITHUB_SHA"
+  # Role: Build reproducibility evidence, scan the exact SBOM and export the approved artifact digest; no publication authority.
   reproducibility:
     name: Release Integrity
     needs: eligibility
@@ -48,9 +53,11 @@ jobs:
     env:
       RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:f6b2550a3bf8a5b2e8bbdbb301120136d01bc38963d1a70d0d7ff3008acb70be
     steps:
+      # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Role: Build the bundle with the pinned toolchain and compare repeat builds for deterministic output.
       - name: Reproducible Release Bundle
         env:
           REGISTRY_TOKEN: ${{ github.token }}
@@ -59,12 +66,14 @@ jobs:
           echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
           docker pull "$RELEASE_BUILD_IMAGE"
           docker run --rm --user "$(id -u):$(id -g)" --volume "$GITHUB_WORKSPACE:/workspace:ro" --volume "$RUNNER_TEMP:/output" --workdir /workspace "$RELEASE_BUILD_IMAGE" bash scripts/ci/test-build-release-bundle.sh /output/current
+      # Role: Install the pinned SCA tool and scan the SBOM belonging to this bundle.
       - name: Exact release SBOM
         run: |
           scripts/ci/install-release-sca-tool.sh "$RUNNER_TEMP/release-sca-bin"
           PATH="$RUNNER_TEMP/release-sca-bin:$PATH" scripts/ci/scan-release-sbom.sh \
             "$RUNNER_TEMP/current/sbom.cyclonedx.json" \
             "$RUNNER_TEMP/current/sbom-sca.json"
+      # Role: Upload the scan summary as release evidence, not as an approval by itself.
       - name: Release SBOM SCA evidence
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
@@ -72,32 +81,39 @@ jobs:
           path: ${{ runner.temp }}/current/sbom-sca.json
           if-no-files-found: error
           retention-days: 90
+      # Role: Reject failed scans or Critical, High and Unknown findings.
       - name: Release SBOM SCA decision
         run: jq -e '.status == "passed" and .findings.critical == 0 and .findings.high == 0 and .findings.unknown == 0' "$RUNNER_TEMP/current/sbom-sca.json" >/dev/null
+      # Role: Export the scanned artifact digest for the publishing job's exact-artifact checks.
       - name: Approved release binding
         id: sca-binding
         run: |
           artifact_digest="$(jq -er '.artifact_digest' "$RUNNER_TEMP/current/sbom-sca.json")"
           printf 'artifact_digest=%s\n' "$artifact_digest" >> "$GITHUB_OUTPUT"
+      # Role: Fetch a prior release when available for integrity comparison.
       - name: Previous Release
         id: previous
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci/workflows/fetch-previous-release.sh
+      # Role: Compare current and previous release integrity metadata.
       - name: Release Comparison
         if: steps.previous.outputs.available == 'true'
         run: scripts/ci/compare-release-integrity.sh "$RUNNER_TEMP/previous" "$RUNNER_TEMP/current" "$RUNNER_TEMP/current/integrity.json"
+      # Role: Record an explicit baseline when there is no previous release to compare.
       - name: Initial Release Baseline
         if: steps.previous.outputs.available != 'true'
         run: |
           jq -n --arg sha "$GITHUB_SHA" '{schema_version:"v1",status:"baseline",source_revision:$sha}' \
             > "$RUNNER_TEMP/current/integrity.json"
+      # Role: Upload the comparison or initial-baseline result for later inspection.
       - name: Integrity evidence
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: release-integrity-${{ github.sha }}
           path: ${{ runner.temp }}/current/integrity.json
           retention-days: 90
+  # Role: Rebuild the approved bundle, hand off signing and publish release assets using the protected private runner.
   build-and-publish:
     name: Signed Release
     needs: [eligibility, reproducibility]
@@ -115,21 +131,25 @@ jobs:
     env:
       RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:f6b2550a3bf8a5b2e8bbdbb301120136d01bc38963d1a70d0d7ff3008acb70be
     steps:
+      # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Role: Rebuild the release and verify it matches the approved bundle and SBOM digest.
       - name: Release Bundle
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
           APPROVED_ARTIFACT_DIGEST: ${{ needs.reproducibility.outputs.artifact_digest }}
         run: scripts/release/build-release-bundle.sh
+      # Role: Stage inputs for the private signing path and obtain signed release outputs.
       - name: Release Signing Handoff
         env:
           AWS_ROLE_ARN: ${{ vars.RELEASE_RUNNER_ROLE_ARN }}
           AWS_REGION: ap-northeast-2
           INPUT_BUCKET: ${{ vars.RELEASE_ARTIFACT_BUCKET }}
         run: scripts/release/sign-release-bundle.sh
+      # Role: Create or update the GitHub release and attach its verified assets.
       - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

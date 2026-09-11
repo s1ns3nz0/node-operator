@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Reject untrusted scanner policy replacement before collecting evidence.
+# Purpose: Block PR changes to scanner rules and ignore files that must remain trusted control-plane inputs.
+# Inputs: .pr-source checkout plus BASE_SHA and SUBJECT_SHA.
+# Outputs: Exit status only, with the prohibited path on stderr.
+# Side effects: Read-only local Git comparison; no network or workspace mutation.
 set -euo pipefail
 
 while IFS= read -r -d '' path; do

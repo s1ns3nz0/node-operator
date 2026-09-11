@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Purpose: Validate trusted scanner envelopes and construct bounded normalized policy input.
+# Inputs: Raw evidence directory, subject SHA, SCM JSON, and destination JSON path.
+# Outputs: Normalized evidence JSON for OPA evaluation.
+# Side effects: Local validation and output-file creation only; no network or scanner execution.
 # Check objective: Validate scanner envelopes and assemble the bounded OPA policy input.
 set -euo pipefail
 

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Publish the toolchain image release.
+# Purpose: Verify a staged toolchain image's inputs and publish immutable and main tags.
+# Inputs: DOCKERFILE, IMAGE, GITHUB_SHA, REGISTRY_TOKEN, REGISTRY_USERNAME, staged files under /tmp/toolchain-image, and optional INPUT_FILE.
+# Outputs: Published GHCR image tags; no structured workflow output.
+# Side effects: Loads a Docker image, authenticates to GHCR, and pushes two tags.
 set -euo pipefail
 
 expected="$({ sha256sum "$DOCKERFILE" ${INPUT_FILE:+"$INPUT_FILE"}; } | awk '{print $1}' | sha256sum | awk '{print $1}')"

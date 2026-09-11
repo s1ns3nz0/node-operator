@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Verify private runner access to required AWS service APIs without changing resources.
+# Purpose: Check the private runner's identity and minimum EKS, ECR, and CloudWatch read paths.
+# Inputs: Ambient AWS credentials and the fixed node-operator cluster name.
+# Outputs: Exit status only.
+# Side effects: Read-only AWS API calls; creates or changes no cloud resources.
 set -euo pipefail
 
 set -eu

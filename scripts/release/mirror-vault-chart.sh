@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Verify and mirror the approved Vault chart to the private OCI registry.
+# Purpose: Download, checksum-verify, and mirror the approved Vault Helm chart.
+# Inputs: ACCOUNT_ID, AWS_ROLE_ARN, AWS_REGION, GitHub OIDC variables, GITHUB_RUN_ID, RUNNER_TEMP, and the approved artifact file.
+# Outputs: Temporary STS credentials in GITHUB_ENV and the verified manifest digest in GITHUB_STEP_SUMMARY.
+# Side effects: Calls the upstream chart endpoint and AWS STS/ECR, and pushes the chart to private ECR.
 set -euo pipefail
 chart="$(jq -er '.helm_archives[] | select(.name == "vault")' .ci/gitops/approved-oci-artifacts.json)"
 chart_version="$(jq -er '.version' <<<"$chart")"

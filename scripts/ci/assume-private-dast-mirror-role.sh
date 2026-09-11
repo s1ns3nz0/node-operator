@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Purpose: Obtain short-lived credentials for the dedicated private DAST ECR mirror role.
+# Inputs: OIDC request context, AWS_ROLE_ARN, RUNNER_TEMP, GITHUB_ENV, and GITHUB_RUN_ID.
+# Outputs: Masked temporary AWS credential entries appended to GITHUB_ENV.
+# Side effects: Calls AWS STS and writes local temporary credentials; does not mirror or publish an image.
 set -euo pipefail
 
 : "${AWS_ROLE_ARN:?PRIVATE_DAST_ECR_MIRROR_ROLE_ARN is required}"

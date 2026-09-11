@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Copy approved OCI digest to private ECR.
+# Purpose: Copy one allowlisted GitOps OCI artifact to its private ECR repository and verify its digest.
+# Inputs: ACCOUNT_ID, AWS_REGION, SOURCE, DESTINATION, ECR_TAG, MIRROR_TOOL_IMAGE, RUNNER_TEMP, and inherited AWS credentials.
+# Outputs: Mirror source and verified destination digest written to GITHUB_STEP_SUMMARY.
+# Side effects: Logs into ECR and may copy an OCI artifact into private ECR.
 set -euo pipefail
 
 test -n "$ACCOUNT_ID"

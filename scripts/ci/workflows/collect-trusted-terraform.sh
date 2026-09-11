@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Run the trusted Terraform collector offline against read-only PR input.
+# Purpose: Produce Terraform evidence with the trusted collector while keeping the PR checkout as input only.
+# Inputs: Pinned TERRAFORM_IMAGE, registry credentials, subject SHA, trusted workspace, and PR source path.
+# Outputs: EVIDENCE_ROOT/raw/terraform.json.
+# Side effects: Pulls and runs an offline container; writes only runner-local evidence.
 set -euo pipefail
 
 echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin

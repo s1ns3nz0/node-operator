@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Mirror reviewed runtime digests to private ECR.
+# Purpose: Mirror allowlisted Web3Signer and PostgreSQL runtime images to private ECR.
+# Inputs: ACCOUNT_ID, AWS_ROLE_ARN, AWS_REGION, GitHub OIDC variables, GITHUB_RUN_ID, RUNNER_TEMP, and the runtime allowlist.
+# Outputs: Verified private image digests in GITHUB_STEP_SUMMARY; temporary STS credential file.
+# Side effects: Calls GitHub OIDC/AWS STS and creates images in private ECR.
 set -euo pipefail
 
 test -n "$ACCOUNT_ID"; test -n "$AWS_ROLE_ARN"

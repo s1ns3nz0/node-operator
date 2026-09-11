@@ -1,3 +1,4 @@
+# Purpose: Manually select private-runner diagnostics or Vault candidate verification; signing is separately opt-in.
 name: CI Operations
 on:
   workflow_dispatch:
@@ -21,6 +22,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Role: Exercise the protected private runner and AWS service connectivity without releasing artifacts.
   smoke:
     name: Private Connectivity
     if: github.ref == 'refs/heads/main' && inputs.target == 'private-runner'
@@ -30,17 +32,21 @@ jobs:
       contents: read
       packages: read
     steps:
+      # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Role: Check the private runner context and pinned build image without publishing.
       - name: Ephemeral runner boundary
         env:
           RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:f6b2550a3bf8a5b2e8bbdbb301120136d01bc38963d1a70d0d7ff3008acb70be
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
         run: bash scripts/ci/workflows/check-private-runner.sh
+      # Role: Probe the private AWS connectivity required by release operations.
       - name: Private AWS service paths
         run: bash scripts/ci/workflows/check-private-services.sh
+  # Role: Inspect and scan each frozen Vault candidate with its verifier role; do not deploy or sign.
   verify:
     name: Vault Runtime Verification
     if: github.ref == 'refs/heads/main' && inputs.target == 'vault-runtime'
@@ -54,18 +60,22 @@ jobs:
       matrix:
         component: [server, agent, injector]
     steps:
+      # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      # Role: Collect digest-bound Vault component evidence without deploying a candidate.
       - name: Frozen Candidate Verification
         env:
           COMPONENT: ${{ matrix.component }}
           AWS_REGION: ap-northeast-2
           AWS_ROLE_ARN: ${{ vars.VAULT_RUNTIME_VERIFIER_ROLE_ARN }}
         run: bash scripts/ci/workflows/verify-frozen-vault-candidate.sh
+      # Role: Write the bounded candidate scan and authorization summary to the job summary.
       - name: Candidate Scan Result
         if: always()
         run: bash scripts/ci/workflows/report-vault-candidate.sh
+      # Role: Upload the candidate verification files selected by this workflow.
       - name: Non-sensitive verification evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -78,6 +88,7 @@ jobs:
             ${{ runner.temp }}/vault-runtime-evidence/dependencies.txt
           if-no-files-found: warn
           retention-days: 30
+  # Role: Require successful candidate verification and explicit opt-in before signing a digest-bound statement.
   sign-evidence:
     name: Verification Signature
     needs: verify
@@ -91,16 +102,20 @@ jobs:
       pull-requests: read
       id-token: write
     steps:
+      # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
           fetch-depth: 0
+      # Role: Download verification outputs from this run, not arbitrary earlier runs.
       - name: Current Run Verification Artifacts
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci/workflows/download-vault-verification.sh
+      # Role: Bind verification evidence to revision/run and sign only after eligibility checks.
       - name: Verification Statement Signature
         run: scripts/ci/workflows/sign-vault-runtime-verification.sh
+      # Role: Upload the signed statement and verification evidence for downstream validation.
       - name: Signed Verification Evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

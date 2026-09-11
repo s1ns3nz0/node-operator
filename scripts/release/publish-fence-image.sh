@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Build, scan, attest, and publish the reviewed validator signing-fence image.
+# Purpose: Build, scan, sign, attest, and publish the validator signing-fence image from main.
+# Inputs: GITHUB_REF, GITHUB_SHA, GITHUB_RUN_ID, ACCOUNT_ID, AWS_ROLE_ARN, AWS_REGION, GitHub OIDC variables, and RUNNER_TEMP.
+# Outputs: SBOM, scan, provenance, and release-verification files under RUNNER_TEMP; image metadata in GITHUB_STEP_SUMMARY.
+# Side effects: Calls GitHub OIDC/AWS STS, pushes to private ECR, and writes Cosign signatures and attestations.
 set -euo pipefail
 
 test "$GITHUB_REF" = refs/heads/main

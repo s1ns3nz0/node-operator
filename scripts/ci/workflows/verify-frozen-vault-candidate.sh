@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Verify frozen candidate without rebuilding or publishing.
+# Purpose: Read and assess one approved Vault runtime candidate without building, publishing, or deploying it.
+# Inputs: Main-branch/OIDC context, AWS verifier role, component, candidate allowlist, and pinned tools.
+# Outputs: Component verification JSON and verification-run metadata beneath RUNNER_TEMP/vault-runtime-evidence.
+# Side effects: Read-only ECR/AWS access and local Docker pulls; temporary credentials and files are removed.
 set -euo pipefail
 
 umask 077

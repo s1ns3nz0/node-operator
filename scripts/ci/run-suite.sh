@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Execute the same named, ordered test suite locally and in CI, stopping at the first failed check.
+# Purpose: Execute or list one allowlisted CI test-suite manifest in a deterministic order.
+# Inputs: Suite name and optional --list mode, plus repository-local suite manifests and test scripts.
+# Outputs: Listed members or CHECK/PASS status lines and the first failing exit code.
+# Side effects: Runs local test scripts in run mode; it performs no direct cloud, registry, or publication action.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 suite="${1:-}"; mode="${2:-run}"

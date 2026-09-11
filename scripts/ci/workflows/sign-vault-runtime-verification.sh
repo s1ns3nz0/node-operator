@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Keylessly sign only the exact revalidated Vault runtime verification statement.
+# Purpose: Build, keylessly sign, and immediately verify the exact current-run Vault runtime statement.
+# Inputs: Main-branch checkout, run identity, OIDC context, and downloaded verification evidence.
+# Outputs: Statement JSON and Sigstore bundle beneath RUNNER_TEMP/vault-signed-evidence.
+# Side effects: Requests an OIDC-backed signature and writes local evidence; never builds, publishes, or deploys images.
 set -euo pipefail
 umask 077
 test "$GITHUB_REF" = refs/heads/main

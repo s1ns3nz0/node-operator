@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Reevaluate trusted cached findings against live SCM posture without invoking scanners or Terraform.
+# Purpose: Reapply policy to validated cached evidence and current PR posture without rescanning.
+# Inputs: Cached evidence/context, SUBJECT_SHA, PR_NUMBER, EVIDENCE_ROOT, policy data, and GH-backed SCM posture.
+# Outputs: Refreshed evidence, policy decision, published JSON, and copied cache context.
+# Side effects: Reads GitHub SCM state and writes runner-local evidence only; no scanner or Terraform execution.
 set -euo pipefail
 scripts/ci/collect-scm-posture.sh "$SUBJECT_SHA" "$EVIDENCE_ROOT/scm.json" "$PR_NUMBER"
 jq --slurpfile scm "$EVIDENCE_ROOT/scm.json" --slurpfile tiers policy/data/tiers.json \

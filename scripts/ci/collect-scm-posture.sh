@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Purpose: Collect normalized PR posture needed by policy evaluation.
+# Inputs: Subject SHA, output path, PR number, GH_TOKEN, and GITHUB_REPOSITORY.
+# Outputs: One SCM posture JSON document at the requested path.
+# Side effects: Read-only GitHub API calls and a local JSON write; no review or repository mutation.
 # Check objective: Bind changed files and reviewers' latest approvals to the exact pull-request head SHA for policy evaluation.
 set -euo pipefail
 

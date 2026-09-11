@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Run the same locked Terraform validation and plan-boundary suites in a network-isolated container locally and in CI.
+# Purpose: Run one allowlisted Terraform validation group in the pinned, network-isolated container.
+# Inputs: Optional suite selector, digest-pinned TERRAFORM_IMAGE, repository checkout, and optional output directory.
+# Outputs: Suite status and local validation artifacts beneath CI_OUTPUT_DIR or a temporary directory.
+# Side effects: Runs local Docker containers with read-only source and --network none; no Terraform apply or cloud mutation.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 suite="${1:-all}"

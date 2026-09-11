@@ -1,3 +1,4 @@
+# Purpose: Build selected image families and publish only through their dedicated main-branch jobs.
 name: Release Images
 
 on:
@@ -15,6 +16,7 @@ permissions:
   contents: read
 
 jobs:
+  # Role: Resolve changed inputs or an explicit manual target into bounded image selections.
   select:
     name: Changed Image Inputs
     runs-on: ubuntu-24.04
@@ -25,11 +27,14 @@ jobs:
       relay: ${{ steps.select.outputs.relay }}
       toolchain_matrix: ${{ steps.select.outputs.toolchain_matrix }}
     steps:
+      # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false, fetch-depth: 0}
+      # Role: Compare push inputs or validate the manual target and emit selected image/matrix outputs.
       - name: Image Selection
         id: select
         run: python3 scripts/ci/select-image-release.py
+  # Role: Build and package a scanner image locally without registry write permission.
   scanner-build:
     name: Scanner Build
     needs: [select]
@@ -41,12 +46,15 @@ jobs:
     outputs:
       changed: ${{ steps.build.outputs.changed }}
     steps:
+      # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
+      # Role: Build and export the scanner image plus its input hash; do not push to a registry.
       - id: build
         env:
           IMAGE: ghcr.io/${{ github.repository_owner }}/node-operator/security-scanners
         run: bash scripts/release/build-scanner-image.sh
+      # Role: Upload the exact files and artifact name below for later inspection or same-run consumption.
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: scanner-image-${{ github.sha }}
@@ -55,6 +63,7 @@ jobs:
             scanner-input.sha256
           if-no-files-found: error
           retention-days: 1
+  # Role: Verify the same-run build artifact and publish the scanner image to GHCR.
   scanner-publish:
     name: Scanner Publication
     needs: [select, scanner-build]
@@ -64,18 +73,22 @@ jobs:
       contents: read
       packages: write
     steps:
+      # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
+      # Role: Download the named build artifact from this workflow run before publication checks.
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5.0.0
         with:
           name: scanner-image-${{ github.sha }}
           path: /tmp/scanner-image
+      # Role: Verify the downloaded scanner build inputs and publish with this job's registry token.
       - env:
           IMAGE: ghcr.io/${{ github.repository_owner }}/node-operator/security-scanners
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
         run: bash scripts/release/publish-scanner-image.sh
 
+  # Role: Build only selected toolchain matrix entries without registry write permission.
   toolchain-build:
     name: Toolchain Build (${{ matrix.image }})
     needs: [select]
@@ -87,8 +100,10 @@ jobs:
     strategy:
       matrix: ${{ fromJSON(needs.select.outputs.toolchain_matrix) }}
     steps:
+      # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
+      # Role: Build and export this toolchain matrix image plus its input hash; do not publish.
       - id: build
         env:
           IMAGE: ghcr.io/${{ github.repository_owner }}/node-operator/${{ matrix.image }}
@@ -96,6 +111,7 @@ jobs:
           DOCKERFILE: ${{ matrix.dockerfile }}
           IMAGE_NAME: ${{ matrix.image }}
         run: bash scripts/release/build-toolchain-image.sh
+      # Role: Upload the exact files and artifact name below for later inspection or same-run consumption.
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: toolchain-${{ matrix.image }}-${{ github.sha }}
@@ -104,6 +120,7 @@ jobs:
             toolchain-input.sha256
           if-no-files-found: error
           retention-days: 1
+  # Role: Verify selected same-run artifacts and publish toolchain images to GHCR.
   toolchain-publish:
     name: Toolchain Publication (${{ matrix.image }})
     needs: [select, toolchain-build]
@@ -115,12 +132,15 @@ jobs:
     strategy:
       matrix: ${{ fromJSON(needs.select.outputs.toolchain_matrix) }}
     steps:
+      # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
+      # Role: Download the named build artifact from this workflow run before publication checks.
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5.0.0
         with:
           name: toolchain-${{ matrix.image }}-${{ github.sha }}
           path: /tmp/toolchain-image
+      # Role: Verify the downloaded toolchain build inputs and publish with this job's registry token.
       - env:
           IMAGE: ghcr.io/${{ github.repository_owner }}/node-operator/${{ matrix.image }}
           INPUT_FILE: ${{ matrix.input_file }}
@@ -130,6 +150,7 @@ jobs:
           REGISTRY_USERNAME: ${{ github.actor }}
         run: bash scripts/release/publish-toolchain-image.sh
 
+  # Role: Require the reusable Fence SAST and isolated DAST suite before publishing Fence.
   fence-security:
     name: Fence SAST and DAST
     needs: [select]
@@ -137,6 +158,7 @@ jobs:
     uses: ./.github/workflows/fence-security.yml
     permissions:
       contents: read
+  # Role: Build, scan, sign and publish the Fence image through its protected OIDC environment.
   fence-publish:
     name: Fence Publication
     needs: [select, fence-security]
@@ -147,14 +169,17 @@ jobs:
     runs-on: ubuntu-24.04
     environment: validator-client-ecr-mirror
     steps:
+      # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
+      # Role: Build and scan Fence, publish its image and attach verifiable signing evidence.
       - name: Fence Image Release
         env:
           AWS_REGION: ap-northeast-2
           ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
           AWS_ROLE_ARN: ${{ vars.VALIDATOR_CLIENT_ECR_MIRROR_ROLE_ARN }}
         run: scripts/release/publish-fence-image.sh
+      # Role: Upload the bounded Fence release verification result.
       - name: Sanitized release verification
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -163,6 +188,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  # Role: Build, scan, sign and publish the audit relay through its dedicated OIDC environment.
   relay-publish:
     name: Audit Relay Publication
     needs: [select]
@@ -173,14 +199,17 @@ jobs:
     runs-on: ubuntu-24.04
     environment: vault-audit-relay-ecr-publish
     steps:
+      # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
+      # Role: Build and scan the audit relay, publish its image and sign the release evidence.
       - name: Audit Relay Release
         env:
           AWS_REGION: ap-northeast-2
           ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
           AWS_ROLE_ARN: ${{ vars.VAULT_AUDIT_RELAY_ECR_PUBLISHER_ROLE_ARN }}
         run: scripts/release/publish-vault-audit-relay.sh
+      # Role: Upload selected relay release evidence rather than runner credentials.
       - name: Non-secret release evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

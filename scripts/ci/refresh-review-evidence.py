@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # Check objective: Safely recover exact-head policy evidence from a trusted, recent gate artifact.
+# Purpose: Recover recent exact-head review evidence only after validating its full GitHub provenance chain.
+# Inputs: Review event, GitHub context/token, trusted SHA, EVIDENCE_ROOT, and read-only GitHub artifact APIs.
+# Outputs: Validated cache evidence/context JSON plus subject/pr/cache readiness outputs.
+# Side effects: Read-only GitHub API/artifact download and bounded local cache writes; no scanner rerun or publication.
 """Fail-closed cache loader for review-refresh policy evaluations.
 
 Only GitHub API responses and an artifact produced by the pinned policy gate are

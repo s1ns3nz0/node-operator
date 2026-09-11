@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Build, scan, attest, publish, and verify the Vault audit-relay image.
+# Purpose: Build, scan, sign, attest, publish, and verify the Vault audit-relay image from main.
+# Inputs: GITHUB_REF, GITHUB_SHA, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, ACCOUNT_ID, AWS_ROLE_ARN, AWS_REGION, GitHub OIDC variables, and RUNNER_TEMP.
+# Outputs: Temporary release evidence under RUNNER_TEMP and verified image metadata in GITHUB_STEP_SUMMARY.
+# Side effects: Calls GitHub OIDC/AWS STS, pushes to private ECR, and writes Cosign signatures and attestations.
 set -euo pipefail; umask 077
 test "$GITHUB_REF" = refs/heads/main
 evidence="$RUNNER_TEMP/vault-audit-relay-release-evidence"; mkdir -p "$evidence"

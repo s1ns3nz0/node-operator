@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # Check objective: Reject invalid mirror targets and input combinations before obtaining AWS credentials.
+# Purpose: Validate manual private-ECR mirror target, source digest, destination, and main-branch constraints.
+# Inputs: MIRROR_TARGET, SOURCE, DESTINATION, and GITHUB_REF environment variables.
+# Outputs: A concise PASS line or a nonzero rejection.
+# Side effects: Pure local input validation; no GitHub, AWS, registry, or filesystem mutation.
 import os
 import re
 

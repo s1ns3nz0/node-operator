@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Purpose: Download and checksum-verify pinned OPA, Conftest, and ShellCheck for CI policy checks.
+# Inputs: Optional installation directory and the host OS/architecture.
+# Outputs: Executable tools in the chosen local directory and optional GITHUB_PATH entry.
+# Side effects: Downloads pinned public releases and writes only the caller-selected local tool directory.
 set -euo pipefail
 
 # The adapter never downloads tools implicitly. This explicit bootstrap writes

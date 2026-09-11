@@ -5,6 +5,27 @@ action pins, inputs and artifact upload configuration. Scripts own program
 logic. A one-command invocation need not become another wrapper; a conditional,
 loop or multi-stage release program belongs in a named script.
 
+## Reading the execution roles
+
+Each workflow starts with an English `Purpose` comment; job and step `Role`
+comments explain why that stage exists without changing GitHub check names.
+Workflow execution scripts document `Purpose`, `Inputs`, `Outputs` and
+`Side effects`. These describe implemented behavior, not a claim that a live
+run has passed. Focused tests retain their `Check objective` headers.
+
+An offline contract test for a live-operation script does not run that live
+operation. A build can write local images without publishing them. A mirror
+copies artifacts to a registry but does not deploy workloads. A signature
+authenticates a statement; it does not by itself authorize deployment.
+Inputs listing GitHub tokens or OIDC variables mean runner-provided credentials,
+not values to paste into Git, documentation or shell history.
+
+The documentation review identified two existing verification limitations:
+`mirror-signer-image.sh` and `mirror-validator-log-collector.sh` validate the
+destination digest's format but do not compare it with the source digest.
+Their inline `Limitation` comments record this gap; the comment-only review
+does not repair or certify these mirror paths.
+
 ## Local checks
 
 From the repository root:

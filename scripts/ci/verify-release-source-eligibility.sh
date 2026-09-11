@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Verify a release source commit is eligible under reviewed GitHub provenance.
+# Purpose: Require exact trusted CI checks, merged-main ancestry, and policy evidence before release use.
+# Inputs: Source SHA, local origin/main history, GH_TOKEN, GITHUB_REPOSITORY, and unzip.
+# Outputs: Exit status and a non-sensitive provenance confirmation.
+# Side effects: Read-only GitHub/Git/artifact access and temporary local files; no release publication.
 set -euo pipefail
 
 if [ "$#" -ne 1 ]; then

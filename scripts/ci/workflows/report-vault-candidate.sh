@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Report scan-only outcome.
+# Purpose: Summarize frozen Vault candidate scan and applicability evidence without implying release approval.
+# Inputs: Optional JSON evidence beneath RUNNER_TEMP/vault-runtime-evidence.
+# Outputs: A bounded Markdown summary in GITHUB_STEP_SUMMARY.
+# Side effects: Appends local GitHub step-summary output only; no cloud, registry, or deployment action.
 set -euo pipefail
 
 echo '### Frozen candidate verification (not a release or deployment)' >> "$GITHUB_STEP_SUMMARY"

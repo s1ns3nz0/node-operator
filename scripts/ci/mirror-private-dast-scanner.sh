@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Purpose: Copy the approved passive DAST scanner digest into its immutable private ECR repository.
+# Inputs: Approved allowlist JSON, AWS credentials, AWS_REGION, ACCOUNT_ID, and GITHUB_STEP_SUMMARY.
+# Outputs: Private image digest summary in GITHUB_STEP_SUMMARY.
+# Side effects: Authenticates to ECR and creates an immutable image tag; no source build or production scan.
 set -euo pipefail
 
 contract="${1:-}"

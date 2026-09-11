@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Assume private ECR mirror role.
+# Purpose: Exchange the GitHub OIDC token for the signer-image mirror role.
+# Inputs: AWS_ROLE_ARN, GitHub OIDC request variables, GITHUB_RUN_ID, and RUNNER_TEMP.
+# Outputs: Masked AWS credential variables appended to GITHUB_ENV; temporary STS JSON.
+# Side effects: Calls GitHub OIDC and AWS STS; makes credentials available to later workflow steps.
 set -euo pipefail
 
 test -n "$AWS_ROLE_ARN"

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Mirror reviewed Prysm digest to private ECR.
+# Purpose: Allowlist-check and mirror the reviewed Prysm validator image to private ECR.
+# Inputs: SOURCE_IMAGE, ACCOUNT_ID, AWS_ROLE_ARN, AWS_REGION, GitHub OIDC variables, GITHUB_RUN_ID, and RUNNER_TEMP.
+# Outputs: The verified private image digest in GITHUB_STEP_SUMMARY; temporary STS credential file.
+# Side effects: Calls GitHub OIDC/AWS STS and creates an image in private ECR.
 set -euo pipefail
 
 [[ "$SOURCE_IMAGE" =~ ^offchainlabs/prysm-validator@sha256:[a-f0-9]{64}$ ]] || { echo 'source must be an immutable reviewed Prysm validator digest' >&2; exit 1; }

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Check objective: Collect head findings with trusted policy mounted separately from untrusted PR source.
+# Purpose: Scan the PR head using only trusted scanner configuration.
+# Inputs: Pinned SCANNER_IMAGE, registry credentials, subject/base SHAs, and checked-out trusted configs.
+# Outputs: Raw JSON scanner evidence beneath EVIDENCE_ROOT/raw.
+# Side effects: Pulls a scanner image and writes runner-local evidence; the PR source is mounted read-only.
 set -euo pipefail
 
 echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
