@@ -6,13 +6,9 @@ manifest="$root/deploy/dast/service-and-network-policies.yaml"
 installer="$root/scripts/ops/install-private-dast-public-cas.sh"
 
 grep -Fq 'name: prysm-beacon' "$manifest"
-grep -Fq 'name: validator-signer-upcheck-proxy' "$manifest"
 grep -Fq 'name: nethermind-upcheck-proxy' "$manifest"
 grep -Fq "upstream = 'nethermind-execution'" "$manifest"
 grep -Fq "socket.create_connection((upstream, 30303), timeout=5)" "$manifest"
-grep -Fq "upstream = 'validator-hoodi-001-remote-signer'" "$manifest"
-# TLS uses the certificate CN; HTTP Host independently matches the existing
-# signer allowlist. The behavioral test below enforces both identities.
 grep -Fq "if self.path != '/upcheck': self.send_error(404); return" "$manifest"
 grep -Fq 'def do_POST(self): self.send_error(405)' "$manifest"
 grep -Fq 'def do_PATCH(self): self.send_error(405)' "$manifest"
@@ -24,15 +20,18 @@ ruby -ryaml -e '
   abort("retired DAST namespace resources remain") unless retired.empty?
   dast_paths = documents.select { |document| YAML.dump(document).include?("node-operator.io/dast-client") || YAML.dump(document).include?("private-dast-scanner") }
   abort("stale DAST policy paths remain") unless dast_paths.empty?
-  signer = documents.find { |document| document.dig("kind") == "NetworkPolicy" && document.dig("metadata", "name") == "signer-upcheck-proxy-to-signer" }
-  abort("missing signer proxy ingress policy") unless signer
-  sources = signer.dig("spec", "ingress").flat_map { |rule| rule.fetch("from", []) }
-  abort("unexpected signer proxy ingress") unless sources == [{"podSelector" => {"matchLabels" => {"app.kubernetes.io/component" => "validator-signer-upcheck-proxy"}}}]
-  signer_egress = documents.find { |document| document.dig("kind") == "NetworkPolicy" && document.dig("metadata", "name") == "signer-upcheck-proxy-egress" }
-  abort("missing signer proxy egress policy") unless signer_egress
+  retired_signer_upcheck = [
+    ["Service", "validator-signer-upcheck-proxy"],
+    ["Deployment", "validator-signer-upcheck-proxy"],
+    ["NetworkPolicy", "signer-upcheck-proxy-to-signer"],
+    ["NetworkPolicy", "signer-upcheck-proxy-egress"]
+  ]
+  retired_signer_upcheck.each do |kind, name|
+    abort("retired signer upcheck object remains: #{kind}/#{name}") if documents.any? { |document| document["kind"] == kind && document.dig("metadata", "name") == name }
+  end
 
-  proxies = documents.select { |document| document.dig("kind") == "Deployment" && ["nethermind-upcheck-proxy", "validator-signer-upcheck-proxy"].include?(document.dig("metadata", "name")) }
-  abort("missing DAST upcheck proxies") unless proxies.length == 2
+  proxies = documents.select { |document| document.dig("kind") == "Deployment" && document.dig("metadata", "name") == "nethermind-upcheck-proxy" }
+  abort("missing fixed Nethermind upcheck proxy") unless proxies.length == 1
   proxies.each do |proxy|
     container = proxy.dig("spec", "template", "spec", "containers")&.fetch(0)
     abort("#{proxy.dig("metadata", "name")} must explicitly disable privilege") unless container&.dig("securityContext", "privileged") == false
@@ -83,80 +82,6 @@ fi
 TEST_KUBECTL_CALLS="$scratch/calls" PRIVATE_EKS_SESSION=1 PATH="$scratch/bin:$PATH" "$installer" --signer-ca "$scratch/cert.pem" >/dev/null
 test "$(wc -l < "$scratch/calls" | tr -d ' ')" = 1
 grep -Fq -- '-n validator-operations create configmap validator-hoodi-001-signer-ca --from-file=ca.crt=' "$scratch/calls"
-
-# Execute the actual embedded proxy implementation with a fake TLS upstream.
-# The server start line is excluded; every handler method is exercised below.
-proxy_code="$(awk '
-  /              import http\.client, ssl/ { capture=1 }
-  capture && /              HTTPServer\(\('\''0\.0\.0\.0'\'', 8080\), Handler\)\.serve_forever\(\)/ { exit }
-  capture { sub(/^              /, ""); print }
-' "$manifest")"
-PROXY_CODE="$proxy_code" python3 - <<'PY'
-import http.client
-import os
-import ssl
-
-calls = []
-closed = []
-class Response:
-    status = 200
-    def read(self, size):
-        assert size == 0
-class Connection:
-    def __init__(self, host, port, context, timeout):
-        assert host == 'validator-hoodi-001-remote-signer'
-        assert port == 9000 and timeout == 5
-        assert context.check_hostname and context.verify_mode == ssl.CERT_REQUIRED
-    def request(self, method, path, headers=None):
-        assert headers == {'Host': 'validator-hoodi-001-remote-signer.validator-operations.svc'}
-        calls.append((method, path))
-    def getresponse(self): return Response()
-    def close(self): closed.append(True)
-
-http.client.HTTPSConnection = Connection
-def default_context(cafile):
-    assert cafile == '/etc/signer-ca/ca.crt'
-    return ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-ssl.create_default_context = default_context
-scope = {}
-exec(os.environ['PROXY_CODE'], scope)
-Handler = scope['Handler']
-
-def invoke(method, path):
-    handler = object.__new__(Handler)
-    handler.path = path
-    events = []
-    handler.send_response = lambda status: events.append(('response', status))
-    handler.end_headers = lambda: events.append(('end',))
-    handler.send_error = lambda status: events.append(('error', status))
-    getattr(handler, method)()
-    return events
-
-assert invoke('do_GET', '/upcheck') == [('response', 200), ('end',)]
-assert calls == [('GET', '/upcheck')] and closed == [True]
-for method in ('do_POST', 'do_PUT', 'do_DELETE', 'do_PATCH'):
-    assert invoke(method, '/upcheck') == [('error', 405)]
-assert invoke('do_GET', '/api/v1/eth2/sign/0x00') == [('error', 404)]
-assert calls == [('GET', '/upcheck')]
-
-# Exercise real HTTP serialization, not the send_response mock above.
-import io
-class Request:
-    def __init__(self, method, path):
-        self.input = io.BytesIO(f'{method} {path} HTTP/1.1\r\nHost: localhost\r\n\r\n'.encode())
-        self.output = io.BytesIO()
-    def makefile(self, *args): return self.input
-    def sendall(self, data): self.output.write(data)
-def unavailable_response(self): raise OSError('fixture upstream unavailable')
-for method, path, status in [('GET', '/upcheck', 200), ('GET', '/denied', 404), ('POST', '/upcheck', 405), ('GET', '/upcheck', 503)]:
-    if status == 503: Connection.getresponse = unavailable_response
-    request = Request(method, path)
-    Handler(request, ('127.0.0.1', 1), None)
-    headers = request.output.getvalue().split(b'\r\n\r\n', 1)[0].lower()
-    assert headers.startswith(f'http/1.0 {status} '.encode())
-    assert b'\r\ndate:' in headers
-    assert b'\r\nserver:' not in headers and b'python' not in headers
-PY
 
 # Execute the fixed Nethermind reachability proxy. It may establish and close
 # a TCP connection but must never send application bytes or expose JSON-RPC.
