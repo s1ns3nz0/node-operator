@@ -199,6 +199,9 @@ jobs:
     name: Evidence Contracts
     runs-on: ubuntu-24.04
     steps:
+      # Role: Supply ripgrep used by release contract tests; Ubuntu verifies signed package metadata.
+      - name: Evidence Test Dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y ripgrep
       # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
