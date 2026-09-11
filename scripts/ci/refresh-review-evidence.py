@@ -207,12 +207,12 @@ def validate_source_run(repository, source_run_id, subject_sha, pr_number):
     run = object_field(api_json(f"repos/{repository}/actions/runs/{source_run_id}"), "source run")
     pull_requests = run.get("pull_requests")
     if (object_field(run.get("repository"), "source run repository").get("full_name") != repository or
-            run.get("name") != "CI Security" or run.get("path") != ".github/workflows/ci-security.yml" or
+            run.get("name") != "CI" or run.get("path") != ".github/workflows/ci.yml" or
             run.get("event") != "pull_request" or run.get("status") != "completed" or
             run.get("conclusion") != "success" or run.get("head_sha") != subject_sha or
             not isinstance(pull_requests, list) or len(pull_requests) != 1 or
             object_field(pull_requests[0], "source run pull request").get("number") != pr_number):
-        reject("cache source run is not the current successful CI Security run")
+        reject("cache source run is not the current successful CI run")
 
 
 def validate_evidence(evidence, subject_sha):

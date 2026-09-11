@@ -10,7 +10,7 @@ confidence. The finding must remain visible in scanner evidence.
 
 The resolver and control-plane scripts come from the default-branch workflow
 SHA, not the pull-request checkout. The resolver validates the upstream CI
-Security workflow name/path/repository/event, exactly one PR, the 40-hex subject
+workflow (`CI` / `ci.yml`) name/path/repository/event, exactly one PR, the 40-hex subject
 and its equality to the API current PR head. Checkouts do not persist credentials.
 PR/base source is passed as read-only input to scanners. Scanner/Terraform
 containers receive no GitHub token; Terraform also has no network. Only trusted

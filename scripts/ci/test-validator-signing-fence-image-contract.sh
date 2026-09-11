@@ -30,12 +30,13 @@ for kind in slsaprovenance1 cyclonedx https://github.com/s1ns3nz0/node-operator/
 grep -Fq 'needs: [select, fence-security]' "$workflow" || fail 'fence publication does not depend on selection and fence security'
 grep -Fq "needs.fence-security.result == 'success'" "$workflow" || fail 'fence publication does not require successful fence security'
 grep -Fq 'uses: ./.github/workflows/fence-security.yml' <(workflow_source "$workflow") || fail 'release does not execute the security workflow'
-grep -Fq 'needs: [fence-security, quality-tests]' "$root/.github/workflows/ci-quality.yml" || fail 'required quality check does not depend on fence security'
-grep -Fq 'if: always()' "$root/.github/workflows/ci-quality.yml" || fail 'required quality check can be skipped after failed security'
+ci_workflow="$root/.github/workflows/ci.yml"
+grep -Fq 'needs: [fence-security, quality-tests]' <(workflow_job_source "$ci_workflow" quality) || fail 'required quality check does not depend on fence security'
+grep -Fq 'if: always()' <(workflow_job_source "$ci_workflow" quality) || fail 'required quality check can be skipped after failed security'
 # shellcheck disable=SC2016 # Literal workflow source.
-grep -Fq 'run: test "$FENCE_SECURITY_RESULT" = success' "$root/.github/workflows/ci-quality.yml" || fail 'required quality check does not fail on skipped/failed security'
+grep -Fq 'run: test "$FENCE_SECURITY_RESULT" = success' <(workflow_job_source "$ci_workflow" quality) || fail 'required quality check does not fail on skipped/failed security'
 # shellcheck disable=SC2016 # Literal workflow source.
-grep -Fq 'FENCE_SECURITY_RESULT: ${{ needs.fence-security.result }}' "$root/.github/workflows/ci-quality.yml" || fail 'quality result is not bound to the actual security dependency'
+grep -Fq 'FENCE_SECURITY_RESULT: ${{ needs.fence-security.result }}' <(workflow_job_source "$ci_workflow" quality) || fail 'quality result is not bound to the actual security dependency'
 # shellcheck disable=SC2016 # Literal workflow source.
 grep -Fq 'collect-validator-signing-fence-release-evidence.sh "$subject" "$GITHUB_SHA"' <(workflow_source "$workflow") || fail 'authenticated release collector is not executed'
 grep -Fq 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' <(workflow_source "$workflow") || fail 'sanitized release evidence is not retained through a pinned action'

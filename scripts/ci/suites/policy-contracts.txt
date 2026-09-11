@@ -10,3 +10,4 @@ scripts/ci/test-image-release-selection.py
 scripts/ci/test-private-ecr-inputs.py
 scripts/ci/test-refresh-review-evidence.py
 scripts/ci/test-review-refresh-flow.py
+scripts/ci/test-workflow-consolidation.py

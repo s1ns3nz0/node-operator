@@ -21,19 +21,19 @@ automatic publisher; lack of a workflow reference alone does not imply disuse.
 
 ## Required workflow ownership
 
-- `CI Policy / Policy Rules`: Rego, Terraform policy and rendered manifest tests.
-- `CI Policy / Evidence Contracts`: evidence normalization, PR gate and
+- `CI / Policy Rules`: Rego, Terraform policy and rendered manifest tests.
+- `CI / Evidence Contracts`: evidence normalization, PR gate and
   baseline filtering contracts, private target contract and suite ownership.
-- `CI Quality / Code Quality`: script quality and remaining implementation tests.
-- `CI Quality / quality`: compatibility gate requiring Code Quality and Fence Security.
+- `CI / Code Quality`: script quality and remaining implementation tests.
+- `CI / quality`: compatibility gate requiring Code Quality and Fence Security.
 
-The former foundation workflow is consolidated into CI Policy. Release
-eligibility validates the new job names and paths. Both policy jobs still run
+The general CI workflows are consolidated into `ci.yml`. Release
+eligibility validates unchanged job names against that exact path. Policy jobs still run
 on PRs and main pushes. No signing, scan, approval or release gate is removed.
 
 ## English presentation conventions
 
-Workflow display titles use `CI <Subject>`, `Release <Artifact>` or
+Workflow display titles use `CI`, `CI <Subject>`, `Release <Artifact>` or
 `Mirror <Artifact>`. Job and step names describe the target, such as `Policy
 Rules`, `Shell Quality`, or `Release Bundle`, without redundant action prefixes.
 These labels do not imply that a step has passed.
@@ -41,7 +41,7 @@ These labels do not imply that a step has passed.
 Publisher filenames are identity-bound; retain them unless the corresponding
 OIDC and signature-verification policies are migrated together. Required check
 contexts `quality`, `scanners`, and `CI Evidence Decision` remain unchanged.
-`CI Security` and `CI Evidence Review Signal` are also event-routing identities,
+`CI` and `CI Evidence Review Signal` are also event-routing identities,
 so their exact titles must remain aligned with workflow-run consumers.
 
 Workflow-referenced test, verification and scan entrypoints describe their

@@ -15,7 +15,7 @@ if [ "${EVALUATION_RESULT:-}" = success ] && [ -f "$EVIDENCE_ROOT/published/deci
 fi
 scripts/ci/publish-pr-evidence-check.sh "$SUBJECT_SHA" "$decision" "$DETAILS_URL"
 if [ "$decision" = - ]; then
-  printf 'Reusable evidence unavailable or stale; rerun CI Security to trigger fresh full CI Evidence Gate verification.\n' >&2
+  printf 'Reusable evidence unavailable or stale; rerun CI to trigger fresh full CI Evidence Gate verification.\n' >&2
   exit 1
 fi
 scripts/ci/verify-policy-decision.sh "$decision"

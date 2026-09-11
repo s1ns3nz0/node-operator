@@ -6,7 +6,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib/workflow-contract.sh"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-workflow="$script_dir/../../.github/workflows/ci-security.yml"
+workflow="$script_dir/../../.github/workflows/ci.yml"
 gate_workflow="$script_dir/../../.github/workflows/opa-pr-gate.yml"
 review_workflow="$script_dir/../../.github/workflows/ci-review-refresh.yml"
 review_handler="$gate_workflow"
@@ -44,7 +44,7 @@ run_scanner_image_guard_tests() {
   local valid_image='ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 
   test_dir="$(mktemp -d)"
-  ci_fixture="$test_dir/ci-security.yml"
+  ci_fixture="$test_dir/ci.yml"
   gate_fixture="$test_dir/opa-pr-gate.yml"
   trap 'rm -rf "$test_dir"' RETURN
 
@@ -85,11 +85,11 @@ check_scanner_images "$workflow" "$gate_workflow"
 # rather than a hidden checkout path. This preserves upload-artifact's safe
 # default (hidden files excluded) and prevents an accidental workspace-wide
 # upload. The scanner mounts the workspace read-only and /evidence separately.
-grep -Fq 'EVIDENCE_ROOT: ${{ github.workspace }}/security-evidence' <(workflow_source "$workflow")
-grep -Fq 'path: ${{ env.EVIDENCE_ROOT }}' <(workflow_source "$workflow")
-grep -Fq -- '--volume "$GITHUB_WORKSPACE:/workspace:ro"' <(workflow_source "$workflow")
-grep -Fq -- '--volume "$EVIDENCE_ROOT:/evidence"' <(workflow_source "$workflow")
-if grep -Fq 'include-hidden-files: true' <(workflow_source "$workflow"); then
+grep -Fq 'EVIDENCE_ROOT: ${{ github.workspace }}/security-evidence' <(workflow_job_source "$workflow" security-scans)
+grep -Fq 'path: ${{ env.EVIDENCE_ROOT }}' <(workflow_job_source "$workflow" security-scans)
+grep -Fq -- '--volume "$GITHUB_WORKSPACE:/workspace:ro"' <(workflow_job_source "$workflow" security-scans)
+grep -Fq -- '--volume "$EVIDENCE_ROOT:/evidence"' <(workflow_job_source "$workflow" security-scans)
+if grep -Fq 'include-hidden-files: true' <(workflow_job_source "$workflow" security-scans); then
   printf 'security evidence upload must not include hidden files\n' >&2
   exit 1
 fi
@@ -134,7 +134,7 @@ if grep -Eq '(actions|checks|contents|pull-requests): write|request-pr-evidence-
   printf 'review signal must not have write permissions or invoke repository code\n' >&2
   exit 1
 fi
-grep -Fq 'workflows: [CI Security, CI Evidence Review Signal]' "$review_handler"
+grep -Fq 'workflows: [CI, CI Evidence Review Signal]' "$review_handler"
 grep -Fq 'refresh-review-evidence.py' <(workflow_job_source "$review_handler" review-refresh)
 grep -Fq 'checks: write' <(workflow_job_source "$review_handler" review-refresh)
 if workflow_job_source "$review_handler" review-refresh | grep -Eq 'actions: write|docker run|collect-head-security|collect-trusted-terraform|/rerun'; then

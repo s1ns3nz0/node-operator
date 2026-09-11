@@ -1,4 +1,4 @@
-name: CI Quality
+name: CI
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-quality-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -131,3 +131,113 @@ jobs:
           FENCE_SECURITY_RESULT: ${{ needs.fence-security.result }}
           QUALITY_RESULT: ${{ needs.quality-tests.result }}
         run: test "$FENCE_SECURITY_RESULT" = success && test "$QUALITY_RESULT" = success
+  policy:
+    name: Policy Rules
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Policy Tools
+        run: scripts/ci/install-policy-tools.sh "$RUNNER_TEMP/node-operator-policy-tools"
+      - name: Policy Rules
+        run: bash scripts/ci/run-suite.sh policy
+  policy-foundation:
+    name: Evidence Contracts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Policy Tools
+        run: scripts/ci/install-policy-tools.sh "$RUNNER_TEMP/node-operator-policy-tools"
+      - name: Evidence Contracts
+        run: bash scripts/ci/run-suite.sh policy-contracts
+  terraform:
+    name: Terraform Validation
+    permissions:
+      contents: read
+      packages: read
+    runs-on: ubuntu-24.04
+    env:
+      TERRAFORM_IMAGE: ghcr.io/s1ns3nz0/node-operator/terraform-validation@sha256:1f2ac75ec09b43b4a79eaaae94eca8f8f1655315a5aa81e7c80d3a8a14ac189a
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Terraform with pinned offline toolchain
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USERNAME: ${{ github.actor }}
+        run: |
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
+          docker pull "$TERRAFORM_IMAGE"
+          bash scripts/ci/run-terraform-ci.sh root
+      - name: Enabled validator runtime mirror boundary
+        run: bash scripts/ci/run-terraform-ci.sh runtime
+      - name: Standalone Terraform modules offline
+        run: bash scripts/ci/run-terraform-ci.sh modules
+      - name: Foundation backend contract
+        run: bash scripts/ci/run-terraform-ci.sh foundation
+      - name: Basic monitoring and guarded EBS representation
+        run: bash scripts/ci/run-terraform-ci.sh monitoring
+  security-scans:
+    name: Security Scans
+    permissions:
+      contents: read
+      packages: read
+    runs-on: ubuntu-24.04
+    env:
+      SCANNER_IMAGE: ghcr.io/s1ns3nz0/node-operator/security-scanners@sha256:b224334bb3b86a086dea3b11c1e8ad6e3b619dc350af3f9f54c4a85ba576f4c9
+      # Keep the only uploadable scanner output in a non-hidden directory.
+      # upload-artifact v6 excludes hidden paths by default; enabling them
+      # would risk collecting unrelated hidden workspace state. The scanner
+      # sees the workspace read-only and /evidence as a distinct output mount.
+      EVIDENCE_ROOT: ${{ github.workspace }}/security-evidence
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pinned scanner image
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USERNAME: ${{ github.actor }}
+        run: |
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
+          docker pull "$SCANNER_IMAGE"
+      - name: Isolated Vault recovery boundaries
+        run: >-
+          docker run --rm --network none --read-only
+          --tmpfs /tmp:rw,noexec,nosuid,nodev
+          --volume "$GITHUB_WORKSPACE:/workspace:ro"
+          --entrypoint python3 "$SCANNER_IMAGE"
+          -B /workspace/scripts/ci/test-vault-recovery-boundary.py
+      - name: Redacted scanner evidence
+        run: >-
+          docker run --rm
+          --volume "$GITHUB_WORKSPACE:/workspace:ro"
+          --volume "$EVIDENCE_ROOT:/evidence"
+          "$SCANNER_IMAGE" /evidence
+          "${{ github.event.pull_request.head.sha || github.sha }}"
+          "${{ github.event.pull_request.base.sha || github.sha }}"
+      - name: Non-sensitive security evidence
+        if: success()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: security-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ env.EVIDENCE_ROOT }}
+          if-no-files-found: error
+          retention-days: 30
+  scanners:
+    # Compatibility context required by main protection.
+    name: scanners
+    needs: [security-scans]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Security Gate
+        env:
+          SECURITY_RESULT: ${{ needs.security-scans.result }}
+        run: test "$SECURITY_RESULT" = success

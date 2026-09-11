@@ -1,10 +1,14 @@
-name: CI Vault Runtime Candidate Verification
-
+name: CI Operations
 on:
   workflow_dispatch:
     inputs:
+      target:
+        description: Select private-runner smoke or vault-runtime verification
+        required: true
+        type: choice
+        options: [private-runner, vault-runtime]
       sign_evidence:
-        description: Sign the verified digest/evidence statement (not build provenance or deployment)
+        description: Sign Vault runtime evidence after verification; ignored for private-runner
         type: boolean
         default: false
         required: true
@@ -17,9 +21,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  smoke:
+    name: Private Connectivity
+    if: github.ref == 'refs/heads/main' && inputs.target == 'private-runner'
+    runs-on: codebuild-node-operator-baseline-private-release-${{ github.run_id }}-${{ github.run_attempt }}
+    environment: private-runner-smoke
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Ephemeral runner boundary
+        env:
+          RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:f6b2550a3bf8a5b2e8bbdbb301120136d01bc38963d1a70d0d7ff3008acb70be
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USERNAME: ${{ github.actor }}
+        run: bash scripts/ci/workflows/check-private-runner.sh
+      - name: Private AWS service paths
+        run: bash scripts/ci/workflows/check-private-services.sh
   verify:
     name: Vault Runtime Verification
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.target == 'vault-runtime'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -31,7 +55,8 @@ jobs:
         component: [server, agent, injector]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: {persist-credentials: false}
+        with:
+          persist-credentials: false
       - name: Frozen Candidate Verification
         env:
           COMPONENT: ${{ matrix.component }}
@@ -53,11 +78,10 @@ jobs:
             ${{ runner.temp }}/vault-runtime-evidence/dependencies.txt
           if-no-files-found: warn
           retention-days: 30
-
   sign-evidence:
     name: Verification Signature
     needs: verify
-    if: github.ref == 'refs/heads/main' && inputs.sign_evidence && needs.verify.result == 'success'
+    if: github.ref == 'refs/heads/main' && inputs.target == 'vault-runtime' && inputs.sign_evidence && needs.verify.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -68,7 +92,9 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: {persist-credentials: false, fetch-depth: 0}
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - name: Current Run Verification Artifacts
         env:
           GH_TOKEN: ${{ github.token }}

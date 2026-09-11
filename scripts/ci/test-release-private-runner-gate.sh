@@ -11,11 +11,11 @@ fail() { printf 'FAIL %s\n' "$*" >&2; exit 1; }
 
 workflow="$root/.github/workflows/release.yml"
 contract="$root/docs/gitops/private-release-runner-contract.md"
-smoke_workflow="$root/.github/workflows/private-runner-smoke.yml"
+operations_workflow="$root/.github/workflows/operations-check.yml"
 
 test -f "$workflow" || fail 'missing release workflow'
 test -f "$contract" || fail 'missing private release-runner contract'
-test -f "$smoke_workflow" || fail 'missing private runner smoke workflow'
+test -f "$operations_workflow" || fail 'missing operations workflow'
 
 # shellcheck disable=SC2016 # The literal GitHub expression is part of the workflow contract.
 grep -Fq 'runs-on: codebuild-node-operator-baseline-private-release-${{ github.run_id }}-${{ github.run_attempt }}' "$workflow" || fail 'release workflow is not bound to the dedicated CodeBuild runner and workflow-run identity'
@@ -44,7 +44,9 @@ for required in \
   'aws eks describe-cluster --name node-operator' \
   'aws ecr get-authorization-token' \
   'aws logs describe-log-groups'; do
-  grep -Fq "$required" <(workflow_source "$smoke_workflow") || fail "private runner smoke omits required connectivity check: $required"
+  grep -Fq "$required" <(workflow_job_source "$operations_workflow" smoke) || fail "private runner smoke omits required connectivity check: $required"
 done
+grep -Fq "inputs.target == 'private-runner'" <(workflow_job_source "$operations_workflow" smoke) || fail 'private runner smoke is not target-scoped'
+grep -Fq "github.ref == 'refs/heads/main'" <(workflow_job_source "$operations_workflow" smoke) || fail 'private runner smoke is not main-only'
 
 printf 'PASS release workflow requires the protected private-runner boundary.\n'

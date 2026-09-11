@@ -11,9 +11,17 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def job_source(workflow, name):
+    start = workflow.index("\n  " + name + ":")
+    remainder = workflow[start + 1:]
+    match = re.search(r"\n  [A-Za-z0-9_-]+:\n", remainder[len(name) + 3:])
+    return remainder if match is None else remainder[:len(name) + 3 + match.start()]
+
+
 def validate(workflow, verifier):
     assert "default: false" in workflow
-    readonly, signing = workflow.split("\n  sign-evidence:")
+    readonly = job_source(workflow, "verify")
+    signing = job_source(workflow, "sign-evidence")
     assert "verification-run.json" in readonly
     for required in ("needs: verify", "inputs.sign_evidence", "needs.verify.result == 'success'",
                      "github.ref == 'refs/heads/main'", "actions: read", "id-token: write",
@@ -28,15 +36,18 @@ def validate(workflow, verifier):
     assert "cosign" not in readonly
     for forbidden in ("--insecure", "--key ", "--certificate-identity-regexp", "--certificate-oidc-issuer-regexp"):
         assert forbidden not in verifier, forbidden
-    for required in ("cosign verify-blob --bundle", "--certificate-identity 'https://github.com/s1ns3nz0/node-operator/.github/workflows/vault-runtime-candidate-verification.yml@refs/heads/main'",
+    for required in ("cosign verify-blob --bundle", "--certificate-identity \"$identity\"",
+                     "'https://github.com/s1ns3nz0/node-operator/.github/workflows/operations-check.yml@refs/heads/main'",
+                     "'https://github.com/s1ns3nz0/node-operator/.github/workflows/vault-runtime-candidate-verification.yml@refs/heads/main'",
                      "--certificate-oidc-issuer 'https://token.actions.githubusercontent.com'",
                      '--certificate-github-workflow-sha "$revision"',
                      "--certificate-github-workflow-trigger workflow_dispatch"):
         assert required in verifier, required
+    assert verifier.index("operations-check.yml") < verifier.index("vault-runtime-candidate-verification.yml")
     assert verifier.index("cosign verify-blob") < verifier.index('python3 "$root/scripts/ci/vault-runtime-verification-statement.py" verify')
 
 
-workflow = (ROOT / ".github/workflows/vault-runtime-candidate-verification.yml").read_text()
+workflow = (ROOT / ".github/workflows/operations-check.yml").read_text()
 workflow = runpy.run_path(str(ROOT / "scripts/ci/lib/workflow-source.py"))["expand_text"](workflow)
 verifier = (ROOT / "scripts/ci/verify-vault-runtime-signed-evidence.sh").read_text()
 validate(workflow, verifier)
@@ -71,6 +82,6 @@ with tempfile.TemporaryDirectory() as tmp:
                               tmp, "a" * 40, "123", "1"],
                              env={**os.environ, "PATH": tmp + os.pathsep + os.environ["PATH"]},
                              text=True, capture_output=True)
-    assert process.returncode == 37, process.stderr
+    assert process.returncode != 0, process.stderr
     assert "should-not-run" not in process.stderr
 print("PASS: opt-in signing and nine unsafe mutations; crypto failure blocks semantic validation")

@@ -48,8 +48,8 @@ class RefreshEvidenceTest(unittest.TestCase):
             "conclusion": "failure", "head_sha": TRUSTED,
         })
         write_json(self.fixtures / "source.json", {
-            "repository": {"full_name": "owner/repo"}, "name": "CI Security",
-            "path": ".github/workflows/ci-security.yml", "event": "pull_request", "status": "completed",
+            "repository": {"full_name": "owner/repo"}, "name": "CI",
+            "path": ".github/workflows/ci.yml", "event": "pull_request", "status": "completed",
             "conclusion": "success", "head_sha": HEAD, "pull_requests": [{"number": 7}],
         })
         self.write_archive()
