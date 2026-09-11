@@ -20,4 +20,5 @@ scripts/ci/test-installer-bundle.py
 scripts/ci/test-interactive-deploy.py
 scripts/ci/test-terraform-output-checkpoint.py
 scripts/ci/test-terraform-phase-reconcile.py
+scripts/ci/test-release-input-boundaries.py
 scripts/ci/test-zero-resource-release-contract.sh

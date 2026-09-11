@@ -66,4 +66,13 @@ vCPU, NAT gateway, VPC, endpoint and other quotas remain unverified.
 
 ## Failure handling
 
+The release infrastructure wrapper now rejects enabled SSM/temporary
+cluster-admin flags and caller-supplied derived network fields in JSON as well
+as HCL inputs. This is not full input authorization: its generic credential
+field screen still needs JSON coverage, and standalone `zero apply` still needs
+cross-file account/Region binding. Do not connect automatic apply until those
+checks and state-aware partial-apply recovery are implemented. In particular,
+an existing bootstrap/foundation module without an output checkpoint must be
+reconciled in place, not treated as permission to deploy into a new work directory.
+
 Do not automatically delete partially created resources. Record only controlled status codes, keep sensitive tool output outside normal logs, reconcile actual state on resume, and request missing credentials/authority in context. Preserve a running checkpoint after abrupt interruption until its associated resources and operation are inspected. A successful local checkpoint write is not evidence that a remote operation completed.

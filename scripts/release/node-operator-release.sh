@@ -73,11 +73,30 @@ verify_bundle() {
 
 reject_privileged_baseline_inputs() {
   local input="$1"
+  if [[ "$input" == *.json ]]; then
+    jq -e -s 'length == 1 and (.[0] | type == "object")' "$input" >/dev/null || fail "baseline JSON must contain one object"
+    jq -e '
+      [.enable_temporary_ssm_ops_host,
+       .enable_argocd_bootstrap_cluster_admin,
+       .enable_vault_bootstrap_cluster_admin] |
+      all(. == null or . == false)
+    ' "$input" >/dev/null || fail "SSM and temporary cluster-admin require their separately approved phases"
+    return
+  fi
   if rg -n '^[[:space:]]*enable_temporary_ssm_ops_host[[:space:]]*=[[:space:]]*true([[:space:]]|$)' "$input" >/dev/null; then
     fail "SSM operations access belongs to the isolated ops-access command"
   fi
   if rg -n '^[[:space:]]*enable_(argocd|vault)_bootstrap_cluster_admin[[:space:]]*=[[:space:]]*true([[:space:]]|$)' "$input" >/dev/null; then
     fail "temporary cluster-admin bootstrap requires its separately approved phase"
+  fi
+}
+
+reject_derived_network_inputs() {
+  local input="$1"
+  if [[ "$input" == *.json ]]; then
+    jq -e 'type == "object" and (has("network_source") or has("foundation_network") or has("hoodi_nat_gateway_id") | not)' "$input" >/dev/null || fail "zero apply derives foundation network inputs; remove network overrides from baseline JSON"
+  elif rg -n '^[[:space:]]*(network_source|foundation_network|hoodi_nat_gateway_id)[[:space:]]*=' "$input" >/dev/null; then
+    fail "zero apply derives foundation network inputs; remove network_source, foundation_network, and hoodi_nat_gateway_id from --baseline-config"
   fi
 }
 
@@ -407,9 +426,7 @@ zero_apply() {
   require_command terraform
   require_nonsecret_file "$bootstrap_config"; require_nonsecret_file "$foundation_config"; require_nonsecret_file "$baseline_config"
   reject_privileged_baseline_inputs "$baseline_config"
-  if rg -n '^[[:space:]]*(network_source|foundation_network|hoodi_nat_gateway_id)[[:space:]]*=' "$baseline_config" >/dev/null; then
-    fail "zero apply derives foundation network inputs; remove network_source, foundation_network, and hoodi_nat_gateway_id from --baseline-config"
-  fi
+  reject_derived_network_inputs "$baseline_config"
 
   local bootstrap_module="$work_dir/bootstrap-state" foundation_module="$work_dir/foundation-network" baseline_module="$work_dir/baseline"
   local bootstrap_backend="$work_dir/bootstrap.backend.hcl" foundation_backend="$work_dir/foundation.backend.hcl" baseline_backend="$work_dir/baseline.backend.hcl"
