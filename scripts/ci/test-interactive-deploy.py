@@ -9,7 +9,7 @@ import sys
 import tempfile
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "release"))
 cli = importlib.import_module("interactive_deploy")
@@ -60,6 +60,36 @@ class InstallerCommandTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.invoke(Path(temporary) / "state", "start", ["--release-dir", temporary])
             discover.assert_not_called()
+
+    def test_prepare_materializes_context_bound_release_without_claiming_deployment(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary).resolve() / "state"
+            materialize = Mock(return_value=directory / "release")
+            bundle_module = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=materialize)
+            discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"]}
+            role = "arn:aws:iam::123456789012:role/backend"
+            options = ["--release-dir", temporary, "--aws-profile", "test", "--aws-region", "ap-northeast-1", "--name", "test-node",
+                       "--prepare-infrastructure", "--backend-principal-arn", role]
+            with patch.dict(sys.modules, {"installer_bundle": bundle_module}), patch.object(cli, "discover", return_value=discovery), patch.object(cli, "prepare_inputs") as prepare:
+                _, result = self.invoke(directory, "start", options)
+            materialize.assert_called_once_with(Path(temporary), directory / "release", RELEASE["release_sha"], RELEASE["bundle_digest"])
+            prepare.assert_called_once_with(directory / "release", directory / "infrastructure-inputs", discovery, role)
+            self.assertEqual(result["result"], "infrastructure_inputs_ready")
+            self.assertFalse(result["deployment_complete"])
+            _, status = self.invoke(directory, "status")
+            self.assertEqual(status["stages"]["infrastructure"]["status"], "awaiting_input")
+
+    def test_wrong_role_never_materializes_or_executes_release(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            materialize = Mock()
+            bundle_module = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=materialize)
+            discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"]}
+            options = ["--release-dir", temporary, "--aws-profile", "test", "--aws-region", "ap-northeast-1", "--name", "test-node",
+                       "--prepare-infrastructure", "--backend-principal-arn", "arn:aws:iam::999999999999:role/backend"]
+            with patch.dict(sys.modules, {"installer_bundle": bundle_module}), patch.object(cli, "discover", return_value=discovery), patch.object(cli, "prepare_inputs") as prepare, self.assertRaises(cli.InfrastructureError):
+                self.invoke(Path(temporary).resolve() / "state", "start", options)
+            materialize.assert_not_called()
+            prepare.assert_not_called()
 
 
 if __name__ == "__main__":

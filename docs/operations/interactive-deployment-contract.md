@@ -2,7 +2,7 @@
 
 ## Commands
 
-The public entrypoint is `scripts/release/node-operator-install.sh`. Its current implementation provides `start`, `status` and `resume` for release consistency checks, read-only AWS discovery and private checkpoints. `ops-access` and provisioning adapters are not implemented yet. `resume` revalidates identity and rejects running stages pending reconciliation; it does not automatically reconcile or retry cloud mutations. `status` reads local state without contacting AWS or Vault. The future `ops-access` command owns a separate Terraform apply and confirmation.
+The public entrypoint is `scripts/release/node-operator-install.sh`. Its current implementation provides `start`, `status` and `resume` for release consistency checks, read-only AWS discovery and private checkpoints. `start` and `resume` additionally accept `--prepare-infrastructure` to materialize the trusted release and generate private Terraform input files, without applying infrastructure. `ops-access` and cloud provisioning adapters are not implemented yet. `resume` revalidates identity and rejects running stages pending reconciliation; it does not automatically reconcile or retry cloud mutations. `status` reads local state without contacting AWS or Vault. The future `ops-access` command owns a separate Terraform apply and confirmation.
 
 Current local/discovery invocation (not a deployment):
 
@@ -18,6 +18,20 @@ scripts/release/node-operator-install.sh resume \
 ```
 
 Missing initial profile/Region/name values are prompted only in a terminal. Release assets must come from the trusted release workflow; self-consistent manifests are not standalone public-key signature verification. Discovery reports missing local commands by infrastructure, private-access, Vault and optional custody stages; command presence does not prove supported versions or runtime health. It checks account-owned backend bucket names, regional DynamoDB lock-table names, and account-wide IAM role names under the deployment's foundation/baseline namespaces without authorizing adoption. Global S3 name availability, IAM policy attachments, provisioning permissions, quotas and remaining resource collisions are still explicitly unverified. Inventory failures stop discovery instead of being treated as empty inventories.
+
+## Local infrastructure preparation
+
+Add `--prepare-infrastructure` to `start` or `resume`. Supply
+`--backend-principal-arn arn:aws:iam::<account>:role/<backend-role>` or answer
+the role prompt. This creates `release/` and `infrastructure-inputs/` under the
+private state directory. Existing release bytes, file permissions and input
+values must still match on reuse; changed files are not overwritten. The role
+is checked for same-account ARN syntax only at this stage, not existence or
+effective permissions. No role is created or assumed, and Terraform is not run.
+`infrastructure_inputs_ready` is a preparation result, not a deployment result.
+Publishing the release and inputs uses the OS no-replace rename operation
+(macOS or Linux with supported libc/filesystem). Unsupported platforms fail
+without falling back to an operation that could replace an existing directory.
 
 ## Capacity observation
 

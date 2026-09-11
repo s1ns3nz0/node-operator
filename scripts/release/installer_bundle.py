@@ -12,10 +12,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
+import shutil
 import stat
 import tarfile
+import tempfile
 from typing import Any
 
 
@@ -39,6 +42,7 @@ MAX_MANIFEST_ENTRIES = 10_000
 MAX_TAR_MEMBERS = 10_001  # manifest plus the maximum number of listed files
 MAX_TAR_MEMBER_BYTES = 64 * 1024 * 1024
 MAX_TAR_TOTAL_BYTES = 256 * 1024 * 1024
+COPY_CHUNK_BYTES = 1024 * 1024
 
 
 class ReleaseVerificationError(ValueError):
@@ -267,6 +271,245 @@ def verify_release(download_dir: str | Path) -> dict[str, Any]:
         raise ReleaseVerificationError("SBOM is not bound to the manifest artifact")
     verify_bundle(archive, outer, digest)
     return {"release_sha": source_revision, "bundle_digest": digest, "manifest_digest": _canonical_digest(outer), "manifest": outer}
+
+
+def _require_normalized_absolute_destination(destination: Path) -> None:
+    if not destination.is_absolute() or Path(os.path.normpath(str(destination))) != destination:
+        raise ReleaseVerificationError("destination must be a normalized absolute path")
+
+
+def _require_safe_destination(destination: Path) -> None:
+    """Require a new, absolute destination below existing real directories."""
+    _require_normalized_absolute_destination(destination)
+    try:
+        destination.lstat()
+    except FileNotFoundError:
+        pass
+    else:
+        raise ReleaseVerificationError("destination already exists")
+    # Do not let a harmless-looking output path walk through a symlink.  The
+    # destination itself is deliberately absent, so inspect its ancestors.
+    for ancestor in (destination.parent, *destination.parents):
+        try:
+            mode = ancestor.lstat().st_mode
+        except OSError as error:
+            raise ReleaseVerificationError(f"cannot inspect destination ancestor: {error}") from error
+        if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
+            raise ReleaseVerificationError("destination has an unsafe ancestor")
+
+
+def _copy_with_expected_digest(source: Path, target: Path, expected_digest: str) -> None:
+    """Copy bytes once and bind the staging copy to the expected digest."""
+    digest = hashlib.sha256()
+    try:
+        with source.open("rb") as reader, target.open("xb") as writer:
+            for chunk in iter(lambda: reader.read(COPY_CHUNK_BYTES), b""):
+                digest.update(chunk)
+                writer.write(chunk)
+        os.chmod(target, 0o600)
+    except OSError as error:
+        raise ReleaseVerificationError(f"cannot copy release bundle: {error}") from error
+    if "sha256:" + digest.hexdigest() != expected_digest:
+        raise ReleaseVerificationError("release bundle changed while it was being copied")
+
+
+def _materialization_plan(archive: Path, manifest: dict[str, Any]) -> dict[str, tuple[int, str, int]]:
+    """Return the exact files and normalized modes permitted in an output tree."""
+    # This complete streaming validation also makes the archive metadata safe
+    # to use as the source of executable semantics.
+    _validate_tar(archive, manifest)
+    plan: dict[str, tuple[int, str, int]] = {}
+    try:
+        with tarfile.open(archive, "r:") as tar:
+            for member in tar:
+                name = _safe_name(member.name)
+                if not member.isfile():
+                    raise ReleaseVerificationError("tar contains a non-regular entry")
+                executable = bool(member.mode & 0o111)
+                mode = 0o700 if executable else 0o600
+                if name == "bundle-manifest.json":
+                    extracted = tar.extractfile(member)
+                    if extracted is None:
+                        raise ReleaseVerificationError("cannot inspect embedded bundle manifest")
+                    digest = hashlib.sha256()
+                    for chunk in iter(lambda: extracted.read(COPY_CHUNK_BYTES), b""):
+                        digest.update(chunk)
+                    plan[name] = (member.size, digest.hexdigest(), mode)
+                else:
+                    entry = next((item for item in manifest["entries"] if item["path"] == name), None)
+                    if entry is None:
+                        raise ReleaseVerificationError("tar entry does not match manifest")
+                    plan[name] = (entry["size"], entry["sha256"], mode)
+    except (tarfile.TarError, OSError) as error:
+        raise ReleaseVerificationError(f"invalid tar archive: {error}") from error
+    for name in plan:
+        parent = PurePosixPath(name).parent
+        while str(parent) != ".":
+            if str(parent) in plan:
+                raise ReleaseVerificationError("tar has a file/directory path collision")
+            parent = parent.parent
+    return plan
+
+
+def _private_parent(root: Path, relative: str) -> Path:
+    """Create private output parents using only validated relative path parts."""
+    parent = root
+    for part in PurePosixPath(relative).parent.parts:
+        if part == ".":
+            continue
+        parent = parent / part
+        try:
+            mode = parent.lstat().st_mode
+        except FileNotFoundError:
+            try:
+                parent.mkdir(mode=0o700)
+            except OSError as error:
+                raise ReleaseVerificationError(f"cannot create output directory: {error}") from error
+        else:
+            if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
+                raise ReleaseVerificationError("unsafe output directory")
+        os.chmod(parent, 0o700)
+    return parent
+
+
+def _extract_validated_tree(archive: Path, tree: Path, plan: dict[str, tuple[int, str, int]]) -> None:
+    """Stream tar members to exclusive regular files; never call extractall."""
+    seen: set[str] = set()
+    try:
+        with tarfile.open(archive, "r:") as tar:
+            for member in tar:
+                name = _safe_name(member.name)
+                if name in seen or name not in plan or not member.isfile():
+                    raise ReleaseVerificationError("tar changed during materialization")
+                seen.add(name)
+                expected_size, expected_hash, output_mode = plan[name]
+                if member.size != expected_size:
+                    raise ReleaseVerificationError("tar changed during materialization")
+                parent = _private_parent(tree, name)
+                output = parent / PurePosixPath(name).name
+                flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                if hasattr(os, "O_NOFOLLOW"):
+                    flags |= os.O_NOFOLLOW
+                descriptor = os.open(output, flags, output_mode)
+                try:
+                    digest = hashlib.sha256()
+                    extracted = tar.extractfile(member)
+                    if extracted is None:
+                        raise ReleaseVerificationError("cannot extract tar entry")
+                    written = 0
+                    with os.fdopen(descriptor, "wb", closefd=False) as writer:
+                        for chunk in iter(lambda: extracted.read(COPY_CHUNK_BYTES), b""):
+                            written += len(chunk)
+                            if written > expected_size:
+                                raise ReleaseVerificationError("tar entry exceeds manifest size")
+                            digest.update(chunk)
+                            writer.write(chunk)
+                    if written != expected_size or digest.hexdigest() != expected_hash:
+                        raise ReleaseVerificationError("tar entry changed during materialization")
+                    os.chmod(output, output_mode)
+                finally:
+                    os.close(descriptor)
+    except (tarfile.TarError, OSError) as error:
+        raise ReleaseVerificationError(f"cannot materialize release bundle: {error}") from error
+    if seen != set(plan):
+        raise ReleaseVerificationError("tar changed during materialization")
+
+
+def _verify_materialized_tree(destination: Path, plan: dict[str, tuple[int, str, int]], manifest: dict[str, Any]) -> None:
+    """Verify an idempotently reused tree has no unrecorded files or links."""
+    if destination.is_symlink() or not destination.is_dir():
+        raise ReleaseVerificationError("materialized destination is not a real directory")
+    observed: set[str] = set()
+    expected_directories = {str(parent) for name in plan for parent in PurePosixPath(name).parents if str(parent) != "."}
+    for current, directories, files in os.walk(destination, topdown=True, followlinks=False):
+        current_path = Path(current)
+        if stat.S_IMODE(current_path.lstat().st_mode) != 0o700:
+            raise ReleaseVerificationError("materialized directory has unsafe permissions")
+        for name in directories[:]:
+            child = current_path / name
+            if child.is_symlink() or child.relative_to(destination).as_posix() not in expected_directories:
+                raise ReleaseVerificationError("materialized tree contains an unexpected directory or symlink")
+        for name in files:
+            path = current_path / name
+            relative = path.relative_to(destination).as_posix()
+            try:
+                mode = path.lstat().st_mode
+            except OSError as error:
+                raise ReleaseVerificationError(f"cannot inspect materialized file: {error}") from error
+            if stat.S_ISLNK(mode) or not stat.S_ISREG(mode) or relative not in plan:
+                raise ReleaseVerificationError("materialized tree contains an unexpected path")
+            size, expected_hash, expected_mode = plan[relative]
+            if path.stat().st_size != size or stat.S_IMODE(mode) != expected_mode or _sha256_file(path) != expected_hash:
+                raise ReleaseVerificationError("materialized file does not match release bundle")
+            observed.add(relative)
+    if observed != set(plan):
+        raise ReleaseVerificationError("materialized tree is incomplete")
+    embedded = _load_json(destination / "bundle-manifest.json")
+    embedded = _validate_manifest(embedded, outer=False)
+    if (embedded["source_revision"] != manifest["source_revision"] or embedded["entries"] != manifest["entries"] or
+            embedded["artifact"] != {"name": ARCHIVE_NAME, "media_type": "application/x-tar"}):
+        raise ReleaseVerificationError("materialized embedded manifest is not bound to release")
+
+
+def materialize_release(download_dir: str | Path, destination: str | Path, expected_release_sha: str,
+                        expected_bundle_digest: str) -> Path:
+    """Safely unpack a verified release into a new private absolute directory.
+
+    Existing output is never overwritten.  A previously published output may
+    be returned only after its complete tree is revalidated against the fresh,
+    trusted release evidence and archive.
+    """
+    from installer_files import publish_directory
+    if not isinstance(expected_release_sha, str) or not SHA40_RE.fullmatch(expected_release_sha):
+        raise ReleaseVerificationError("expected release SHA is invalid")
+    if not isinstance(expected_bundle_digest, str) or not DIGEST_RE.fullmatch(expected_bundle_digest):
+        raise ReleaseVerificationError("expected bundle digest is invalid")
+    context = verify_release(download_dir)
+    if context["release_sha"] != expected_release_sha or context["bundle_digest"] != expected_bundle_digest:
+        raise ReleaseVerificationError("release context does not match caller expectations")
+    destination_path = Path(destination)
+    _require_normalized_absolute_destination(destination_path)
+    reuse = destination_path.exists() or destination_path.is_symlink()
+    if reuse:
+        # Reuse is intentionally narrower than normal destination acceptance:
+        # a symlink must not turn idempotency into a path escape.
+        if destination_path.is_symlink():
+            raise ReleaseVerificationError("destination must not be a symlink")
+        for ancestor in destination_path.parents:
+            if ancestor.is_symlink() or not ancestor.is_dir():
+                raise ReleaseVerificationError("destination has an unsafe ancestor")
+    else:
+        _require_safe_destination(destination_path)
+    stage: Path | None = None
+    try:
+        stage = Path(tempfile.mkdtemp(prefix=".node-operator-materialize-", dir=destination_path.parent))
+        os.chmod(stage, 0o700)
+        staged_archive = stage / ARCHIVE_NAME
+        _copy_with_expected_digest(Path(download_dir) / ARCHIVE_NAME, staged_archive, expected_bundle_digest)
+        # Revalidate the immutable private copy, rather than trusting bytes read
+        # before the copy completed.
+        verify_bundle(staged_archive, context["manifest"], expected_bundle_digest)
+        plan = _materialization_plan(staged_archive, context["manifest"])
+        if reuse:
+            _verify_materialized_tree(destination_path, plan, context["manifest"])
+            return destination_path
+        tree = stage / "tree"
+        tree.mkdir(mode=0o700)
+        _extract_validated_tree(staged_archive, tree, plan)
+        _verify_materialized_tree(tree, plan, context["manifest"])
+        try:
+            destination_path.lstat()
+        except FileNotFoundError:
+            pass
+        else:
+            raise ReleaseVerificationError("destination appeared during materialization")
+        publish_directory(tree, destination_path)
+        return destination_path
+    except OSError as error:
+        raise ReleaseVerificationError(f"cannot publish materialized release: {error}") from error
+    finally:
+        if stage is not None:
+            shutil.rmtree(stage, ignore_errors=True)
 
 
 def main() -> int:

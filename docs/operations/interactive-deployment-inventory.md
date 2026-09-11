@@ -20,7 +20,7 @@
 3. `release/hoodi-release-contract.json` still declares Seoul while interfaces permit Tokyo. Static Prysm/Nethermind manifests embed account 106760547719 and Seoul artifacts/AZs. Render from target-specific verified outputs; do not reuse those values for fresh installs.
 4. Secret source of truth is `docs/security/vault-v2-secret-inventory.md`. Inventory and validate the entire document before task9, not only validator signing secrets.
 5. GitOps publication and registry permissions still require independent adapters. Image destination digests are not first-run user inputs in the intended interface.
-6. The baseline release did not include the new installer Python modules. The implementation branch now explicitly packages its four support modules and tests their archive presence; future modules must extend that allowlist and contract.
+6. The baseline release did not include the new installer Python modules. The implementation branch now explicitly packages its Python entrypoint and support modules and tests their archive presence; future modules must extend that allowlist and contract.
 
 ## Evidence limits
 

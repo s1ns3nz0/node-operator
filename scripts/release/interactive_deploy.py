@@ -1,4 +1,4 @@
-"""Interactive deployment entrypoint: verified release and read-only discovery slice.
+"""Interactive deployment entrypoint: release discovery and local input preparation.
 
 Provisioning adapters are not yet connected. Never report discovery as deployment.
 """
@@ -13,6 +13,7 @@ import sys
 
 from installer_preflight import PreflightError, discover, validate_inputs
 from installer_state import CheckpointStore, StateError, STAGE_NAMES
+from installer_infrastructure import InfrastructureError, prepare_inputs
 
 
 def load_context(directory: Path) -> dict:
@@ -42,18 +43,20 @@ def prompt(value: str | None, label: str, default: str | None = None) -> str:
 
 
 def run(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Start/status/resume verified release discovery. No provisioning is performed in this version.")
+    parser = argparse.ArgumentParser(description="Start/status/resume release discovery and optional local infrastructure preparation. No provisioning is performed in this version.")
     parser.add_argument("command", choices=("start", "status", "resume"))
     parser.add_argument("--state-dir", required=True, type=Path)
     parser.add_argument("--release-dir", type=Path, help="Downloaded release asset directory; required for start/resume")
     parser.add_argument("--aws-profile")
     parser.add_argument("--aws-region")
     parser.add_argument("--name")
+    parser.add_argument("--prepare-infrastructure", action="store_true", help="Materialize verified release and generate local Terraform inputs; does not apply")
+    parser.add_argument("--backend-principal-arn", help="Exact same-account backend IAM role for infrastructure preparation")
     args = parser.parse_args(argv)
     if not args.state_dir.is_absolute():
         raise StateError("Use an absolute state directory.")
     if args.command == "status":
-        if args.release_dir or args.aws_profile or args.aws_region or args.name:
+        if args.release_dir or args.aws_profile or args.aws_region or args.name or args.prepare_infrastructure or args.backend_principal_arn:
             raise StateError("status accepts only --state-dir; it does not query AWS.")
         context = load_context(args.state_dir)
         store = CheckpointStore(args.state_dir, context)
@@ -61,6 +64,8 @@ def run(argv: list[str] | None = None) -> int:
             checkpoint = store.resume()
         print(json.dumps({"context": context, "stages": checkpoint["stages"], "deployment_complete": False}, sort_keys=True))
         return 0
+    if args.backend_principal_arn and not args.prepare_infrastructure:
+        raise StateError("--backend-principal-arn requires --prepare-infrastructure.")
     if args.release_dir is None:
         raise StateError("start/resume requires --release-dir with verified release assets.")
     from installer_bundle import verify_release
@@ -91,16 +96,27 @@ def run(argv: list[str] | None = None) -> int:
         # Read-only discovery is useful but does not prove permissions, quotas,
         # all-resource collision safety or provisioning readiness.
         store.set_stage("preflight", "awaiting_input")
-    print(json.dumps({"result": "discovery_complete", "discovery": discovery,
+        if args.prepare_infrastructure:
+            from installer_bundle import materialize_release
+            principal = prompt(args.backend_principal_arn, "Same-account Terraform backend IAM role ARN")
+            # Validate the role/context before writing the release tree.
+            from installer_infrastructure import expected_inputs
+            inputs_dir = args.state_dir / "infrastructure-inputs"
+            expected_inputs(inputs_dir, discovery, principal)
+            bundle_root = materialize_release(args.release_dir, args.state_dir / "release",
+                                              release["release_sha"], release["bundle_digest"])
+            prepare_inputs(bundle_root, inputs_dir, discovery, principal)
+            store.set_stage("infrastructure", "awaiting_input")
+    print(json.dumps({"result": "infrastructure_inputs_ready" if args.prepare_infrastructure else "discovery_complete", "discovery": discovery,
                       "deployment_complete": False,
-                      "remaining": "Permission/quota/collision checks and provisioning adapters are not connected yet."}, sort_keys=True))
+                      "remaining": "Still required: full permission/quota/collision preflight and infrastructure apply integration."}, sort_keys=True))
     return 0
 
 
 if __name__ == "__main__":
     try:
         raise SystemExit(run())
-    except (StateError, PreflightError) as error:
+    except (StateError, PreflightError, InfrastructureError) as error:
         print(str(error), file=sys.stderr)
         raise SystemExit(1)
     except (OSError, ValueError, KeyError, KeyboardInterrupt):
