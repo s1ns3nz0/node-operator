@@ -30,6 +30,20 @@ class Renderer(unittest.TestCase):
             result, output = self.render(directory, extra=("--server-image", "bad")); self.assertNotEqual(result.returncode, 0); self.assertFalse(output.exists())
             output.write_text("keep"); result, _ = self.render(directory); self.assertNotEqual(result.returncode, 0); self.assertEqual(output.read_text(), "keep")
             output.unlink(); victim = directory / "victim"; victim.write_text("keep"); output.symlink_to(victim); result, _ = self.render(directory); self.assertNotEqual(result.returncode, 0); self.assertEqual(victim.read_text(), "keep")
+    def test_existing_operator_account_is_a_valid_selected_input(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp); os.chmod(directory, 0o700)
+            result, output = self.render(directory, account="106760547719")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("106760547719.dkr.ecr.ap-northeast-1.amazonaws.com", output.read_text())
+    def test_historical_literal_in_template_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp); os.chmod(directory, 0o700)
+            template = directory / "historical.yaml"
+            template.write_text(TEMPLATE.read_text() + "\nlegacy_account: 106760547719\n")
+            result, output = self.render(directory, extra=("--template", str(template)))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(output.exists())
     def test_unresolved_token_has_no_final_output(self):
         with tempfile.TemporaryDirectory() as temp:
             directory = Path(temp); os.chmod(directory, 0o700); template = directory / "bad.yaml"; template.write_text(TEMPLATE.read_text() + "\nx: __VAULT_UNKNOWN__\n")

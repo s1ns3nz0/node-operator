@@ -78,6 +78,15 @@ registry availability, image signature verification, TLS readiness or actual
 Vault deployment. Prepared runner inputs deliberately keep cluster-admin
 access disabled. Artifact mirroring and guarded execution remain pending.
 
+The pending Vault executor must reuse `terraform-work/baseline`, its original
+`baseline.backend.hcl` and `node-operator/baseline/terraform.tfstate` key.
+It must compare the derived foundation network file against the original
+handoff and compose the original baseline config with a separate Vault delta.
+Do not repurpose `zero apply`, which intentionally rejects temporary Vault
+cluster-admin access. Prepare, temporary authority, deployment and revocation
+need explicit phase handling and reviewed saved-plan hashes; neither a new
+Terraform state nor a silently changed original config is acceptable.
+
 Task 8 cannot be fulfilled by calling a recovery script on an uninitialized
 Vault. Existing bootstrap-runner automation deliberately installs sealed Vault
 without initialization. The installer must implement a distinct first-init

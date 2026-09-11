@@ -9,6 +9,11 @@ while [ "$#" -gt 0 ]; do case "$1" in
 [[ $kms =~ ^arn:aws:kms:$region:$account:key/[A-Za-z0-9-]+$ ]] || usage
 case "$output" in /*) ;; *) usage;; esac
 [ -f "$template" ] && [ ! -L "$template" ] && [ ! -e "$output" ] && [ ! -L "$output" ] || { printf '%s\n' 'template or output path is unsafe' >&2; exit 65; }
+# Reject historical literals in the input template, not a valid selected
+# account in the rendered output. Existing operators may deploy in that account.
+if grep -Eq '106760547719|REPLACE_WITH_' "$template"; then
+  printf '%s\n' 'template contains historical deployment data' >&2; exit 65
+fi
 parent=$(dirname "$output"); [ -d "$parent" ] && [ ! -L "$parent" ] || { printf '%s\n' 'output parent is unsafe' >&2; exit 65; }
 parent_mode=$(stat -c '%a' "$parent" 2>/dev/null) || parent_mode=$(stat -f '%OLp' "$parent")
 case "$parent_mode" in 700) ;; *) printf '%s\n' 'output parent must be private' >&2; exit 65;; esac
@@ -22,7 +27,7 @@ stage=$(mktemp "$parent/.vault-values.XXXXXX") || exit 1
 cleanup(){ rm -f "$stage"; }; trap cleanup EXIT
 sed -e "s|__VAULT_AWS_REGION__|$region|g" -e "s|__VAULT_UNSEAL_KEY_ARN__|$kms|g" -e "s|__VAULT_SERVER_REPOSITORY__|$server_repo|g" -e "s|__VAULT_SERVER_TAG__|$server_tag|g" -e "s|__VAULT_AGENT_REPOSITORY__|$agent_repo|g" -e "s|__VAULT_AGENT_TAG__|$agent_tag|g" -e "s|__VAULT_INJECTOR_REPOSITORY__|$injector_repo|g" -e "s|__VAULT_INJECTOR_TAG__|$injector_tag|g" -e "s|__VAULT_AUDIT_RELAY_IMAGE__|$relay_full|g" "$template" > "$stage"
 grep -q '__VAULT_' "$stage" && { printf '%s\n' 'template contains an unresolved Vault token' >&2; exit 65; }
-grep -Eq '106760547719|REPLACE_WITH_' "$stage" && { printf '%s\n' 'template contains historical deployment data' >&2; exit 65; }
+grep -q 'REPLACE_WITH_' "$stage" && { printf '%s\n' 'template contains unresolved deployment data' >&2; exit 65; }
 chmod 600 "$stage"
 set -C
 if ! cat "$stage" > "$output" 2>/dev/null; then printf '%s\n' 'refusing to overwrite output' >&2; exit 65; fi
