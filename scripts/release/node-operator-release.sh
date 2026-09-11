@@ -398,6 +398,24 @@ verify_completed_phase() {
   unlink "$temporary"
 }
 
+recover_missing_phase_output() {
+  # Recover a lost output checkpoint only from an unchanged original state.
+  # A residual plan is deliberately not applied without a new approval path.
+  local module="$1" config="$2" output="$3" output_name="$4"
+  [ -d "$module" ] && [ ! -L "$module" ] || fail "partial phase requires its original Terraform directory"
+  [ ! -e "$output" ] && [ ! -L "$output" ] || fail "partial phase output already exists; preserve it for reconciliation"
+  local backup="${output}.recovery-state.json"
+  capture_state "$module" "$backup"
+  jq -e '(.resources | length) > 0' "$backup" >/dev/null || fail "partial phase has no managed resource state; preserve this directory and review before retrying"
+  local result=0
+  terraform -chdir="$module" plan -input=false -detailed-exitcode -var-file="$config" >/dev/null || result=$?
+  case "$result" in
+    0) capture_terraform_output "$module" "$output" "$output_name" ;;
+    2) fail "partial phase still requires changes; preserve original state and review its remaining plan; do not start a new work directory" ;;
+    *) fail "partial phase reconciliation failed; check authentication and original backend before retrying" ;;
+  esac
+}
+
 zero_apply() {
   if [ -n "$inputs" ]; then
     [ -z "$bootstrap_config$foundation_config$baseline_config" ] || fail "--inputs cannot be combined with individual phase configs"
@@ -433,12 +451,20 @@ zero_apply() {
   local bootstrap_output="$work_dir/bootstrap-output.json" foundation_output="$work_dir/foundation-output.json" foundation_input="$work_dir/foundation-network.auto.tfvars.json" baseline_output="$work_dir/baseline-output.json" gitops_handoff="$work_dir/gitops-publisher-handoff.json" ops_handoff="$work_dir/ops-access-handoff.json"
 
   if [ ! -f "$bootstrap_output" ]; then
-    [ ! -e "$bootstrap_module" ] || fail "incomplete bootstrap checkpoint; use a new work directory"
-    copy_module infra/bootstrap-state "$bootstrap_module"
-    terraform -chdir="$bootstrap_module" init -input=false -backend=false
-    terraform -chdir="$bootstrap_module" plan -input=false -var-file="$bootstrap_config" -out="$work_dir/bootstrap.tfplan"
-    terraform -chdir="$bootstrap_module" apply -input=false "$work_dir/bootstrap.tfplan"
-    capture_terraform_output "$bootstrap_module" "$bootstrap_output" backend
+    if [ -e "$bootstrap_module" ] || [ -L "$bootstrap_module" ]; then
+      [ ! -e "$bootstrap_module/node-operator-runtime-backend.tf" ] || fail "bootstrap output missing after migration boundary; restore the original checkpoint before resuming"
+      [ -f "$bootstrap_module/terraform.tfstate" ] && [ ! -L "$bootstrap_module/terraform.tfstate" ] || fail "partial bootstrap requires its original local state; do not start a new work directory"
+      if [ -e "$bootstrap_module/.terraform/terraform.tfstate" ]; then
+        jq -e '.backend == null or (.backend.type == "local" and ((.backend.config.path // "terraform.tfstate") == "terraform.tfstate") and ((.backend.config.workspace_dir // "terraform.tfstate.d") == "terraform.tfstate.d"))' "$bootstrap_module/.terraform/terraform.tfstate" >/dev/null || fail "partial bootstrap is not using its original default local backend"
+      fi
+      recover_missing_phase_output "$bootstrap_module" "$bootstrap_config" "$bootstrap_output" backend
+    else
+      copy_module infra/bootstrap-state "$bootstrap_module"
+      terraform -chdir="$bootstrap_module" init -input=false -backend=false
+      terraform -chdir="$bootstrap_module" plan -input=false -var-file="$bootstrap_config" -out="$work_dir/bootstrap.tfplan"
+      terraform -chdir="$bootstrap_module" apply -input=false "$work_dir/bootstrap.tfplan"
+      capture_terraform_output "$bootstrap_module" "$bootstrap_output" backend
+    fi
   fi
   write_backend_config "$bootstrap_output" "node-operator/bootstrap-state/terraform.tfstate" "$bootstrap_backend"
   # A bootstrap output checkpoint alone does not prove where Terraform state is
@@ -450,10 +476,14 @@ zero_apply() {
 
   write_backend_config "$bootstrap_output" "node-operator/foundation-network/terraform.tfstate" "$foundation_backend"
   if [ ! -f "$foundation_output" ]; then
-    [ ! -e "$foundation_module" ] || fail "incomplete foundation checkpoint; use a new work directory"
-    copy_module infra/foundation-network "$foundation_module"
-    apply_phase "$foundation_module" "$foundation_config" "$foundation_backend" "$work_dir/foundation.tfplan"
-    capture_terraform_output "$foundation_module" "$foundation_output" network
+    if [ -e "$foundation_module" ] || [ -L "$foundation_module" ]; then
+      verify_s3_backend_identity "$foundation_module" "$bootstrap_output" "node-operator/foundation-network/terraform.tfstate"
+      recover_missing_phase_output "$foundation_module" "$foundation_config" "$foundation_output" network
+    else
+      copy_module infra/foundation-network "$foundation_module"
+      apply_phase "$foundation_module" "$foundation_config" "$foundation_backend" "$work_dir/foundation.tfplan"
+      capture_terraform_output "$foundation_module" "$foundation_output" network
+    fi
   else
     verify_completed_phase "$foundation_module" "$foundation_config" "$foundation_output" network
   fi

@@ -29,10 +29,12 @@ reset='{"version":4,"serial":1,"lineage":"1ab1c89b-c841-5119-dff7-48606a2148bf",
 bad_reset='{"version":4,"serial":2,"lineage":"1ab1c89b-c841-5119-dff7-48606a2148bf","resources":[{"module":"","mode":"managed","type":"aws_s3_bucket","name":"state","provider":"provider[\"registry.terraform.io/hashicorp/aws\"]","instances":[{"schema_version":0,"attributes":{"id":"state"}}]}],"outputs":{}}'
 metadata() {
   mkdir -p "$directory/.terraform"
+  local state_key="node-operator/bootstrap-state/terraform.tfstate"
+  if [[ "$directory" == *foundation-network ]]; then state_key="node-operator/foundation-network/terraform.tfstate"; fi
   if [ "${TF_CASE:-success}" = wrongbackend ]; then
     printf '%s' '{"backend":{"type":"s3","config":{"bucket":"wrong","key":"wrong","region":"ap-northeast-2","dynamodb_table":"lock","kms_key_id":"kms","encrypt":true}}}' > "$directory/.terraform/terraform.tfstate"
   else
-    printf '%s' '{"backend":{"type":"s3","config":{"bucket":"bucket","key":"node-operator/bootstrap-state/terraform.tfstate","region":"ap-northeast-2","dynamodb_table":"lock","kms_key_id":"kms","encrypt":true}}}' > "$directory/.terraform/terraform.tfstate"
+    printf '%s' '{"backend":{"type":"s3","config":{"bucket":"bucket","key":"'"$state_key"'","region":"ap-northeast-2","dynamodb_table":"lock","kms_key_id":"kms","encrypt":true}}}' > "$directory/.terraform/terraform.tfstate"
   fi
 }
 case "$command" in
@@ -49,11 +51,14 @@ case "$command" in
     if [[ " ${args[*]} " != *' -detailed-exitcode '* ]]; then
       for arg in "${args[@]}"; do [[ "$arg" == -out=* ]] && : > "${arg#-out=}"; done
     fi ;;
-  apply) ;;
+  apply)
+    if [[ "$directory" == *bootstrap-state ]]; then printf '%s' "$state" > "$directory/terraform.tfstate"; fi ;;
   output)
     if [ "${args[2]:-}" = backend ]; then
+      [ "${TF_CASE:-success}" != bootstrap_output_fail ] || exit 21
       printf '%s\n' '{"bucket":"bucket","region":"ap-northeast-2","dynamodb_table":"lock","kms_key_id":"kms"}'
     elif [ "${args[2]:-}" = network ]; then
+      [ "${TF_CASE:-success}" != foundation_output_fail ] || exit 22
       printf '%s\n' '{"vpc_id":"vpc-abc","vpc_cidr":"10.0.0.0/16","system_subnet_ids":["subnet-a","subnet-b"],"hoodi_subnet_ids":["subnet-c"],"system_route_table_id":"rtb-a","hoodi_route_table_id":"rtb-b","hoodi_nat_gateway_id":"nat-a"}'
     else
       printf '%s\n' '{"deployment_account_id":{"value":"123456789012"},"cluster_name":{"value":"node-operator"},"gitops_client_ecr_repository_url":{"value":"123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator"},"github_gitops_client_ecr_publisher_role_arn":{"value":"arn:aws:iam::123456789012:role/publisher"}}'
@@ -127,4 +132,26 @@ migrate_retry_work="$(run_case migrate_fail fail)"
 run_case success pass "$migrate_retry_work" >/dev/null
 mismatch_retry_work="$(run_case mismatch fail)"
 run_case mismatch fail "$mismatch_retry_work" >/dev/null
+for phase in bootstrap foundation; do
+  partial_work="$(run_case "${phase}_output_fail" fail)"
+  if [ "$phase" = foundation ]; then
+    metadata_file="$partial_work/foundation-network/.terraform/terraform.tfstate"
+    cp "$metadata_file" "$partial_work/foundation-metadata.original.json"
+    jq '.backend.config.key = "unapproved/terraform.tfstate"' "$partial_work/foundation-metadata.original.json" > "$metadata_file"
+    run_case foundation_recovery_wrong_backend fail "$partial_work" >/dev/null
+    if rg -q '^foundation-network (state|plan|apply|output) ' "$scratch/foundation_recovery_wrong_backend.log"; then
+      printf 'foundation recovery used an unapproved backend\n' >&2; exit 1
+    fi
+    cp "$partial_work/foundation-metadata.original.json" "$metadata_file"
+  fi
+  run_case "${phase}_recovered" pass "$partial_work" >/dev/null
+  # Completed resource application must not be repeated to recover its output.
+  module="bootstrap-state"
+  [ "$phase" != foundation ] || module="foundation-network"
+  [ "$(rg -c "^$module apply " "$scratch/${phase}_output_fail.log")" = 1 ]
+  if rg -q "^$module apply " "$scratch/${phase}_recovered.log"; then
+    printf 'checkpoint recovery repeated resource application\n' >&2; exit 1
+  fi
+  [ -f "$partial_work/${phase}-output.json.recovery-state.json" ]
+done
 printf 'PASS bootstrap migration mocks enforce local backup, remote identity, state equivalence, and downstream ordering.\n'

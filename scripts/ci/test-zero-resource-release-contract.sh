@@ -45,8 +45,8 @@ rg -F 'gitops-publisher-handoff.json' "$entrypoint" >/dev/null
 rg -F 'ops-access-handoff.json' "$entrypoint" >/dev/null
 rg -F -- '--inputs cannot be combined with individual phase configs' "$entrypoint" >/dev/null
 rg -F 'zero apply requires --inputs or all three phase configs' "$entrypoint" >/dev/null
-rg -F 'incomplete bootstrap checkpoint; use a new work directory' "$entrypoint" >/dev/null
-rg -F 'incomplete foundation checkpoint; use a new work directory' "$entrypoint" >/dev/null
+rg -F 'recover_missing_phase_output "$bootstrap_module"' "$entrypoint" >/dev/null
+rg -F 'recover_missing_phase_output "$foundation_module"' "$entrypoint" >/dev/null
 rg -F 'cp -R "$bundle_root/source/$relative/." "$destination"' "$entrypoint" >/dev/null
 rg -F 'bootstrap-state.tfvars.json' "$entrypoint" >/dev/null
 rg -F 'github_gitops_client_ecr_publisher_role_arn' "$entrypoint" >/dev/null
