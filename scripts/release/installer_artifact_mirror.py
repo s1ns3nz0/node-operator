@@ -89,7 +89,7 @@ def mirror(state_dir: Path, bundle_root: Path, discovery: dict, profile: str, re
             subprocess.run(["docker","run","--rm","--env","HELM_REGISTRY_CONFIG=/auth/config.json","--volume",f"{auth}:/auth:ro","--volume",f"{work}:/work","--entrypoint","sh",chart_tool,"-c",command,"--",archive,url,sha,target],check=True,env=env)
             got=subprocess.run(["aws","ecr","describe-images","--region",region,"--repository-name",repos[key].split('/',1)[1],"--image-ids","imageTag="+tag,"--query","imageDetails[0].imageDigest","--output","text"],check=True,capture_output=True,text=True,env=env).stdout.strip()
             if got != digest: raise MirrorError("destination chart digest differs from release index")
-            verified[name]={"image_ref":repos[key]+"@"+got,"manifest_digest":got}
+            verified[name]={"image_ref":repos[key]+"@"+got,"manifest_digest":got,"version":item["version"]}
         binding={"schema_version":1,"aws_account_id":account,"aws_region":region,"deployment_name":discovery["deployment_name"],"release_revision":index["release_revision"],"index_sha256":hashlib.sha256(index_path.read_bytes()).hexdigest(),"artifacts":verified}
         vault_chart=index["components"]["vault-chart"]
         consumer={"schema_version":1,"aws_account_id":account,"aws_region":region,"deployment_name":discovery["deployment_name"],

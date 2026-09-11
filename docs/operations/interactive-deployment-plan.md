@@ -167,10 +167,14 @@ those dependencies or prove live deployment.
 The release bundle now carries a fresh-only private cert-manager values
 renderer, fixed hardened values template and guarded deploy helper. Local mock
 tests reject public, cross-account, cross-Region, missing and mismatched image
-digests and arbitrary values overrides. These helpers are not yet wired into
-the installer or Vault CodeBuild image: that image currently lacks the Python
-runtime required by the renderer, and a fresh-only install must be an explicit
-reconcilable stage before TLS rather than an implicit Vault retry side effect.
+digests and arbitrary values overrides. The Vault CodeBuild toolchain now
+packages the Python renderer and installs the receipt-bound private
+cert-manager chart before TLS preparation and sealed Vault deployment. Its
+Terraform contract exposes an applied buildspec/image/role identity, and the
+installer platform adapter reconciles granted authority before starting one
+exact CodeBuild execution and only polls that build on resume. Local mock and
+offline Terraform tests do not prove a live install; guided CLI orchestration,
+post-build authority revocation, and fresh-environment evidence remain.
 
 Release-bundle generation can now accept the exact Vault bootstrap, audit
 relay and GitOps OCI mirror publication records together and deterministically

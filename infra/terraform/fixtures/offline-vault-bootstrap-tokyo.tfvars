@@ -18,3 +18,11 @@ vault_runtime_images = {
   injector    = "123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/vault-injector@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
   audit_relay = "123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/vault-audit-relay@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
 }
+cert_manager_runtime_images = {
+  controller      = "123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/node-operator-baseline-gitops-cert-manager@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  webhook         = "123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/node-operator-baseline-gitops-cert-manager@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  cainjector      = "123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/node-operator-baseline-gitops-cert-manager@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  startupapicheck = "123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/node-operator-baseline-gitops-cert-manager@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+}
+cert_manager_chart_version         = "1.21.1"
+cert_manager_chart_manifest_digest = "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"

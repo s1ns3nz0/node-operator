@@ -37,7 +37,7 @@ def _value(outputs: dict, key: str):
     return item["value"]
 
 
-def _current_invariants(terraform: list[str], environment: dict, state_dir: Path, discovery: dict) -> None:
+def _current_invariants(terraform: list[str], environment: dict, state_dir: Path, discovery: dict) -> dict:
     """Refresh only stable identity outputs; never compare stale output bytes."""
     result = _run(terraform + ["output", "-json"], environment, output=True)
     if result.returncode:
@@ -60,6 +60,7 @@ def _current_invariants(terraform: list[str], environment: dict, state_dir: Path
     if (observed != expected or observed["deployment_account_id"] != discovery["aws_account_id"]
             or observed["cluster_name"] != discovery["deployment_name"]):
         raise VaultAuthorityError("Vault authority stable output invariants changed; reconcile before continuing.")
+    return current
 
 
 def _delta_value(path: Path, phase: str, *, current: bool) -> dict:
@@ -125,11 +126,11 @@ def _receipt(value: object, phase: str, discovery: dict, digest: str, scope: dic
     return value
 
 
-def _reconcile(terraform: list[str], environment: dict, baseline: Path, current: Path, state_dir: Path, discovery: dict) -> None:
+def _reconcile(terraform: list[str], environment: dict, baseline: Path, current: Path, state_dir: Path, discovery: dict) -> dict:
     result = _run(terraform + ["plan", "-input=false", "-detailed-exitcode", f"-var-file={baseline}", f"-var-file={current}"], environment)
     if result.returncode != 0:
         raise VaultAuthorityError("Current composed Vault authority state has drift or pending changes.")
-    _current_invariants(terraform, environment, state_dir, discovery)
+    return _current_invariants(terraform, environment, state_dir, discovery)
 
 
 def _workspace(bundle_root: Path, state_dir: Path, discovery: dict, profile: str, phase: str, action: str) -> Path:
@@ -218,3 +219,19 @@ def apply_vault_authority(bundle_root: Path, state_dir: Path, discovery: dict, p
         raise VaultAuthorityError("Vault authority receipt or plan is malformed.") from error
     finally:
         if module.exists() and not (attempt.exists() or attempt.is_symlink()): shutil.rmtree(module)
+
+
+def reconcile_vault_authority(bundle_root: Path, state_dir: Path, discovery: dict, profile: str, artifacts_path: Path, phase: str) -> dict:
+    """Read-only proof that the completed authority phase remains composed and clean."""
+    _phase(phase); _safe_state(state_dir)
+    delta = prepare_vault_inputs(state_dir, discovery, artifacts_path)
+    _identity(discovery, profile); environment = _environment(profile, discovery)
+    module = _workspace(bundle_root, state_dir, discovery, profile, phase, "reconcile")
+    stage = Path(tempfile.mkdtemp(prefix=f".{phase}-reconcile-", dir=state_dir))
+    try:
+        terraform = ["terraform", f"-chdir={module}"]
+        desired = _delta(delta, phase, current=False, directory=stage)
+        return _reconcile(terraform, environment, state_dir / "infrastructure-inputs/baseline.tfvars.json", desired, state_dir, discovery)
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
+        if module.exists(): shutil.rmtree(module)

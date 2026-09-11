@@ -18,6 +18,7 @@ def prepare_vault_plan_workspace(bundle_root: Path,state_dir: Path,discovery: di
   "vault-bootstrap-plan-work", "vault-bootstrap-apply-work",
   "vault-bootstrap-grant-plan-work", "vault-bootstrap-grant-apply-work",
   "vault-bootstrap-revoke-plan-work", "vault-bootstrap-revoke-apply-work",
+  "vault-bootstrap-grant-reconcile-work", "vault-bootstrap-revoke-reconcile-work",
  }:
   raise VaultExecutionError("Vault plan workspace name is not approved.")
  if shutil.disk_usage(state_dir).free < minimum_free: raise VaultExecutionError("Vault plan staging requires at least 2 GiB free private disk space.")

@@ -94,4 +94,12 @@ class AuthorityTests(unittest.TestCase):
         self.assertTrue((self.state / "vault-authority-plans/grant-apply-attempt.json").exists())
         with self.mocks("grant")[3], self.assertRaises(subject.VaultAuthorityError): subject.apply_vault_authority(self.bundle, self.state, D, "p", self.delta, "grant", digest)
 
+    def test_read_only_reconcile_uses_phase_specific_workspace(self):
+        workspace = self.state / "vault-bootstrap-grant-reconcile-work"; workspace.mkdir(mode=0o700)
+        names=[]
+        def fresh(*args, **kwargs): names.append(kwargs["target_name"]); return workspace
+        with patch.object(subject, "prepare_vault_inputs", return_value=self.delta), patch.object(subject, "prepare_vault_plan_workspace", side_effect=fresh), patch.object(subject, "_identity"), patch.object(subject, "_environment", return_value={}), patch.object(subject, "_reconcile") as reconcile:
+            subject.reconcile_vault_authority(self.bundle, self.state, D, "p", self.delta, "grant")
+        self.assertEqual(names, ["vault-bootstrap-grant-reconcile-work"]); reconcile.assert_called_once(); self.assertFalse(workspace.exists())
+
 if __name__ == "__main__": unittest.main()

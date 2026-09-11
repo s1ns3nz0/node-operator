@@ -26,6 +26,7 @@ RUN apt-get update \
       tar=${TAR_VERSION} \
       unzip=${UNZIP_VERSION} \
       jq=${JQ_VERSION} \
+      python3 \
  && rm -rf /var/lib/apt/lists/*
 RUN curl --fail --location --silent --show-error --output /tmp/awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip" \
  && echo "${AWSCLI_SHA256}  /tmp/awscliv2.zip" | sha256sum --check --status \
@@ -46,8 +47,11 @@ RUN curl --fail --location --silent --show-error --output /usr/local/bin/kubectl
 COPY release/vault-values.yaml.example /opt/node-operator/vault-values.template.yaml
 COPY scripts/release/render-private-vault-values.sh scripts/release/deploy-sealed-vault.sh /opt/node-operator/
 COPY scripts/release/prepare-vault-bootstrap-tls.sh /opt/node-operator/
+COPY release/cert-manager-values.yaml.example /opt/node-operator/cert-manager-values.template.yaml
+COPY scripts/release/render-private-cert-manager-values.py scripts/release/deploy-private-cert-manager.sh /opt/node-operator/
 COPY docs/gitops/vault-tls-internal-ca.example.yaml /opt/node-operator/vault-tls.yaml
 RUN chmod 0755 /opt/node-operator/render-private-vault-values.sh /opt/node-operator/deploy-sealed-vault.sh
 RUN chmod 0755 /opt/node-operator/prepare-vault-bootstrap-tls.sh
+RUN chmod 0755 /opt/node-operator/render-private-cert-manager-values.py /opt/node-operator/deploy-private-cert-manager.sh
 
 WORKDIR /workspace
