@@ -2,6 +2,7 @@
 """Check read-only AWS discovery, identity binding and sanitized failures."""
 import importlib.util
 import os
+import json
 from pathlib import Path
 import subprocess
 import unittest
@@ -13,6 +14,36 @@ spec.loader.exec_module(module)
 
 
 class PreflightTests(unittest.TestCase):
+    def test_bootstrap_permission_probe_never_claims_full_authorization(self):
+        context = {"aws_profile": "operator", "aws_region": "ap-northeast-1", "aws_account_id": "123456789012", "deployment_name": "test-node"}
+        role = {"arn": "arn:aws:iam::123456789012:role/apply"}
+        for decision, missing, expected in (("allowed", [], "limited_checks_passed"),
+                                            ("implicitDeny", ["aws:userid"], "requires_permission_review"),
+                                            ("explicitDeny", [], "requires_permission_review")):
+            def response(profile, region, args):
+                self.assertEqual(profile, "operator")
+                self.assertEqual(args[0:2], ["iam", "simulate-principal-policy"])
+                entries = json.loads(args[args.index("--context-entries") + 1])
+                self.assertEqual({entry["ContextKeyName"] for entry in entries}, {"aws:CurrentTime", "aws:RequestedRegion"})
+                targets = {"s3:CreateBucket": "arn:aws:s3:::test-node-tfstate-123456789012-apnortheast1",
+                           "dynamodb:CreateTable": "arn:aws:dynamodb:ap-northeast-1:123456789012:table/test-node-terraform-lock",
+                           "iam:CreateRole": "arn:aws:iam::123456789012:role/test-node-foundation-flow-logs"}
+                self.assertEqual(args[args.index("--resource-arns") + 1], targets[args[args.index("--action-names") + 1]])
+                return [{"Action": args[args.index("--action-names") + 1], "Decision": decision, "Missing": missing}]
+            with patch.object(module, "aws_read", side_effect=response) as read:
+                result = module.bootstrap_permission_probe(context, role)
+            self.assertEqual(read.call_count, 3)
+            self.assertEqual(result["result"], expected)
+            self.assertEqual(result["provisioning_permissions"], "not_verified")
+            if missing:
+                self.assertTrue(all(check["result"] == "inconclusive" for check in result["checks"]))
+        with patch.object(module, "aws_read", side_effect=module.PreflightError("raw sensitive detail")):
+            result = module.bootstrap_permission_probe(context, role)
+        self.assertTrue(all(check["result"] == "unverified" for check in result["checks"]))
+        self.assertNotIn("sensitive", json.dumps(result))
+        with patch.object(module, "aws_read", return_value=[]), self.assertRaises(module.PreflightError):
+            module.bootstrap_permission_probe(context, role)
+
     def test_execution_profile_binds_unique_role_id_without_getrole_permission(self):
         context = {"aws_profile": "operator", "aws_region": "ap-northeast-1", "aws_account_id": "123456789012", "deployment_name": "test-node"}
         role = {"arn": "arn:aws:iam::123456789012:role/path/backend", "role_id": "AROA" + "A" * 17}

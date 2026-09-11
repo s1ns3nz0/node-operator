@@ -70,7 +70,7 @@ class InstallerCommandTests(unittest.TestCase):
             role = "arn:aws:iam::123456789012:role/backend"
             options = ["--release-dir", temporary, "--aws-profile", "test", "--aws-region", "ap-northeast-1", "--name", "test-node",
                        "--prepare-infrastructure", "--backend-principal-arn", role, "--execution-profile", "execution"]
-            with patch.dict(sys.modules, {"installer_bundle": bundle_module}), patch.object(cli, "discover", return_value=discovery), patch.object(cli, "verify_backend_role", return_value={"existence": "verified"}) as verify_role, patch.object(cli, "verify_execution_profile", return_value={"session_identity": "verified"}) as execution, patch.object(cli, "prepare_inputs") as prepare:
+            with patch.dict(sys.modules, {"installer_bundle": bundle_module}), patch.object(cli, "discover", return_value=discovery), patch.object(cli, "verify_backend_role", return_value={"existence": "verified"}) as verify_role, patch.object(cli, "verify_execution_profile", return_value={"session_identity": "verified"}) as execution, patch.object(cli, "bootstrap_permission_probe", return_value={"result": "requires_permission_review"}), patch.object(cli, "prepare_inputs") as prepare:
                 _, result = self.invoke(directory, "start", options)
             verify_role.assert_called_once_with(discovery, role)
             execution.assert_called_once_with(discovery, discovery["backend_role"], "execution")

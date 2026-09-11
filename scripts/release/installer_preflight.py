@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+from datetime import datetime, timezone
 
 
 class PreflightError(RuntimeError):
@@ -101,6 +102,46 @@ def verify_execution_profile(discovery: dict, role: dict, profile: str) -> dict:
         raise PreflightError("Execution profile is not a session of the verified deployment role.")
     return {"aws_profile": profile, "role_arn": role_arn, "role_id": role_id,
             "session_identity": "verified", "provisioning_permissions": "not_verified"}
+
+
+def bootstrap_permission_probe(discovery: dict, role: dict) -> dict:
+    """Screen three prerequisite creates, never certify full AWS authorization.
+
+    Supply current time so expired temporary allows cannot appear current.
+    Missing IAM context is inconclusive, not a demonstrated effective denial.
+    """
+    profile, region, name, account = (discovery[key] for key in
+        ("aws_profile", "aws_region", "deployment_name", "aws_account_id"))
+    validate_inputs(profile, region, name)
+    principal = role.get("arn", "")
+    if not isinstance(principal, str) or not principal.startswith(f"arn:aws:iam::{account}:role/"):
+        raise PreflightError("Permission probe requires the selected same-account role.")
+    context = [{"ContextKeyName": "aws:CurrentTime", "ContextKeyValues": [datetime.now(timezone.utc).isoformat()], "ContextKeyType": "date"},
+               {"ContextKeyName": "aws:RequestedRegion", "ContextKeyValues": [region], "ContextKeyType": "string"}]
+    checks = []
+    targets = [("s3:CreateBucket", f"arn:aws:s3:::{name}-tfstate-{account}-{region.replace('-', '')}"),
+               ("dynamodb:CreateTable", f"arn:aws:dynamodb:{region}:{account}:table/{name}-terraform-lock"),
+               ("iam:CreateRole", f"arn:aws:iam::{account}:role/{name}-foundation-flow-logs")]
+    for action, resource in targets:
+        try:
+            response = aws_read(profile, region, ["iam", "simulate-principal-policy", "--policy-source-arn", principal,
+                "--action-names", action, "--resource-arns", resource, "--context-entries", json.dumps(context),
+                "--query", "EvaluationResults[].{Action:EvalActionName,Decision:EvalDecision,Missing:MissingContextValues}"])
+        except PreflightError:
+            checks.append({"action": action, "resource": resource, "result": "unverified", "reason": "simulation_unavailable"})
+            continue
+        if (not isinstance(response, list) or len(response) != 1 or not isinstance(response[0], dict)
+                or response[0].get("Action") != action
+                or response[0].get("Decision") not in ("allowed", "implicitDeny", "explicitDeny")
+                or not isinstance(response[0].get("Missing"), list)
+                or not all(isinstance(item, str) for item in response[0]["Missing"])):
+            raise PreflightError("IAM simulation returned an invalid prerequisite result.")
+        value = response[0]
+        result = "inconclusive" if value["Missing"] else ("allowed_in_simulation" if value["Decision"] == "allowed" else "denied_in_simulation")
+        checks.append({"action": action, "resource": resource, "result": result,
+                       "decision": value["Decision"], "missing_context": sorted(set(value["Missing"]))})
+    return {"checks": checks, "result": "limited_checks_passed" if all(check["result"] == "allowed_in_simulation" for check in checks) else "requires_permission_review",
+            "provisioning_permissions": "not_verified", "scope": "three prerequisite creates only; resource policies, session policies and complete deployment actions not verified"}
 
 
 def backend_collisions(profile: str, region: str, name: str, account: str) -> dict:

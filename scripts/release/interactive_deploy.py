@@ -11,7 +11,7 @@ from pathlib import Path
 import stat
 import sys
 
-from installer_preflight import PreflightError, discover, validate_inputs, verify_backend_role, verify_execution_profile
+from installer_preflight import PreflightError, discover, validate_inputs, verify_backend_role, verify_execution_profile, bootstrap_permission_probe
 from installer_state import CheckpointStore, StateError, STAGE_NAMES
 from installer_infrastructure import InfrastructureError, prepare_inputs
 
@@ -109,6 +109,7 @@ def run(argv: list[str] | None = None) -> int:
             discovery["backend_role"] = verify_backend_role(discovery, principal)
             if args.execution_profile:
                 discovery["execution_identity"] = verify_execution_profile(discovery, discovery["backend_role"], args.execution_profile)
+                discovery["bootstrap_permission_probe"] = bootstrap_permission_probe(discovery, discovery["backend_role"])
             bundle_root = materialize_release(args.release_dir, args.state_dir / "release",
                                               release["release_sha"], release["bundle_digest"])
             prepare_inputs(bundle_root, inputs_dir, discovery, principal)

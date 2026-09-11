@@ -42,6 +42,15 @@ stores access-key/session-token values. This option verifies identity only:
 no IAM policies are attached, no Terraform command runs, and no permission
 success is claimed. The execution profile is not persisted as an apply
 authorization; it must be supplied and reverified on a later execution path.
+With an execution profile selected, preparation also runs three read-only IAM
+simulations for the generated state bucket, lock table and foundation role
+creation. Current time and target Region are supplied so an expired temporary
+allow is not treated as current. Missing conditions are `inconclusive`, denied
+simulation access is `unverified`, and even three allowed results are only
+`limited_checks_passed`, never full provisioning authorization. Input preparation
+may finish while this report says `requires_permission_review`; that status
+must not be used to start an automatic apply. Additional deployment actions,
+resource/session policies and live execution remain unverified.
 `infrastructure_inputs_ready` is a preparation result, not a deployment result.
 Newly generated baseline inputs also set `terraform_apply_role_arn` to the
 selected role, eliminating the mandatory historical role name from new KMS
