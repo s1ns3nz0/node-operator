@@ -55,13 +55,14 @@ def run(argv: list[str] | None = None) -> int:
     parser.add_argument("--prepare-ops-access", action="store_true", help="Prepare separate SSM inputs after infrastructure completion; never plans, applies or opens a session")
     parser.add_argument("--plan-ops-access", action="store_true", help="Create a separate private SSM saved plan; does not apply")
     parser.add_argument("--apply-ops-access", action="store_true", help="Apply the separately reviewed SSM plan after terminal confirmation")
+    parser.add_argument("--verify-ops-access", action="store_true", help="Verify SSM Online and private EKS access through a temporary session; no Terraform apply")
     parser.add_argument("--ops-plan-sha", help="Exact SHA-256 from the reviewed SSM plan; required for SSM apply")
     parser.add_argument("--apply-infrastructure", action="store_true", help="Prepare and apply infrastructure after terminal confirmation; does not set up SSM/Vault/workloads")
     parser.add_argument("--backend-principal-arn", help="Exact same-account backend IAM role for infrastructure preparation")
     parser.add_argument("--execution-profile", help="Optional existing AWS role profile to verify and use for infrastructure execution")
     args = parser.parse_args(argv)
-    ops_requested = args.prepare_ops_access or args.plan_ops_access or args.apply_ops_access
-    if ops_requested and (args.command != "resume" or args.prepare_infrastructure or args.apply_infrastructure or args.backend_principal_arn or args.execution_profile or sum((args.prepare_ops_access, args.plan_ops_access, args.apply_ops_access)) != 1):
+    ops_requested = args.prepare_ops_access or args.plan_ops_access or args.apply_ops_access or args.verify_ops_access
+    if ops_requested and (args.command != "resume" or args.prepare_infrastructure or args.apply_infrastructure or args.backend_principal_arn or args.execution_profile or sum((args.prepare_ops_access, args.plan_ops_access, args.apply_ops_access, args.verify_ops_access)) != 1):
         raise StateError("SSM is a separate resume operation; choose one preparation, plan or apply step without infrastructure options.")
     if args.ops_plan_sha and not args.apply_ops_access:
         raise StateError("--ops-plan-sha is accepted only with --apply-ops-access.")
@@ -123,17 +124,31 @@ def run(argv: list[str] | None = None) -> int:
         if ops_requested:
             if checkpoint["stages"].get("infrastructure", {}).get("status") != "complete":
                 raise StateError("SSM operations require completed infrastructure in this original state directory.")
-            if checkpoint["stages"].get("ops_access", {}).get("status") == "complete":
+            if checkpoint["stages"].get("ops_access", {}).get("status") == "complete" and not args.verify_ops_access:
                 raise StateError("SSM access is already complete; preparation cannot reset its status.")
-            from installer_bundle import materialize_release
-            from installer_ops_access import prepare_ops_access
-            bundle_root = materialize_release(args.release_dir, args.state_dir / "release",
-                                              release["release_sha"], release["bundle_digest"])
+            if args.verify_ops_access:
+                store.set_stage("ops_access", "running")
+                try:
+                    from installer_bundle import materialize_release
+                    bundle_root = materialize_release(args.release_dir, args.state_dir / "release",
+                                                      release["release_sha"], release["bundle_digest"])
+                    from installer_ops_verify import verify_ops_access
+                    verify_ops_access(bundle_root, args.state_dir, discovery, profile)
+                except (Exception, KeyboardInterrupt):
+                    store.set_stage("ops_access", "awaiting_input")
+                    raise
+                store.set_stage("ops_access", "complete")
+                ops_result = "ops_access_ready"
+            else:
+                from installer_bundle import materialize_release
+                bundle_root = materialize_release(args.release_dir, args.state_dir / "release",
+                                                  release["release_sha"], release["bundle_digest"])
             if args.prepare_ops_access:
+                from installer_ops_access import prepare_ops_access
                 prepare_ops_access(bundle_root, args.state_dir, discovery, profile)
                 store.set_stage("ops_access", "awaiting_input")
                 ops_result = "ops_access_inputs_ready"
-            else:
+            elif not args.verify_ops_access:
                 from installer_ops_execution import plan_ops_access, apply_ops_access
                 if args.apply_ops_access:
                     confirmation = f"APPLY SSM {discovery['aws_account_id']} {region} {name} node-operator/ops-access/terraform.tfstate {args.ops_plan_sha}"
@@ -183,10 +198,15 @@ def run(argv: list[str] | None = None) -> int:
                     store.set_stage("infrastructure", "failed")
                     raise
                 store.set_stage("infrastructure", "complete")
+    remaining = "Infrastructure apply and later deployment stages remain required."
+    if ops_requested or args.apply_infrastructure:
+        remaining = "SSM session/private EKS readiness, Vault, secrets, GitOps, workloads, custody, deposit, activation, duty and E2E remain required."
+    if args.verify_ops_access:
+        remaining = "Vault, secrets, GitOps, workloads, custody, deposit, activation, duty and E2E remain required."
     print(json.dumps({"result": ops_result or ("infrastructure_ready" if args.apply_infrastructure else ("infrastructure_inputs_ready" if args.prepare_infrastructure else "discovery_complete")), "discovery": discovery,
                       "ops_plan_sha256": ops_plan_sha,
                       "deployment_complete": False,
-                      "remaining": "SSM session/private EKS readiness, Vault, secrets, GitOps, workloads, custody, deposit, activation, duty and E2E remain required." if ops_requested or args.apply_infrastructure else "Infrastructure apply and later deployment stages remain required."}, sort_keys=True))
+                      "remaining": remaining}, sort_keys=True))
     return 0
 
 

@@ -18,6 +18,62 @@ DISCOVERY = {"aws_profile": "test", "aws_account_id": "123456789012", "aws_regio
 
 
 class InstallerCommandTests(unittest.TestCase):
+    def test_missing_materializer_downgrades_completed_recheck(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary).resolve() / "state"
+            store = cli.CheckpointStore(directory, {**DISCOVERY, **RELEASE})
+            with store.lock():
+                store.resume()
+                store.set_stage("infrastructure", "complete")
+                store.set_stage("ops_access", "complete")
+            bundle = types.SimpleNamespace(verify_release=lambda _: RELEASE)
+            with patch.dict(sys.modules, {"installer_bundle": bundle}), patch.object(cli, "discover", return_value=DISCOVERY), self.assertRaises(ImportError):
+                self.invoke(directory, "resume", ["--release-dir", temporary, "--verify-ops-access"])
+            _, status = self.invoke(directory, "status")
+            self.assertEqual(status["stages"]["ops_access"]["status"], "awaiting_input")
+
+    def test_interrupted_or_unmaterializable_recheck_removes_stale_completion(self):
+        for materialize_failure in (False, True):
+            with tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary).resolve() / "state"
+                store = cli.CheckpointStore(directory, {**DISCOVERY, **RELEASE})
+                with store.lock():
+                    store.resume()
+                    store.set_stage("infrastructure", "complete")
+                    store.set_stage("ops_access", "complete")
+                materialize = Mock(side_effect=ValueError("corrupt release") if materialize_failure else None)
+                verify = Mock(side_effect=KeyboardInterrupt())
+                bundle = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=materialize)
+                with patch.dict(sys.modules, {"installer_bundle": bundle, "installer_ops_verify": types.SimpleNamespace(verify_ops_access=verify)}), patch.object(cli, "discover", return_value=DISCOVERY), self.assertRaises(ValueError if materialize_failure else KeyboardInterrupt):
+                    self.invoke(directory, "resume", ["--release-dir", temporary, "--verify-ops-access"])
+                if materialize_failure:
+                    verify.assert_not_called()
+                _, status = self.invoke(directory, "status")
+                self.assertEqual(status["stages"]["ops_access"]["status"], "awaiting_input")
+
+    def test_ops_complete_requires_live_verifier_and_failed_recheck_downgrades(self):
+        for failure in (False, True):
+            with tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary).resolve() / "state"
+                store = cli.CheckpointStore(directory, {**DISCOVERY, **RELEASE})
+                with store.lock():
+                    store.resume()
+                    store.set_stage("infrastructure", "complete")
+                    store.set_stage("ops_access", "complete" if failure else "awaiting_input")
+                bundle = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=Mock(return_value=directory / "release"))
+                verify = Mock(side_effect=cli.InfrastructureError("SSM offline") if failure else None)
+                with patch.dict(sys.modules, {"installer_bundle": bundle, "installer_ops_verify": types.SimpleNamespace(verify_ops_access=verify)}), patch.object(cli, "discover", return_value=DISCOVERY):
+                    if failure:
+                        with self.assertRaises(cli.InfrastructureError):
+                            self.invoke(directory, "resume", ["--release-dir", temporary, "--verify-ops-access"])
+                    else:
+                        _, result = self.invoke(directory, "resume", ["--release-dir", temporary, "--verify-ops-access"])
+                        self.assertEqual(result["result"], "ops_access_ready")
+                        self.assertFalse(result["deployment_complete"])
+                verify.assert_called_once_with(directory / "release", directory, DISCOVERY, "test")
+                _, status = self.invoke(directory, "status")
+                self.assertEqual(status["stages"]["ops_access"]["status"], "awaiting_input" if failure else "complete")
+
     def test_ops_apply_requires_terminal_sha_and_separate_operation(self):
         for options in (["--apply-ops-access"], ["--plan-ops-access", "--apply-ops-access"], ["--ops-plan-sha", "a" * 64]):
             with patch.object(cli.sys.stdin, "isatty", return_value=False), patch.object(cli, "discover") as discover, self.assertRaises(cli.StateError):

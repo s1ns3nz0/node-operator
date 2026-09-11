@@ -10,8 +10,11 @@ Baseline: v0.1.20, source a87b02f9422d33e75a20879e5916ff73fe036df5. Status: impl
   `require_approval=1`; passing CI alone does not authorize merge or release.
 - Infrastructure preparation/apply adapters have local contract evidence;
   a downloaded-release live infrastructure deployment is not yet verified.
-- Task 7 has separate input preparation and guarded plan/apply source adapters.
-  Live provisioning, private-session readiness and tasks 8-14 remain incomplete.
+- Task 7 has preparation, guarded plan/apply and private-access verification
+  source adapters. Fresh-environment execution and tasks 8-14 remain incomplete.
+- PR #221 head `9f9797fbe8af859ba70a8f486854a9422815664e`: CI run
+  `34576136851` and Scanner Build job `103188927488` passed. The separate
+  trusted decision still requires approval; no release publication is implied.
 - No live deployment, Vault ceremony, validator activation or resource
   deletion is evidenced by these local tests.
 

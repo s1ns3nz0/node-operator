@@ -55,6 +55,9 @@ case "${1:-} ${2:-}" in
       fi
       shift
     done
+    if [ -n "${MOCK_TEMP_ROOT:-}" ]; then
+      case "$kubeconfig" in "$MOCK_TEMP_ROOT"/*) ;; *) exit 65 ;; esac
+    fi
     : > "$kubeconfig"
     ;;
   'ssm start-session')
@@ -112,9 +115,12 @@ chmod +x "$scratch/bin/aws" "$scratch/bin/kubectl" "$scratch/bin/nc"
 
 trace="$scratch/trace"
 : > "$trace"
-PATH="$scratch/bin:$PATH" MOCK_TRACE="$trace" MOCK_SSM_MODE=owned \
+mkdir -m 700 "$scratch/private-tmp"
+TMPDIR="$scratch/private-tmp" MOCK_TEMP_ROOT="$scratch/private-tmp" \
+  PATH="$scratch/bin:$PATH" MOCK_TRACE="$trace" MOCK_SSM_MODE=owned \
   ANTHROPIC_API_KEY=mocked-anthropic OPENAI_API_KEY=mocked-openai GITHUB_TOKEN=mocked-github \
   bash "$wrapper" -- /usr/bin/true
+test -z "$(find "$scratch/private-tmp" -type f -print)" || fail 'wrapper retained temporary files after cleanup'
 grep -Fq 'start-session ssm start-session' "$trace" || fail 'wrapper did not start a mocked SSM session'
 grep -Fxq 'terminate-session ssm terminate-session --session-id owned-session --region ap-northeast-2' "$trace" ||
   fail 'wrapper did not terminate exactly its owned SSM session'

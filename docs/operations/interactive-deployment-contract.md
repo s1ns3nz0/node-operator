@@ -2,7 +2,14 @@
 
 ## Commands
 
-The public entrypoint is `scripts/release/node-operator-install.sh`. It provides `start`, `status` and `resume` for release checks, AWS discovery and private checkpoints. `--prepare-infrastructure` only generates local inputs. `--apply-infrastructure` additionally invokes the verified release's guarded Terraform path after explicit terminal confirmation. Separate SSM preparation, plan and apply operations retain their own state and confirmation. SSM connection readiness and later deployment adapters remain unimplemented. `resume` rejects running stages pending reconciliation; a failed infrastructure apply can be retried through the release wrapper's existing-state checks, but residual changes still stop for review. `status` is local only.
+The public entrypoint is `scripts/release/node-operator-install.sh`. It provides
+`start`, `status` and `resume` for release checks, discovery and checkpoints.
+Infrastructure preparation and confirmed apply are separate from SSM
+preparation, plan, confirmed apply and private-access verification. Vault and
+later deployment adapters remain unimplemented. `resume` rejects running stages
+pending reconciliation; a failed infrastructure apply can be retried through
+existing-state checks, but residual changes still stop for review. `status` is
+local only. Source and mock-test support do not prove a live deployment.
 
 ## Separate operations-access preparation
 
@@ -40,6 +47,19 @@ new private session handoff. The ops stage remains `awaiting_input` until
 SSM Online and private EKS connectivity are verified; no Vault, signer or
 validator readiness is inferred. Current adapter tests use mocked cloud and
 Terraform behavior; they are not evidence of a successful fresh deployment.
+
+## Private access verification
+
+Use `resume --verify-ops-access` with the same release assets and state directory
+after SSM provisioning. This is separate from Terraform apply: it verifies the
+handoff, AWS identity, instance/network ownership, SSM Online status and private
+EKS endpoint configuration before opening a temporary session. The wrapper
+uses the handoff's Region, cluster and instance, never its historical defaults.
+Only a successful Kubernetes API read and session cleanup allow
+`ops_access_ready` and `ops_access=complete`. A failed recheck removes the stale
+completed status; offline access remains `awaiting_input`. Vault and validator
+readiness are not inferred. Temporary files use the host temporary directory
+so the transport does not require macOS's `/private/tmp` on Linux.
 
 ## Explicit infrastructure apply
 

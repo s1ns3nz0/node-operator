@@ -24,8 +24,8 @@ region="${AWS_REGION:-ap-northeast-2}"
 cluster_name="${EKS_CLUSTER_NAME:-node-operator}"
 instance_id="${SSM_OPS_INSTANCE_ID:-i-02c57d75e7f6810b1}"
 eks_port="${PRIVATE_EKS_LOCAL_PORT:-9443}"
-session_log="$(mktemp /private/tmp/node-operator-ssm.XXXXXX)"
-kubeconfig_file="$(mktemp /private/tmp/node-operator-kubeconfig.XXXXXX)"
+session_log="$(mktemp "${TMPDIR:-/tmp}/node-operator-ssm.XXXXXX")"
+kubeconfig_file="$(mktemp "${TMPDIR:-/tmp}/node-operator-kubeconfig.XXXXXX")"
 session_pid=''
 session_id=''
 session_id_ambiguous=0
@@ -72,10 +72,11 @@ cleanup() {
     kill -TERM "$session_pid" 2>/dev/null || true
     wait "$session_pid" 2>/dev/null || true
   fi
-  unlink "$session_log" "$kubeconfig_file" 2>/dev/null || true
+  unlink "$session_log" 2>/dev/null || cleanup_failed=1
+  unlink "$kubeconfig_file" 2>/dev/null || cleanup_failed=1
 
   if [ "$cleanup_failed" -ne 0 ]; then
-    printf '%s\n' 'failed to terminate the owned SSM session' >&2
+    printf '%s\n' 'private EKS session cleanup failed' >&2
   fi
   if [ "$original_status" -eq 0 ] && [ "$cleanup_failed" -ne 0 ]; then
     return 1
