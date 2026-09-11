@@ -56,3 +56,25 @@ if GH_TOKEN=fixture GITHUB_REPOSITORY=owner/repo TRUSTED_WORKFLOW_SHA=bbbbbbbbbb
   exit 1
 fi
 printf 'PASS: trusted evidence publishes a fail-closed check on the exact PR head SHA.\n'
+
+# The consolidated producer accepts only the new exact pair.
+jq '.workflow_run.name = "CI" | .workflow_run.path = ".github/workflows/ci.yml"' "$temporary_directory/event.json" > "$temporary_directory/new-ci.json"
+GH_TOKEN=fixture GITHUB_REPOSITORY=owner/repo TRUSTED_WORKFLOW_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb PATH="$temporary_directory/bin:$PATH" \
+  "$script_dir/resolve-pr-evidence-context.sh" "$temporary_directory/new-ci.json" "$temporary_directory/new-ci.out"
+grep -Fx 'subject_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "$temporary_directory/new-ci.out" >/dev/null
+for name in 'CI' 'CI Security'; do
+  if [ "$name" = 'CI' ]; then wrong_path='.github/workflows/ci-security.yml'; else wrong_path='.github/workflows/ci.yml'; fi
+  jq --arg name "$name" --arg path "$wrong_path" '.workflow_run.name=$name | .workflow_run.path=$path' "$temporary_directory/event.json" > "$temporary_directory/crossed.json"
+  if GH_TOKEN=fixture GITHUB_REPOSITORY=owner/repo TRUSTED_WORKFLOW_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb PATH="$temporary_directory/bin:$PATH" \
+    "$script_dir/resolve-pr-evidence-context.sh" "$temporary_directory/crossed.json" "$temporary_directory/crossed.out" 2>/dev/null; then
+    printf 'resolver accepted a mismatched workflow name/path pair\n' >&2
+    exit 1
+  fi
+done
+jq '.workflow_run.name = "CI Security" | .workflow_run.path = ".github/workflows/ci-security.yml"' "$temporary_directory/event.json" > "$temporary_directory/legacy-ci.json"
+if GH_TOKEN=fixture GITHUB_REPOSITORY=owner/repo TRUSTED_WORKFLOW_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb PATH="$temporary_directory/bin:$PATH" \
+  "$script_dir/resolve-pr-evidence-context.sh" "$temporary_directory/legacy-ci.json" "$temporary_directory/legacy-ci.out" 2>/dev/null; then
+  printf 'resolver accepted the retired CI workflow\n' >&2
+  exit 1
+fi
+printf 'PASS: consolidated CI identity accepted; legacy and crossed identities rejected.\n'
