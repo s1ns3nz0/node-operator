@@ -49,7 +49,11 @@ printf '%s\n' 'Use a Hoodi withdrawal address you control. This is a new operati
 "$deposit_bin" new-mnemonic --num_validators=1 --mnemonic_language=english --chain=hoodi --folder "$output_dir"
 
 keystore_count="$(find "$output_dir/validator_keys" -maxdepth 1 -type f -name 'keystore-*.json' | wc -l | tr -d ' ')"
-deposit_count="$(find "$output_dir" -maxdepth 1 -type f -name 'deposit_data-*.json' | wc -l | tr -d ' ')"
+# Recent deposit-cli releases place deposit_data alongside the keystore under
+# validator_keys; older releases placed it at the output root. Accept either
+# layout while preserving the files exactly where the verified tool wrote them.
+deposit_files="$(find "$output_dir" -maxdepth 2 -type f -name 'deposit_data-*.json' -print)"
+deposit_count="$(printf '%s\n' "$deposit_files" | sed '/^$/d' | wc -l | tr -d ' ')"
 [ "$keystore_count" = 1 ] && [ "$deposit_count" = 1 ] || { printf 'Expected exactly one keystore and one deposit-data file. Do not upload or deposit.\n' >&2; exit 65; }
-chmod 600 "$output_dir/validator_keys"/* "$output_dir"/deposit_data-*.json
+chmod 600 "$output_dir/validator_keys"/* $deposit_files
 printf 'PASS: new Hoodi key ceremony completed locally. Next, run validate-hoodi-deposit-data.sh; do not deposit before it passes.\n'
