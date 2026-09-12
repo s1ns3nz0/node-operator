@@ -103,7 +103,7 @@ variable "availability_zones" {
   default     = ["ap-northeast-2a", "ap-northeast-2c"]
 
   validation {
-    condition     = length(var.availability_zones) == 2 && length(distinct(var.availability_zones)) == 2 && alltrue([for zone in var.availability_zones : can(regex("^${var.aws_region}[a-z]$", zone))])
+    condition     = length(var.availability_zones) == 2 && length(distinct(var.availability_zones)) == 2 && alltrue([for zone in var.availability_zones : can(regex("^[a-z]{2}-[a-z0-9-]+-[0-9]+[a-z]$", zone))])
     error_message = "availability_zones must contain exactly two distinct zones in aws_region."
   }
 }
