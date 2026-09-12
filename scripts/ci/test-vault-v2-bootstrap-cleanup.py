@@ -48,7 +48,7 @@ class BootstrapCleanup(unittest.TestCase):
                 path = root / name
                 path.write_text('#!/bin/bash\nexit "$BOOTSTRAP_RC"\n')
                 path.chmod(0o700)
-            vault = root / "vault"
+vault = root / "vault"
             for name in ("copy-hoodi-custody-to-runtime-v2.sh",
                          "prepare-hoodi-vault-v2-transport.sh"):
                 path = root / name
@@ -57,8 +57,9 @@ class BootstrapCleanup(unittest.TestCase):
                                 'if [ "$BOOTSTRAP_RC" != 0 ]; then exit "$BOOTSTRAP_RC"; fi\n'
                                 'if [ "$1" = --validator-set ] && [ "${3:-}" = --output-dir ]; then mkdir "$4"; fi\n')
                 path.chmod(0o700)
-            vault.write_text("""#!/bin/bash
+vault.write_text("""#!/bin/bash
 case "$*" in
+  *"status -format=json"*) echo '{"initialized":true,"sealed":false,"version":"1.18.0"}' ;;
   *"generate-root -status"*) echo '{"started":false}' ;;
   *"generate-root -init"*) echo '{"nonce":"n","otp":"o","required":1}' ;;
   *"generate-root -nonce="*) echo '{"complete":true,"encoded_token":"e"}' ;;
