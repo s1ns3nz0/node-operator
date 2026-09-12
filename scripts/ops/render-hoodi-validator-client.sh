@@ -10,7 +10,7 @@ case "$aws_account_id" in [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9
 [[ "$aws_region" =~ ^[a-z]{2}-[a-z0-9-]+-[0-9]+$ ]] || usage
 case "$output" in /*) ;; *) usage ;; esac
 printf '%s\n' "$image" | grep -Eq "^${aws_account_id}\\.dkr\\.ecr\\.${aws_region}\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$" || { printf '%s\n' 'image must be an approved same-account private ECR digest in aws_region' >&2; exit 65; }
-printf '%s\n' "$fence_image" | grep -Eq "^${aws_account_id}\\.dkr\\.ecr\\.${aws_region}\\.amazonaws\\.com/node-operator-baseline-validator-fence@sha256:[a-f0-9]{64}$" || { printf '%s\n' 'fence image must be the protected type-separated private ECR digest in aws_region' >&2; exit 65; }
+printf '%s\n' "$fence_image" | grep -Eq "^${aws_account_id}\\.dkr\\.ecr\\.${aws_region}\\.amazonaws\\.com/[a-z0-9][a-z0-9-]*-baseline-validator-fence@sha256:[a-f0-9]{64}$" || { printf '%s\n' 'fence image must be the protected type-separated private ECR digest in aws_region' >&2; exit 65; }
 printf '%s\n' "$kubernetes_api_cidr" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}/32$' || { printf '%s\n' 'Kubernetes API CIDR must be one explicit IPv4 /32' >&2; exit 65; }
 for command in sed mkdir mktemp mv grep dirname unlink jq; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"; template="$root/deploy/validator/client-template.yaml"; fence_template="$root/deploy/validator/client-lease-fence-template.yaml"
