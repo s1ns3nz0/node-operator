@@ -1,0 +1,58 @@
+# Purpose: Permanently retain only redacted, exact-head CI evidence after Cosign signing and verification.
+name: CI Evidence Archive
+
+on:
+  workflow_run:
+    workflows: [CI Evidence Gate]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: ci-evidence-archive-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    name: Signed Evidence Archive
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    environment: ci-evidence-archive
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    env:
+      CI_EVIDENCE_ARCHIVE_BUCKET: ${{ vars.CI_EVIDENCE_ARCHIVE_BUCKET }}
+      AWS_ROLE_ARN: ${{ vars.CI_EVIDENCE_ARCHIVE_ROLE_ARN }}
+    steps:
+      - name: Trusted archive control plane
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download exact OPA evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5.0.0
+        with:
+          pattern: ci-evidence-gate-*
+          merge-multiple: true
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/ci-evidence
+      - name: Resolve evidence subject
+        id: subject
+        env:
+          EVIDENCE_ROOT: ${{ runner.temp }}/ci-evidence
+        run: |
+          evidence_file="$(find "$EVIDENCE_ROOT" -type f -name evidence.json -print -quit)"
+          test -n "$evidence_file"
+          subject_sha="$(jq -er '.subject.commit_sha' "$evidence_file")"
+          printf 'subject_sha=%s\n' "$subject_sha" >> "$GITHUB_OUTPUT"
+      - name: Short-lived archive identity
+        run: scripts/ci/assume-ci-evidence-archive-role.sh
+      - name: Cosign sign, verify, and archive
+        env:
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          evidence_file="$(find "${{ runner.temp }}/ci-evidence" -type f -name evidence.json -print -quit)"
+          evidence_root="$(dirname "$evidence_file")"
+          scripts/ci/archive-ci-evidence.sh "$evidence_root" "${{ steps.subject.outputs.subject_sha }}" "$RUN_ID" "$RUNNER_TEMP/ci-evidence-signed"

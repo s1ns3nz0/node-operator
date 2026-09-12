@@ -109,6 +109,9 @@ jobs:
       # Role: Contract test: Preserve immutable scanner-image and evidence-gate contracts across security workflows.
       - name: Scanner evidence upload boundary
         run: scripts/ci/test-ci-security-evidence-contract.sh
+      # Role: Verify long-term evidence archival uses Cosign and the dedicated immutable S3 boundary.
+      - name: CI Evidence Archive Contract
+        run: scripts/ci/test-ci-evidence-archive-contract.sh
       # Role: Contract test: Keep PR evidence Terraform validation bound to the deployable root module.
       - name: Evidence-gate Terraform contract
         run: scripts/ci/test-evidence-gate-terraform-contract.sh

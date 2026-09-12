@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Check objective: Preserve the eight workflow entrypoints, CI authority boundaries and non-publishing release verification mode.
+# Check objective: Preserve the workflow entrypoints, CI authority boundaries and non-publishing release verification mode.
 import itertools
 from pathlib import Path
 import re
@@ -19,7 +19,8 @@ class Consolidation(unittest.TestCase):
     def test_entrypoints(self):
         self.assertEqual({p.name for p in WORKFLOWS.glob("*.yml")}, {
             "ci.yml", "fence-security.yml", "opa-pr-gate.yml", "ci-review-refresh.yml",
-            "release.yml", "image-release.yml", "private-ecr-mirror.yml", "operations-check.yml"})
+            "release.yml", "image-release.yml", "private-ecr-mirror.yml", "operations-check.yml",
+            "ci-evidence-archive.yml"})
 
     def test_ci_permissions_and_checks(self):
         source = (WORKFLOWS / "ci.yml").read_text()
