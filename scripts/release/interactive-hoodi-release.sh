@@ -129,10 +129,14 @@ verify_private_image() {
     printf 'bootstrap image must be a same-account private ECR digest: %s\n' "$image" >&2; exit 65;
   }
   found="$(aws ecr describe-images --region "$region" --repository-name "$repository" --image-ids imageDigest="$digest" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
-  [ "$found" = "$digest" ] || { printf 'required private ECR image is missing: %s\n' "$image" >&2; printf '%s\n' 'Mirror the reviewed v0.1.20 artifact into this account, then rerun the single installer.' >&2; exit 65; }
+  if [ "$found" != "$digest" ]; then
+    printf 'required private ECR image is missing; it will be mirrored from the release approval: %s\n' "$image" >&2
+    return 1
+  fi
 }
-verify_private_image "$argocd_bootstrap_image"
-verify_private_image "$vault_bootstrap_image"
+bootstrap_mirror_images=()
+if ! verify_private_image "$argocd_bootstrap_image"; then bootstrap_mirror_images+=("$argocd_bootstrap_image"); fi
+if ! verify_private_image "$vault_bootstrap_image"; then bootstrap_mirror_images+=("$vault_bootstrap_image"); fi
 
 printf '%s\n' 'Generating and validating the new Hoodi validator key before infrastructure staging.' >&2
 mkdir -m 700 "$output_dir" "$output_dir/custody"
@@ -160,6 +164,33 @@ inputs="$output_dir/inputs/hoodi-zero-release-inputs.json"
 session="$output_dir/private-eks-session.json"
 
 "$release" deploy apply --bundle-root "$bundle_root" --inputs "$inputs" --work-dir "$output_dir/deployment-work" --private-eks-session-handoff "$session" --allow-create
+
+# A fresh account has empty private mirrors. Copy only the exact, release-
+# approved source digest after Terraform has created the destination ECR
+# repositories, then read the destination digest back before proceeding.
+if [ "${#bootstrap_mirror_images[@]}" -gt 0 ]; then
+  [ -f "$platform_approval" ] || { printf '%s\n' 'release bundle lacks platform artifact approval for automatic mirroring' >&2; exit 65; }
+  command -v docker >/dev/null 2>&1 || { printf '%s\n' 'docker is required to mirror missing approved bootstrap artifacts' >&2; exit 69; }
+  registry="${account}.dkr.ecr.${region}.amazonaws.com"
+  ecr_auth="$(aws ecr get-login-password --region "$region")"
+  printf '%s' "$ecr_auth" | docker login --username AWS --password-stdin "$registry" >/dev/null
+  for destination in "${bootstrap_mirror_images[@]}"; do
+    case "$destination" in
+      *node-operator-baseline-gitops-argocd@*) key=argocd_bootstrap ;;
+      *node-operator-baseline-gitops-vault@*) key=vault_bootstrap ;;
+      *) printf 'unrecognized bootstrap destination: %s\n' "$destination" >&2; exit 65 ;;
+    esac
+    source_image="$(jq -er --arg key "$key" '.artifacts[$key].source' "$platform_approval")"
+    digest="${destination##*@}"; repository="${destination#*/}"; repository="${repository%@*}"
+    aws ecr describe-repositories --region "$region" --repository-names "$repository" >/dev/null 2>&1 || \
+      aws ecr create-repository --region "$region" --repository-name "$repository" >/dev/null
+    docker pull "$source_image" >/dev/null
+    docker tag "$source_image" "$registry/$repository:${digest#sha256:}"
+    docker push "$registry/$repository:${digest#sha256:}" >/dev/null
+    mirrored="$(aws ecr describe-images --region "$region" --repository-name "$repository" --image-ids imageTag="${digest#sha256:}" --query 'imageDetails[0].imageDigest' --output text)"
+    [ "$mirrored" = "$digest" ] || { printf 'mirrored bootstrap digest mismatch: expected %s got %s\n' "$digest" "$mirrored" >&2; exit 65; }
+  done
+fi
 
 platform_script="$source_root/scripts/release/run-platform-bootstrap.sh"
 [ -x "$platform_script" ] || { printf '%s\n' 'release bundle lacks the unified platform bootstrap helper' >&2; exit 65; }
