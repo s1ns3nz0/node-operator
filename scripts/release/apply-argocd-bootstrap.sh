@@ -24,7 +24,7 @@ parent="$(dirname "$plan_file")"; [ -d "$parent" ] || { printf '%s\n' 'plan dire
 mode="$(stat -f '%Lp' "$parent" 2>/dev/null || stat -c '%a' "$parent")"; [ $((8#$mode & 077)) -eq 0 ] || { printf '%s\n' 'plan directory must not be accessible by group or others' >&2; exit 65; }
 jq -e '
   .enable_argocd_bootstrap_runner == true and .enable_argocd_bootstrap_cluster_admin == true and
-  (.argocd_bootstrap_image | test("^[0-9]{12}\\.dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com/.+@sha256:[a-f0-9]{64}$")) and
+  (.argocd_bootstrap_image | test("^[0-9]{12}\\.dkr\\.ecr\\.[a-z]{2}-[a-z0-9-]+-[0-9]+\\.amazonaws\\.com/.+@sha256:[a-f0-9]{64}$")) and
   (.argocd_bootstrap_subnet_ids | type == "array" and length > 0 and all(.[]; test("^subnet-[a-z0-9]+$"))) and
   (.gitops_client_chart_version | test("^0\\.1\\.[0-9]+$")) and (.gitops_client_chart_oci_digest | test("^sha256:[a-f0-9]{64}$"))
 ' "$bootstrap_input" >/dev/null || { printf '%s\n' 'bootstrap input is not a digest-bound Argo handoff' >&2; exit 65; }
