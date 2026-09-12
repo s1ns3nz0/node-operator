@@ -156,7 +156,7 @@ if ! verify_private_image "$vault_bootstrap_image"; then bootstrap_mirror_images
 
 printf '%s\n' 'Generating and validating the new Hoodi validator key before infrastructure staging.' >&2
 mkdir -m 700 "$output_dir" "$output_dir/custody"
-"$keystore" --output-dir "$output_dir/custody"
+HOODI_WITHDRAWAL_ADDRESS="$withdrawal" "$keystore" --output-dir "$output_dir/custody"
 deposit_data="$(find "$output_dir/custody" -maxdepth 2 -type f -name 'deposit_data-*.json' -print)"
 [ "$(printf '%s\n' "$deposit_data" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { printf '%s\n' 'key ceremony did not produce exactly one deposit-data file' >&2; exit 65; }
 mkdir -m 700 "$output_dir/custody/public-attestation"

@@ -14,10 +14,14 @@ repo_root="$(cd "$script_dir/../.." && pwd -P)"
 
 usage() { printf 'Usage: %s --output-dir <new-absolute-directory-outside-repository>\n' "${0##*/}" >&2; exit 64; }
 output_dir=''
+withdrawal_address="${HOODI_WITHDRAWAL_ADDRESS:-}"
 while [ "$#" -gt 0 ]; do
   case "$1" in --output-dir) output_dir="${2:-}"; shift 2 ;; *) usage ;; esac
 done
 case "$output_dir" in /*) ;; *) usage ;; esac
+if [ -n "$withdrawal_address" ]; then
+  [[ "$withdrawal_address" =~ ^0x[0-9a-fA-F]{40}$ ]] || { printf '%s\n' 'HOODI_WITHDRAWAL_ADDRESS must be a 20-byte hex address' >&2; exit 64; }
+fi
 case "$(uname -s)-$(uname -m)" in Darwin-arm64) ;; *) printf 'This verified helper currently supports Apple Silicon macOS only.\n' >&2; exit 69 ;; esac
 for command in curl shasum tar mkdir chmod find gh; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 
@@ -47,7 +51,9 @@ chmod 700 "$deposit_bin"
 
 printf '%s\n' 'The key ceremony is interactive. Never paste its mnemonic or password into chat, shell history, Git, CI, or cloud storage.'
 printf '%s\n' 'Use a Hoodi withdrawal address you control. This is a new operational key; do not use any prior test key.'
-"$deposit_bin" new-mnemonic --num_validators=1 --mnemonic_language=english --chain=hoodi --folder "$output_dir"
+deposit_args=(new-mnemonic --num_validators=1 --mnemonic_language=english --chain=hoodi --folder "$output_dir")
+[ -n "$withdrawal_address" ] && deposit_args+=(--eth1_withdrawal_address "$withdrawal_address")
+"$deposit_bin" "${deposit_args[@]}"
 
 keystore_count="$(find "$output_dir/validator_keys" -maxdepth 1 -type f -name 'keystore-*.json' | wc -l | tr -d ' ')"
 # Recent deposit-cli releases place deposit_data alongside the keystore under
