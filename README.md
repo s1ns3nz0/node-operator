@@ -4,6 +4,12 @@ Secure, read-only EKS node-operator portfolio implementation for Hoodi execution
 and consensus clients. Deployment is intentionally out of scope until separately
 authorized.
 
+## OpenSSF Best Practices
+
+This project follows the OpenSSF Best Practices criteria. Registration and the
+project-specific badge are maintained at [bestpractices.dev](https://bestpractices.dev/);
+the repository intentionally does not embed a fabricated project ID.
+
 ## Local policy checks
 
 The policy foundation is runnable without AWS credentials. Install OPA, Conftest,
