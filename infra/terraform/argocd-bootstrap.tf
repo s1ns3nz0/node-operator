@@ -50,7 +50,9 @@ variable "gitops_client_chart_oci_digest" {
 }
 
 locals {
-  argocd_chart_version = "10.4.0"
+  argocd_chart_version               = "10.4.0"
+  cert_manager_chart_version         = "v1.21.1"
+  cert_manager_chart_manifest_digest = "sha256:62c4745561eccfd723678c6547500750ebef5a880d81ff670d33124ab335f877"
 }
 
 resource "aws_security_group" "argocd_bootstrap" {
@@ -242,6 +244,10 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
             - aws ecr get-login-password --region ${var.aws_region} | helm registry login --username AWS --password-stdin ${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com
             - helm upgrade --install argocd oci://${aws_ecr_repository.private_gitops["argocd"].repository_url} --version ${local.argocd_chart_version} --namespace argocd --create-namespace --values /opt/node-operator/argocd-private-values.yaml --atomic --timeout 10m
             - kubectl wait --namespace argocd --for=condition=Available deployment/argocd-server --timeout=10m
+            - helm upgrade --install cert-manager oci://${aws_ecr_repository.private_gitops["cert_manager_chart"].repository_url}@${local.cert_manager_chart_manifest_digest} --version ${local.cert_manager_chart_version} --namespace cert-manager --create-namespace --values /opt/node-operator/cert-manager-values.yaml --atomic --timeout 10m
+            - kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager --timeout=10m
+            - kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager-webhook --timeout=10m
+            - kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager-cainjector --timeout=10m
             - test "$(aws ecr describe-images --region ${var.aws_region} --repository-name ${aws_ecr_repository.gitops_client_chart[0].name} --image-ids imageTag=${var.gitops_client_chart_version} --query 'imageDetails[0].imageDigest' --output text)" = "${var.gitops_client_chart_oci_digest}"
             - |
               cat <<'EOF' | kubectl apply -f -

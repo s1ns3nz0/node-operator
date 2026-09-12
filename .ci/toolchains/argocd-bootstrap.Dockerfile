@@ -31,5 +31,6 @@ RUN curl --fail --location --silent --show-error --output /usr/local/bin/kubectl
 # The values are non-secret deployment input and are deliberately embedded so
 # NO_SOURCE CodeBuild cannot fetch or substitute a mutable external file.
 COPY docs/gitops/argocd-private-values.example.yaml /opt/node-operator/argocd-private-values.yaml
+COPY docs/gitops/cert-manager-values.example.yaml /opt/node-operator/cert-manager-values.yaml
 
 WORKDIR /workspace
