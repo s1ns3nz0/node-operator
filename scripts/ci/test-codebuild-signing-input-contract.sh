@@ -31,7 +31,7 @@ for required in \
   'digest, never a tag-only' \
   'approved atomic change' \
   "Terraform \`aws_codebuild_project\`" \
-  "\`release.yml\` input archive packaging"; do
+  "\`release-bundle.yml\` input archive packaging"; do
   grep -Fq "$required" "$contract" || fail "contract omits required boundary: $required"
 done
 

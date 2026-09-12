@@ -37,17 +37,17 @@ def validate(workflow, verifier):
     for forbidden in ("--insecure", "--key ", "--certificate-identity-regexp", "--certificate-oidc-issuer-regexp"):
         assert forbidden not in verifier, forbidden
     for required in ("cosign verify-blob --bundle", "--certificate-identity \"$identity\"",
-                     "'https://github.com/s1ns3nz0/node-operator/.github/workflows/operations-check.yml@refs/heads/main'",
+                     "'https://github.com/s1ns3nz0/node-operator/.github/workflows/operations-verification.yml@refs/heads/main'",
                      "'https://github.com/s1ns3nz0/node-operator/.github/workflows/vault-runtime-candidate-verification.yml@refs/heads/main'",
                      "--certificate-oidc-issuer 'https://token.actions.githubusercontent.com'",
                      '--certificate-github-workflow-sha "$revision"',
                      "--certificate-github-workflow-trigger workflow_dispatch"):
         assert required in verifier, required
-    assert verifier.index("operations-check.yml") < verifier.index("vault-runtime-candidate-verification.yml")
+    assert verifier.index("operations-verification.yml") < verifier.index("vault-runtime-candidate-verification.yml")
     assert verifier.index("cosign verify-blob") < verifier.index('python3 "$root/scripts/ci/vault-runtime-verification-statement.py" verify')
 
 
-workflow = (ROOT / ".github/workflows/operations-check.yml").read_text()
+workflow = (ROOT / ".github/workflows/operations-verification.yml").read_text()
 workflow = runpy.run_path(str(ROOT / "scripts/ci/lib/workflow-source.py"))["expand_text"](workflow)
 verifier = (ROOT / "scripts/ci/verify-vault-runtime-signed-evidence.sh").read_text()
 validate(workflow, verifier)

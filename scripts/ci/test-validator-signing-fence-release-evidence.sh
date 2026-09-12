@@ -50,8 +50,8 @@ jq -e --arg d "$digest" --arg r "$revision" '.result == "PASS" and .artifact_dig
 grep -Fq 'verify --certificate-identity' "$scratch/trace"; grep -Fq 'verify-attestation --type slsaprovenance1' "$scratch/trace"; grep -Fq "registry:$image" "$scratch/trace"
 : > "$scratch/trace"
 PATH="$scratch/bin:$PATH" MOCK_CURRENT_ONLY=true MOCK_TRACE="$scratch/trace" MOCK_STATEMENT="$statement" MOCK_SBOM_STATEMENT="$sbom_statement" MOCK_SCAN_STATEMENT="$scan_statement" "$collector" "$image" "$revision" "$scratch/result-current.json" >/dev/null
-jq -e '.cryptographic_verification.identity == "https://github.com/s1ns3nz0/node-operator/.github/workflows/image-release.yml@refs/heads/main"' "$scratch/result-current.json" >/dev/null
-grep -Fq 'verify-attestation --type slsaprovenance1 --certificate-identity https://github.com/s1ns3nz0/node-operator/.github/workflows/image-release.yml@refs/heads/main' "$scratch/trace"
+jq -e '.cryptographic_verification.identity == "https://github.com/s1ns3nz0/node-operator/.github/workflows/image-publish.yml@refs/heads/main"' "$scratch/result-current.json" >/dev/null
+grep -Fq 'verify-attestation --type slsaprovenance1 --certificate-identity https://github.com/s1ns3nz0/node-operator/.github/workflows/image-publish.yml@refs/heads/main' "$scratch/trace"
 base_env=(env PATH="$scratch/bin:$PATH" MOCK_TRACE="$scratch/trace" MOCK_STATEMENT="$statement" MOCK_SBOM_STATEMENT="$sbom_statement" MOCK_SCAN_STATEMENT="$scan_statement")
 expect_fail "${base_env[@]}" MOCK_COSIGN_FAIL=true "$collector" "$image" "$revision" "$scratch/fail.json"
 expect_fail "${base_env[@]}" MOCK_SIGNATURE_MODE=empty "$collector" "$image" "$revision" "$scratch/fail.json"

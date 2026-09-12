@@ -2,7 +2,7 @@
 # Check objective: Ensure CI evidence is redacted, Cosign-signed, verified, and archived through the dedicated S3 role.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-workflow="$root/.github/workflows/ci-evidence-archive.yml"
+workflow="$root/.github/workflows/evidence-archive.yml"
 iac="$root/infra/terraform/ci-evidence-archive.tf"
 archive="$root/scripts/ci/archive-ci-evidence.sh"
 assume="$root/scripts/ci/assume-ci-evidence-archive-role.sh"

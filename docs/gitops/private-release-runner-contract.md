@@ -1,7 +1,7 @@
 # Private release runner contract
 
 This contract prepares the private execution boundary required before
-`release.yml` is allowed to exchange a GitHub OIDC token for a Vault token. It
+`release-bundle.yml` is allowed to exchange a GitHub OIDC token for a Vault token. It
 is not authorization to register a runner, change a GitHub environment, open
 network paths, or deploy Vault.
 
@@ -59,12 +59,12 @@ branch/tag rules are reviewed with the runner-group repository restriction.
 
 Environment approval does not replace Vault policy. Vault continues to enforce
 the versioned `release-runner` JWT role: repository, owner, `refs/tags/v*`,
-`release.yml` workflow reference, and
+`release-bundle.yml` workflow reference, and
 `https://vault.node-operator.internal` audience. PRs, forks, branches,
 `workflow_run`, and a job whose labels differ from the exact set above are not
 release credential paths.
 
-`operations-check.yml` with the `private-runner` target uses the separate `private-runner-smoke`
+`operations-verification.yml` with the `private-runner` target uses the separate `private-runner-smoke`
 Environment, restricted to `main` and containing no release variables or
 secrets. It may verify the ephemeral runner, private AWS read paths, and the
 reviewed build-image pull, but it cannot obtain the release Environment or

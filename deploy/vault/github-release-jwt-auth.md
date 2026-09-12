@@ -18,7 +18,7 @@ token only when all of these GitHub OIDC claims match:
 - audience: `https://vault.node-operator.internal`
 - repository and owner: `s1ns3nz0/node-operator` and `s1ns3nz0`
 - ref type and ref: a `v*` tag under `refs/tags/`
-- workflow reference: `.github/workflows/release.yml` at that same tag
+- workflow reference: `.github/workflows/release-bundle.yml` at that same tag
 
 The Vault token is a non-renewable batch token with one use, no default policy,
 a 15-minute TTL, and only the `release-runner-dynamic-aws` policy. It cannot

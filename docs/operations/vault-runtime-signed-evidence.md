@@ -12,7 +12,7 @@ After this implementation is merged and its source checks pass, explicitly
 request a signing run:
 
 ```sh
-gh workflow run operations-check.yml --ref main -f target=vault-runtime -f sign_evidence=true
+gh workflow run operations-verification.yml --ref main -f target=vault-runtime -f sign_evidence=true
 ```
 
 The default remains `sign_evidence=false`. The three jobs pull and rescan
@@ -53,7 +53,7 @@ bash scripts/ci/verify-vault-runtime-signed-evidence.sh \
 
 The verifier accepts either exact workflow identity used for the historical
 manual verifier (`vault-runtime-candidate-verification.yml`) or its replacement
-(`operations-check.yml`); it requires the same issuer, source SHA, repository,
+(`operations-verification.yml`); it requires the same issuer, source SHA, repository,
 main ref and manual trigger for either identity. It then regenerates the statement from all three
 evidence sets and trusted policy files. It rejects modified/missing/symlinked
 evidence, wrong subjects/runs/attempts, unresolved findings, stale scans over

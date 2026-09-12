@@ -19,7 +19,7 @@ TOOLCHAINS = [
         ("vault-bootstrap", "docs/gitops/vault-values.example.yaml"),
     )
 ]
-SHARED = {".github/workflows/image-release.yml", "scripts/ci/select-image-release.py"}
+SHARED = {".github/workflows/image-publish.yml", "scripts/ci/select-image-release.py"}
 SIGNING = {
     "scripts/ci/lib/common.sh",
     "scripts/ci/install-validator-signing-fence-release-tools.sh",

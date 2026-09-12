@@ -5,7 +5,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib/workflow-contract.sh"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 dockerfile="$root/.ci/validator-signing-fence/Dockerfile"
-workflow="$root/.github/workflows/image-release.yml"
+workflow="$root/.github/workflows/image-publish.yml"
 fail(){ printf 'FAIL signing fence image contract: %s\n' "$*" >&2; exit 1; }
 grep -Eq '^FROM golang:1\.26\.6-alpine@sha256:[a-f0-9]{64} AS build$' "$dockerfile" || fail 'builder is not digest pinned'
 grep -Fq 'FROM scratch' "$dockerfile" || fail 'runtime is not scratch'
@@ -30,7 +30,7 @@ for kind in slsaprovenance1 cyclonedx https://github.com/s1ns3nz0/node-operator/
 grep -Fq 'needs: [select, fence-security]' "$workflow" || fail 'fence publication does not depend on selection and fence security'
 grep -Fq "needs.fence-security.result == 'success'" "$workflow" || fail 'fence publication does not require successful fence security'
 grep -Fq 'uses: ./.github/workflows/fence-security.yml' <(workflow_source "$workflow") || fail 'release does not execute the security workflow'
-ci_workflow="$root/.github/workflows/ci.yml"
+ci_workflow="$root/.github/workflows/continuous-integration.yml"
 grep -Fq 'needs: [fence-security, quality-tests]' <(workflow_job_source "$ci_workflow" quality) || fail 'required quality check does not depend on fence security'
 grep -Fq 'if: always()' <(workflow_job_source "$ci_workflow" quality) || fail 'required quality check can be skipped after failed security'
 # shellcheck disable=SC2016 # Literal workflow source.

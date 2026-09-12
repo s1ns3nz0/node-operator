@@ -10,7 +10,7 @@
     "repository_owner": "s1ns3nz0",
     "ref_type": "tag",
     "ref": "refs/tags/v*",
-    "workflow_ref": "s1ns3nz0/node-operator/.github/workflows/release.yml@refs/tags/v*"
+    "workflow_ref": "s1ns3nz0/node-operator/.github/workflows/release-bundle.yml@refs/tags/v*"
   },
   "token_policies": [
     "release-runner-dynamic-aws"

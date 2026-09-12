@@ -28,7 +28,7 @@ jq -e '
   .bound_claims.repository_owner == "s1ns3nz0" and
   .bound_claims.ref_type == "tag" and
   .bound_claims.ref == "refs/tags/v*" and
-  .bound_claims.workflow_ref == "s1ns3nz0/node-operator/.github/workflows/release.yml@refs/tags/v*" and
+  .bound_claims.workflow_ref == "s1ns3nz0/node-operator/.github/workflows/release-bundle.yml@refs/tags/v*" and
   .token_policies == ["release-runner-dynamic-aws"] and
   .token_ttl == "15m" and .token_max_ttl == "15m" and
   .token_type == "batch" and

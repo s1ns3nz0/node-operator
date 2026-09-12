@@ -8,7 +8,7 @@ for file in \
   "$root/cmd/vault-audit-relay/main_test.go" \
   "$root/.ci/vault-audit-relay/Dockerfile" \
   "$root/infra/terraform/vault-audit-relay-ecr.tf" \
-  "$root/.github/workflows/image-release.yml"; do
+  "$root/.github/workflows/image-publish.yml"; do
   test -f "$file" || { printf 'missing Vault audit relay asset: %s\n' "$file" >&2; exit 1; }
 done
 
@@ -26,7 +26,7 @@ grep -Fq 'image_tag_mutability = "IMMUTABLE"' "$root/infra/terraform/vault-audit
 grep -Fq 'scan_on_push = true' "$root/infra/terraform/vault-audit-relay-ecr.tf"
 grep -Fq 'vault-audit-relay-ecr-publish' "$root/infra/terraform/vault-audit-relay-ecr.tf"
 grep -Fq 'ecr:PutImage' "$root/infra/terraform/vault-audit-relay-ecr.tf"
-workflow="$root/.github/workflows/image-release.yml"
+workflow="$root/.github/workflows/image-publish.yml"
 source "$root/scripts/ci/lib/workflow-contract.sh"
 relay_source() {
   workflow_source "$workflow" | awk '

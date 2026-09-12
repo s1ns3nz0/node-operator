@@ -88,8 +88,8 @@ class Entrypoints(unittest.TestCase):
 
     def test_compatibility_gates_reject_every_non_success_result(self):
         cases = (
-            ("ci.yml", "quality", ("FENCE_SECURITY_RESULT", "QUALITY_RESULT")),
-            ("ci.yml", "scanners", ("SECURITY_RESULT",)),
+            ("continuous-integration.yml", "quality", ("FENCE_SECURITY_RESULT", "QUALITY_RESULT")),
+            ("continuous-integration.yml", "scanners", ("SECURITY_RESULT",)),
         )
         import itertools
         for file, job, variables in cases:

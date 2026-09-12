@@ -25,7 +25,7 @@ for required in \
   "\`release\` GitHub Environment requires an approval" \
   'Self-approval is' \
   "repository, owner, \`refs/tags/v*\`" \
-  "\`release.yml\` workflow reference" \
+  "\`release-bundle.yml\` workflow reference" \
   'GitHub repository ID, run ID, run attempt' \
   'Vault login request ID, Vault AWS lease ID' \
   'CodeBuild build ID' \

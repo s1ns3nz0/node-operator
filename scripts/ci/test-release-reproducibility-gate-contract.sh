@@ -6,7 +6,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib/workflow-contract.sh"
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-release="$root/.github/workflows/release.yml"
+release="$root/.github/workflows/release-bundle.yml"
 reproducibility="$(workflow_job_source "$release" reproducibility)"
 if grep -Fq 'uses: ./.github/workflows/ci-release-integrity.yml' "$release"; then
   printf 'release reproducibility must be inlined rather than call the retired reusable workflow\n' >&2

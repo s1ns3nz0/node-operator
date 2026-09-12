@@ -32,7 +32,7 @@ PY
 scripts/ci/install-validator-signing-fence-release-tools.sh "$scratch/cosign-tools"
 export PATH="$scratch/cosign-tools:$PATH"
 cosign sign-blob --yes --bundle "$output_directory/manifest.sigstore.json" "$output_directory/manifest.json"
-identity="${COSIGN_CERTIFICATE_IDENTITY:-https://github.com/s1ns3nz0/node-operator/.github/workflows/ci-evidence-archive.yml@refs/heads/main}"
+identity="${COSIGN_CERTIFICATE_IDENTITY:-https://github.com/s1ns3nz0/node-operator/.github/workflows/evidence-archive.yml@refs/heads/main}"
 cosign verify-blob --bundle "$output_directory/manifest.sigstore.json" --certificate-identity "$identity" \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   --certificate-github-workflow-repository 's1ns3nz0/node-operator' \

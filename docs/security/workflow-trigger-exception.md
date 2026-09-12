@@ -3,14 +3,14 @@
 ## CI-EVIDENCE-GATE
 
 `workflow.unsafe` / `dangerous-triggers` is accepted only for
-`.github/workflows/opa-pr-gate.yml` through 2026-10-03. This is not a false-positive
+`.github/workflows/evidence-gate.yml` through 2026-10-03. This is not a false-positive
 claim: the trigger still starts a privileged follow-on workflow. The diagnostic
 after removing its old inline suppression reports High severity and Medium
 confidence. The finding must remain visible in scanner evidence.
 
 The resolver and control-plane scripts come from the default-branch workflow
 SHA, not the pull-request checkout. The resolver validates the upstream CI
-workflow (`CI` / `ci.yml`) name/path/repository/event, exactly one PR, the 40-hex subject
+workflow (`CI` / `continuous-integration.yml`) name/path/repository/event, exactly one PR, the 40-hex subject
 and its equality to the API current PR head. Checkouts do not persist credentials.
 PR/base source is passed as read-only input to scanners. Scanner/Terraform
 containers receive no GitHub token; Terraform also has no network. Only trusted
@@ -33,7 +33,7 @@ and the SSM runtime/state changes remain separate from this disposition.
 ## CI-REVIEW-REFRESH
 
 The standalone handler has been removed along with its path-specific exception.
-Review processing now belongs to `opa-pr-gate.yml` and remains within the existing
+Review processing now belongs to `evidence-gate.yml` and remains within the existing
 CI-EVIDENCE-GATE disposition above, with no extension of its expiry or rule scope.
 
 The review signal has no permissions and executes no repository code. Its gate

@@ -107,7 +107,7 @@ def object_field(value, field):
 def exact_event(event, repository):
     workflow_run = object_field(event.get("workflow_run"), "review signal")
     if (workflow_run.get("name") != "CI Evidence Review Signal" or
-            workflow_run.get("path") != ".github/workflows/ci-review-refresh.yml" or
+            workflow_run.get("path") != ".github/workflows/review-signal.yml" or
             workflow_run.get("event") != "pull_request_review" or
             workflow_run.get("conclusion") != "success" or
             object_field(workflow_run.get("repository"), "review signal repository").get("full_name") != repository):
@@ -166,7 +166,7 @@ def newest_artifact(repository, subject_sha):
 def validate_gate_run(repository, gate_run_id, trusted_sha):
     run = object_field(api_json(f"repos/{repository}/actions/runs/{gate_run_id}"), "gate run")
     if (object_field(run.get("repository"), "gate run repository").get("full_name") != repository or
-            run.get("path") != ".github/workflows/opa-pr-gate.yml" or run.get("event") != "workflow_run" or
+            run.get("path") != ".github/workflows/evidence-gate.yml" or run.get("event") != "workflow_run" or
             run.get("status") != "completed" or run.get("conclusion") not in {"success", "failure"} or
             run.get("head_sha") != trusted_sha):
         reject("artifact was not produced by the trusted policy gate")
@@ -211,7 +211,7 @@ def validate_source_run(repository, source_run_id, subject_sha, pr_number):
     run = object_field(api_json(f"repos/{repository}/actions/runs/{source_run_id}"), "source run")
     pull_requests = run.get("pull_requests")
     if (object_field(run.get("repository"), "source run repository").get("full_name") != repository or
-            run.get("name") != "CI" or run.get("path") != ".github/workflows/ci.yml" or
+            run.get("name") != "CI" or run.get("path") != ".github/workflows/continuous-integration.yml" or
             run.get("event") != "pull_request" or run.get("status") != "completed" or
             run.get("conclusion") != "success" or run.get("head_sha") != subject_sha or
             not isinstance(pull_requests, list) or len(pull_requests) != 1 or

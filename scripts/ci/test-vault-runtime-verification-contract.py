@@ -41,7 +41,7 @@ def validate(script, workflow):
 
 
 script = (ROOT / "scripts/ci/verify-vault-runtime-candidate.sh").read_text()
-workflow = (ROOT / ".github/workflows/operations-check.yml").read_text()
+workflow = (ROOT / ".github/workflows/operations-verification.yml").read_text()
 workflow = runpy.run_path(str(ROOT / "scripts/ci/lib/workflow-source.py"))["expand_text"](workflow)
 validate(script, workflow)
 for bad_script, bad_workflow in (

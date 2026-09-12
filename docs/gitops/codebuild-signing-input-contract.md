@@ -94,7 +94,7 @@ Runtime activation is an approved atomic change after plan review. It must set
 `release_signer_image`, and one or more
 explicit private `release_signer_subnet_ids`; Terraform rejects an enabled
 project without those inputs. Terraform `aws_codebuild_project` and
-`release.yml` input archive packaging already implement the reviewed source,
+`release-bundle.yml` input archive packaging already implement the reviewed source,
 output, and consumer fields. Runtime activation must also satisfy all of the
 following:
 
