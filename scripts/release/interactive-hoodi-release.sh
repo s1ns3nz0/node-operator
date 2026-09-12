@@ -117,7 +117,8 @@ else
   fence_image="$(prompt 'Approved signing-fence private ECR image@sha256 digest (v0.1.20 has no canonical default)')"
 fi
 api_cidr="$(prompt 'Kubernetes API operator IPv4 CIDR (/32)')"
-output_dir="$(prompt 'New absolute working directory')"
+default_output_dir="${PWD}/node-operator-run-$(date -u +%Y%m%dT%H%M%SZ)"
+output_dir="$(prompt_default 'New absolute working directory' "$default_output_dir")"
 absolute_new_dir "$output_dir"
 trap 'unset confirmation validator_key expected_key withdrawal web3signer_image postgres_image prysm_image fence_image ecr_auth source_image; rm -f "$output_dir/.interactive-inputs.tmp" 2>/dev/null || true' EXIT
 
