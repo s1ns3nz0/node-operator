@@ -136,6 +136,10 @@ server:
 # in-cluster workloads, and the private release-runner/CodeBuild paths.
 injector:
   enabled: true
+  # Point the injector at the HA active service rather than a pod-specific
+  # address. This is rendered into AGENT_INJECT_VAULT_ADDR for every injected
+  # agent, so failover does not require a manual patch or pod restart.
+  externalVaultAddr: https://vault-active.vault.svc:8200
   # This is the image injected into application Pods, distinct from the
   # injector webhook Deployment below. Pin it to the private mirror as well:
   # private EKS workers intentionally have no Docker Hub egress.
