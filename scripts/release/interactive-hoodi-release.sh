@@ -406,7 +406,7 @@ if [ "$client_found" != "$client_chart_digest" ]; then
   client_found="$(aws ecr describe-images --region "$region" --repository-name "$client_repository" --image-ids imageTag="$client_chart_version" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
 fi
 [ "$client_found" = "$client_chart_digest" ] || { printf 'client chart %s with digest %s is missing or mismatched in private ECR\n' "$client_chart_version" "$client_chart_digest" >&2; exit 65; }
-"$platform_script" "${platform_args[@]}"
+NODE_OPERATOR_AUTOMATED_CEREMONY="${NODE_OPERATOR_AUTOMATED_CEREMONY:-0}" "$platform_script" "${platform_args[@]}"
 
 step 'Configuring private Vault TLS'
 printf '%s\n' 'Preparing cert-manager-managed Vault TLS through the private EKS session.' >&2
@@ -417,7 +417,7 @@ tls_manifest="$source_root/docs/gitops/vault-tls-internal-ca.example.yaml"
 
 step 'Running Vault v2 recovery and validator custody'
 printf '%s\n' 'Next ceremony: Vault v2 recovery. Recovery shares will be requested silently by the delegated script.' >&2
-"$bundle_root/source/scripts/ops/recover-and-bootstrap-hoodi-vault-v2.sh" --validator-set "$validator_set"
+NODE_OPERATOR_AUTOMATED_CEREMONY="${NODE_OPERATOR_AUTOMATED_CEREMONY:-0}" "$bundle_root/source/scripts/ops/recover-and-bootstrap-hoodi-vault-v2.sh" --validator-set "$validator_set"
 
 "$release" custody apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --keystore-dir "$keystore_dir_for_custody" --ceremony-dir "$output_dir/ceremony"
 

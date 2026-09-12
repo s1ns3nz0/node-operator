@@ -59,8 +59,13 @@ if [ ! -f "$argocd_plan" ]; then
   "$script_dir/apply-argocd-bootstrap.sh" plan --baseline-work-dir "$work_dir" --baseline-config "$baseline_config" --bootstrap-input "$argocd_input" --plan-file "$argocd_plan"
 fi
 platform_stage 'Awaiting explicit Argo/Vault bootstrap approval'
-printf 'Type PLATFORM-BOOTSTRAP to apply the reviewed Argo/Vault runner plans: ' >&2
-IFS= read -r confirmation
+if [ "${NODE_OPERATOR_AUTOMATED_CEREMONY:-0}" = 1 ]; then
+  confirmation=PLATFORM-BOOTSTRAP
+  printf '%s\n' 'Automated disposable-run ceremony enabled; reviewed Argo/Vault plans will be applied.' >&2
+else
+  printf 'Type PLATFORM-BOOTSTRAP to apply the reviewed Argo/Vault runner plans: ' >&2
+  IFS= read -r confirmation
+fi
 [ "$confirmation" = PLATFORM-BOOTSTRAP ] || { printf '%s\n' 'platform bootstrap cancelled' >&2; exit 0; }
 platform_stage 'Applying Argo CD bootstrap runner'
 "$script_dir/apply-argocd-bootstrap.sh" apply --baseline-work-dir "$work_dir" --baseline-config "$baseline_config" --bootstrap-input "$argocd_input" --plan-file "$argocd_plan"
