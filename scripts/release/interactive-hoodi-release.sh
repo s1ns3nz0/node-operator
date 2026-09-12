@@ -45,11 +45,12 @@ if [ -n "$env_file" ]; then
   while IFS='=' read -r key value; do
     key="${key%%[[:space:]]*}"; value="${value##[[:space:]]}"
     case "$key" in ''|'#'*) continue ;; esac
-    case "$key" in REGION) DEFAULT_REGION="$value" ;; DEPLOYMENT_NAME) DEFAULT_DEPLOYMENT_NAME="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; CLIENT_CHART_SOURCE_REGION) DEFAULT_CLIENT_CHART_SOURCE_REGION="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; esac
+    case "$key" in REGION) DEFAULT_REGION="$value" ;; DEPLOYMENT_NAME) DEFAULT_DEPLOYMENT_NAME="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; EXISTING_KEYSTORE_DIR) DEFAULT_KEYSTORE_DIR="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; CLIENT_CHART_SOURCE_REGION) DEFAULT_CLIENT_CHART_SOURCE_REGION="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; esac
   done < "$env_file"
 fi
 DEFAULT_REGION="${DEFAULT_REGION:-ap-northeast-2}"
 DEFAULT_DEPLOYMENT_NAME="${DEFAULT_DEPLOYMENT_NAME:-node-operator}"
+DEFAULT_KEYSTORE_DIR="${DEFAULT_KEYSTORE_DIR:-}"
 DEFAULT_VALIDATOR_SET="${DEFAULT_VALIDATOR_SET:-hoodi-001}"
 DEFAULT_VALIDATOR_KEY="${DEFAULT_VALIDATOR_KEY:-}"
 DEFAULT_WITHDRAWAL="${DEFAULT_WITHDRAWAL:-0x403FF64383B8ddf994D5563550c8040d89F025Ac}"
@@ -154,11 +155,35 @@ bootstrap_mirror_images=()
 if ! verify_private_image "$argocd_bootstrap_image"; then bootstrap_mirror_images+=("$argocd_bootstrap_image"); fi
 if ! verify_private_image "$vault_bootstrap_image"; then bootstrap_mirror_images+=("$vault_bootstrap_image"); fi
 
-printf '%s\n' 'Generating and validating the new Hoodi validator key before infrastructure staging.' >&2
+printf '%s\n' 'Preparing and validating the Hoodi validator key before infrastructure staging.' >&2
 mkdir -m 700 "$output_dir" "$output_dir/custody"
-HOODI_WITHDRAWAL_ADDRESS="$withdrawal" "$keystore" --output-dir "$output_dir/custody"
-deposit_data="$(find "$output_dir/custody" -maxdepth 2 -type f -name 'deposit_data-*.json' -print)"
-[ "$(printf '%s\n' "$deposit_data" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { printf '%s\n' 'key ceremony did not produce exactly one deposit-data file' >&2; exit 65; }
+keystore_dir_for_custody="$output_dir/custody/validator_keys"
+existing_keystore_dir="$DEFAULT_KEYSTORE_DIR"
+if [ -z "$existing_keystore_dir" ]; then
+  existing_keystore_dir="$(prompt_default 'Existing validator keystore directory (blank to generate a new key)' '')"
+fi
+if [ -n "$existing_keystore_dir" ]; then
+  case "$existing_keystore_dir" in /*) ;; *) printf '%s\n' 'existing keystore directory must be absolute' >&2; exit 64 ;; esac
+  [ -d "$existing_keystore_dir" ] && [ ! -L "$existing_keystore_dir" ] || { printf '%s\n' 'existing keystore directory must be a real directory' >&2; exit 65; }
+  existing_keystore_dir="$(cd "$existing_keystore_dir" && pwd -P)"
+  if [ -n "$protected_repository_root" ]; then
+    case "$existing_keystore_dir" in
+      "$protected_repository_root"|"$protected_repository_root"/*) printf '%s\n' 'existing keystore directory must be outside the source repository' >&2; exit 64 ;;
+    esac
+  fi
+  existing_keystore="$(find "$existing_keystore_dir" -maxdepth 1 -type f -name 'keystore-*.json' -print)"
+  existing_deposit="$(find "$existing_keystore_dir" -maxdepth 1 -type f -name 'deposit_data-*.json' -print)"
+  [ "$(printf '%s\n' "$existing_keystore" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { printf '%s\n' 'existing keystore directory must contain exactly one keystore-*.json' >&2; exit 65; }
+  [ "$(printf '%s\n' "$existing_deposit" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { printf '%s\n' 'existing keystore directory must contain exactly one deposit_data-*.json' >&2; exit 65; }
+  keystore_dir_for_custody="$existing_keystore_dir"
+  deposit_data="$existing_deposit"
+  printf '%s\n' 'Using the existing validator keystore; no private key material will be copied.' >&2
+else
+  HOODI_WITHDRAWAL_ADDRESS="$withdrawal" "$keystore" --output-dir "$output_dir/custody"
+  deposit_data="$(find "$output_dir/custody" -maxdepth 2 -type f -name 'deposit_data-*.json' -print)"
+  [ "$(printf '%s\n' "$deposit_data" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { printf '%s\n' 'key ceremony did not produce exactly one deposit-data file' >&2; exit 65; }
+  keystore_dir_for_custody="$output_dir/custody/validator_keys"
+fi
 mkdir -m 700 "$output_dir/custody/public-attestation"
 "$deposit_validate" --deposit-data "$deposit_data" --withdrawal-address "$withdrawal" --output-dir "$output_dir/custody/public-attestation" >/dev/null
 deposit_attestation="$output_dir/custody/public-attestation/uc-1-deposit-attestation.json"
@@ -251,7 +276,7 @@ tls_manifest="$source_root/docs/gitops/vault-tls-internal-ca.example.yaml"
 printf '%s\n' 'Next ceremony: Vault v2 recovery. Recovery shares will be requested silently by the delegated script.' >&2
 "$bundle_root/source/scripts/ops/recover-and-bootstrap-hoodi-vault-v2.sh" --validator-set "$validator_set"
 
-"$release" custody apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --keystore-dir "$output_dir/custody/validator_keys" --ceremony-dir "$output_dir/ceremony"
+"$release" custody apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --keystore-dir "$keystore_dir_for_custody" --ceremony-dir "$output_dir/ceremony"
 
 mkdir -m 700 "$output_dir/evidence"
 "$release" evidence signer --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --output-dir "$output_dir/evidence/signer"
