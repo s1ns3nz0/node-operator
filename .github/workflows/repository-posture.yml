@@ -45,7 +45,7 @@ jobs:
         with:
           name: repository-posture-${{ github.sha }}
           path: |
-            ${{ runner.temp }}/scorecard.sarif
+            ${{ github.workspace }}/scorecard.sarif
             ${{ runner.temp }}/scorecard-evidence.json
           if-no-files-found: error
           retention-days: 90
