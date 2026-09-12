@@ -23,7 +23,7 @@ done
 
 grep -Fqx '  enabled: true' "$values" || fail 'cert-manager CRDs must be enabled'
 grep -Fq 'kind: Secret' "$tls" && fail 'TLS manifest must not create a Secret directly'
-for required in 'name: vault-selfsigned-bootstrap' 'name: vault-internal-ca' 'secretName: vault-internal-ca' 'name: vault-server-tls' 'secretName: vault-tls' 'rotationPolicy: Always' 'vault-2.vault-internal.vault.svc.cluster.local' 'client auth'; do
+for required in 'name: vault-selfsigned-bootstrap' 'name: vault-internal-ca' 'secretName: vault-internal-ca' 'name: vault-server-tls' 'secretName: vault-tls' 'rotationPolicy: Always' 'vault-2.vault-internal.vault.svc.cluster.local' 'vault-active.vault.svc' 'client auth'; do
   grep -Fq "$required" "$tls" || fail "TLS manifest omits $required"
 done
 
