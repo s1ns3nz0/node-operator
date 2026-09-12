@@ -194,13 +194,13 @@ zero_apply() {
     state_logs_bucket="${state_bucket_name:0:48}-${state_log_suffix}-logs"
     bootstrap_state_list="$(terraform -chdir="$bootstrap_module" state list 2>/dev/null || true)"
     if aws s3api head-bucket --bucket "$state_bucket_name" >/dev/null 2>&1 && ! grep -Fxq 'aws_s3_bucket.state' <<<"$bootstrap_state_list"; then
-      terraform -chdir="$bootstrap_module" import -input=false aws_s3_bucket.state "$state_bucket_name"
+      terraform -chdir="$bootstrap_module" import -input=false -var-file="$bootstrap_config" aws_s3_bucket.state "$state_bucket_name"
     fi
     if aws s3api head-bucket --bucket "$state_logs_bucket" >/dev/null 2>&1 && ! grep -Fxq 'aws_s3_bucket.state_access_logs' <<<"$bootstrap_state_list"; then
-      terraform -chdir="$bootstrap_module" import -input=false aws_s3_bucket.state_access_logs "$state_logs_bucket"
+      terraform -chdir="$bootstrap_module" import -input=false -var-file="$bootstrap_config" aws_s3_bucket.state_access_logs "$state_logs_bucket"
     fi
     if aws dynamodb describe-table --region "$(jq -er '.aws_region' "$bootstrap_config")" --table-name "$(jq -er '.name' "$bootstrap_config")-terraform-lock" >/dev/null 2>&1 && ! grep -Fxq 'aws_dynamodb_table.lock' <<<"$bootstrap_state_list"; then
-      terraform -chdir="$bootstrap_module" import -input=false aws_dynamodb_table.lock "$(jq -er '.name' "$bootstrap_config")-terraform-lock"
+      terraform -chdir="$bootstrap_module" import -input=false -var-file="$bootstrap_config" aws_dynamodb_table.lock "$(jq -er '.name' "$bootstrap_config")-terraform-lock"
     fi
     printf '[bootstrap] Planning state resources...\n' >&2
     terraform -chdir="$bootstrap_module" plan -input=false -var-file="$bootstrap_config" -out="$work_dir/bootstrap.tfplan"
