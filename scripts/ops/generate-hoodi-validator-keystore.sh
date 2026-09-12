@@ -24,7 +24,8 @@ for command in curl shasum tar mkdir chmod find gh; do command -v "$command" >/d
 umask 077
 mkdir -p "$output_dir/validator_keys"
 output_dir="$(cd "$output_dir" && pwd -P)"
-case "$output_dir" in "$repo_root"|"$repo_root"/*) printf 'Refusing to write custody material inside the repository.\n' >&2; exit 64 ;; esac
+protected_repository_root="${NODE_OPERATOR_SOURCE_REPOSITORY_ROOT:-$repo_root}"
+case "$output_dir" in "$protected_repository_root"|"$protected_repository_root"/*) printf 'Refusing to write custody material inside the repository.\n' >&2; exit 64 ;; esac
 if find "$output_dir/validator_keys" -maxdepth 1 -type f -name 'keystore-*.json' -print -quit | grep -q .; then
   printf 'Refusing to reuse a directory containing a prior validator key.\n' >&2; exit 64
 fi

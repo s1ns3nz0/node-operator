@@ -30,7 +30,7 @@ if [ ! -f "$repo_root/bundle-manifest.json" ] && [ -f "$repo_root/scripts/ci/bui
   if [ -f "$repo_root/release/env" ] && [ ! -L "$repo_root/release/env" ]; then
     install -m 600 "$repo_root/release/env" "$bundle_root/env"
   fi
-  "$bundle_root/source/scripts/release/interactive-hoodi-release.sh"
+  NODE_OPERATOR_SOURCE_REPOSITORY_ROOT="$repo_root" "$bundle_root/source/scripts/release/interactive-hoodi-release.sh"
   exit $?
 fi
 

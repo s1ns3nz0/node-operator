@@ -117,9 +117,20 @@ else
   fence_image="$(prompt 'Approved signing-fence private ECR image@sha256 digest (v0.1.20 has no canonical default)')"
 fi
 api_cidr="$(prompt 'Kubernetes API operator IPv4 CIDR (/32)')"
-default_output_dir="${PWD}/node-operator-run-$(date -u +%Y%m%dT%H%M%SZ)"
+if [ -n "${NODE_OPERATOR_SOURCE_REPOSITORY_ROOT:-}" ]; then
+  default_output_dir="${TMPDIR:-/tmp}/node-operator-run-$(date -u +%Y%m%dT%H%M%SZ)"
+else
+  default_output_dir="${PWD}/node-operator-run-$(date -u +%Y%m%dT%H%M%SZ)"
+fi
 output_dir="$(prompt_default 'New absolute working directory' "$default_output_dir")"
 absolute_new_dir "$output_dir"
+protected_repository_root="${NODE_OPERATOR_SOURCE_REPOSITORY_ROOT:-}"
+if [ -n "$protected_repository_root" ]; then
+  protected_repository_root="$(cd "$protected_repository_root" && pwd -P)"
+  case "$output_dir" in
+    "$protected_repository_root"|"$protected_repository_root"/*) printf '%s\n' 'working directory must be outside the source repository' >&2; exit 64 ;;
+  esac
+fi
 trap 'unset confirmation validator_key expected_key withdrawal web3signer_image postgres_image prysm_image fence_image ecr_auth source_image; rm -f "$output_dir/.interactive-inputs.tmp" 2>/dev/null || true' EXIT
 
 # Collect and verify the immutable platform bootstrap artifacts before creating
