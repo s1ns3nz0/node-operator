@@ -234,6 +234,25 @@ if [ -n "$DEFAULT_VALIDATOR_KEY" ]; then
   [ "$validator_key" = "$expected_key" ] || { printf '%s\n' 'generated validator public key does not match VALIDATOR_PUBLIC_KEY; refusing to continue' >&2; exit 65; }
 fi
 
+# Hoodi registration is an operator-owned, on-chain action. The installer
+# prepares and validates public deposit data but never handles a wallet,
+# broadcasts a transaction, or accepts a private key. Keep this guidance next
+# to the key ceremony so a fresh operator cannot mistake custody onboarding for
+# testnet registration.
+registration_timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+printf '\n%s╭────────────────────────────────────────────────────────────╮%s\n' "$ui_cyan" "$ui_reset" >&2
+printf '%s│ HOODI TESTNET REGISTRATION  %s│%s\n' "$ui_cyan" "$registration_timestamp" "$ui_reset" >&2
+printf '%s╰────────────────────────────────────────────────────────────╯%s\n' "$ui_cyan" "$ui_reset" >&2
+printf '%s1.%s Review the public attestation: %s\n' "$ui_yellow" "$ui_reset" "$deposit_attestation" >&2
+printf '%s2.%s Open the official Hoodi Launchpad and upload the matching deposit_data JSON:\n' "$ui_yellow" "$ui_reset" >&2
+printf '   https://hoodi.launchpad.ethereum.org/\n' >&2
+printf '%s3.%s Confirm network=Hoodi, amount=32 HoodiETH, validator public key, and withdrawal credentials match the attestation.\n' "$ui_yellow" "$ui_reset" >&2
+printf '%s4.%s Connect your own Hoodi wallet and submit exactly one 32 HoodiETH deposit through the Launchpad.\n' "$ui_yellow" "$ui_reset" >&2
+printf '%s5.%s Save the mined transaction hash; it is required for public receipt verification before activation.\n' "$ui_yellow" "$ui_reset" >&2
+printf '%s!%s Do not paste mnemonics, keystore passwords, private keys, or wallet credentials into this shell, Git, CI, or Vault.\n' "$ui_red" "$ui_reset" >&2
+printf '   Deposit data directory: %s\n' "$(dirname "$deposit_data")" >&2
+printf '   Registration is intentionally manual; the release will continue with infrastructure and Vault setup while the deposit/activation queue is observed.\n' >&2
+
 zones=()
 while IFS= read -r zone; do
   [ -n "$zone" ] && zones+=("$zone")
