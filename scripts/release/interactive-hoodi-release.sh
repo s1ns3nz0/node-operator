@@ -111,7 +111,8 @@ deposit_data="$(find "$output_dir/custody" -maxdepth 1 -type f -name 'deposit_da
 [ "$(printf '%s\n' "$deposit_data" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { printf '%s\n' 'key ceremony did not produce exactly one deposit-data file' >&2; exit 65; }
 mkdir -m 700 "$output_dir/custody/public-attestation"
 "$deposit_validate" --deposit-data "$deposit_data" --withdrawal-address "$withdrawal" --output-dir "$output_dir/custody/public-attestation" >/dev/null
-validator_key="$(jq -er '.[0].pubkey' "$deposit_data" | tr '[:upper:]' '[:lower:]')"
+deposit_attestation="$output_dir/custody/public-attestation/uc-1-deposit-attestation.json"
+validator_key="$(jq -er '.validator_public_key' "$deposit_attestation" | tr '[:upper:]' '[:lower:]')"
 if [ -n "$DEFAULT_VALIDATOR_KEY" ]; then
   expected_key="$(printf '%s' "$DEFAULT_VALIDATOR_KEY" | tr '[:upper:]' '[:lower:]')"
   [ "$validator_key" = "$expected_key" ] || { printf '%s\n' 'generated validator public key does not match VALIDATOR_PUBLIC_KEY; refusing to continue' >&2; exit 65; }
@@ -160,8 +161,8 @@ mkdir -m 700 "$output_dir/evidence"
 "$release" evidence signer --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --output-dir "$output_dir/evidence/signer"
 "$release" evidence beacon --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --output-dir "$output_dir/evidence/beacon"
 
-printf '%s\n' 'Activation requires independently reviewed deposit evidence. Enter paths only; secret material is not accepted.' >&2
-deposit_attestation="$(prompt 'Absolute deposit attestation JSON')"
+printf 'Generated and validated deposit attestation: %s\n' "$deposit_attestation" >&2
+printf '%s\n' 'Activation requires independently reviewed public deposit, private Beacon, and signer evidence. Enter paths only; secret material is not accepted.' >&2
 public_deposit="$(prompt 'Absolute public deposit verification JSON')"
 private_evidence="$(prompt 'Absolute private Beacon evidence JSON')"
 signer_evidence="$(prompt 'Absolute signer evidence JSON')"
