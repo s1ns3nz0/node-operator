@@ -31,7 +31,7 @@ def local_prerequisites() -> dict:
     tools separate so a node-only installation need not generate a validator.
     """
     stages = {
-        "infrastructure": ("aws", "terraform", "jq", "shasum", "rg"),
+        "infrastructure": ("aws", "terraform", "jq", "shasum", "grep"),
         "ops_access": ("aws", "session-manager-plugin", "kubectl", "nc", "mktemp", "unlink"),
         "vault": ("vault", "openssl", "kubectl"),
         "custody": ("curl", "shasum", "tar", "mkdir", "chmod", "find", "gh"),
@@ -293,4 +293,3 @@ def discover(profile: str, region: str, name: str) -> dict:
             "elastic_ip_headroom": elastic_ip_headroom(profile, region),
             "provisioning_permissions": "not_verified", "quotas": "not_verified",
             "other_resource_collisions": "not_verified"}
-

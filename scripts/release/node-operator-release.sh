@@ -48,7 +48,7 @@ done
 [ -f "$bundle_root/bundle-manifest.json" ] || fail "bundle root must contain bundle-manifest.json"
 require_command jq
 require_command shasum
-require_command rg
+require_command grep
 
 verify_bundle() {
   local bad=0 path expected actual
@@ -65,10 +65,10 @@ verify_bundle() {
 
 reject_privileged_baseline_inputs() {
   local input="$1"
-  if rg -n '^[[:space:]]*enable_temporary_ssm_ops_host[[:space:]]*=[[:space:]]*true([[:space:]]|$)' "$input" >/dev/null; then
+  if grep -E -n '^[[:space:]]*enable_temporary_ssm_ops_host[[:space:]]*=[[:space:]]*true([[:space:]]|$)' "$input" >/dev/null; then
     fail "SSM operations access belongs to the isolated ops-access command"
   fi
-  if rg -n '^[[:space:]]*enable_(argocd|vault)_bootstrap_cluster_admin[[:space:]]*=[[:space:]]*true([[:space:]]|$)' "$input" >/dev/null; then
+  if grep -E -n '^[[:space:]]*enable_(argocd|vault)_bootstrap_cluster_admin[[:space:]]*=[[:space:]]*true([[:space:]]|$)' "$input" >/dev/null; then
     fail "temporary cluster-admin bootstrap requires its separately approved phase"
   fi
 }
@@ -76,7 +76,7 @@ reject_privileged_baseline_inputs() {
 require_nonsecret_file() {
   local input="$1"
   [ -f "$input" ] && [ ! -L "$input" ] || fail "configuration must name a regular non-secret file"
-  if rg -n -i '(vault[_-]?token|recovery[_-]?key|mnemonic|keystore|private[_-]?key|secret[_-]?access[_-]?key|aws_secret_access_key)[[:space:]]*=' "$input" >/dev/null; then
+  if grep -E -n -i '(vault[_-]?token|recovery[_-]?key|mnemonic|keystore|private[_-]?key|secret[_-]?access[_-]?key|aws_secret_access_key)[[:space:]]*=' "$input" >/dev/null; then
     fail "configuration contains a prohibited credential field"
   fi
 }
@@ -146,7 +146,7 @@ zero_apply() {
   require_command terraform
   require_nonsecret_file "$bootstrap_config"; require_nonsecret_file "$foundation_config"; require_nonsecret_file "$baseline_config"
   reject_privileged_baseline_inputs "$baseline_config"
-  if rg -n '^[[:space:]]*(network_source|foundation_network|hoodi_nat_gateway_id)[[:space:]]*=' "$baseline_config" >/dev/null; then
+  if grep -E -n '^[[:space:]]*(network_source|foundation_network|hoodi_nat_gateway_id)[[:space:]]*=' "$baseline_config" >/dev/null; then
     fail "zero apply derives foundation network inputs; remove network_source, foundation_network, and hoodi_nat_gateway_id from --baseline-config"
   fi
 

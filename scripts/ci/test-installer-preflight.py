@@ -85,7 +85,7 @@ class PreflightTests(unittest.TestCase):
         with patch.object(module.shutil, "which", side_effect=lambda tool: "/bin/" + tool if tool in {"aws", "jq"} else None), patch.object(module.subprocess, "run") as run:
             result = module.local_prerequisites()
         run.assert_not_called()
-        self.assertEqual(result["missing_by_stage"]["infrastructure"], ["terraform", "shasum", "rg"])
+        self.assertEqual(result["missing_by_stage"]["infrastructure"], ["terraform", "shasum", "grep"])
         self.assertIn("session-manager-plugin", result["missing_by_stage"]["ops_access"])
         self.assertIn("vault", result["missing_by_stage"]["vault"])
         self.assertEqual(result["versions"], "not_verified")
@@ -191,4 +191,3 @@ class PreflightTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
