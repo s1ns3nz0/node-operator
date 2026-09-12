@@ -30,8 +30,9 @@ fi
 release="$source_root/scripts/release/hoodi-validator-release.sh"
 prepare="$source_root/scripts/release/prepare-hoodi-zero-release-inputs.sh"
 keystore="$source_root/scripts/ops/generate-hoodi-validator-keystore.sh"
+deposit_validate="$source_root/scripts/ops/validate-hoodi-deposit-data.sh"
 vault_tls="$source_root/scripts/release/prepare-vault-bootstrap-tls.sh"
-for file in "$release" "$prepare" "$keystore" "$vault_tls"; do [ -x "$file" ] || { printf 'missing executable in release bundle: %s\n' "$file" >&2; exit 65; }; done
+for file in "$release" "$prepare" "$keystore" "$deposit_validate" "$vault_tls"; do [ -x "$file" ] || { printf 'missing executable in release bundle: %s\n' "$file" >&2; exit 65; }; done
 for command in aws jq find shasum; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 
 # Optional non-secret .env-style overrides. Values are never exported and
@@ -49,7 +50,7 @@ if [ -n "$env_file" ]; then
 fi
 DEFAULT_REGION="${DEFAULT_REGION:-ap-northeast-2}"
 DEFAULT_VALIDATOR_SET="${DEFAULT_VALIDATOR_SET:-hoodi-001}"
-DEFAULT_VALIDATOR_KEY="${DEFAULT_VALIDATOR_KEY:-0xa3866b82651039224bfd725fc81e7ff17c1765021dff37f3fd4bc01405e2ed14c97c7c5c82cd95104d8f82c4229ab0d0}"
+DEFAULT_VALIDATOR_KEY="${DEFAULT_VALIDATOR_KEY:-}"
 DEFAULT_WITHDRAWAL="${DEFAULT_WITHDRAWAL:-0x403FF64383B8ddf994D5563550c8040d89F025Ac}"
 DEFAULT_WEB3SIGNER_IMAGE="${DEFAULT_WEB3SIGNER_IMAGE:-}"
 DEFAULT_POSTGRES_IMAGE="${DEFAULT_POSTGRES_IMAGE:-}"
@@ -81,7 +82,6 @@ absolute_new_dir() { case "$1" in /*) ;; *) printf '%s\n' 'path must be absolute
 region="$(prompt_default 'AWS Region' "$DEFAULT_REGION")"
 case "$region" in ap-northeast-1|ap-northeast-2) ;; *) printf '%s\n' 'unsupported Region' >&2; exit 64 ;; esac
 validator_set="$(prompt_default 'Validator set' "$DEFAULT_VALIDATOR_SET")"
-validator_key="$(prompt_default 'Validator public key' "$DEFAULT_VALIDATOR_KEY")"
 withdrawal="$(prompt_default 'Withdrawal address' "$DEFAULT_WITHDRAWAL")"
 identity="$(aws sts get-caller-identity --output json)"
 account="$(jq -er '.Account | select(test("^[0-9]{12}$"))' <<<"$identity")" || { printf '%s\n' 'AWS identity did not return a 12-digit account' >&2; exit 65; }
@@ -102,15 +102,26 @@ fi
 api_cidr="$(prompt 'Kubernetes API operator IPv4 CIDR (/32)')"
 output_dir="$(prompt 'New absolute working directory')"
 absolute_new_dir "$output_dir"
+trap 'unset confirmation validator_key expected_key withdrawal web3signer_image postgres_image prysm_image fence_image; rm -f "$output_dir/.interactive-inputs.tmp" 2>/dev/null || true' EXIT
+
+printf '%s\n' 'Generating and validating the new Hoodi validator key before infrastructure staging.' >&2
+mkdir -m 700 "$output_dir" "$output_dir/custody"
+"$keystore" --output-dir "$output_dir/custody"
+deposit_data="$(find "$output_dir/custody" -maxdepth 1 -type f -name 'deposit_data-*.json' -print)"
+[ "$(printf '%s\n' "$deposit_data" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { printf '%s\n' 'key ceremony did not produce exactly one deposit-data file' >&2; exit 65; }
+mkdir -m 700 "$output_dir/custody/public-attestation"
+"$deposit_validate" --deposit-data "$deposit_data" --withdrawal-address "$withdrawal" --output-dir "$output_dir/custody/public-attestation" >/dev/null
+validator_key="$(jq -er '.[0].pubkey' "$deposit_data" | tr '[:upper:]' '[:lower:]')"
+if [ -n "$DEFAULT_VALIDATOR_KEY" ]; then
+  expected_key="$(printf '%s' "$DEFAULT_VALIDATOR_KEY" | tr '[:upper:]' '[:lower:]')"
+  [ "$validator_key" = "$expected_key" ] || { printf '%s\n' 'generated validator public key does not match VALIDATOR_PUBLIC_KEY; refusing to continue' >&2; exit 65; }
+fi
 
 zones=()
 while IFS= read -r zone; do
   [ -n "$zone" ] && zones+=("$zone")
 done < <(aws ec2 describe-availability-zones --region "$region" --filters Name=state,Values=available --query 'AvailabilityZones[].ZoneName' --output text | tr '\t' '\n' | sort | head -n 2)
 [ "${#zones[@]}" -eq 2 ] || { printf '%s\n' 'could not discover two available Availability Zones' >&2; exit 65; }
-mkdir -m 700 "$output_dir"
-trap 'unset confirmation validator_key withdrawal web3signer_image postgres_image prysm_image fence_image; rm -f "$output_dir/.interactive-inputs.tmp" 2>/dev/null || true' EXIT
-
 prepare_args=(--aws-account-id "$account" --aws-region "$region" --availability-zone "${zones[0]}" --availability-zone "${zones[1]}" --validator-set "$validator_set" --validator-public-key "$validator_key" --withdrawal-address "$withdrawal" --web3signer-image "$web3signer_image" --postgres-image "$postgres_image" --prysm-validator-image "$prysm_image" --signing-fence-image "$fence_image" --kubernetes-api-cidr "$api_cidr" --output-dir "$output_dir/inputs")
 [ -n "$DEFAULT_BACKEND_PRINCIPAL_ARN" ] && prepare_args+=(--backend-principal-arn "$DEFAULT_BACKEND_PRINCIPAL_ARN")
 "$prepare" "${prepare_args[@]}"
@@ -143,9 +154,6 @@ tls_manifest="$source_root/docs/gitops/vault-tls-internal-ca.example.yaml"
 printf '%s\n' 'Next ceremony: Vault v2 recovery. Recovery shares will be requested silently by the delegated script.' >&2
 "$bundle_root/source/scripts/ops/recover-and-bootstrap-hoodi-vault-v2.sh" --validator-set "$validator_set"
 
-printf '%s\n' 'Generating validator keystore locally. The keystore password is handled by the generator and is not persisted by this wrapper.' >&2
-mkdir -m 700 "$output_dir/custody"
-"$keystore" --output-dir "$output_dir/custody"
 "$release" custody apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --keystore-dir "$output_dir/custody/validator_keys" --ceremony-dir "$output_dir/ceremony"
 
 mkdir -m 700 "$output_dir/evidence"
