@@ -16,35 +16,35 @@ done
 jq -e '
   .schema_version == "v1" and .network == "hoodi" and .region == "ap-northeast-2" and
   .client_chart == {name:"node-operator-client",version_pattern:"^0\\.1\\.[0-9]+$",immutable_digest_required:true} and
-  (.bootstrap.forbidden_inputs | index("validator key"))
+  (.bootstrap.forbidden_inputs | index("validator private key or keystore"))
 ' "$contract" >/dev/null
 
-rg -Fx 'enable_temporary_ssm_ops_host = false' "$template" >/dev/null
-rg -Fx 'enable_argocd_bootstrap_cluster_admin = false' "$template" >/dev/null
-rg -Fx 'enable_vault_bootstrap_cluster_admin  = false' "$template" >/dev/null
-rg -F 'SSM operations access belongs to the isolated ops-access command' "$entrypoint" >/dev/null
-rg -F 'temporary cluster-admin bootstrap requires its separately approved phase' "$entrypoint" >/dev/null
-rg -F 'zero apply --bundle-root DIRECTORY' "$entrypoint" >/dev/null
-rg -F 'zero apply derives foundation network inputs' "$entrypoint" >/dev/null
-rg -F 'plan|apply|destroy' "$ops_entrypoint" >/dev/null
-rg -F -- '--backend-config BACKEND_HCL' "$ops_entrypoint" >/dev/null
-rg -F -- '--allow-create' "$ops_entrypoint" >/dev/null
-rg -F 'backend "s3" {}' "$root/infra/ops-access/main.tf" >/dev/null
+grep -Fx 'enable_temporary_ssm_ops_host = false' "$template" >/dev/null
+grep -Fx 'enable_argocd_bootstrap_cluster_admin = false' "$template" >/dev/null
+grep -Fx 'enable_vault_bootstrap_cluster_admin  = false' "$template" >/dev/null
+grep -F 'SSM operations access belongs to the isolated ops-access command' "$entrypoint" >/dev/null
+grep -F 'temporary cluster-admin bootstrap requires its separately approved phase' "$entrypoint" >/dev/null
+grep -F 'zero apply --bundle-root DIRECTORY' "$entrypoint" >/dev/null
+grep -F 'zero apply derives foundation network inputs' "$entrypoint" >/dev/null
+grep -F 'plan|apply|destroy' "$ops_entrypoint" >/dev/null
+grep -F -- '--backend-config BACKEND_HCL' "$ops_entrypoint" >/dev/null
+grep -F -- '--allow-create' "$ops_entrypoint" >/dev/null
+grep -F 'backend "s3" {}' "$root/infra/ops-access/main.tf" >/dev/null
 [ -f "$root/infra/ops-access/backend.hcl.example" ] || { printf 'ops-access backend example is missing\n' >&2; exit 1; }
 [ -f "$root/infra/ops-access/terraform.tfvars.example" ] || { printf 'ops-access tfvars example is missing\n' >&2; exit 1; }
-rg -F 'existing_ssm_endpoint_security_group_id' "$root/infra/ops-access/main.tf" "$root/infra/ops-access/variables.tf" >/dev/null
-rg -F 'local.create_ssm_endpoints || var.manage_existing_endpoint_ingress_rule ? 1 : 0' "$root/infra/ops-access/main.tf" >/dev/null
-rg -F 'variable "manage_existing_endpoint_ingress_rule"' "$root/infra/ops-access/variables.tf" >/dev/null
+grep -F 'existing_ssm_endpoint_security_group_id' "$root/infra/ops-access/main.tf" "$root/infra/ops-access/variables.tf" >/dev/null
+grep -F 'local.create_ssm_endpoints || var.manage_existing_endpoint_ingress_rule ? 1 : 0' "$root/infra/ops-access/main.tf" >/dev/null
+grep -F 'variable "manage_existing_endpoint_ingress_rule"' "$root/infra/ops-access/variables.tf" >/dev/null
 for rule in cluster endpoints; do
-  rg -F "from = aws_vpc_security_group_ingress_rule.$rule" "$root/infra/ops-access/main.tf" >/dev/null
-  rg -F "to   = aws_vpc_security_group_ingress_rule.${rule}[0]" "$root/infra/ops-access/main.tf" >/dev/null
+  grep -F "from = aws_vpc_security_group_ingress_rule.$rule" "$root/infra/ops-access/main.tf" >/dev/null
+  grep -F "to   = aws_vpc_security_group_ingress_rule.${rule}[0]" "$root/infra/ops-access/main.tf" >/dev/null
 done
-if rg -n 'scheduler|vault' "$ops_entrypoint"; then
+if grep -n -E 'scheduler|vault' "$ops_entrypoint"; then
   printf 'ops-access command crosses its intended boundary\n' >&2
   exit 1
 fi
 
-if rg -n -i 'vault(_token)?[[:space:]]*=[[:space:]]*[^"[:space:]]+|private[_-]?key[[:space:]]*=[[:space:]]*[^"[:space:]]+|seed_phrase[[:space:]]*=[[:space:]]*[^"[:space:]]+|withdrawal_credential[[:space:]]*=[[:space:]]*[^"[:space:]]+' "$template" "$entrypoint"; then
+if grep -n -E -i 'vault(_token)?[[:space:]]*=[[:space:]]*[^"[:space:]]+|private[_-]?key[[:space:]]*=[[:space:]]*[^"[:space:]]+|seed_phrase[[:space:]]*=[[:space:]]*[^"[:space:]]+|withdrawal_credential[[:space:]]*=[[:space:]]*[^"[:space:]]+' "$template" "$entrypoint"; then
   printf 'release foundation contains a prohibited credential literal\n' >&2
   exit 1
 fi

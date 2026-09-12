@@ -49,7 +49,9 @@ if [ -n "$env_file" ]; then
   done < "$env_file"
 fi
 DEFAULT_REGION="${DEFAULT_REGION:-ap-northeast-2}"
-DEFAULT_DEPLOYMENT_NAME="${DEFAULT_DEPLOYMENT_NAME:-node-operator}"
+# Fresh runs must not accidentally adopt a prior baseline. Keep an explicit
+# env override available, but default to a UTC timestamped deployment name.
+DEFAULT_DEPLOYMENT_NAME="${DEFAULT_DEPLOYMENT_NAME:-node-operator-$(date -u +%Y%m%d%H%M%S)}"
 DEFAULT_KEYSTORE_DIR="${DEFAULT_KEYSTORE_DIR:-}"
 DEFAULT_VALIDATOR_SET="${DEFAULT_VALIDATOR_SET:-hoodi-001}"
 DEFAULT_VALIDATOR_KEY="${DEFAULT_VALIDATOR_KEY:-}"
