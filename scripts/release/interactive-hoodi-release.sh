@@ -252,11 +252,22 @@ printf '%s5.%s Save the mined transaction hash; it is required for public receip
 printf '%s!%s Do not paste mnemonics, keystore passwords, private keys, or wallet credentials into this shell, Git, CI, or Vault.\n' "$ui_red" "$ui_reset" >&2
 printf '   Deposit data directory: %s\n' "$(dirname "$deposit_data")" >&2
 printf '   Registration is intentionally manual and must be completed with your own Hoodi wallet.\n' >&2
-registration_confirmation="$(prompt 'After the 32 HoodiETH transaction is submitted and mined, type YES to continue')"
-case "$(printf '%s' "$registration_confirmation" | tr '[:lower:]' '[:upper:]')" in
-  YES) printf '%s✓%s Hoodi deposit completion acknowledged; continuing to infrastructure and Vault setup.\n' "$ui_green" "$ui_reset" >&2 ;;
-  *) printf '%s✖%s Hoodi registration not confirmed; stopping before infrastructure/Vault changes.\n' "$ui_red" "$ui_reset" >&2; exit 0 ;;
-esac
+while :; do
+  registration_confirmation="$(prompt 'Have you completed and confirmed the 32 HoodiETH deposit? [yes/no]')"
+  case "$(printf '%s' "$registration_confirmation" | tr '[:upper:]' '[:lower:]')" in
+    yes|y|예|완료)
+      printf '%s✓%s Hoodi deposit completion acknowledged; continuing to infrastructure and Vault setup.\n' "$ui_green" "$ui_reset" >&2
+      break
+      ;;
+    no|n|'')
+      printf '%s✖%s Hoodi registration not confirmed; stopping before infrastructure/Vault changes.\n' "$ui_red" "$ui_reset" >&2
+      exit 0
+      ;;
+    *)
+      printf '%s!%s Please answer yes or no.\n' "$ui_yellow" "$ui_reset" >&2
+      ;;
+  esac
+done
 
 zones=()
 while IFS= read -r zone; do
