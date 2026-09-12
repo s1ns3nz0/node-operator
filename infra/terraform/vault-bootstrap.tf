@@ -22,8 +22,8 @@ variable "vault_bootstrap_image" {
   default     = ""
 
   validation {
-    condition     = var.vault_bootstrap_image == "" || can(regex("^[0-9]{12}\\.dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", var.vault_bootstrap_image))
-    error_message = "vault_bootstrap_image must be empty while disabled or a digest-pinned ap-northeast-2 private ECR image."
+    condition     = var.vault_bootstrap_image == "" || can(regex("^[0-9]{12}\\.dkr\\.ecr\\." + var.aws_region + "\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", var.vault_bootstrap_image))
+    error_message = "vault_bootstrap_image must be empty while disabled or a same-region digest-pinned private ECR image."
   }
 }
 

@@ -22,8 +22,8 @@ variable "argocd_bootstrap_image" {
   default     = ""
 
   validation {
-    condition     = var.argocd_bootstrap_image == "" || can(regex("^[0-9]{12}\\.dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", var.argocd_bootstrap_image))
-    error_message = "argocd_bootstrap_image must be empty while disabled or an ap-northeast-2 private ECR image pinned by a sha256 digest."
+    condition     = var.argocd_bootstrap_image == "" || can(regex("^[0-9]{12}\\.dkr\\.ecr\\." + var.aws_region + "\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", var.argocd_bootstrap_image))
+    error_message = "argocd_bootstrap_image must be empty while disabled or a same-region private ECR image pinned by a sha256 digest."
   }
 }
 

@@ -26,7 +26,7 @@ while [ "$#" -gt 0 ]; do
 done
 case "$work_dir:$baseline_config:$account:$region:$argocd_image:$vault_image:$client_version:$client_digest:$vault_version:$vault_digest" in /*:/*:*:*:*:*:*:*:*:*:*) ;; *) usage ;; esac
 [[ "$account" =~ ^[0-9]{12}$ ]] || usage
-[[ "$region" =~ ^ap-northeast-(1|2)$ ]] || usage
+[[ "$region" =~ ^[a-z]{2}-[a-z0-9-]+-[0-9]+$ ]] || usage
 [[ "$argocd_image" =~ ^${account}\.dkr\.ecr\.${region}\.amazonaws\.com/.+@sha256:[a-f0-9]{64}$ ]] || usage
 [[ "$vault_image" =~ ^${account}\.dkr\.ecr\.${region}\.amazonaws\.com/.+@sha256:[a-f0-9]{64}$ ]] || usage
 [[ "$client_version" =~ ^0\.1\.[0-9]+$ && "$client_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || usage

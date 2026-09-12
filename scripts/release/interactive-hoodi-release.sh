@@ -91,7 +91,7 @@ absolute_new_dir() { case "$1" in /*) ;; *) printf '%s\n' 'path must be absolute
 
 step 'Collecting deployment settings'
 region="$(prompt_default 'AWS Region' "$DEFAULT_REGION")"
-case "$region" in ap-northeast-1|ap-northeast-2) ;; *) printf '%s\n' 'unsupported Region' >&2; exit 64 ;; esac
+[[ "$region" =~ ^[a-z]{2}-[a-z0-9-]+-[0-9]+$ ]] || { printf '%s\n' 'unsupported AWS Region format' >&2; exit 64; }
 validator_set="$(prompt_default 'Validator set' "$DEFAULT_VALIDATOR_SET")"
 deployment_name="$(prompt_default 'Deployment name' "$DEFAULT_DEPLOYMENT_NAME")"
 [[ "$deployment_name" =~ ^[a-z][a-z0-9-]{1,18}[a-z0-9]$ ]] || { printf '%s\n' 'deployment name must be a DNS-compatible name of 3-20 characters' >&2; exit 64; }

@@ -317,7 +317,7 @@ case "$operation" in
       instance_id="$(terraform_scoped -chdir="$module" output -raw instance_id)"
       [[ "$instance_id" =~ ^i-[0-9a-f]+$ ]] || { printf '%s\n' 'ops-access apply did not return a valid SSM instance ID' >&2; exit 70; }
       cluster_name="$(jq -er '.cluster_name' "$inputs")"
-      aws_region="$(jq -er '.aws_region | select(test("^ap-northeast-(1|2)$"))' "$config")"
+      aws_region="$(jq -er '.aws_region | select(test("^[a-z]{2}-[a-z0-9-]+-[0-9]+$"))' "$config")"
       jq -n --arg cluster "$cluster_name" --arg region "$aws_region" --arg instance "$instance_id" \
         '{schema_version:1,aws_region:$region,cluster_name:$cluster,ssm_ops_instance_id:$instance}' > "$session_handoff"
       chmod 600 "$session_handoff"

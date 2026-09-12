@@ -3,8 +3,8 @@ variable "aws_region" {
   default = "ap-northeast-2"
 
   validation {
-    condition     = contains(["ap-northeast-1", "ap-northeast-2"], var.aws_region)
-    error_message = "aws_region must be one of ap-northeast-1 or ap-northeast-2."
+    condition     = can(regex("^[a-z]{2}-[a-z0-9-]+-[0-9]+$", var.aws_region))
+    error_message = "aws_region must be a valid AWS commercial region identifier."
   }
 }
 variable "name" {
@@ -65,8 +65,8 @@ variable "availability_zones" {
   default = ["ap-northeast-2a", "ap-northeast-2c"]
 
   validation {
-    condition     = length(var.availability_zones) == 2 && length(distinct(var.availability_zones)) == 2 && alltrue([for zone in var.availability_zones : can(regex("^ap-northeast-(1|2)[a-z]$", zone))])
-    error_message = "availability_zones must contain exactly two distinct approved Tokyo or Seoul zones."
+    condition     = length(var.availability_zones) == 2 && length(distinct(var.availability_zones)) == 2 && alltrue([for zone in var.availability_zones : can(regex("^${var.aws_region}[a-z]$", zone))])
+    error_message = "availability_zones must contain exactly two distinct zones in aws_region."
   }
 }
 variable "system_subnet_cidrs" {

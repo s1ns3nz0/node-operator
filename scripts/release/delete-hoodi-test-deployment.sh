@@ -27,7 +27,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 [ "$execute" = true ] || { printf '%s\n' 'refusing deletion without --execute' >&2; exit 64; }
-[[ "$region" =~ ^ap-northeast-(1|2)$ ]] || { printf '%s\n' 'unsupported AWS region' >&2; exit 64; }
+[[ "$region" =~ ^[a-z]{2}-[a-z0-9-]+-[0-9]+$ ]] || { printf '%s\n' 'unsupported AWS region' >&2; exit 64; }
 [[ "$cluster" =~ ^[a-z][a-z0-9-]{1,38}[a-z0-9]$ ]] || { printf '%s\n' 'invalid EKS cluster name' >&2; exit 64; }
 command -v aws >/dev/null 2>&1 || { printf '%s\n' 'missing command: aws' >&2; exit 69; }
 
