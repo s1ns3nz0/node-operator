@@ -2,6 +2,14 @@
 set -euo pipefail
 umask 077
 
+release_stage='startup'
+release_stage() { release_stage="$1"; printf '\n[%s] %s\n' "$2" "$1" >&2; }
+release_failure() {
+  rc=$?
+  [ "$rc" -eq 0 ] || printf '\n[FAIL] release bootstrap stopped at "%s" (exit %s)\n' "$release_stage" "$rc" >&2
+}
+trap release_failure EXIT
+
 usage() {
   cat <<'USAGE'
 usage:
@@ -51,6 +59,7 @@ require_command shasum
 require_command grep
 
 verify_bundle() {
+  release_stage 'bundle verification' '1/4'
   local bad=0 path expected actual
   while IFS=$'\t' read -r path expected; do
     [ -f "$bundle_root/$path" ] || { printf 'missing archived path: %s\n' "$path" >&2; bad=1; continue; }
@@ -119,6 +128,7 @@ apply_phase() {
 }
 
 zero_apply() {
+  release_stage 'zero-resource bootstrap' '2/4'
   if [ -n "$inputs" ]; then
     [ -z "$bootstrap_config$foundation_config$baseline_config" ] || fail "--inputs cannot be combined with individual phase configs"
     case "$inputs" in /*) ;; *) fail "--inputs must be an absolute path" ;; esac
@@ -161,6 +171,7 @@ zero_apply() {
   if [ ! -f "$bootstrap_output" ]; then
     [ ! -e "$bootstrap_module" ] || fail "incomplete bootstrap checkpoint; use a new work directory"
     copy_module infra/bootstrap-state "$bootstrap_module"
+    printf '[bootstrap] Initializing Terraform provider...\n' >&2
     terraform -chdir="$bootstrap_module" init -input=false -backend=false
     # A retry after an interrupted bootstrap may find the protected state
     # buckets/table already present while the bootstrap state itself is not.
@@ -180,7 +191,9 @@ zero_apply() {
     if aws dynamodb describe-table --region "$(jq -er '.aws_region' "$bootstrap_config")" --table-name "$(jq -er '.name' "$bootstrap_config")-terraform-lock" >/dev/null 2>&1 && ! grep -Fxq 'aws_dynamodb_table.lock' <<<"$bootstrap_state_list"; then
       terraform -chdir="$bootstrap_module" import -input=false aws_dynamodb_table.lock "$(jq -er '.name' "$bootstrap_config")-terraform-lock"
     fi
+    printf '[bootstrap] Planning state resources...\n' >&2
     terraform -chdir="$bootstrap_module" plan -input=false -var-file="$bootstrap_config" -out="$work_dir/bootstrap.tfplan"
+    printf '[bootstrap] Applying state resources...\n' >&2
     terraform -chdir="$bootstrap_module" apply -input=false "$work_dir/bootstrap.tfplan"
     terraform -chdir="$bootstrap_module" output -json backend > "$bootstrap_output"
   fi

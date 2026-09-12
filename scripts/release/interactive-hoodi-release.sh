@@ -80,8 +80,12 @@ IFS= read -r confirmation
 prompt() { local label="$1" value; printf '%s: ' "$label" >&2; IFS= read -r value; printf '%s' "$value"; }
 prompt_default() { local label="$1" fallback="$2" value; printf '%s [%s]: ' "$label" "$fallback" >&2; IFS= read -r value; printf '%s' "${value:-$fallback}"; }
 prompt_secret() { local label="$1" value; printf '%s: ' "$label" >&2; IFS= read -r -s value; printf '\n' >&2; printf '%s' "$value"; }
+step_number=0
+step() { step_number=$((step_number + 1)); printf '\n[%02d/10] %s\n' "$step_number" "$1" >&2; }
+display_digest() { case "$1" in *@sha256:????????????????????????????????????????????????????????????????) printf '%s@sha256:%s...%s' "${1%@*}" "${1##*@sha256:}" "${1: -8}" ;; *) printf '%s' "$1" ;; esac; }
 absolute_new_dir() { case "$1" in /*) ;; *) printf '%s\n' 'path must be absolute' >&2; exit 64 ;; esac; [ ! -e "$1" ] && [ ! -L "$1" ] || { printf 'path already exists: %s\n' "$1" >&2; exit 65; }; }
 
+step 'Collecting deployment settings'
 region="$(prompt_default 'AWS Region' "$DEFAULT_REGION")"
 case "$region" in ap-northeast-1|ap-northeast-2) ;; *) printf '%s\n' 'unsupported Region' >&2; exit 64 ;; esac
 validator_set="$(prompt_default 'Validator set' "$DEFAULT_VALIDATOR_SET")"
@@ -138,7 +142,7 @@ web3signer_image="${DEFAULT_WEB3SIGNER_IMAGE:-$(jq -er '.images.web3signer.sourc
 postgres_image="${DEFAULT_POSTGRES_IMAGE:-$(jq -er '.images.postgres.source' "$runtime_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-validator-runtime-postgres#")}"
 prysm_image="${DEFAULT_PRYSM_IMAGE:-$(jq -er '[.images[] | select(.component == "prysm-validator" and .activation_approved == true) | .private_image][0]' "$client_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-validator-prysm#")}"
 [ "$prysm_image" != null ] && [ -n "$prysm_image" ] || { printf '%s\n' 'approved Prysm activation image is missing' >&2; exit 65; }
-printf 'Using release-approved images: Web3Signer=%s PostgreSQL=%s Prysm=%s\n' "$web3signer_image" "$postgres_image" "$prysm_image" >&2
+printf 'Using release-approved images:\n  Web3Signer %s\n  PostgreSQL %s\n  Prysm %s\n' "$(display_digest "$web3signer_image")" "$(display_digest "$postgres_image")" "$(display_digest "$prysm_image")" >&2
 if [ -n "$DEFAULT_FENCE_IMAGE" ]; then
   fence_image="$DEFAULT_FENCE_IMAGE"
   printf 'Using env-file signing-fence image: %s\n' "$fence_image" >&2
@@ -187,7 +191,8 @@ bootstrap_mirror_images=()
 if ! verify_private_image "$argocd_bootstrap_image"; then bootstrap_mirror_images+=("$argocd_bootstrap_image"); fi
 if ! verify_private_image "$vault_bootstrap_image"; then bootstrap_mirror_images+=("$vault_bootstrap_image"); fi
 
-printf '%s\n' 'Preparing and validating the Hoodi validator key before infrastructure staging.' >&2
+step 'Preparing and validating validator key'
+printf '%s\n' 'Existing key is reused when configured; otherwise a new Hoodi ceremony runs.' >&2
 mkdir -m 700 "$output_dir" "$output_dir/custody"
 keystore_dir_for_custody="$output_dir/custody/validator_keys"
 existing_keystore_dir="$DEFAULT_KEYSTORE_DIR"
@@ -236,6 +241,7 @@ prepare_args=(--aws-account-id "$account" --aws-region "$region" --name "$deploy
 inputs="$output_dir/inputs/hoodi-zero-release-inputs.json"
 session="$output_dir/private-eks-session.json"
 
+step 'Applying zero-resource foundation and private EKS'
 "$release" deploy apply --bundle-root "$bundle_root" --inputs "$inputs" --work-dir "$output_dir/deployment-work" --private-eks-session-handoff "$session" --allow-create
 
 if [ "${backend_role_created:-false}" = true ]; then
@@ -288,6 +294,7 @@ if [ "${#bootstrap_mirror_images[@]}" -gt 0 ]; then
   done
 fi
 
+step 'Publishing platform artifacts and bootstrapping GitOps/Vault'
 platform_script="$source_root/scripts/release/run-platform-bootstrap.sh"
 [ -x "$platform_script" ] || { printf '%s\n' 'release bundle lacks the unified platform bootstrap helper' >&2; exit 65; }
 client_chart_version="$DEFAULT_CLIENT_CHART_VERSION"
@@ -319,23 +326,27 @@ client_found="$(aws ecr describe-images --region "$region" --repository-name "$c
 [ "$client_found" = "$client_chart_digest" ] || { printf 'client chart %s with digest %s is missing from private ECR\n' "$client_chart_version" "$client_chart_digest" >&2; printf '%s\n' 'Publish or mirror the reviewed immutable client chart, then rerun the single installer.' >&2; exit 65; }
 "$platform_script" "${platform_args[@]}"
 
+step 'Configuring private Vault TLS'
 printf '%s\n' 'Preparing cert-manager-managed Vault TLS through the private EKS session.' >&2
 eks_env=(env PRIVATE_EKS_SESSION=1 AWS_REGION="$region" EKS_CLUSTER_NAME="$(jq -er '.cluster_name' "$session")" SSM_OPS_INSTANCE_ID="$(jq -er '.ssm_ops_instance_id' "$session")")
 tls_manifest="$source_root/docs/gitops/vault-tls-internal-ca.example.yaml"
 [ -f "$tls_manifest" ] && [ ! -L "$tls_manifest" ] || { printf '%s\n' 'release bundle lacks the reviewed Vault TLS manifest' >&2; exit 65; }
 "$source_root/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$vault_tls" --manifest "$tls_manifest"
 
+step 'Running Vault v2 recovery and validator custody'
 printf '%s\n' 'Next ceremony: Vault v2 recovery. Recovery shares will be requested silently by the delegated script.' >&2
 "$bundle_root/source/scripts/ops/recover-and-bootstrap-hoodi-vault-v2.sh" --validator-set "$validator_set"
 
 "$release" custody apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --keystore-dir "$keystore_dir_for_custody" --ceremony-dir "$output_dir/ceremony"
 
+step 'Collecting signer and Beacon evidence'
 mkdir -m 700 "$output_dir/evidence"
 "$release" evidence signer --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --output-dir "$output_dir/evidence/signer"
 "$release" evidence beacon --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --output-dir "$output_dir/evidence/beacon"
 
 printf 'Generated and validated deposit attestation: %s\n' "$deposit_attestation" >&2
 printf '%s\n' 'Activation requires independently reviewed public deposit, private Beacon, and signer evidence. Enter paths only; secret material is not accepted.' >&2
+step 'Guarded validator activation'
 public_deposit="$(prompt 'Absolute public deposit verification JSON')"
 private_evidence="$(prompt 'Absolute private Beacon evidence JSON')"
 signer_evidence="$(prompt 'Absolute signer evidence JSON')"
