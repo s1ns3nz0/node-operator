@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set -E
 umask 077
 
 if [ -t 2 ]; then
