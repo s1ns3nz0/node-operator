@@ -90,6 +90,9 @@ deployment_name="$(prompt_default 'Deployment name' "$DEFAULT_DEPLOYMENT_NAME")"
 withdrawal="$(prompt_default 'Withdrawal address' "$DEFAULT_WITHDRAWAL")"
 identity="$(aws sts get-caller-identity --output json)"
 account="$(jq -er '.Account | select(test("^[0-9]{12}$"))' <<<"$identity")" || { printf '%s\n' 'AWS identity did not return a 12-digit account' >&2; exit 65; }
+printf 'Detected AWS account: %s\nType CONFIRM to continue with this account: ' "$account" >&2
+IFS= read -r account_confirmation
+[ "$account_confirmation" = 'CONFIRM' ] || { printf '%s\n' 'AWS account confirmation cancelled' >&2; exit 0; }
 if [ -n "$DEFAULT_BACKEND_PRINCIPAL_ARN" ]; then
   case "$DEFAULT_BACKEND_PRINCIPAL_ARN" in
     "arn:aws:iam::${account}:role/"*) ;;

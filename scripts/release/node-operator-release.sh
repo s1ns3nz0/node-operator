@@ -147,6 +147,7 @@ zero_apply() {
     mkdir -p "$work_dir"; chmod 700 "$work_dir"
   fi
   require_command terraform
+  require_command aws
   require_nonsecret_file "$bootstrap_config"; require_nonsecret_file "$foundation_config"; require_nonsecret_file "$baseline_config"
   reject_privileged_baseline_inputs "$baseline_config"
   if grep -E -n '^[[:space:]]*(network_source|foundation_network|hoodi_nat_gateway_id)[[:space:]]*=' "$baseline_config" >/dev/null; then
@@ -161,6 +162,24 @@ zero_apply() {
     [ ! -e "$bootstrap_module" ] || fail "incomplete bootstrap checkpoint; use a new work directory"
     copy_module infra/bootstrap-state "$bootstrap_module"
     terraform -chdir="$bootstrap_module" init -input=false -backend=false
+    # A retry after an interrupted bootstrap may find the protected state
+    # buckets/table already present while the bootstrap state itself is not.
+    # Adopt only the deterministic, same-account resources; never delete or
+    # overwrite them. This makes retries idempotent after BucketAlreadyOwnedByYou.
+    state_bucket_name="$(jq -er '.state_bucket_name // empty' "$bootstrap_config")"
+    [ -n "$state_bucket_name" ] || state_bucket_name="$(jq -er '.name' "$bootstrap_config")-tfstate-$(jq -er '.aws_account_id' "$bootstrap_config")-$(jq -er '.aws_region' "$bootstrap_config" | tr -d '-')"
+    state_log_suffix="$(printf '%s' "$state_bucket_name" | shasum -a 256 | awk '{print substr($1,1,8)}')"
+    state_logs_bucket="${state_bucket_name:0:48}-${state_log_suffix}-logs"
+    bootstrap_state_list="$(terraform -chdir="$bootstrap_module" state list 2>/dev/null || true)"
+    if aws s3api head-bucket --bucket "$state_bucket_name" >/dev/null 2>&1 && ! grep -Fxq 'aws_s3_bucket.state' <<<"$bootstrap_state_list"; then
+      terraform -chdir="$bootstrap_module" import -input=false aws_s3_bucket.state "$state_bucket_name"
+    fi
+    if aws s3api head-bucket --bucket "$state_logs_bucket" >/dev/null 2>&1 && ! grep -Fxq 'aws_s3_bucket.state_access_logs' <<<"$bootstrap_state_list"; then
+      terraform -chdir="$bootstrap_module" import -input=false aws_s3_bucket.state_access_logs "$state_logs_bucket"
+    fi
+    if aws dynamodb describe-table --region "$(jq -er '.aws_region' "$bootstrap_config")" --table-name "$(jq -er '.name' "$bootstrap_config")-terraform-lock" >/dev/null 2>&1 && ! grep -Fxq 'aws_dynamodb_table.lock' <<<"$bootstrap_state_list"; then
+      terraform -chdir="$bootstrap_module" import -input=false aws_dynamodb_table.lock "$(jq -er '.name' "$bootstrap_config")-terraform-lock"
+    fi
     terraform -chdir="$bootstrap_module" plan -input=false -var-file="$bootstrap_config" -out="$work_dir/bootstrap.tfplan"
     terraform -chdir="$bootstrap_module" apply -input=false "$work_dir/bootstrap.tfplan"
     terraform -chdir="$bootstrap_module" output -json backend > "$bootstrap_output"
