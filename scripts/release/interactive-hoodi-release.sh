@@ -36,6 +36,7 @@ for command in aws jq find shasum; do command -v "$command" >/dev/null 2>&1 || {
 # Optional non-secret .env-style overrides. Values are never exported and
 # unknown keys are ignored. This file may contain addresses/digests only.
 if [ -z "$env_file" ] && [ -f "$bundle_root/env" ]; then env_file="$bundle_root/env"; fi
+if [ -z "$env_file" ] && [ -f "$bundle_root/release/env" ]; then env_file="$bundle_root/release/env"; fi
 if [ -n "$env_file" ]; then
   case "$env_file" in /*) ;; *) printf '%s\n' '--env-file must be absolute' >&2; exit 64 ;; esac
   [ -f "$env_file" ] && [ ! -L "$env_file" ] || { printf '%s\n' 'env file must be a regular file' >&2; exit 65; }
