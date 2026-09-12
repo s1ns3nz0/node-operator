@@ -274,6 +274,14 @@ resource "aws_security_group" "hoodi_nodes" {
   }
 
   egress {
+    description = "Hoodi consensus QUIC through the approved private NAT"
+    from_port   = 13001
+    to_port     = 13001
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
     description = "Hoodi Prysm discovery UDP through the approved private NAT"
     from_port   = 12000
     to_port     = 12000
