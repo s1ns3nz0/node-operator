@@ -80,8 +80,9 @@ IFS= read -r confirmation
 prompt() { local label="$1" value; printf '%s: ' "$label" >&2; IFS= read -r value; printf '%s' "$value"; }
 prompt_default() { local label="$1" fallback="$2" value; printf '%s [%s]: ' "$label" "$fallback" >&2; IFS= read -r value; printf '%s' "${value:-$fallback}"; }
 prompt_secret() { local label="$1" value; printf '%s: ' "$label" >&2; IFS= read -r -s value; printf '\n' >&2; printf '%s' "$value"; }
+if [ -t 2 ]; then ui_reset=$'\033[0m'; ui_cyan=$'\033[1;36m'; ui_green=$'\033[1;32m'; ui_yellow=$'\033[1;33m'; ui_red=$'\033[1;31m'; else ui_reset=''; ui_cyan=''; ui_green=''; ui_yellow=''; ui_red=''; fi
 step_number=0
-step() { step_number=$((step_number + 1)); printf '\n[%02d/10] %s\n' "$step_number" "$1" >&2; }
+step() { step_number=$((step_number + 1)); printf '\n%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n%s◆ STEP %02d/10%s  %s%s%s\n%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$ui_cyan" "$ui_reset" "$ui_cyan" "$step_number" "$ui_reset" "$ui_green" "$1" "$ui_reset" "$ui_cyan" "$ui_reset" >&2; }
 display_digest() { case "$1" in *@sha256:????????????????????????????????????????????????????????????????) printf '%s@sha256:%s...%s' "${1%@*}" "${1##*@sha256:}" "${1: -8}" ;; *) printf '%s' "$1" ;; esac; }
 absolute_new_dir() { case "$1" in /*) ;; *) printf '%s\n' 'path must be absolute' >&2; exit 64 ;; esac; [ ! -e "$1" ] && [ ! -L "$1" ] || { printf 'path already exists: %s\n' "$1" >&2; exit 65; }; }
 
