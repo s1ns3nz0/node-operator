@@ -6,12 +6,12 @@ umask 077
 # prepare-hoodi-validator-deployment.sh. It never initializes Vault, accepts
 # custody material, or starts the signer, client, or fence.
 usage() {
-  printf '%s\n' "usage: ${0##*/} plan|apply --handoff /absolute/validator-deployment-handoff.json [--private-eks-session-handoff /absolute/session.json]" >&2
+  printf '%s\n' "usage: ${0##*/} plan|apply|verify --handoff /absolute/validator-deployment-handoff.json [--private-eks-session-handoff /absolute/session.json]" >&2
   exit 64
 }
 
 operation="${1:-}"
-case "$operation" in plan|apply) ;; *) usage ;; esac
+case "$operation" in plan|apply|verify) ;; *) usage ;; esac
 shift
 handoff=''; private_eks_session_handoff=''
 while [ "$#" -gt 0 ]; do
@@ -77,6 +77,28 @@ if [ "${PRIVATE_EKS_SESSION:-}" != 1 ]; then
   exec "$script_dir/../ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$self" "$operation" --handoff "$handoff"
 fi
 command -v kubectl >/dev/null 2>&1 || { printf '%s\n' 'missing command: kubectl' >&2; exit 69; }
+
+if [ "$operation" = verify ]; then
+  found=0
+  for target in \
+    "statefulset/validator-${validator_set}-slashing-db" \
+    "deployment/validator-${validator_set}-remote-signer" \
+    "statefulset/validator-${validator_set}-client" \
+    "deployment/validator-${validator_set}-signing-fence"; do
+    if kubectl -n "$namespace" get "$target" >/dev/null 2>&1; then found=1; fi
+  done
+  [ "$found" -eq 1 ] || { printf '%s\n' 'no staged validator resources found'; exit 3; }
+  db_replicas="$(kubectl -n "$namespace" get "statefulset/validator-${validator_set}-slashing-db" -o jsonpath='{.spec.replicas}' 2>/dev/null || true)"
+  signer_replicas="$(kubectl -n "$namespace" get "deployment/validator-${validator_set}-remote-signer" -o jsonpath='{.spec.replicas}' 2>/dev/null || true)"
+  client_replicas="$(kubectl -n "$namespace" get "statefulset/validator-${validator_set}-client" -o jsonpath='{.spec.replicas}' 2>/dev/null || true)"
+  fence_replicas="$(kubectl -n "$namespace" get "deployment/validator-${validator_set}-signing-fence" -o jsonpath='{.spec.replicas}' 2>/dev/null || true)"
+  [ "$db_replicas:$signer_replicas:$client_replicas:$fence_replicas" = '1:0:0:0' ] || {
+    printf '%s\n' 'existing validator resources do not preserve the expected runtime/fence boundary' >&2
+    exit 70
+  }
+  printf 'PASS: existing staged validator resources preserve the expected zero-replica activation boundary.\n'
+  exit 0
+fi
 
 # Fresh-set staging must never adopt an existing controller or lease. Check
 # before server-side dry-run too: otherwise Kubernetes reports low-level field
