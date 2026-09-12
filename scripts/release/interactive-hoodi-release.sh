@@ -93,17 +93,30 @@ account="$(jq -er '.Account | select(test("^[0-9]{12}$"))' <<<"$identity")" || {
 printf 'Detected AWS account: %s\nType CONFIRM to continue with this account: ' "$account" >&2
 IFS= read -r account_confirmation
 [ "$account_confirmation" = 'CONFIRM' ] || { printf '%s\n' 'AWS account confirmation cancelled' >&2; exit 0; }
+DEFAULT_BACKEND_PRINCIPAL_ARN="${DEFAULT_BACKEND_PRINCIPAL_ARN:-arn:aws:iam::${account}:role/NodeOperatorTerraformApply}"
 if [ -n "$DEFAULT_BACKEND_PRINCIPAL_ARN" ]; then
   case "$DEFAULT_BACKEND_PRINCIPAL_ARN" in
     "arn:aws:iam::${account}:role/"*) ;;
     *) printf '%s\n' 'BACKEND_PRINCIPAL_ARN must be a same-account IAM role ARN' >&2; exit 65 ;;
   esac
   backend_role_name="${DEFAULT_BACKEND_PRINCIPAL_ARN##*/}"
-  aws iam get-role --role-name "$backend_role_name" --query 'Role.Arn' --output text >/dev/null 2>&1 || {
-    printf 'configured Terraform backend role does not exist: %s\n' "$DEFAULT_BACKEND_PRINCIPAL_ARN" >&2
-    printf '%s\n' 'Create or select an existing same-account backend role, then update release/env before retrying. No resources were changed by this preflight.' >&2
-    exit 65
-  }
+  backend_role_created=false
+  if ! aws iam get-role --role-name "$backend_role_name" --query 'Role.Arn' --output text >/dev/null 2>&1; then
+    printf 'Configured Terraform backend role does not exist: %s\n' "$DEFAULT_BACKEND_PRINCIPAL_ARN" >&2
+    printf 'Type CREATE to create this least-privilege bootstrap role (or press Enter to cancel): ' >&2
+    IFS= read -r create_role_confirmation
+    [ "$create_role_confirmation" = 'CREATE' ] || { printf '%s\n' 'backend role creation cancelled; no resources were changed' >&2; exit 0; }
+    caller_arn="$(jq -er '.Arn' <<<"$identity")"
+    case "$caller_arn" in
+      arn:aws:iam::${account}:user/*) trust_principal="$caller_arn" ;;
+      arn:aws:sts::${account}:assumed-role/*/*) trust_principal="arn:aws:iam::${account}:role/${caller_arn#arn:aws:sts::${account}:assumed-role/}"; trust_principal="${trust_principal%/*}" ;;
+      *) printf '%s\n' 'current AWS identity cannot be used as a backend-role trust principal' >&2; exit 65 ;;
+    esac
+    trust_document="$(jq -cn --arg principal "$trust_principal" '{Version:"2012-10-17",Statement:[{Sid:"AllowInteractiveBootstrapCaller",Effect:"Allow",Principal:{AWS:$principal},Action:"sts:AssumeRole"}]}')"
+    aws iam create-role --role-name "$backend_role_name" --assume-role-policy-document "$trust_document" --description 'Node Operator Terraform bootstrap state access' >/dev/null
+    backend_role_created=true
+    printf 'Created backend role %s with trust restricted to the current AWS identity.\n' "$backend_role_name" >&2
+  fi
 fi
 platform_approval="$source_root/release/platform-artifact-approval.json"
 if [ -f "$platform_approval" ]; then
@@ -224,6 +237,26 @@ inputs="$output_dir/inputs/hoodi-zero-release-inputs.json"
 session="$output_dir/private-eks-session.json"
 
 "$release" deploy apply --bundle-root "$bundle_root" --inputs "$inputs" --work-dir "$output_dir/deployment-work" --private-eks-session-handoff "$session" --allow-create
+
+if [ "${backend_role_created:-false}" = true ]; then
+  bootstrap_output="$output_dir/deployment-work/bootstrap-output.json"
+  [ -f "$bootstrap_output" ] || { printf '%s\n' 'bootstrap did not emit state outputs for backend-role policy binding' >&2; exit 65; }
+  backend_policy_file="$output_dir/backend-role-policy.json"
+  jq -n \
+    --arg bucket "$(jq -er '.bucket' "$bootstrap_output")" \
+    --arg table "$(jq -er '.dynamodb_table' "$bootstrap_output")" \
+    --arg kms "$(jq -er '.kms_key_id' "$bootstrap_output")" \
+    --arg region "$region" --arg account "$account" \
+    '{Version:"2012-10-17",Statement:[
+      {Sid:"StateBucket",Effect:"Allow",Action:["s3:ListBucket"],Resource:("arn:aws:s3:::" + $bucket)},
+      {Sid:"StateObjects",Effect:"Allow",Action:["s3:GetObject","s3:PutObject","s3:DeleteObject"],Resource:("arn:aws:s3:::" + $bucket + "/*")},
+      {Sid:"StateLock",Effect:"Allow",Action:["dynamodb:DescribeTable","dynamodb:GetItem","dynamodb:PutItem","dynamodb:DeleteItem","dynamodb:UpdateItem"],Resource:("arn:aws:dynamodb:" + $region + ":" + $account + ":table/" + $table)},
+      {Sid:"StateKey",Effect:"Allow",Action:["kms:Decrypt","kms:Encrypt","kms:ReEncrypt*","kms:GenerateDataKey","kms:DescribeKey"],Resource:$kms}
+    ]}' > "$backend_policy_file"
+  aws iam put-role-policy --role-name "$backend_role_name" --policy-name NodeOperatorBootstrapStateAccess --policy-document "file://$backend_policy_file"
+  rm -f "$backend_policy_file"
+  printf '%s\n' 'Bound least-privilege state access to the newly created backend role.' >&2
+fi
 
 # A fresh account has empty private mirrors. Copy only the exact, release-
 # approved source digest after Terraform has created the destination ECR
