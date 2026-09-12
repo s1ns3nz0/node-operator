@@ -103,4 +103,3 @@ class AuthorityTests(unittest.TestCase):
         self.assertEqual(names, ["vault-bootstrap-grant-reconcile-work"]); reconcile.assert_called_once(); self.assertFalse(workspace.exists())
 
 if __name__ == "__main__": unittest.main()
-

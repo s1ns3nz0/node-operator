@@ -264,4 +264,3 @@ def apply_ops_access(bundle_root: Path, state_dir: Path, discovery: dict, profil
             and isinstance(value.get("ssm_ops_instance_id"), str) and _INSTANCE.fullmatch(value["ssm_ops_instance_id"])):
         raise OpsExecutionError("Ops-access session handoff does not match the selected deployment.")
     return value
-

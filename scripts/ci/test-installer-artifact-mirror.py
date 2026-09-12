@@ -67,4 +67,3 @@ class Mirror(unittest.TestCase):
    self.assertFalse((state/"vault-artifact-mirror-uncertain.json").exists())
    self.assertFalse(any(call[:3]==["docker","run","--rm"] for call in calls))
 if __name__=="__main__": unittest.main()
-

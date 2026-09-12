@@ -80,4 +80,3 @@ class Tests(unittest.TestCase):
     with self.assertRaises(vault.VaultInputsError): vault.prepare_vault_inputs(self.state,D,self.art)
     self.write(index_path,original_index); self.write(receipt_path,original_receipt)
 if __name__=="__main__": unittest.main()
-

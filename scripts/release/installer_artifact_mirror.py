@@ -106,4 +106,3 @@ def mirror(*args, **kwargs):
         return _mirror_impl(*args, **kwargs)
     except subprocess.CalledProcessError as error:
         raise MirrorError("artifact mirror command failed; the outcome requires reconciliation") from error
-

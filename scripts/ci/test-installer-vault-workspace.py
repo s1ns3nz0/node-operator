@@ -52,4 +52,3 @@ class T(unittest.TestCase):
   self.write(metadata,backend);(work/"baseline/.terraform/environment").symlink_to(work/"absent")
   with self.assertRaises(v.VaultWorkspaceError):v.validate_vault_workspace(self.bundle,self.state,D)
 if __name__=="__main__":unittest.main()
-

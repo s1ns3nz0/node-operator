@@ -26,4 +26,3 @@ def validate_prepare_receipt(receipt: dict, plan: dict, discovery: dict, reviewe
         same_scope = False
     if scope.get("result")!="scope_valid" or not same_scope:
         raise VaultReceiptError("Vault prepare receipt scope does not match the current plan.")
-

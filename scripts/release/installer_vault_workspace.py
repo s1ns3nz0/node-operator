@@ -51,4 +51,3 @@ def validate_vault_workspace(bundle_root: Path, state_dir: Path, discovery: dict
  if env.exists() or env.is_symlink():
   if env.is_symlink() or env.read_text().strip() not in ("","default"): raise VaultWorkspaceError("Baseline Terraform workspace is not default.")
  return module
-

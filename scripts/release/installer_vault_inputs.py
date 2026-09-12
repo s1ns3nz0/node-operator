@@ -155,4 +155,3 @@ def prepare_vault_inputs(state_dir: Path, discovery: dict, artifacts_path: Path)
     except OSError as error: raise VaultInputsError("Vault bootstrap inputs could not be prepared safely.") from error
     finally: shutil.rmtree(stage.parent, ignore_errors=True)
     return destination / "vault-bootstrap.tfvars.json"
-

@@ -26,4 +26,3 @@ class T(unittest.TestCase):
   value=receipt();value["scope"]={**value["scope"],"actions":{"create":True}}
   with self.assertRaises(r.VaultReceiptError):r.validate_prepare_receipt(value,plan(),D,H)
 if __name__=="__main__":unittest.main()
-

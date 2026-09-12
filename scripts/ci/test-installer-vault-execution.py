@@ -101,4 +101,3 @@ class T(unittest.TestCase):
   args=run.call_args[0][0];self.assertTrue(next(x for x in args if x.startswith("-chdir=")).split("=",1)[1].startswith(str(self.state/".vault-plan-")));self.assertIn("-lockfile=readonly",args);self.assertNotIn(str(self.orig)," ".join(args));self.assertFalse((out/".terraform/terraform.tfstate").exists())
 
 if __name__=="__main__":unittest.main()
-

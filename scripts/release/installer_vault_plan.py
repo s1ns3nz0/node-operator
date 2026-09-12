@@ -52,4 +52,3 @@ def validate_vault_plan(plan: dict, phase: str) -> dict:
         raise VaultPlanError("Vault plan repeats a managed resource change.")
     if changed and plan.get("applyable") is False: raise VaultPlanError("Vault plan with managed changes is not applyable.")
     return {"phase":phase,"result":"nochange" if not changed else "scope_valid","addresses":sorted(changed),"actions":dict(Counter({expected:len(changed)})) if changed else {}}
-

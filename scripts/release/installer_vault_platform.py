@@ -104,4 +104,3 @@ def run(bundle_root:Path,state_dir:Path,discovery:dict,profile:str)->dict:
  if status in {"FAILED","FAULT","STOPPED","TIMED_OUT"}:
   x={**binding,"build_id":build_id,"status":status};_write(failure,x);return x
  raise PlatformError("build remains nonterminal; reconcile exact build later")
-

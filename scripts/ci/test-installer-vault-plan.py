@@ -27,4 +27,3 @@ class Tests(unittest.TestCase):
    with self.subTest(value=value):
     with self.assertRaises(v.VaultPlanError): v.validate_vault_plan(value,"prepare")
 if __name__=="__main__": unittest.main()
-

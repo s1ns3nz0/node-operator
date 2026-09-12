@@ -136,4 +136,3 @@ def apply_vault_prepare(bundle_root,state_dir,discovery,profile,artifacts_path,e
  finally:
   # Once an apply attempt is recorded, retain the fresh workspace for reconciliation.
   if module.exists() and not (attempt.exists() or attempt.is_symlink()): shutil.rmtree(module)
-

@@ -36,4 +36,3 @@ def publish_directory(source: Path, destination: Path) -> None:
         raise OSError(errno.ENOTSUP, "Atomic no-replace publication is unavailable") from error
     if result != 0:
         raise OSError(ctypes.get_errno() or errno.EIO, "Atomic no-replace publication failed")
-

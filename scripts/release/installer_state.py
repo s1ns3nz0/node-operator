@@ -247,4 +247,3 @@ class CheckpointStore:
             except FileNotFoundError:
                 pass
             raise
-

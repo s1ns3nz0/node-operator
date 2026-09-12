@@ -190,4 +190,3 @@ def apply_infrastructure(bundle_root: Path, state_dir: Path, discovery: dict,
             or output["deployment_account_id"].get("value") != discovery["aws_account_id"]
             or output["cluster_name"].get("value") != discovery["deployment_name"]):
         raise InfrastructureError("Infrastructure output does not match the selected deployment; completion was not recorded.")
-

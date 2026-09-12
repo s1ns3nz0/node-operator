@@ -46,4 +46,3 @@ class T(unittest.TestCase):
   contract=self.refreshed["vault_bootstrap_project_contract"]["value"];bind={"schema_version":1,**D,"grant_plan_sha256":"b"*64,"artifact_index_sha256":p.digest(self.idx),"project_contract_sha256":__import__("hashlib").sha256(json.dumps(contract,sort_keys=True,separators=(",",":")).encode()).hexdigest(),"project":"p","image_ref":I};self.w(self.s/"vault-platform-intent.json",bind)
   with self.assertRaises(p.PlatformError):self.call(self.responses())
 if __name__=="__main__":unittest.main()
-

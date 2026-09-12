@@ -460,4 +460,3 @@ if __name__ == "__main__":
     except (OSError, ValueError, KeyError, KeyboardInterrupt):
         print("Installer input/state failed or execution was interrupted. Preserve this state directory; resources may exist and must be reconciled before retrying.", file=sys.stderr)
         raise SystemExit(1)
-

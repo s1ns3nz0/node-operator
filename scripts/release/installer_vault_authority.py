@@ -235,4 +235,3 @@ def reconcile_vault_authority(bundle_root: Path, state_dir: Path, discovery: dic
     finally:
         shutil.rmtree(stage, ignore_errors=True)
         if module.exists(): shutil.rmtree(module)
-

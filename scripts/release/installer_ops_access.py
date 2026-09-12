@@ -196,4 +196,3 @@ def prepare_ops_access(bundle_root: Path, state_dir: Path, discovery: dict, exec
     finally:
         shutil.rmtree(stage)
     return destination / "ops-access-inputs.json"
-

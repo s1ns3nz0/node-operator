@@ -146,4 +146,3 @@ def verify_ops_access(bundle_root: Path, state_dir: Path, discovery: dict, profi
         raise OpsVerifyError("Verified release lacks the private EKS wrapper.")
     _namespace(["bash", str(wrapper), "--", "kubectl", "--request-timeout=20s", "get", "namespace", "kube-system", "-o", "json"],
                _environment_for_verify(profile, discovery, session))
-
