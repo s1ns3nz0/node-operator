@@ -124,7 +124,10 @@ zero_apply() {
     case "$inputs" in /*) ;; *) fail "--inputs must be an absolute path" ;; esac
     [ -f "$inputs" ] && [ ! -L "$inputs" ] || fail "--inputs must name a regular file"
     local input_parent expected_bootstrap expected_foundation expected_baseline
-    input_parent="$(cd "$(dirname "$inputs")" && pwd -P)"
+    # Preserve the path spelling recorded by the zero-resource handoff. On
+    # macOS /var is an alias of /private/var; canonicalizing here breaks the
+    # contract's exact path bindings even when every file exists.
+    input_parent="$(dirname "$inputs")"
     expected_bootstrap="$input_parent/bootstrap-state.tfvars.json"
     expected_foundation="$input_parent/foundation-network.tfvars.json"
     expected_baseline="$input_parent/baseline.tfvars.json"
