@@ -61,6 +61,18 @@ for required_path in \
   source/scripts/release/prepare-zero-resource-inputs.sh \
   source/scripts/release/prepare-hoodi-zero-release-inputs.sh \
   source/scripts/release/hoodi-validator-release.sh \
+  source/scripts/release/node-operator-install.sh \
+  source/scripts/release/interactive_deploy.py \
+  source/scripts/release/installer_state.py \
+  source/scripts/release/installer_preflight.py \
+  source/scripts/release/installer_infrastructure.py \
+  source/scripts/release/installer_ops_access.py \
+  source/scripts/release/installer_ops_execution.py \
+  source/scripts/release/installer_ops_verify.py \
+  source/scripts/release/installer_vault_inputs.py \
+  source/scripts/release/installer_vault_execution.py \
+  source/scripts/release/installer_vault_authority.py \
+  source/scripts/release/installer_vault_platform.py \
   source/scripts/release/prepare-ops-access-inputs.sh \
   source/scripts/release/prepare-hoodi-validator-deployment.sh \
   source/scripts/release/stage-hoodi-validator-deployment.sh \
