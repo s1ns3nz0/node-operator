@@ -31,6 +31,11 @@ locals {
 resource "aws_ecr_repository" "private_gitops" {
   for_each = var.enable_private_gitops_foundation ? local.private_gitops_repositories : {}
 
+  # Existing GitOps mirrors are deliberately retained with AWS-managed
+  # encryption (AES256); ECR encryption cannot be changed in place without
+  # replacing deployment artifacts. Secret material is never published here.
+  #checkov:skip=CKV_AWS_136:Existing immutable GitOps mirrors use AES256; migration to KMS requires a separately approved repository cutover.
+
   name                 = each.value
   image_tag_mutability = "IMMUTABLE"
 

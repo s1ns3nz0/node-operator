@@ -477,6 +477,10 @@ resource "aws_config_delivery_channel" "baseline" {
 }
 
 resource "aws_config_configuration_recorder_status" "baseline" {
+  # The conditional resource supports accounts that already own the single
+  # regional recorder. Checkov's graph rule cannot model that ownership mode;
+  # the release contract verifies live recorder status before proceeding.
+  #checkov:skip=CKV2_AWS_45:Conditional account-recorder ownership is validated by the release contract.
   count      = var.manage_config_recorder ? 1 : 0
   name       = aws_config_configuration_recorder.baseline[0].name
   is_enabled = true

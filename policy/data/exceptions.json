@@ -230,24 +230,6 @@
     },
     {
       "rule": "iac.checkov",
-      "check_id": "CKV_AWS_136",
-      "subject": "aws_ecr_repository.private_gitops[\"argocd_chart\"]",
-      "owner": "fjybjinsu",
-      "rationale": "ECR-LEGACY",
-      "issue": "docs/security/checkov-2026-09-08-disposition.md#ecr-legacy",
-      "expires_at": "2026-10-03T00:00:00Z"
-    },
-    {
-      "rule": "iac.checkov",
-      "check_id": "CKV2_AWS_45",
-      "subject": "aws_config_configuration_recorder_status.baseline[0]",
-      "owner": "fjybjinsu",
-      "rationale": "CONFIG-ACCOUNT-RECORDER",
-      "issue": "docs/security/checkov-2026-09-08-disposition.md#config-account-recorder",
-      "expires_at": "2026-10-03T00:00:00Z"
-    },
-    {
-      "rule": "iac.checkov",
       "check_id": "CKV_AWS_144",
       "subject": "aws_s3_bucket.state",
       "owner": "fjybjinsu",

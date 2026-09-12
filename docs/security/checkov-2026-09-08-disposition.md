@@ -63,9 +63,9 @@ change invalidates this exception; migrate the trust explicitly.
 
 ## ECR-LEGACY
 
-`CKV_AWS_136`, the eight exact `aws_ecr_repository.private_gitops` instances:
-`argocd`, `argocd_chart`, `cert_manager`, `cert_manager_chart`, `charts`,
-`nodes`, `vault`, `vault_chart`. A live `DescribeRepositories` check confirmed **AES256** and
+`CKV_AWS_136`, the seven exact `aws_ecr_repository.private_gitops` instances:
+`argocd`, `cert_manager`, `cert_manager_chart`, `charts`, `nodes`, `vault`,
+`vault_chart`. A live `DescribeRepositories` check confirmed **AES256** and
 **IMMUTABLE** on each on 2026-09-08. These are encrypted mirrors of deployment
 artifacts, not stores for credentials, keystores, or user data. Digest-reviewed
 inputs and `prevent_destroy` remain enforced. AWS does not support changing
@@ -78,18 +78,6 @@ mutable tags, removed deletion protection, or a new repository requires a new
 decision. Before expiry either renew with fresh evidence or migrate artifacts
 to separately created KMS repositories and verify consumers before retiring the
 old repositories. [AWS ECR encryption immutability](https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-tag-mutability.html)
-
-## CONFIG-ACCOUNT-RECORDER
-
-`CKV2_AWS_45`, the exact `aws_config_configuration_recorder_status.baseline[0]`
-resource. The module owns the recorder only when `manage_config_recorder=true`;
-when an account already has its single regional recorder, operators set this
-flag false and import/use the existing recorder instead. Checkov cannot model
-that account-level ownership mode and reports the indexed status resource as
-disabled in the plan fixture. The release contract still requires an enabled
-recorder and fails if the managed mode is selected without one. Before expiry,
-capture live `describe-configuration-recorder-status` evidence for the account
-and either remove this exception or renew it with that evidence.
 
 ## REGIONAL-DR
 
