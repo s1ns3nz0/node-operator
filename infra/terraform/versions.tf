@@ -13,6 +13,10 @@ terraform {
 # Provider binaries are still supplied only by the separately controlled build workflow.
 provider "aws" {
   region                      = var.aws_region
+  # Bootstrap may create a brand-new bucket whose virtual-host DNS name is
+  # not yet propagated. Path-style requests keep first-run state creation
+  # deterministic while retaining the bucket policy and TLS requirements.
+  s3_use_path_style           = true
   skip_credentials_validation = var.offline_validation
   skip_metadata_api_check     = var.offline_validation
   skip_region_validation      = var.offline_validation
@@ -23,6 +27,7 @@ provider "aws" {
 provider "aws" {
   alias                       = "audit_replica"
   region                      = var.audit_replica_region
+  s3_use_path_style           = true
   skip_credentials_validation = var.offline_validation
   skip_metadata_api_check     = var.offline_validation
   skip_region_validation      = var.offline_validation
