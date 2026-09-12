@@ -186,7 +186,9 @@ zero_apply() {
     # buckets/table already present while the bootstrap state itself is not.
     # Adopt only the deterministic, same-account resources; never delete or
     # overwrite them. This makes retries idempotent after BucketAlreadyOwnedByYou.
-    state_bucket_name="$(jq -er '.state_bucket_name // empty' "$bootstrap_config")"
+    # state_bucket_name is intentionally null for the generated deterministic
+    # name. Do not use jq -e here: an empty optional result is not an error.
+    state_bucket_name="$(jq -r '.state_bucket_name // empty' "$bootstrap_config")"
     [ -n "$state_bucket_name" ] || state_bucket_name="$(jq -er '.name' "$bootstrap_config")-tfstate-$(jq -er '.aws_account_id' "$bootstrap_config")-$(jq -er '.aws_region' "$bootstrap_config" | tr -d '-')"
     state_log_suffix="$(printf '%s' "$state_bucket_name" | shasum -a 256 | awk '{print substr($1,1,8)}')"
     state_logs_bucket="${state_bucket_name:0:48}-${state_log_suffix}-logs"
