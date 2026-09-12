@@ -78,7 +78,7 @@ jobs:
       # Role: Upload the candidate verification files selected by this workflow.
       - name: Non-sensitive verification evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: vault-runtime-${{ matrix.component }}-verification
           path: |
@@ -117,7 +117,7 @@ jobs:
         run: scripts/ci/workflows/sign-vault-runtime-verification.sh
       # Role: Upload the signed statement and verification evidence for downstream validation.
       - name: Signed Verification Evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: vault-runtime-signed-evidence-${{ github.run_attempt }}
           path: ${{ runner.temp }}/vault-signed-evidence/
