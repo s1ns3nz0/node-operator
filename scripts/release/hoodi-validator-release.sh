@@ -187,6 +187,48 @@ case "$command_name" in
     else
       "$0" ops-access apply --bundle-root "$bundle_root" --inputs "$inputs" --ops-inputs "$deploy_ops_inputs" --plan-file "$deploy_plan" --expected-sha "$deploy_sha" --allow-create --private-eks-session-handoff "$session_handoff"
     fi
+    # The fence egress policy targets the private EKS API endpoint, whose
+    # address is not knowable before foundation creation. Replace the bounded
+    # preparation sentinel only after the private cluster and session handoff
+    # exist, and fail closed if DNS does not yield exactly one IPv4 address.
+    command -v python3 >/dev/null 2>&1 || { printf '%s\n' 'missing command: python3 (required to resolve the private EKS endpoint)' >&2; exit 69; }
+    client_manifest="$(jq -er '.client_manifest | select(type == "string" and startswith("/"))' "$validator_handoff")"
+    endpoint_url="$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN aws eks describe-cluster --region "$input_region" --name "$(jq -er '.cluster_name' "$session_handoff")" --query 'cluster.endpoint' --output text)"
+    endpoint_host="${endpoint_url#https://}"; endpoint_host="${endpoint_host%%/*}"
+    endpoint_ips="$(python3 - "$endpoint_host" <<'PY'
+import socket, sys
+host = sys.argv[1]
+seen = []
+for item in socket.getaddrinfo(host, 443, socket.AF_INET, socket.SOCK_STREAM):
+    address = item[4][0]
+    if address not in seen:
+        seen.append(address)
+print("\n".join(seen))
+PY
+)"
+    [ -n "$endpoint_ips" ] || { printf '%s\n' 'private EKS endpoint did not resolve to an IPv4 address' >&2; exit 65; }
+    grep -q '127\.0\.0\.1/32' "$client_manifest" || { printf '%s\n' 'validator client manifest lacks the expected API CIDR staging sentinel' >&2; exit 65; }
+    rewritten_manifest="$(mktemp "${client_manifest}.endpoint.XXXXXX")"
+    python3 - "$client_manifest" "$rewritten_manifest" "$endpoint_ips" <<'PY'
+import sys
+source, target, raw_ips = sys.argv[1:]
+ips = [ip.strip() for ip in raw_ips.splitlines() if ip.strip()]
+if not ips or any(not all(part.isdigit() and 0 <= int(part) <= 255 for part in ip.split('.')) or len(ip.split('.')) != 4 for ip in ips):
+    raise SystemExit("invalid private EKS endpoint address")
+with open(source, encoding="utf-8") as handle:
+    lines = handle.readlines()
+with open(target, "w", encoding="utf-8") as handle:
+    for line in lines:
+        if "cidr: 127.0.0.1/32" in line:
+            indent = line[:len(line) - len(line.lstrip())]
+            for ip in ips:
+                handle.write(f"{indent}- to: [{{ipBlock: {{cidr: {ip}/32}}}}]\n")
+        else:
+            handle.write(line)
+PY
+    chmod 600 "$rewritten_manifest"
+    mv "$rewritten_manifest" "$client_manifest"
+    printf 'Resolved private EKS API endpoint %s; validator fence policy narrowed to %s.\n' "$endpoint_host" "$(printf '%s' "$endpoint_ips" | tr '\n' ' ')" >&2
     # Retry only an exact zero-replica boundary. A wholly absent set may be
     # staged; a partial or active set fails closed rather than being adopted.
     if "$0" stage verify --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session_handoff"; then
