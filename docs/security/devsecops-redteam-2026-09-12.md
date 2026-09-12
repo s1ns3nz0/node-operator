@@ -1,6 +1,6 @@
 # DevSecOps pipeline red-team report
 
-**Date:** 2026-09-12  
+**Date:** 2026-09-12
 **Framework:** DoD DevSecOps Activities & Tools Guidebook v2.5, NIST SP 800-218 SSDF v1.1, and NIST SP 800-204D
 
 ## HIGH severity (0)
