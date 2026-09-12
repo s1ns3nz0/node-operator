@@ -138,6 +138,9 @@ jobs:
           bash scripts/ci/test-validator-signing-fence-image-contract.sh
           bash scripts/ci/test-release-scan-attestation.sh
           bash scripts/ci/test-validator-signing-fence-release-evidence.sh
+      # Role: Ensure the external posture and provenance controls remain pinned and bounded.
+      - name: Repository posture and SLSA contracts
+        run: bash scripts/ci/test-repository-posture-contract.sh
       # Role: Contract test: Verify private DAST mirror uses the approved scanner digest and restricted publication path.
       - name: Private DAST mirror boundary
         run: scripts/ci/test-private-dast-mirror-contract.sh

@@ -75,6 +75,10 @@ infrastructure access.
 - `scripts/release/`: authenticated artifact build, mirror and publication
   programs. These are not part of a local test suite and must not be run as
   tests; they require explicit release authority and their workflow inputs.
+- `scripts/ci/normalize-scorecard-evidence.sh`: normalize official OpenSSF
+  Scorecard SARIF into bounded posture evidence.
+- `scripts/ci/test-repository-posture-contract.sh`: enforce the pinned
+  Scorecard workflow and SLSA release-attestation contract.
 
 Publishing adapters consume the workflow's explicit environment contract,
 including GitHub OIDC/output channels. Do not pretend those external operations

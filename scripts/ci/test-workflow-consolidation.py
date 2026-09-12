@@ -20,7 +20,7 @@ class Consolidation(unittest.TestCase):
         self.assertEqual({p.name for p in WORKFLOWS.glob("*.yml")}, {
             "continuous-integration.yml", "fence-security.yml", "evidence-gate.yml", "review-signal.yml",
             "release-bundle.yml", "image-publish.yml", "private-ecr-mirror.yml", "operations-verification.yml",
-            "evidence-archive.yml"})
+            "evidence-archive.yml", "repository-posture.yml"})
 
     def test_ci_permissions_and_checks(self):
         source = (WORKFLOWS / "continuous-integration.yml").read_text()
@@ -39,7 +39,9 @@ class Consolidation(unittest.TestCase):
         source = (WORKFLOWS / "release-bundle.yml").read_text()
         self.assertIn("default: verify-only", source)
         parsed = jobs("release-bundle.yml")
-        self.assertNotIn(": write", parsed["reproducibility"])
+        self.assertNotIn("contents: write", parsed["reproducibility"])
+        self.assertIn("id-token: write", parsed["reproducibility"])
+        self.assertIn("attestations: write", parsed["reproducibility"])
         self.assertIn("artifact_digest: ${{ steps.sca-binding.outputs.artifact_digest }}", parsed["reproducibility"])
         expression = re.search(r"    if: >-\n((?:      .*\n)+)", parsed["build-and-publish"]).group(1)
         for event, mode, eligible, integrity in itertools.product(
