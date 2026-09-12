@@ -253,9 +253,9 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
             # values file.  Rehydrate the reviewed, non-secret inputs from the
             # Terraform release bundle so the immutable image remains usable
             # without depending on a mutable repository or public network.
-            - test -f /opt/node-operator/argocd-private-values.yaml || (echo '${base64encode(file("${path.module}/../../docs/gitops/argocd-private-values.example.yaml"))}' | base64 -d > /opt/node-operator/argocd-private-values.yaml)
-            - test -f /opt/node-operator/cert-manager-values.yaml || (echo '${base64encode(file("${path.module}/../../docs/gitops/cert-manager-values.example.yaml"))}' | base64 -d > /opt/node-operator/cert-manager-values.yaml)
-            - test -f /opt/node-operator/vault-tls-internal-ca.yaml || (echo '${base64encode(file("${path.module}/../../docs/gitops/vault-tls-internal-ca.example.yaml"))}' | base64 -d > /opt/node-operator/vault-tls-internal-ca.yaml)
+            - test -f /opt/node-operator/argocd-private-values.yaml || (echo '${base64encode(file("${path.module}/argocd-private-values.example.yaml"))}' | base64 -d > /opt/node-operator/argocd-private-values.yaml)
+            - test -f /opt/node-operator/cert-manager-values.yaml || (echo '${base64encode(file("${path.module}/cert-manager-values.example.yaml"))}' | base64 -d > /opt/node-operator/cert-manager-values.yaml)
+            - test -f /opt/node-operator/vault-tls-internal-ca.yaml || (echo '${base64encode(file("${path.module}/vault-tls-internal-ca.example.yaml"))}' | base64 -d > /opt/node-operator/vault-tls-internal-ca.yaml)
             # The release image embeds reviewed values, while repository names
             # are deployment-scoped. Rewrite only the non-secret ECR prefix at
             # runtime so a zero-resource account never pulls another stack's

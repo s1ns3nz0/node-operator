@@ -246,6 +246,15 @@ zero_apply() {
   chmod 600 "$foundation_input"
 
   copy_module infra/terraform "$baseline_module"
+  # The Argo bootstrap buildspec may need reviewed non-secret values that are
+  # not Terraform resources. Copy them beside the module so Terraform's
+  # file() calls remain valid after the release bundle is staged in a clean
+  # temporary work directory.
+  for gitops_input in argocd-private-values.example.yaml cert-manager-values.example.yaml vault-tls-internal-ca.example.yaml; do
+    [ -f "$bundle_root/source/docs/gitops/$gitops_input" ] || fail "release bundle is missing docs/gitops/$gitops_input"
+    cp "$bundle_root/source/docs/gitops/$gitops_input" "$baseline_module/$gitops_input"
+    chmod 600 "$baseline_module/$gitops_input"
+  done
   cp "$foundation_input" "$baseline_module/foundation-network.auto.tfvars.json"
   write_backend_config "$bootstrap_output" "node-operator/baseline/terraform.tfstate" "$baseline_backend"
   apply_phase "$baseline_module" "$baseline_config" "$baseline_backend" "$work_dir/baseline.tfplan"
