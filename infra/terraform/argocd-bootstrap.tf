@@ -299,7 +299,7 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
                 syncPolicy:
                   automated:
                     prune: false
-                    selfHeal: false
+                    selfHeal: true
                   syncOptions:
                     - CreateNamespace=false
               EOF
