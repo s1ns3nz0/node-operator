@@ -137,4 +137,3 @@ xmltodict==1.0.4 --hash=sha256:a4a00d300b0e1c59fc2bfccb53d7b2e88c32f200df138a0dd
 yarl==1.24.5 --hash=sha256:f08c7513ecef5aad65687bfdf6bc601ae9fccd04a42904501f8f7141abad9eb9
 zipp==4.1.0 --hash=sha256:25ad4e16390cd314347dd8f1de67a2ac538ae658ed4ab9db16029c07c188e97f
 zizmor==1.12.1 --hash=sha256:92db1a97697db58137f0e4479bb63b1236608ed7bcc0bb23dea107436df6fd2e
-
