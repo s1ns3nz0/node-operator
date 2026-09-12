@@ -29,3 +29,16 @@ security issue.
 This policy covers repository code, GitHub Actions workflows, release bundles,
 container build definitions, Terraform, Helm/Kubernetes manifests, and the
 validator signing-fence service.
+
+## Related security controls
+
+The reporting and remediation process is implemented together with the
+repository's reviewed security controls:
+
+- [CI security-evidence contract](docs/security/release-and-gitops-admission.md)
+- [Vault secret boundary](docs/security/vault-v2-secret-inventory.md)
+- [Dependency and infrastructure exception register](docs/security/checkov-2026-09-08-disposition.md)
+- [Prysm residual-risk decisions](docs/operations/prysm-risk-acceptance.md)
+
+Changes to these controls require pull-request review, passing required CI
+checks, and CODEOWNER approval before they can reach `main`.
