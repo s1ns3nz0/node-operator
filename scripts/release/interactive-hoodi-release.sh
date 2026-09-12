@@ -45,7 +45,7 @@ if [ -n "$env_file" ]; then
   while IFS='=' read -r key value; do
     key="${key%%[[:space:]]*}"; value="${value##[[:space:]]}"
     case "$key" in ''|'#'*) continue ;; esac
-    case "$key" in REGION) DEFAULT_REGION="$value" ;; DEPLOYMENT_NAME) DEFAULT_DEPLOYMENT_NAME="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; EXISTING_KEYSTORE_DIR) DEFAULT_KEYSTORE_DIR="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; CLIENT_CHART_SOURCE_REGION) DEFAULT_CLIENT_CHART_SOURCE_REGION="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; esac
+    case "$key" in REGION) DEFAULT_REGION="$value" ;; DEPLOYMENT_NAME) DEFAULT_DEPLOYMENT_NAME="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; EXISTING_KEYSTORE_DIR) DEFAULT_KEYSTORE_DIR="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; CLIENT_CHART_SOURCE_REGION) DEFAULT_CLIENT_CHART_SOURCE_REGION="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; DEPOSIT_TX_HASH) DEFAULT_DEPOSIT_TX_HASH="$value" ;; HOODI_PUBLIC_RPC_URL) DEFAULT_HOODI_PUBLIC_RPC_URL="$value" ;; esac
   done < "$env_file"
 fi
 DEFAULT_REGION="${DEFAULT_REGION:-ap-northeast-2}"
@@ -69,6 +69,8 @@ DEFAULT_CLIENT_CHART_DIGEST="${DEFAULT_CLIENT_CHART_DIGEST:-}"
 DEFAULT_CLIENT_CHART_SOURCE_REGION="${DEFAULT_CLIENT_CHART_SOURCE_REGION:-ap-northeast-2}"
 DEFAULT_VAULT_CHART_VERSION="${DEFAULT_VAULT_CHART_VERSION:-0.31.0}"
 DEFAULT_VAULT_CHART_DIGEST="${DEFAULT_VAULT_CHART_DIGEST:-sha256:85cfa6b40396a198a104fbf06c7cccaf75428db7201394f9061c272441bcd0e4}"
+DEFAULT_DEPOSIT_TX_HASH="${DEFAULT_DEPOSIT_TX_HASH:-}"
+DEFAULT_HOODI_PUBLIC_RPC_URL="${DEFAULT_HOODI_PUBLIC_RPC_URL:-}"
 
 [ -d "$bundle_root/source" ] && [ -f "$bundle_root/bundle-manifest.json" ] || {
   printf '%s\n' 'a verified v0.1.20 release bundle is required' >&2; exit 65;
@@ -441,10 +443,22 @@ mkdir -m 700 "$output_dir/evidence"
 printf 'Generated and validated deposit attestation: %s\n' "$deposit_attestation" >&2
 printf '%s\n' 'Activation requires independently reviewed public deposit, private Beacon, and signer evidence. Enter paths only; secret material is not accepted.' >&2
 step 'Guarded validator activation'
-public_deposit="$(prompt 'Absolute public deposit verification JSON')"
-private_evidence="$(prompt 'Absolute private Beacon evidence JSON')"
-signer_evidence="$(prompt 'Absolute signer evidence JSON')"
-confirm_key="$(prompt 'Confirm validator public key (0x...)')"
-confirm_withdrawal="$(prompt 'Confirm withdrawal address (0x...)')"
+if [ "${NODE_OPERATOR_AUTOMATED_CEREMONY:-0}" = 1 ] && [ -n "$DEFAULT_DEPOSIT_TX_HASH" ] && [ -n "$DEFAULT_HOODI_PUBLIC_RPC_URL" ]; then
+  external_dir="$output_dir/evidence/public"; mkdir -m 700 "$external_dir"
+  withdrawal_credentials="$(jq -er '.withdrawal_credentials' "$deposit_attestation")"
+  "$source_root/scripts/ops/observe-external-hoodi-validator.sh" --validator-set "$validator_set" --validator-public-key "$validator_key" --correlation-id "$(printf '%s' "$validator_set-$deployment_name" | shasum -a 256 | cut -c1-32)" --output-dir "$external_dir" --deposit-tx "$DEFAULT_DEPOSIT_TX_HASH" --withdrawal-credentials "$withdrawal_credentials" --public-rpc-url "$DEFAULT_HOODI_PUBLIC_RPC_URL" >/dev/null
+  public_deposit="$(find "$external_dir" -type f -name '*public-rpc*.json' -print -quit)"
+  private_evidence="$(find "$output_dir/evidence/beacon" -type f -name '*.json' -print -quit)"
+  signer_evidence="$(find "$output_dir/evidence/signer" -type f -name '*.json' -print -quit)"
+  confirm_key="$validator_key"; confirm_withdrawal="$withdrawal"
+  [ -n "$public_deposit" ] && [ -n "$private_evidence" ] && [ -n "$signer_evidence" ] || { printf '%s\n' 'automated activation evidence collection was incomplete' >&2; exit 65; }
+  printf '%s\n' 'Automated disposable-run mode: public receipt, Beacon, and signer evidence were collected; activating the existing Hoodi validator.' >&2
+else
+  public_deposit="$(prompt 'Absolute public deposit verification JSON')"
+  private_evidence="$(prompt 'Absolute private Beacon evidence JSON')"
+  signer_evidence="$(prompt 'Absolute signer evidence JSON')"
+  confirm_key="$(prompt 'Confirm validator public key (0x...)')"
+  confirm_withdrawal="$(prompt 'Confirm withdrawal address (0x...)')"
+fi
 "$release" activate apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --deposit-attestation "$deposit_attestation" --public-deposit-verification "$public_deposit" --private-evidence "$private_evidence" --signer-evidence "$signer_evidence" --confirm-public-key "$confirm_key" --confirm-withdrawal-address "$confirm_withdrawal"
 printf 'PASS: v0.1.20 interactive Hoodi release completed. Non-secret handoffs and evidence are under %s.\n' "$output_dir"
