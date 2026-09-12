@@ -38,6 +38,9 @@ jobs:
       # Role: Contract test: Enforce ShellCheck static analysis of CI and release shell scripts.
       - name: Shell Quality
         run: scripts/ci/test-script-quality.sh
+      # Role: Enforce the pinned-action, least-privilege and fail-closed red-team baseline.
+      - name: DevSecOps Red-Team Contract
+        run: scripts/ci/test-devsecops-redteam.sh
       # Role: Test probe rendering and audit build contracts, then build the diagnostic image locally without publishing.
       - name: Bounded runtime diagnostics and signer audit source contract
         run: |
