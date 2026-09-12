@@ -131,9 +131,28 @@ copy_module() {
 
 apply_phase() {
   local module="$1" phase_config="$2" backend_config="$3" plan_file="$4"
+  local apply_log apply_rc
   terraform -chdir="$module" init -input=false -backend-config="$backend_config"
   terraform -chdir="$module" plan -input=false -var-file="$phase_config" -out="$plan_file"
-  terraform -chdir="$module" apply -input=false "$plan_file"
+  apply_log="$(mktemp /private/tmp/node-operator-terraform-apply.XXXXXX)"
+  if terraform -chdir="$module" apply -input=false "$plan_file" 2>&1 | tee "$apply_log"; then
+    unlink "$apply_log"
+    return 0
+  fi
+  apply_rc=${PIPESTATUS[0]}
+  # EKS can briefly report ResourceNotFound for Pod Identity associations
+  # immediately after the control plane becomes ACTIVE. Re-plan once after a
+  # bounded delay so the release does not strand a partially created baseline.
+  if grep -q 'No cluster found for name:' "$apply_log"; then
+    printf '[terraform] EKS control plane propagation delay detected; waiting 30s and retrying %s apply.\n' "$module" >&2
+    sleep 30
+    terraform -chdir="$module" plan -input=false -var-file="$phase_config" -out="$plan_file"
+    terraform -chdir="$module" apply -input=false "$plan_file"
+    unlink "$apply_log"
+    return 0
+  fi
+  unlink "$apply_log"
+  return "$apply_rc"
 }
 
 zero_apply() {
