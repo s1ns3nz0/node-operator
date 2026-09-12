@@ -23,7 +23,7 @@ while [ "$#" -gt 0 ]; do
 done
 case "$handoff" in /*) ;; *) usage ;; esac
 [ -f "$handoff" ] && [ ! -L "$handoff" ] || { printf '%s\n' 'handoff must be a regular file' >&2; exit 65; }
-command -v jq >/dev/null 2>&1 || { printf '%s\n' 'missing command: jq' >&2; exit 69; }
+for command in jq grep; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 
 parent="$(cd "$(dirname "$handoff")" && pwd -P)"
 runtime="$parent/runtime.yaml"
@@ -52,7 +52,7 @@ jq -e --arg parent "$parent" --arg runtime "$runtime" --arg client "$client" '
 secret_kind='Sec''ret'
 private_key='PRIVATE'' KEY'
 nonpersistent='DO_NOT''_PERSIST_'
-if rg -n "(^|[[:space:]])kind:[[:space:]]*${secret_kind}([[:space:]]|$)|-----BEGIN( [A-Z]+)? ${private_key}-----|${nonpersistent}" "$runtime" "$client" >/dev/null; then
+if grep -E -n "(^|[[:space:]])kind:[[:space:]]*${secret_kind}([[:space:]]|$)|-----BEGIN( [A-Z]+)? ${private_key}-----|${nonpersistent}" "$runtime" "$client" >/dev/null; then
   printf '%s\n' 'staging input crosses the non-secret manifest boundary' >&2
   exit 65
 fi
