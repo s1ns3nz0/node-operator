@@ -76,7 +76,7 @@ vault_egress_policy="$repository_root/deploy/validator/vault-runtime-egress-poli
 [ -f "$vault_egress_policy" ] && [ ! -L "$vault_egress_policy" ] || { printf '%s\n' 'dedicated validator Vault egress policy is missing or unsafe' >&2; exit 66; }
 if [ "${PRIVATE_EKS_SESSION:-}" != 1 ]; then
   if [ -n "$private_eks_session_handoff" ]; then
-    exec "$script_dir/../ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 AWS_REGION="$handoff_region" EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance" "$self" "$operation" --handoff "$handoff" --private-eks-session-handoff "$private_eks_session_handoff"
+    exec env AWS_REGION="$handoff_region" EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance" "$script_dir/../ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$self" "$operation" --handoff "$handoff" --private-eks-session-handoff "$private_eks_session_handoff"
   fi
   exec "$script_dir/../ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$self" "$operation" --handoff "$handoff"
 fi
