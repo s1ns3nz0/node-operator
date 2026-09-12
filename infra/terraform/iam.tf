@@ -207,7 +207,17 @@ data "aws_iam_policy_document" "vault_pod_assume_role" {
 
 data "aws_iam_policy_document" "vault_kms" {
   statement {
-    actions   = ["kms:Decrypt", "kms:DescribeKey", "kms:Encrypt", "kms:CreateGrant"]
+    actions   = ["kms:DescribeKey"]
+    resources = [aws_kms_key.vault.arn]
+  }
+
+  statement {
+    actions   = ["kms:Decrypt", "kms:Encrypt"]
+    resources = [aws_kms_key.vault.arn]
+  }
+
+  statement {
+    actions   = ["kms:CreateGrant"]
     resources = [aws_kms_key.vault.arn]
     condition {
       test     = "Bool"
