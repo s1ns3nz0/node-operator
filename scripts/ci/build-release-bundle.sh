@@ -67,7 +67,14 @@ kubectl kustomize "$stage_directory/source/deploy/nethermind" > "$stage_director
 # Kubernetes Secret objects and common private-key encodings do not belong in
 # a distributable release bundle.  This is a boundary check, not a substitute
 # for a secret scanner in CI.
-if rg -n --glob '*' '(^|[[:space:]])kind:[[:space:]]*Secret([[:space:]]|$)|-----BEGIN( [A-Z]+)? PRIVATE KEY-----|DO_NOT_PERSIST_' "$stage_directory" >/dev/null; then
+secret_pattern='(^|[[:space:]])kind:[[:space:]]*Secret([[:space:]]|$)|-----BEGIN( [A-Z]+)? PRIVATE KEY-----|DO_NOT_PERSIST_'
+if command -v rg >/dev/null 2>&1; then
+  secret_scan=(rg -n --glob '*')
+else
+  command -v grep >/dev/null 2>&1 || { printf '%s\n' 'missing command: rg or grep' >&2; exit 69; }
+  secret_scan=(grep -R -n -E)
+fi
+if "${secret_scan[@]}" "$secret_pattern" "$stage_directory" >/dev/null; then
   printf 'release bundle input crosses the non-sensitive artifact boundary\n' >&2
   exit 1
 fi
