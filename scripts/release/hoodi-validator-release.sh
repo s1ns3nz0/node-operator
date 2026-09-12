@@ -89,7 +89,7 @@ if [ "$command_name" = interactive ]; then
   case "$bundle_root:$output_dir" in */*:/*) ;; *) usage ;; esac
   [ -t 0 ] && [ -t 1 ] || { printf '%s\n' 'interactive preparation requires a terminal' >&2; exit 69; }
   command -v aws >/dev/null 2>&1 || { printf '%s\n' 'missing command: aws' >&2; exit 69; }
-  case "$aws_region" in ap-northeast-1|ap-northeast-2) ;; *) printf '%s\n' 'aws region must be ap-northeast-1 or ap-northeast-2' >&2; exit 64 ;; esac
+  [[ "$aws_region" =~ ^[a-z]{2}-[a-z0-9-]+-[0-9]+$ ]] || { printf '%s\n' 'aws region must be a valid AWS commercial region identifier' >&2; exit 64; }
   identity="$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN aws sts get-caller-identity --output json)"
   account="$(jq -er '.Account' <<<"$identity")"
   [[ "$account" =~ ^[0-9]{12}$ ]] || { printf '%s\n' 'current AWS identity did not return a valid account' >&2; exit 65; }

@@ -153,6 +153,13 @@ if [ -n "$DEFAULT_FENCE_IMAGE" ]; then
 else
   fence_image="$(prompt 'Approved signing-fence private ECR image@sha256 digest (v0.1.20 has no canonical default)')"
 fi
+# Non-secret env files may carry the approved digest from the source Region.
+# Re-home that immutable digest to the selected account/Region so a fresh
+# Region can mirror it without requiring the operator to edit a registry URL.
+if [[ "$fence_image" =~ ^[0-9]{12}\.dkr\.ecr\.[a-z]{2}-[a-z0-9-]+-[0-9]+\.amazonaws\.com/(.+@sha256:[a-f0-9]{64})$ ]]; then
+  fence_image="${account}.dkr.ecr.${region}.amazonaws.com/${BASH_REMATCH[1]}"
+  printf 'Resolved signing-fence digest for selected Region: %s\n' "$(display_digest "$fence_image")" >&2
+fi
 # The signing-fence policy targets the private EKS API endpoint, which does not
 # exist until foundation/EKS creation. A guarded deploy step replaces this
 # staging sentinel with the endpoint's resolved private IPv4 before any
