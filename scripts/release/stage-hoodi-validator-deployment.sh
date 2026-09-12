@@ -121,6 +121,13 @@ done
 
 # The server-side dry run proves admission, RBAC, and schema compatibility
 # before an apply. It is run for both operations so apply has the same guard.
+if [ "$operation" = apply ]; then
+  # A zero-resource EKS cluster has no application namespaces yet. Create only
+  # the two bounded namespaces referenced by the staged manifests; this does
+  # not create workloads or cross the secret boundary.
+  kubectl create namespace "$namespace" --dry-run=client -o yaml | kubectl apply --server-side --field-manager=node-operator-release-stage -f - >/dev/null
+  kubectl create namespace node-operator --dry-run=client -o yaml | kubectl apply --server-side --field-manager=node-operator-release-stage -f - >/dev/null
+fi
 kubectl apply --server-side --field-manager=node-operator-release-stage --dry-run=server -f "$vault_egress_policy" -f "$runtime" -f "$client" >/dev/null
 if [ "$operation" = plan ]; then
   printf 'PASS: private EKS accepted non-secret staged manifests for %s; no resources were created.\n' "$validator_set"
