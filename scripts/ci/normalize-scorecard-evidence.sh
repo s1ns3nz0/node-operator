@@ -8,7 +8,11 @@ set -euo pipefail
 [[ -f "$SCORECARD_SARIF" ]] || { printf '%s\n' 'Scorecard SARIF is missing' >&2; exit 1; }
 command -v jq >/dev/null || { printf '%s\n' 'missing command: jq' >&2; exit 1; }
 
-jq -e '.version == "2.1.0" and (.runs | type == "array" and length == 1)' "$SCORECARD_SARIF" >/dev/null || {
+jq -e '
+  .version == "2.1.0" and
+  (.runs | type == "array" and length > 0) and
+  ([.runs[].tool.driver.name] | any(. == "Scorecard" or . == "OpenSSF Scorecard"))
+' "$SCORECARD_SARIF" >/dev/null || {
   printf '%s\n' 'Scorecard SARIF schema is invalid' >&2
   exit 1
 }
