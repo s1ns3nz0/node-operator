@@ -3,7 +3,7 @@
 # replication role cannot delete either source or destination records.
 resource "aws_s3_bucket" "audit_replica" {
   provider      = aws.audit_replica
-  bucket_prefix = "${local.name_prefix}-audit-dr-"
+  bucket_prefix = "${substr(local.name_prefix, 0, 20)}-audit-dr-"
   force_destroy = false
 
   tags = merge(local.common_tags, {
@@ -185,7 +185,7 @@ resource "aws_s3_bucket" "audit_replica_access_logs" {
   #checkov:skip=CKV_AWS_144:Replicating this DR delivery target would create a second unbounded audit-log stream; the audited source is replicated instead.
   #checkov:skip=CKV_AWS_145:S3 server access log delivery does not support a default SSE-KMS destination key.
   provider      = aws.audit_replica
-  bucket_prefix = "${local.name_prefix}-al-dr-"
+  bucket_prefix = "${substr(local.name_prefix, 0, 20)}-al-dr-"
   force_destroy = false
 
   tags = merge(local.common_tags, {
