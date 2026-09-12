@@ -270,7 +270,12 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
             # are deployment-scoped. Rewrite only the non-secret ECR prefix at
             # runtime so a zero-resource account never pulls another stack's
             # images.
-            - sed -i 's#node-operator-baseline#${local.name_prefix}#g' /opt/node-operator/argocd-private-values.yaml /opt/node-operator/cert-manager-values.yaml
+            # The reviewed values files carry the Seoul source registry as
+            # provenance metadata.  Rewrite both the deployment prefix and
+            # registry region before the private-cluster install; otherwise
+            # nodes in a new region try to pull over a non-existent cross-
+            # region ECR endpoint and remain in ImagePullBackOff.
+            - sed -i -e 's#node-operator-baseline#${local.name_prefix}#g' -e 's#ap-northeast-2#${var.aws_region}#g' /opt/node-operator/argocd-private-values.yaml /opt/node-operator/cert-manager-values.yaml
             - helm upgrade --install argocd oci://${aws_ecr_repository.private_gitops["argocd_chart"].repository_url} --version ${local.argocd_chart_version} --namespace argocd --create-namespace --values /opt/node-operator/argocd-private-values.yaml --atomic --timeout 10m
             - kubectl wait --namespace argocd --for=condition=Available deployment/argocd-server --timeout=10m
             - helm upgrade --install cert-manager oci://${aws_ecr_repository.private_gitops["cert_manager_chart"].repository_url}@${var.cert_manager_chart_manifest_digest} --version ${local.cert_manager_chart_version} --namespace cert-manager --create-namespace --values /opt/node-operator/cert-manager-values.yaml --atomic --timeout 10m
