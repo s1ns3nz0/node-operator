@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   eligibility:
+    name: Release Eligibility
     # Keep every release job on the ephemeral, dedicated private runner.
     runs-on: codebuild-node-operator-baseline-private-release-${{ github.run_id }}-${{ github.run_attempt }}
     permissions:
@@ -20,17 +21,19 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Verify exact source release eligibility
+      - name: Source release eligibility
         env:
           GH_TOKEN: ${{ github.token }}
         run: scripts/ci/verify-release-source-eligibility.sh "$GITHUB_SHA"
   reproducibility:
+    name: Release Reproducibility
     needs: eligibility
     uses: ./.github/workflows/ci-release-integrity.yml
     permissions:
       contents: read
       checks: read
   build-and-publish:
+    name: Release Build and Publish
     needs: [eligibility, reproducibility]
     # A CodeBuild-hosted runner is ephemeral per workflow job and is bound to
     # the dedicated private project by its name plus run identity. A

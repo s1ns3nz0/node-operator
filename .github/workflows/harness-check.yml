@@ -1,4 +1,4 @@
-name: Harness check
+name: CI Harness
 
 on:
   pull_request:
@@ -11,25 +11,20 @@ permissions:
 
 jobs:
   harness-check:
+    name: CI Harness
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: Repository checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
+      - name: Node.js 20 toolchain
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install root dependencies
+      - name: Root dependency setup
         shell: bash
-        run: |
-          test -f package.json
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+        run: bash scripts/ci/install-root-dependencies.sh
 
-      - name: Run harness checks
+      - name: Harness validation
         run: npm run harness:verify
