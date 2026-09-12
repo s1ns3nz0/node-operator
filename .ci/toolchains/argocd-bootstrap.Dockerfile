@@ -32,5 +32,6 @@ RUN curl --fail --location --silent --show-error --output /usr/local/bin/kubectl
 # NO_SOURCE CodeBuild cannot fetch or substitute a mutable external file.
 COPY docs/gitops/argocd-private-values.example.yaml /opt/node-operator/argocd-private-values.yaml
 COPY docs/gitops/cert-manager-values.example.yaml /opt/node-operator/cert-manager-values.yaml
+COPY docs/gitops/vault-tls-internal-ca.example.yaml /opt/node-operator/vault-tls-internal-ca.yaml
 
 WORKDIR /workspace

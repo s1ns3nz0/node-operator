@@ -248,6 +248,12 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
             - kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager --timeout=10m
             - kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager-webhook --timeout=10m
             - kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager-cainjector --timeout=10m
+            - kubectl create namespace vault --dry-run=client -o yaml | kubectl apply -f -
+            - kubectl label namespace vault pod-security.kubernetes.io/enforce=restricted pod-security.kubernetes.io/enforce-version=latest pod-security.kubernetes.io/audit=restricted pod-security.kubernetes.io/audit-version=latest pod-security.kubernetes.io/warn=restricted pod-security.kubernetes.io/warn-version=latest --overwrite
+            - kubectl apply -f /opt/node-operator/vault-tls-internal-ca.yaml
+            - kubectl -n vault wait --for=condition=Ready certificate/vault-internal-ca --timeout=10m
+            - kubectl -n vault wait --for=condition=Ready certificate/vault-server-tls --timeout=10m
+            - kubectl -n vault get secret vault-tls -o name | grep -Fx 'secret/vault-tls'
             - test "$(aws ecr describe-images --region ${var.aws_region} --repository-name ${aws_ecr_repository.gitops_client_chart[0].name} --image-ids imageTag=${var.gitops_client_chart_version} --query 'imageDetails[0].imageDigest' --output text)" = "${var.gitops_client_chart_oci_digest}"
             - |
               cat <<'EOF' | kubectl apply -f -

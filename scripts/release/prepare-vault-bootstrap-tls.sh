@@ -30,8 +30,11 @@ done
 
 namespace="$(kubectl get namespace vault --ignore-not-found -o name)"
 if [ -n "$namespace" ] && [ -n "$(kubectl -n vault get statefulset vault --ignore-not-found -o name)" ]; then
-  printf '%s\n' 'Vault StatefulSet already exists; refusing bootstrap TLS mutation.' >&2
-  exit 65
+  kubectl -n vault wait --for=condition=Ready certificate/vault-internal-ca --timeout=10m
+  kubectl -n vault wait --for=condition=Ready certificate/vault-server-tls --timeout=10m
+  kubectl -n vault get secret vault-tls -o name | grep -qx 'secret/vault-tls'
+  printf '%s\n' 'PASS: existing Vault TLS prerequisites are ready; no bootstrap mutation was performed.'
+  exit 0
 fi
 
 if [ -z "$namespace" ]; then
