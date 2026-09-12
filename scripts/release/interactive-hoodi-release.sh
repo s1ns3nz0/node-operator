@@ -104,6 +104,23 @@ output_dir="$(prompt 'New absolute working directory')"
 absolute_new_dir "$output_dir"
 trap 'unset confirmation validator_key expected_key withdrawal web3signer_image postgres_image prysm_image fence_image; rm -f "$output_dir/.interactive-inputs.tmp" 2>/dev/null || true' EXIT
 
+# Collect and verify the immutable platform bootstrap artifacts before creating
+# any foundation resources. A missing mirror must fail closed without leaving a
+# partially-created baseline behind.
+argocd_bootstrap_image="${DEFAULT_ARGOCD_BOOTSTRAP_IMAGE:-$(prompt 'Private ECR Argo bootstrap image@sha256 digest')}"
+vault_bootstrap_image="${DEFAULT_VAULT_BOOTSTRAP_IMAGE:-$(prompt 'Private ECR Vault bootstrap image@sha256 digest')}"
+verify_private_image() {
+  local image="$1" repository digest found
+  repository="${image#*/}"; repository="${repository%@*}"; digest="${image##*@}"
+  [[ "$image" =~ ^${account}\.dkr\.ecr\.${region//./\.}\.amazonaws\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$ ]] || {
+    printf 'bootstrap image must be a same-account private ECR digest: %s\n' "$image" >&2; exit 65;
+  }
+  found="$(aws ecr describe-images --region "$region" --repository-name "$repository" --image-ids imageDigest="$digest" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
+  [ "$found" = "$digest" ] || { printf 'required private ECR image is missing: %s\n' "$image" >&2; printf '%s\n' 'Mirror the reviewed v0.1.20 artifact into this account, then rerun the single installer.' >&2; exit 65; }
+}
+verify_private_image "$argocd_bootstrap_image"
+verify_private_image "$vault_bootstrap_image"
+
 printf '%s\n' 'Generating and validating the new Hoodi validator key before infrastructure staging.' >&2
 mkdir -m 700 "$output_dir" "$output_dir/custody"
 "$keystore" --output-dir "$output_dir/custody"
@@ -133,8 +150,6 @@ session="$output_dir/private-eks-session.json"
 
 platform_script="$source_root/scripts/release/run-platform-bootstrap.sh"
 [ -x "$platform_script" ] || { printf '%s\n' 'release bundle lacks the unified platform bootstrap helper' >&2; exit 65; }
-argocd_bootstrap_image="${DEFAULT_ARGOCD_BOOTSTRAP_IMAGE:-$(prompt 'Private ECR Argo bootstrap image@sha256 digest')}"
-vault_bootstrap_image="${DEFAULT_VAULT_BOOTSTRAP_IMAGE:-$(prompt 'Private ECR Vault bootstrap image@sha256 digest')}"
 client_chart_version="${DEFAULT_CLIENT_CHART_VERSION:-$(prompt 'Published node-operator-client chart version (0.1.N)')}"
 client_chart_digest="${DEFAULT_CLIENT_CHART_DIGEST:-$(prompt 'Published node-operator-client chart manifest digest (sha256:...)')}"
 zero_inputs="$(jq -er '.zero_resource_inputs' "$inputs")"
@@ -144,18 +159,6 @@ while IFS= read -r subnet; do [ -n "$subnet" ] && platform_subnets+=("$subnet");
 [ "${#platform_subnets[@]}" -gt 0 ] || { printf '%s\n' 'foundation output lacks Hoodi private subnets for platform bootstrap' >&2; exit 65; }
 platform_args=(--baseline-work-dir "$output_dir/deployment-work" --baseline-config "$baseline_config" --account "$account" --region "$region" --argocd-image "$argocd_bootstrap_image" --vault-image "$vault_bootstrap_image" --client-chart-version "$client_chart_version" --client-chart-digest "$client_chart_digest" --vault-chart-version "$DEFAULT_VAULT_CHART_VERSION" --vault-chart-digest "$DEFAULT_VAULT_CHART_DIGEST")
 for subnet in "${platform_subnets[@]}"; do platform_args+=(--subnet-id "$subnet"); done
-# Fail before starting CodeBuild if the digest-pinned bootstrap images are not
-# actually present in the account-local private ECR mirrors. A fresh baseline
-# creates the repositories but cannot safely invent or mirror an unapproved
-# bootstrap artifact.
-verify_private_image() {
-  local image="$1" repository digest found
-  repository="${image#*/}"; repository="${repository%@*}"; digest="${image##*@}"
-  found="$(aws ecr describe-images --region "$region" --repository-name "$repository" --image-ids imageDigest="$digest" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
-  [ "$found" = "$digest" ] || { printf 'required private ECR image is missing: %s\n' "$image" >&2; printf '%s\n' 'Mirror the reviewed v0.1.20 artifact into this account, then rerun the single installer.' >&2; exit 65; }
-}
-verify_private_image "$argocd_bootstrap_image"
-verify_private_image "$vault_bootstrap_image"
 client_repository="$(terraform -chdir="$output_dir/deployment-work/baseline" output -raw gitops_client_ecr_repository_url 2>/dev/null || true)"
 case "$client_repository" in
   "${account}.dkr.ecr.${region}.amazonaws.com/"*) ;;
