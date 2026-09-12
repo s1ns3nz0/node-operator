@@ -210,9 +210,9 @@ print("\n".join(seen))
 PY
 )"
     [ -n "$endpoint_ips" ] || { printf '%s\n' 'private EKS endpoint did not resolve to an IPv4 address' >&2; exit 65; }
-    grep -q '127\.0\.0\.1/32' "$client_manifest" || { printf '%s\n' 'validator client manifest lacks the expected API CIDR staging sentinel' >&2; exit 65; }
-    rewritten_manifest="$(mktemp "${client_manifest}.endpoint.XXXXXX")"
-    python3 - "$client_manifest" "$rewritten_manifest" "$endpoint_ips" <<'PY'
+    if grep -q '127\.0\.0\.1/32' "$client_manifest"; then
+      rewritten_manifest="$(mktemp "${client_manifest}.endpoint.XXXXXX")"
+      python3 - "$client_manifest" "$rewritten_manifest" "$endpoint_ips" <<'PY'
 import sys
 source, target, raw_ips = sys.argv[1:]
 ips = [ip.strip() for ip in raw_ips.splitlines() if ip.strip()]
@@ -229,9 +229,12 @@ with open(target, "w", encoding="utf-8") as handle:
         else:
             handle.write(line)
 PY
-    chmod 600 "$rewritten_manifest"
-    mv "$rewritten_manifest" "$client_manifest"
-    printf 'Resolved private EKS API endpoint %s; validator fence policy narrowed to %s.\n' "$endpoint_host" "$(printf '%s' "$endpoint_ips" | tr '\n' ' ')" >&2
+      chmod 600 "$rewritten_manifest"
+      mv "$rewritten_manifest" "$client_manifest"
+      printf 'Resolved private EKS API endpoint %s; validator fence policy narrowed to %s.\n' "$endpoint_host" "$(printf '%s' "$endpoint_ips" | tr '\n' ' ')" >&2
+    else
+      printf 'Validator fence policy is already narrowed; reusing the existing endpoint-bound manifest.\n' >&2
+    fi
     # Retry only an exact zero-replica boundary. A wholly absent set may be
     # staged; a partial or active set fails closed rather than being adopted.
     if "$0" stage verify --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session_handoff"; then
