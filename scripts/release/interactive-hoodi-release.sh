@@ -383,7 +383,29 @@ case "$client_repository" in
 esac
 client_repository="${client_repository#*/}"
 client_found="$(aws ecr describe-images --region "$region" --repository-name "$client_repository" --image-ids imageTag="$client_chart_version" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
-[ "$client_found" = "$client_chart_digest" ] || { printf 'client chart %s with digest %s is missing from private ECR\n' "$client_chart_version" "$client_chart_digest" >&2; printf '%s\n' 'Publish or mirror the reviewed immutable client chart, then rerun the single installer.' >&2; exit 65; }
+if [ "$client_found" != "$client_chart_digest" ]; then
+  # A fresh region has an empty chart repository. Mirror the reviewed,
+  # immutable chart automatically instead of requiring a manual publish step.
+  command -v docker >/dev/null 2>&1 || { printf '%s\n' 'docker is required to mirror the reviewed client chart' >&2; exit 69; }
+  if [ -z "${docker_config:-}" ]; then
+    docker_config="$(mktemp -d "$output_dir/.docker-config.XXXXXX")"
+    chmod 700 "$docker_config"
+    trap 'unset confirmation validator_key expected_key withdrawal web3signer_image postgres_image prysm_image fence_image ecr_auth source_image; rm -f "$output_dir/.interactive-inputs.tmp" 2>/dev/null || true; rm -rf "$docker_config" 2>/dev/null || true' EXIT
+  fi
+  source_registry="$(printf '%s' "$account.dkr.ecr.$DEFAULT_CLIENT_CHART_SOURCE_REGION.amazonaws.com")"
+  target_registry="$(printf '%s' "$account.dkr.ecr.$region.amazonaws.com")"
+  source_repository="node-operator-baseline-gitops-client/node-operator-client"
+  source_image="$source_registry/$source_repository:$client_chart_version"
+  source_auth="$(aws ecr get-login-password --region "$DEFAULT_CLIENT_CHART_SOURCE_REGION")"
+  printf '%s' "$source_auth" | DOCKER_CONFIG="$docker_config" docker login --username AWS --password-stdin "$source_registry" >/dev/null
+  ecr_auth="$(aws ecr get-login-password --region "$region")"
+  printf '%s' "$ecr_auth" | DOCKER_CONFIG="$docker_config" docker login --username AWS --password-stdin "$target_registry" >/dev/null
+  DOCKER_CONFIG="$docker_config" docker pull "$source_image" >/dev/null
+  DOCKER_CONFIG="$docker_config" docker tag "$source_image" "$target_registry/$client_repository:$client_chart_version"
+  DOCKER_CONFIG="$docker_config" docker push "$target_registry/$client_repository:$client_chart_version" >/dev/null
+  client_found="$(aws ecr describe-images --region "$region" --repository-name "$client_repository" --image-ids imageTag="$client_chart_version" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
+fi
+[ "$client_found" = "$client_chart_digest" ] || { printf 'client chart %s with digest %s is missing or mismatched in private ECR\n' "$client_chart_version" "$client_chart_digest" >&2; exit 65; }
 "$platform_script" "${platform_args[@]}"
 
 step 'Configuring private Vault TLS'
