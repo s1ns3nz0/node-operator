@@ -49,10 +49,20 @@ variable "gitops_client_chart_oci_digest" {
   }
 }
 
+variable "cert_manager_chart_manifest_digest" {
+  description = "OCI manifest digest for the reviewed cert-manager chart mirrored into the private ECR repository."
+  type        = string
+  default     = "sha256:62c4745561eccfd723678c6547500750ebef5a880d81ff670d33124ab335f877"
+
+  validation {
+    condition     = can(regex("^sha256:[a-f0-9]{64}$", var.cert_manager_chart_manifest_digest))
+    error_message = "cert_manager_chart_manifest_digest must be an OCI sha256 manifest digest."
+  }
+}
+
 locals {
-  argocd_chart_version               = "10.4.0"
-  cert_manager_chart_version         = "v1.21.1"
-  cert_manager_chart_manifest_digest = "sha256:62c4745561eccfd723678c6547500750ebef5a880d81ff670d33124ab335f877"
+  argocd_chart_version       = "10.4.0"
+  cert_manager_chart_version = "v1.21.1"
 }
 
 resource "aws_security_group" "argocd_bootstrap" {
@@ -263,7 +273,7 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
             - sed -i 's#node-operator-baseline#${local.name_prefix}#g' /opt/node-operator/argocd-private-values.yaml /opt/node-operator/cert-manager-values.yaml
             - helm upgrade --install argocd oci://${aws_ecr_repository.private_gitops["argocd_chart"].repository_url} --version ${local.argocd_chart_version} --namespace argocd --create-namespace --values /opt/node-operator/argocd-private-values.yaml --atomic --timeout 10m
             - kubectl wait --namespace argocd --for=condition=Available deployment/argocd-server --timeout=10m
-            - helm upgrade --install cert-manager oci://${aws_ecr_repository.private_gitops["cert_manager_chart"].repository_url}@${local.cert_manager_chart_manifest_digest} --version ${local.cert_manager_chart_version} --namespace cert-manager --create-namespace --values /opt/node-operator/cert-manager-values.yaml --atomic --timeout 10m
+            - helm upgrade --install cert-manager oci://${aws_ecr_repository.private_gitops["cert_manager_chart"].repository_url}@${var.cert_manager_chart_manifest_digest} --version ${local.cert_manager_chart_version} --namespace cert-manager --create-namespace --values /opt/node-operator/cert-manager-values.yaml --atomic --timeout 10m
             - kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager --timeout=10m
             - kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager-webhook --timeout=10m
             - kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager-cainjector --timeout=10m

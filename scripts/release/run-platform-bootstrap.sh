@@ -3,11 +3,11 @@ set -euo pipefail
 umask 077
 
 usage() {
-  printf '%s\n' "usage: ${0##*/} --baseline-work-dir ABSOLUTE_DIR --baseline-config ABSOLUTE_FILE --account ACCOUNT --region REGION --argocd-image IMAGE@DIGEST --vault-image IMAGE@DIGEST --client-chart-version 0.1.N --client-chart-digest sha256:DIGEST --vault-chart-version VERSION --vault-chart-digest sha256:DIGEST --subnet-id subnet-ID [--subnet-id subnet-ID]"
+  printf '%s\n' "usage: ${0##*/} --baseline-work-dir ABSOLUTE_DIR --baseline-config ABSOLUTE_FILE --account ACCOUNT --region REGION --argocd-image IMAGE@DIGEST --vault-image IMAGE@DIGEST --client-chart-version 0.1.N --client-chart-digest sha256:DIGEST --vault-chart-version VERSION --vault-chart-digest sha256:DIGEST --cert-manager-chart-digest sha256:DIGEST --subnet-id subnet-ID [--subnet-id subnet-ID]"
   exit 64
 }
 
-work_dir=''; baseline_config=''; account=''; region=''; argocd_image=''; vault_image=''; client_version=''; client_digest=''; vault_version=''; vault_digest=''; subnets=()
+work_dir=''; baseline_config=''; account=''; region=''; argocd_image=''; vault_image=''; client_version=''; client_digest=''; vault_version=''; vault_digest=''; cert_manager_digest=''; subnets=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --baseline-work-dir) work_dir="${2:-}"; shift 2 ;;
@@ -20,17 +20,19 @@ while [ "$#" -gt 0 ]; do
     --client-chart-digest) client_digest="${2:-}"; shift 2 ;;
     --vault-chart-version) vault_version="${2:-}"; shift 2 ;;
     --vault-chart-digest) vault_digest="${2:-}"; shift 2 ;;
+    --cert-manager-chart-digest) cert_manager_digest="${2:-}"; shift 2 ;;
     --subnet-id) subnets+=("${2:-}"); shift 2 ;;
     *) usage ;;
   esac
 done
-case "$work_dir:$baseline_config:$account:$region:$argocd_image:$vault_image:$client_version:$client_digest:$vault_version:$vault_digest" in /*:/*:*:*:*:*:*:*:*:*:*) ;; *) usage ;; esac
+case "$work_dir:$baseline_config:$account:$region:$argocd_image:$vault_image:$client_version:$client_digest:$vault_version:$vault_digest:$cert_manager_digest" in /*:/*:*:*:*:*:*:*:*:*:*:*) ;; *) usage ;; esac
 [[ "$account" =~ ^[0-9]{12}$ ]] || usage
 [[ "$region" =~ ^[a-z]{2}-[a-z0-9-]+-[0-9]+$ ]] || usage
 [[ "$argocd_image" =~ ^${account}\.dkr\.ecr\.${region}\.amazonaws\.com/.+@sha256:[a-f0-9]{64}$ ]] || usage
 [[ "$vault_image" =~ ^${account}\.dkr\.ecr\.${region}\.amazonaws\.com/.+@sha256:[a-f0-9]{64}$ ]] || usage
 [[ "$client_version" =~ ^0\.1\.[0-9]+$ && "$client_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || usage
 [[ "$vault_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$vault_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || usage
+[[ "$cert_manager_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || usage
 [ "${#subnets[@]}" -gt 0 ] || usage
 for subnet in "${subnets[@]}"; do [[ "$subnet" =~ ^subnet-[a-z0-9]+$ ]] || usage; done
 for command in terraform jq aws; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
@@ -46,8 +48,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 input_dir="$work_dir/platform-bootstrap-inputs"; mkdir -m 700 "$input_dir" 2>/dev/null || { [ -d "$input_dir" ] || exit 65; }
 argocd_input="$input_dir/argocd.tfvars.json"; vault_input="$input_dir/vault.tfvars.json"
 subnet_json="$(printf '%s\n' "${subnets[@]}" | jq -R . | jq -s .)"
-jq -n --arg image "$argocd_image" --arg version "$client_version" --arg digest "$client_digest" --argjson subnets "$subnet_json" \
-  '{enable_argocd_bootstrap_runner:true,enable_argocd_bootstrap_cluster_admin:true,argocd_bootstrap_image:$image,argocd_bootstrap_subnet_ids:$subnets,gitops_client_chart_version:$version,gitops_client_chart_oci_digest:$digest}' > "$argocd_input"
+jq -n --arg image "$argocd_image" --arg version "$client_version" --arg digest "$client_digest" --arg cert_digest "$cert_manager_digest" --argjson subnets "$subnet_json" \
+  '{enable_argocd_bootstrap_runner:true,enable_argocd_bootstrap_cluster_admin:true,argocd_bootstrap_image:$image,argocd_bootstrap_subnet_ids:$subnets,gitops_client_chart_version:$version,gitops_client_chart_oci_digest:$digest,cert_manager_chart_manifest_digest:$cert_digest}' > "$argocd_input"
 jq -n --arg image "$vault_image" --arg version "$vault_version" --arg digest "$vault_digest" --argjson subnets "$subnet_json" \
   '{enable_vault_bootstrap_runner:true,enable_vault_bootstrap_cluster_admin:true,vault_bootstrap_image:$image,vault_bootstrap_subnet_ids:$subnets,vault_chart_version:$version,vault_chart_manifest_digest:$digest}' > "$vault_input"
 chmod 600 "$argocd_input" "$vault_input"

@@ -45,7 +45,7 @@ if [ -n "$env_file" ]; then
   while IFS='=' read -r key value; do
     key="${key%%[[:space:]]*}"; value="${value##[[:space:]]}"
     case "$key" in ''|'#'*) continue ;; esac
-    case "$key" in REGION) DEFAULT_REGION="$value" ;; DEPLOYMENT_NAME) DEFAULT_DEPLOYMENT_NAME="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; EXISTING_KEYSTORE_DIR) DEFAULT_KEYSTORE_DIR="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; CLIENT_CHART_SOURCE_REGION) DEFAULT_CLIENT_CHART_SOURCE_REGION="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; DEPOSIT_TX_HASH) DEFAULT_DEPOSIT_TX_HASH="$value" ;; HOODI_PUBLIC_RPC_URL) DEFAULT_HOODI_PUBLIC_RPC_URL="$value" ;; esac
+    case "$key" in REGION) DEFAULT_REGION="$value" ;; DEPLOYMENT_NAME) DEFAULT_DEPLOYMENT_NAME="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; EXISTING_KEYSTORE_DIR) DEFAULT_KEYSTORE_DIR="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; CLIENT_CHART_SOURCE_REGION) DEFAULT_CLIENT_CHART_SOURCE_REGION="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; CERT_MANAGER_CHART_DIGEST) DEFAULT_CERT_MANAGER_CHART_DIGEST="$value" ;; DEPOSIT_TX_HASH) DEFAULT_DEPOSIT_TX_HASH="$value" ;; HOODI_PUBLIC_RPC_URL) DEFAULT_HOODI_PUBLIC_RPC_URL="$value" ;; esac
   done < "$env_file"
 fi
 DEFAULT_REGION="${DEFAULT_REGION:-ap-northeast-2}"
@@ -69,6 +69,7 @@ DEFAULT_CLIENT_CHART_DIGEST="${DEFAULT_CLIENT_CHART_DIGEST:-}"
 DEFAULT_CLIENT_CHART_SOURCE_REGION="${DEFAULT_CLIENT_CHART_SOURCE_REGION:-ap-northeast-2}"
 DEFAULT_VAULT_CHART_VERSION="${DEFAULT_VAULT_CHART_VERSION:-0.31.0}"
 DEFAULT_VAULT_CHART_DIGEST="${DEFAULT_VAULT_CHART_DIGEST:-sha256:85cfa6b40396a198a104fbf06c7cccaf75428db7201394f9061c272441bcd0e4}"
+DEFAULT_CERT_MANAGER_CHART_DIGEST="${DEFAULT_CERT_MANAGER_CHART_DIGEST:-sha256:62c4745561eccfd723678c6547500750ebef5a880d81ff670d33124ab335f877}"
 DEFAULT_DEPOSIT_TX_HASH="${DEFAULT_DEPOSIT_TX_HASH:-}"
 DEFAULT_HOODI_PUBLIC_RPC_URL="${DEFAULT_HOODI_PUBLIC_RPC_URL:-}"
 
@@ -376,7 +377,7 @@ baseline_config="$(jq -er '.baseline_config' "$zero_inputs")"
 platform_subnets=()
 while IFS= read -r subnet; do [ -n "$subnet" ] && platform_subnets+=("$subnet"); done < <(jq -er '.hoodi_subnet_ids[]' "$output_dir/deployment-work/foundation-output.json")
 [ "${#platform_subnets[@]}" -gt 0 ] || { printf '%s\n' 'foundation output lacks Hoodi private subnets for platform bootstrap' >&2; exit 65; }
-platform_args=(--baseline-work-dir "$output_dir/deployment-work" --baseline-config "$baseline_config" --account "$account" --region "$region" --argocd-image "$argocd_bootstrap_image" --vault-image "$vault_bootstrap_image" --client-chart-version "$client_chart_version" --client-chart-digest "$client_chart_digest" --vault-chart-version "$DEFAULT_VAULT_CHART_VERSION" --vault-chart-digest "$DEFAULT_VAULT_CHART_DIGEST")
+platform_args=(--baseline-work-dir "$output_dir/deployment-work" --baseline-config "$baseline_config" --account "$account" --region "$region" --argocd-image "$argocd_bootstrap_image" --vault-image "$vault_bootstrap_image" --client-chart-version "$client_chart_version" --client-chart-digest "$client_chart_digest" --vault-chart-version "$DEFAULT_VAULT_CHART_VERSION" --vault-chart-digest "$DEFAULT_VAULT_CHART_DIGEST" --cert-manager-chart-digest "$DEFAULT_CERT_MANAGER_CHART_DIGEST")
 for subnet in "${platform_subnets[@]}"; do platform_args+=(--subnet-id "$subnet"); done
 client_repository="$(terraform -chdir="$output_dir/deployment-work/baseline" output -raw gitops_client_ecr_repository_url 2>/dev/null || true)"
 case "$client_repository" in
