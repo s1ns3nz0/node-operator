@@ -30,7 +30,8 @@ fi
 release="$source_root/scripts/release/hoodi-validator-release.sh"
 prepare="$source_root/scripts/release/prepare-hoodi-zero-release-inputs.sh"
 keystore="$source_root/scripts/ops/generate-hoodi-validator-keystore.sh"
-for file in "$release" "$prepare" "$keystore"; do [ -x "$file" ] || { printf 'missing executable in release bundle: %s\n' "$file" >&2; exit 65; }; done
+vault_tls="$source_root/scripts/release/prepare-vault-bootstrap-tls.sh"
+for file in "$release" "$prepare" "$keystore" "$vault_tls"; do [ -x "$file" ] || { printf 'missing executable in release bundle: %s\n' "$file" >&2; exit 65; }; done
 for command in aws jq find shasum; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 
 # Optional non-secret .env-style overrides. Values are never exported and
@@ -111,6 +112,12 @@ inputs="$output_dir/inputs/hoodi-zero-release-inputs.json"
 session="$output_dir/private-eks-session.json"
 
 "$release" deploy apply --bundle-root "$bundle_root" --inputs "$inputs" --work-dir "$output_dir/deployment-work" --private-eks-session-handoff "$session" --allow-create
+
+printf '%s\n' 'Preparing cert-manager-managed Vault TLS through the private EKS session.' >&2
+eks_env=(env PRIVATE_EKS_SESSION=1 AWS_REGION="$region" EKS_CLUSTER_NAME="$(jq -er '.cluster_name' "$session")" SSM_OPS_INSTANCE_ID="$(jq -er '.ssm_ops_instance_id' "$session")")
+tls_manifest="$source_root/docs/gitops/vault-tls-internal-ca.example.yaml"
+[ -f "$tls_manifest" ] && [ ! -L "$tls_manifest" ] || { printf '%s\n' 'release bundle lacks the reviewed Vault TLS manifest' >&2; exit 65; }
+"$source_root/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$vault_tls" --manifest "$tls_manifest"
 
 printf '%s\n' 'Next ceremony: Vault v2 recovery. Recovery shares will be requested silently by the delegated script.' >&2
 "$bundle_root/source/scripts/ops/recover-and-bootstrap-hoodi-vault-v2.sh" --validator-set "$validator_set"
