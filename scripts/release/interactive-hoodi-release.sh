@@ -239,7 +239,16 @@ while IFS= read -r zone; do
   [ -n "$zone" ] && zones+=("$zone")
 done < <(aws ec2 describe-availability-zones --region "$region" --filters Name=state,Values=available --query 'AvailabilityZones[].ZoneName' --output text | tr '\t' '\n' | sort | sed -n '1,2p')
 [ "${#zones[@]}" -eq 2 ] || { printf '%s\n' 'could not discover two available Availability Zones' >&2; exit 65; }
+# AWS Config permits only one recorder and delivery channel per Region. Reuse
+# an existing account-wide recorder rather than attempting a second one.
+manage_config_recorder=true
+config_recorder_count="$(aws configservice describe-configuration-recorders --region "$region" --query 'length(ConfigurationRecorders)' --output text 2>/dev/null || printf '0')"
+case "$config_recorder_count" in ''|None|0) ;; *) manage_config_recorder=false ;; esac
+if [ "$manage_config_recorder" = false ]; then
+  printf '%s\n' 'Reusing the existing regional AWS Config recorder; no duplicate recorder will be created.' >&2
+fi
 prepare_args=(--aws-account-id "$account" --aws-region "$region" --name "$deployment_name" --availability-zone "${zones[0]}" --availability-zone "${zones[1]}" --validator-set "$validator_set" --validator-public-key "$validator_key" --withdrawal-address "$withdrawal" --web3signer-image "$web3signer_image" --postgres-image "$postgres_image" --prysm-validator-image "$prysm_image" --signing-fence-image "$fence_image" --kubernetes-api-cidr "$api_cidr" --output-dir "$output_dir/inputs")
+prepare_args+=(--manage-config-recorder "$manage_config_recorder")
 [ -n "$DEFAULT_BACKEND_PRINCIPAL_ARN" ] && prepare_args+=(--backend-principal-arn "$DEFAULT_BACKEND_PRINCIPAL_ARN")
 "$prepare" "${prepare_args[@]}"
 inputs="$output_dir/inputs/hoodi-zero-release-inputs.json"

@@ -451,6 +451,7 @@ resource "aws_cloudtrail" "audit" {
 }
 
 resource "aws_config_configuration_recorder" "baseline" {
+  count    = var.manage_config_recorder ? 1 : 0
   name     = "${local.name_prefix}-config"
   role_arn = aws_iam_role.config.arn
 
@@ -461,6 +462,7 @@ resource "aws_config_configuration_recorder" "baseline" {
 }
 
 resource "aws_config_delivery_channel" "baseline" {
+  count          = var.manage_config_recorder ? 1 : 0
   name           = "${local.name_prefix}-config"
   s3_bucket_name = aws_s3_bucket.audit.id
 
@@ -475,7 +477,8 @@ resource "aws_config_delivery_channel" "baseline" {
 }
 
 resource "aws_config_configuration_recorder_status" "baseline" {
-  name       = aws_config_configuration_recorder.baseline.name
+  count      = var.manage_config_recorder ? 1 : 0
+  name       = aws_config_configuration_recorder.baseline[0].name
   is_enabled = true
 
   depends_on = [
