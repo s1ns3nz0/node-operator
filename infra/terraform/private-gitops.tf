@@ -6,7 +6,11 @@ variable "enable_private_gitops_foundation" {
 
 locals {
   private_gitops_repositories = {
-    argocd       = "${local.name_prefix}-gitops-argocd"
+    argocd = "${local.name_prefix}-gitops-argocd"
+    # The Argo bootstrap image and Helm chart are distinct OCI artifacts. Helm
+    # publishes the chart beneath Chart.yaml's `argo-cd` path, so keep that
+    # chart repository separate from the executable image repository.
+    argocd_chart = "${local.name_prefix}-gitops-argocd/argo-cd"
     charts       = "${local.name_prefix}-gitops-charts"
     nodes        = "${local.name_prefix}-gitops-nodes"
     vault        = "${local.name_prefix}-gitops-vault"

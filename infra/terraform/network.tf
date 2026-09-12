@@ -398,11 +398,57 @@ resource "aws_vpc_security_group_ingress_rule" "nodes_webhook_from_cluster" {
   ip_protocol = "tcp"
 }
 
+resource "aws_vpc_security_group_ingress_rule" "nodes_vault_injector_webhook_from_cluster" {
+  description                  = "Vault injector webhook traffic from the control plane"
+  security_group_id            = aws_security_group.nodes.id
+  referenced_security_group_id = aws_security_group.cluster.id
+  # The Vault injector Service exposes 443 but targets the injector Pod on 8080.
+  from_port   = 8080
+  to_port     = 8080
+  ip_protocol = "tcp"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "hoodi_nodes_webhook_from_cluster" {
   description                  = "Webhook and extension API traffic from the control plane to Hoodi nodes"
   security_group_id            = aws_security_group.hoodi_nodes.id
   referenced_security_group_id = aws_security_group.cluster.id
   from_port                    = 9443
   to_port                      = 9443
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "hoodi_nodes_vault_injector_webhook_from_cluster" {
+  description                  = "Vault injector webhook traffic from the control plane to Hoodi nodes"
+  security_group_id            = aws_security_group.hoodi_nodes.id
+  referenced_security_group_id = aws_security_group.cluster.id
+  from_port                    = 8080
+  to_port                      = 8080
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "hoodi_nodes_vault_api_from_hoodi" {
+  description                  = "Vault API and raft bootstrap between Hoodi nodes"
+  security_group_id            = aws_security_group.hoodi_nodes.id
+  referenced_security_group_id = aws_security_group.hoodi_nodes.id
+  from_port                    = 8200
+  to_port                      = 8201
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "hoodi_nodes_vault_api_from_system" {
+  description                  = "Vault API from system nodes to Hoodi Vault peers"
+  security_group_id            = aws_security_group.hoodi_nodes.id
+  referenced_security_group_id = aws_security_group.nodes.id
+  from_port                    = 8200
+  to_port                      = 8200
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "nodes_vault_api_from_hoodi" {
+  description                  = "Vault API from Hoodi nodes to the system Vault peer"
+  security_group_id            = aws_security_group.nodes.id
+  referenced_security_group_id = aws_security_group.hoodi_nodes.id
+  from_port                    = 8200
+  to_port                      = 8200
   ip_protocol                  = "tcp"
 }

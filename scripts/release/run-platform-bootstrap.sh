@@ -34,6 +34,11 @@ case "$work_dir:$baseline_config:$account:$region:$argocd_image:$vault_image:$cl
 [ "${#subnets[@]}" -gt 0 ] || usage
 for subnet in "${subnets[@]}"; do [[ "$subnet" =~ ^subnet-[a-z0-9]+$ ]] || usage; done
 for command in terraform jq aws; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
+platform_stage_number=0
+platform_stage() {
+  platform_stage_number=$((platform_stage_number + 1))
+  printf '\n▶ PLATFORM %02d/06  %s\n' "$platform_stage_number" "$1" >&2
+}
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 [ -d "$work_dir/baseline" ] && [ -f "$work_dir/baseline.backend.hcl" ] || { printf '%s\n' 'baseline work directory is not a zero-apply result' >&2; exit 65; }
 [ -f "$baseline_config" ] && [ ! -L "$baseline_config" ] || { printf '%s\n' 'baseline config must be a regular file' >&2; exit 65; }
@@ -50,17 +55,31 @@ chmod 600 "$argocd_input" "$vault_input"
 platform_dir="$work_dir/platform-bootstrap-plans"; mkdir -m 700 "$platform_dir" 2>/dev/null || { [ -d "$platform_dir" ] || exit 65; }
 argocd_plan="$platform_dir/argocd.tfplan"; vault_plan="$platform_dir/vault.tfplan"
 if [ ! -f "$argocd_plan" ]; then
+  platform_stage 'Planning Argo CD bootstrap runner'
   "$script_dir/apply-argocd-bootstrap.sh" plan --baseline-work-dir "$work_dir" --baseline-config "$baseline_config" --bootstrap-input "$argocd_input" --plan-file "$argocd_plan"
 fi
-if [ ! -f "$vault_plan" ]; then
-  "$script_dir/apply-vault-bootstrap.sh" plan --baseline-work-dir "$work_dir" --baseline-config "$baseline_config" --bootstrap-input "$vault_input" --plan-file "$vault_plan"
-fi
+platform_stage 'Awaiting explicit Argo/Vault bootstrap approval'
 printf 'Type PLATFORM-BOOTSTRAP to apply the reviewed Argo/Vault runner plans: ' >&2
 IFS= read -r confirmation
 [ "$confirmation" = PLATFORM-BOOTSTRAP ] || { printf '%s\n' 'platform bootstrap cancelled' >&2; exit 0; }
+platform_stage 'Applying Argo CD bootstrap runner'
 "$script_dir/apply-argocd-bootstrap.sh" apply --baseline-work-dir "$work_dir" --baseline-config "$baseline_config" --bootstrap-input "$argocd_input" --plan-file "$argocd_plan"
+
+# Argo apply changes the shared Terraform state. Generate the Vault plan only
+# after that apply, and retain the Argo variables in its baseline overlay so
+# Terraform does not plan to delete the already-applied Argo runner.
+vault_baseline_config="$platform_dir/vault-baseline.tfvars.json"
+jq -s '.[0] * .[1]' "$baseline_config" "$argocd_input" > "$vault_baseline_config"
+chmod 600 "$vault_baseline_config"
+if [ -f "$vault_plan" ]; then
+  mv "$vault_plan" "$vault_plan.stale.$(date -u +%Y%m%dT%H%M%SZ)"
+fi
+platform_stage 'Planning Vault bootstrap runner'
+"$script_dir/apply-vault-bootstrap.sh" plan --baseline-work-dir "$work_dir" --baseline-config "$vault_baseline_config" --bootstrap-input "$vault_input" --plan-file "$vault_plan"
+platform_stage 'Applying Vault bootstrap runner'
 "$script_dir/apply-vault-bootstrap.sh" apply --baseline-work-dir "$work_dir" --baseline-config "$baseline_config" --bootstrap-input "$vault_input" --plan-file "$vault_plan"
 
+platform_stage 'Waiting for Argo/Vault CodeBuild completion'
 for project in "$(terraform -chdir="$work_dir/baseline" output -raw argocd_bootstrap_project_name 2>/dev/null || true)" "$(terraform -chdir="$work_dir/baseline" output -raw vault_bootstrap_project_name 2>/dev/null || true)"; do
   [ -n "$project" ] || continue
   build_id="$(aws codebuild start-build --region "$region" --project-name "$project" --query 'build.id' --output text)"
@@ -76,6 +95,7 @@ done
 # Remove the temporary runners and cluster-admin associations. The baseline
 # configuration has all bootstrap flags disabled; only the explicitly named
 # bootstrap resources may be deleted by this revoke plan.
+platform_stage 'Revoking temporary runners and authority'
 revoke_plan="$platform_dir/revoke.tfplan"
 if [ ! -f "$revoke_plan" ]; then
   terraform -chdir="$work_dir/baseline" plan -input=false -var-file="$baseline_config" -out="$revoke_plan"

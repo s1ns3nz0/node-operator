@@ -9,7 +9,7 @@ ACCOUNT = "106760547719"
 REGION = "ap-northeast-2"
 IMAGE = ("106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/"
          "node-operator-baseline-validator-signer-identity-probe@sha256:"
-         "cb359b144ae61a778ac247cf7c6bcb4a210514b1a4da0b825af717ea4231269a")
+         "11212189c98afaeb719eaaa8ac7d3c86179884c84986c97c9c1a35b6b4f4ec8f")
 NAMESPACE = "validator-operations"
 SET_RE = re.compile(r"^hoodi-[a-z0-9][a-z0-9-]{0,20}$")
 KEY_RE = re.compile(r"^0x[0-9a-f]{96}$")

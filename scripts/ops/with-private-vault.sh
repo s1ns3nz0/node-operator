@@ -20,6 +20,7 @@ exec "$root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 \
       command -v "$command" >/dev/null 2>&1 || { printf "missing command: %s\\n" "$command" >&2; exit 69; }
     done
     vault_port="${PRIVATE_VAULT_LOCAL_PORT:-18200}"
+    vault_target="${PRIVATE_VAULT_TARGET:-service/vault-active}"
     port_log="$(mktemp /private/tmp/node-operator-vault-port.XXXXXX)"
     ca_file="$(mktemp /private/tmp/node-operator-vault-ca.XXXXXX)"
     port_pid=""
@@ -31,7 +32,7 @@ exec "$root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 \
     trap cleanup EXIT
     kubectl -n vault exec vault-0 -- sh -c "dd if=/vault/userconfig/vault-tls/ca.crt 2>/dev/null" > "$ca_file"
     chmod 600 "$ca_file"
-    kubectl -n vault port-forward service/vault-active "${vault_port}:8200" >"$port_log" 2>&1 &
+    kubectl -n vault port-forward "$vault_target" "${vault_port}:8200" >"$port_log" 2>&1 &
     port_pid=$!
     for attempt in $(seq 1 20); do nc -z 127.0.0.1 "$vault_port" 2>/dev/null && break; sleep 1; done
     nc -z 127.0.0.1 "$vault_port" >/dev/null

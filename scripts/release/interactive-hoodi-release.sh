@@ -144,7 +144,7 @@ client_images="$source_root/.ci/validator/approved-client-images.json"
 [ -f "$runtime_images" ] && [ -f "$client_images" ] || { printf '%s\n' 'release bundle lacks canonical approved image records' >&2; exit 65; }
 web3signer_image="${DEFAULT_WEB3SIGNER_IMAGE:-$(jq -er '.images.web3signer.source' "$runtime_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-validator-runtime-web3signer#")}"
 postgres_image="${DEFAULT_POSTGRES_IMAGE:-$(jq -er '.images.postgres.source' "$runtime_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-validator-runtime-postgres#")}"
-prysm_image="${DEFAULT_PRYSM_IMAGE:-$(jq -er '[.images[] | select(.component == "prysm-validator" and .activation_approved == true) | .private_image][0]' "$client_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-validator-prysm#")}"
+prysm_image="${DEFAULT_PRYSM_IMAGE:-$(jq -er '([.images[] | select(.component == "prysm-validator" and .activation_approved == true and .release_channel == "manual-native-mtls")] + [.images[] | select(.component == "prysm-validator" and .activation_approved == true)]) | .[0].private_image' "$client_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-validator-prysm#")}"
 [ "$prysm_image" != null ] && [ -n "$prysm_image" ] || { printf '%s\n' 'approved Prysm activation image is missing' >&2; exit 65; }
 printf 'Using release-approved images:\n  Web3Signer %s\n  PostgreSQL %s\n  Prysm %s\n' "$(display_digest "$web3signer_image")" "$(display_digest "$postgres_image")" "$(display_digest "$prysm_image")" >&2
 if [ -n "$DEFAULT_FENCE_IMAGE" ]; then
@@ -386,6 +386,18 @@ printf '%s\n' 'Next ceremony: Vault v2 recovery. Recovery shares will be request
 "$bundle_root/source/scripts/ops/recover-and-bootstrap-hoodi-vault-v2.sh" --validator-set "$validator_set"
 
 "$release" custody apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --keystore-dir "$keystore_dir_for_custody" --ceremony-dir "$output_dir/ceremony"
+
+step 'Applying Vault-backed validator runtime'
+runtime_manifest="$inputs/validator-deployment/runtime.yaml"
+client_manifest="$inputs/validator-deployment/client-and-fence.yaml"
+[ -f "$runtime_manifest" ] && [ ! -L "$runtime_manifest" ] && [ -f "$client_manifest" ] && [ ! -L "$client_manifest" ] || {
+  printf '%s\n' 'staged validator runtime manifests are missing' >&2
+  exit 65
+}
+printf '%s\n' 'Synchronizing the public Vault CA trust anchor and applying non-secret manifests.' >&2
+"$source_root/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$source_root/scripts/ops/ensure-vault-agent-ca.sh" --namespace validator-operations --namespace node-operator
+cat "$runtime_manifest" "$client_manifest" | "$source_root/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" kubectl apply -f - >/dev/null
+printf '%s\n' 'PASS: Vault-backed runtime is staged; signer, validator client, and fence remain at their guarded replica counts.' >&2
 
 step 'Collecting signer and Beacon evidence'
 mkdir -m 700 "$output_dir/evidence"

@@ -16,4 +16,4 @@ parameters:
   encrypted: "true"
   # The T-2 baseline creates this alias for its EBS KMS key. A build integration
   # must resolve it in the approved account before this manifest is applied.
-  kmsKeyId: alias/node-operator-baseline-ebs
+  kmsKeyId: alias/node-op-2609120620-baseline-ebs

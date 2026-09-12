@@ -12,4 +12,4 @@ volumeBindingMode: WaitForFirstConsumer
 parameters:
   type: gp3
   encrypted: "true"
-  kmsKeyId: alias/node-operator-baseline-ebs
+  kmsKeyId: alias/node-op-2609120620-baseline-ebs

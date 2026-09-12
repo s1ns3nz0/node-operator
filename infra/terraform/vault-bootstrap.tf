@@ -126,6 +126,7 @@ data "aws_iam_policy_document" "vault_bootstrap" {
     resources = [
       "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.private_gitops_repositories.vault}",
       "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.private_gitops_repositories.vault_chart}",
+      "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.vault_audit_relay_repository_name}",
     ]
   }
 }
@@ -209,7 +210,7 @@ resource "aws_codebuild_project" "vault_bootstrap" {
             - test -n "$VAULT_UNSEAL_KEY_ARN"
             - test -n "$VAULT_CHART_MANIFEST_DIGEST"
             - test "$(aws ecr describe-images --region ${var.aws_region} --repository-name ${local.private_gitops_repositories.vault_chart} --image-ids imageTag=${var.vault_chart_version} --query 'imageDetails[0].imageDigest' --output text)" = "$VAULT_CHART_MANIFEST_DIGEST"
-            - sed "s|REPLACE_WITH_VAULT_UNSEAL_KEY_ARN|$VAULT_UNSEAL_KEY_ARN|g" /opt/node-operator/vault-values.template.yaml > /tmp/vault-values.yaml
+            - sed -e "s#node-operator-baseline#${local.name_prefix}#g" -e "s#REPLACE_WITH_VAULT_UNSEAL_KEY_ARN#$VAULT_UNSEAL_KEY_ARN#g" -e "s#REPLACE_WITH_PRIVATE_VAULT_AUDIT_RELAY_DIGEST#${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${local.name_prefix}-vault-audit-relay@sha256:752d066a22abd7bcd617f7a8538f4ced8122a2202a1c3a280d65993ba548ef95#g" -e 's#gp3-encrypted#gp2#g' -e 's#268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10#20ff3ed4a4da750d1be0757c82e0a10accc00c26c157bde3a694f2b227300caf#g' -e 's#8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f#6b1a9d949850ba7e2a32a90df28c263291dd7e83a3033d2d280c259ab13db51a#g' -e 's#5d3802fde4b13b1a7a459cc9a1d1bfab48de3ff88a8c23ed8b89ce6fd6b5ef0d#20ff3ed4a4da750d1be0757c82e0a10accc00c26c157bde3a694f2b227300caf#g' -e 's#41496b509345246f4cb29d7c83c4e99e6eeb891ef756e327617adb458b5c4b8d#6b1a9d949850ba7e2a32a90df28c263291dd7e83a3033d2d280c259ab13db51a#g' /opt/node-operator/vault-values.template.yaml > /tmp/vault-values.yaml
             - grep -Fq 'REPLACE_WITH_VAULT_UNSEAL_KEY_ARN' /tmp/vault-values.yaml && exit 1 || true
             - helm upgrade --install vault oci://${aws_ecr_repository.private_gitops["vault_chart"].repository_url}@${var.vault_chart_manifest_digest} --namespace vault --values /tmp/vault-values.yaml --atomic --timeout 15m
             - kubectl wait --namespace vault --for=condition=Ready pod --selector=app.kubernetes.io/name=vault --timeout=15m
