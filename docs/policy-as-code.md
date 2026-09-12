@@ -125,8 +125,8 @@ The initial portfolio tier blocks deterministic integrity failures: secrets, mis
 1. Establish policy layout, thin workflow convention, data schema, `opa test`, Conftest, script fixture tests, and JSON normalizer fixtures.
 2. Add required PR evidence producers: Gitleaks, OSV-Scanner, Semgrep, Checkov, and Zizmor.
 3. Add Rego commit/merge/build decisions and make their OPA result a required status check.
-4. Add scheduled GitHub posture collection and Scorecard evidence; never run it using untrusted fork code.
-5. Add Syft/Grype, Cosign verification, and SLSA provenance checks as a release-eligibility gate. It produces evidence but does not publish or deploy in this phase.
+4. Scheduled GitHub posture collection now runs the official OpenSSF Scorecard action from trusted source and archives bounded SARIF/JSON evidence; it never runs untrusted fork code.
+5. Release verification now adds GitHub-signed SLSA build provenance for the exact release bundle, alongside the existing Syft/Grype and Cosign evidence. The release-eligibility gate remains responsible for digest/source binding and does not deploy.
 6. Add rendered-manifest Conftest checks. Gatekeeper admission/audit integration remains disabled until AWS/EKS deployment is separately authorized.
 
 ## Evidence retention

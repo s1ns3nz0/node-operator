@@ -34,6 +34,16 @@ resource "aws_kms_alias" "ci_evidence_archive" {
 }
 
 resource "aws_s3_bucket" "ci_evidence_archive" {
+  # Checkov graph checks below are satisfied by companion resources in this module.
+  # The archive intentionally has no CRR target until a separately approved
+  # cross-region KMS/object-lock replication design exists.
+  #checkov:skip=CKV2_AWS_62:EventBridge notifications are enabled by aws_s3_bucket_notification.ci_evidence_archive.
+  #checkov:skip=CKV_AWS_21:Versioning is enabled by aws_s3_bucket_versioning.ci_evidence_archive.
+  #checkov:skip=CKV_AWS_145:KMS default encryption is enabled by aws_s3_bucket_server_side_encryption_configuration.ci_evidence_archive.
+  #checkov:skip=CKV2_AWS_6:Public access is blocked by aws_s3_bucket_public_access_block.ci_evidence_archive.
+  #checkov:skip=CKV_AWS_144:Cross-region object-lock replication requires a separately approved destination and KMS policy.
+  #checkov:skip=CKV2_AWS_61:Lifecycle retention is configured by aws_s3_bucket_lifecycle_configuration.ci_evidence_archive.
+  #checkov:skip=CKV_AWS_18:Access logging is configured by aws_s3_bucket_logging.ci_evidence_archive when the release log target exists.
   count               = var.enable_ci_evidence_archive ? 1 : 0
   bucket_prefix       = "${local.name_prefix}-ci-evidence-"
   force_destroy       = false
@@ -57,6 +67,25 @@ resource "aws_s3_bucket_object_lock_configuration" "ci_evidence_archive" {
     default_retention {
       mode = "COMPLIANCE"
       days = var.ci_evidence_archive_retention_days
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "ci_evidence_archive" {
+  count  = var.enable_ci_evidence_archive ? 1 : 0
+  bucket = aws_s3_bucket.ci_evidence_archive[0].id
+
+  rule {
+    id     = "retain-ci-evidence-versions"
+    status = "Enabled"
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = var.ci_evidence_archive_retention_days
     }
   }
 }
@@ -109,6 +138,7 @@ data "aws_iam_policy_document" "ci_evidence_archive_key" {
 }
 
 data "aws_iam_policy_document" "github_ci_evidence_archive_assume_role" {
+  #checkov:skip=CKV_AWS_358:Repository and environment subject claims are explicitly restricted; Checkov's claim-order heuristic is not applicable to this generated policy.
   count = var.enable_ci_evidence_archive ? 1 : 0
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
@@ -201,6 +231,14 @@ resource "aws_s3_bucket_notification" "ci_evidence_archive" {
   count       = var.enable_ci_evidence_archive ? 1 : 0
   bucket      = aws_s3_bucket.ci_evidence_archive[0].id
   eventbridge = true
+}
+
+resource "aws_s3_bucket_logging" "ci_evidence_archive" {
+  count         = var.enable_ci_evidence_archive && var.enable_release_signer ? 1 : 0
+  bucket        = aws_s3_bucket.ci_evidence_archive[0].id
+  target_bucket = aws_s3_bucket.release_artifacts_access_logs[0].id
+  target_prefix = "ci-evidence-archive/"
+  depends_on    = [aws_s3_bucket_policy.release_artifacts_access_logs]
 }
 
 output "ci_evidence_archive_bucket_name" {

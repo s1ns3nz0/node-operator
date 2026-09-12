@@ -47,6 +47,8 @@ jobs:
     permissions:
       contents: read
       packages: read
+      id-token: write
+      attestations: write
     runs-on: ubuntu-24.04
     outputs:
       artifact_digest: ${{ steps.sca-binding.outputs.artifact_digest }}
@@ -73,6 +75,11 @@ jobs:
           PATH="$RUNNER_TEMP/release-sca-bin:$PATH" scripts/ci/scan-release-sbom.sh \
             "$RUNNER_TEMP/current/sbom.cyclonedx.json" \
             "$RUNNER_TEMP/current/sbom-sca.json"
+      # Role: Generate GitHub's signed SLSA build provenance for the exact release bundle.
+      - name: SLSA build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/current/node-operator-release-bundle.tar
       # Role: Upload the scan summary as release evidence, not as an approval by itself.
       - name: Release SBOM SCA evidence
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
