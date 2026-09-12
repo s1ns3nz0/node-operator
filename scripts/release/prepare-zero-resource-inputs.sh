@@ -68,7 +68,7 @@ jq -n --arg account "$account" --arg name "$name" --arg region "$aws_region" --a
 jq -n --arg name "$name" --arg region "$aws_region" --argjson zones "$(printf '%s\n' "${availability_zones[@]}" | jq -R . | jq -s .)" '{aws_region:$region,name:$name,network_mode:"fresh",availability_zones:$zones}' > "$foundation"
 audit_replica_region='ap-northeast-1'; [ "$aws_region" = 'ap-northeast-1' ] && audit_replica_region='ap-northeast-2'
 jq -n --arg account "$account" --arg name "$name" --arg region "$aws_region" --arg apply_role "${principals[0]}" --arg audit_replica_region "$audit_replica_region" --argjson zones "$(printf '%s\n' "${availability_zones[@]}" | jq -R . | jq -s .)" --argjson manage_config_recorder "$manage_config_recorder" '
-  {aws_account_id:$account,aws_region:$region,terraform_apply_role_arn:$apply_role,audit_replica_region:$audit_replica_region,availability_zones:$zones,name:$name,enable_gitops_client_ecr_publisher:true,
+  {aws_account_id:$account,aws_region:$region,terraform_apply_role_arn:$apply_role,audit_replica_region:$audit_replica_region,availability_zones:$zones,name:$name,enable_gitops_client_ecr_publisher:true,enable_validator_runtime_ecr_mirror:true,enable_validator_client_ecr_mirror:true,
    manage_config_recorder:$manage_config_recorder,
    enable_temporary_ssm_ops_host:false,temporary_ssm_ops_host_termination_at:"",
    enable_argocd_bootstrap_runner:false,enable_argocd_bootstrap_cluster_admin:false,

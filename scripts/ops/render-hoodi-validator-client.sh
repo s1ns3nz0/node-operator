@@ -14,7 +14,13 @@ printf '%s\n' "$fence_image" | grep -Eq "^${aws_account_id}\\.dkr\\.ecr\\.${aws_
 printf '%s\n' "$kubernetes_api_cidr" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}/32$' || { printf '%s\n' 'Kubernetes API CIDR must be one explicit IPv4 /32' >&2; exit 65; }
 for command in sed mkdir mktemp mv grep dirname unlink jq; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"; template="$root/deploy/validator/client-template.yaml"; fence_template="$root/deploy/validator/client-lease-fence-template.yaml"
-jq -e --arg image "$image" --arg account "$aws_account_id" --arg region "$aws_region" '.schema_version == 2 and any(.images[]; .private_image == $image and (.private_image | startswith($account + ".dkr.ecr." + $region + ".amazonaws.com/")) and .stage_approved == true and (.release_channel == "upstream-mirror" or .release_channel == "manual-native-mtls"))' "$root/.ci/validator/approved-client-images.json" >/dev/null || { printf '%s\n' 'private Prysm image is not an exact stage-approved reviewed artifact for this account and region' >&2; exit 65; }
+jq -e --arg image "$image" --arg account "$aws_account_id" --arg region "$aws_region" '
+  ($image | split("@")[1]) as $digest |
+  .schema_version == 2 and any(.images[];
+    (.private_image | split("@")[1]) == $digest and
+    ($image | startswith($account + ".dkr.ecr." + $region + ".amazonaws.com/")) and
+    .stage_approved == true and (.release_channel == "upstream-mirror" or .release_channel == "manual-native-mtls"))
+' "$root/.ci/validator/approved-client-images.json" >/dev/null || { printf '%s\n' 'private Prysm digest is not stage-approved for this release' >&2; exit 65; }
 mkdir -p "$(dirname "$output")"; temporary="$(mktemp "${output}.tmp.XXXXXX")"
 cleanup() { set +e; [ -z "${temporary:-}" ] || [ ! -e "$temporary" ] || unlink "$temporary" 2>/dev/null || true; }; trap cleanup EXIT INT TERM
 sed -e "s|REPLACE_WITH_VALIDATOR_SET|${validator_set}|g" -e "s|REPLACE_WITH_SIGNING_FENCE_IMAGE|${fence_image}|g" -e "s|REPLACE_WITH_KUBERNETES_API_CIDR|${kubernetes_api_cidr}|g" "$fence_template" > "$temporary"

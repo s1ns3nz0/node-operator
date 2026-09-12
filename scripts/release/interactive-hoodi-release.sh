@@ -132,19 +132,19 @@ if [ -f "$platform_approval" ]; then
   [ "$approval_schema" = 1 ] || { printf '%s\n' 'platform artifact approval is malformed' >&2; exit 65; }
   if [ -z "$DEFAULT_ARGOCD_BOOTSTRAP_IMAGE" ]; then
     argo_digest="$(jq -er '.artifacts.argocd_bootstrap.source | split("@")[-1]' "$platform_approval")"
-    DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-gitops-argocd@${argo_digest}"
+    DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="${account}.dkr.ecr.${region}.amazonaws.com/${deployment_name}-baseline-gitops-argocd@${argo_digest}"
   fi
   if [ -z "$DEFAULT_VAULT_BOOTSTRAP_IMAGE" ]; then
     vault_digest="$(jq -er '.artifacts.vault_bootstrap.source | split("@")[-1]' "$platform_approval")"
-    DEFAULT_VAULT_BOOTSTRAP_IMAGE="${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-gitops-vault@${vault_digest}"
+    DEFAULT_VAULT_BOOTSTRAP_IMAGE="${account}.dkr.ecr.${region}.amazonaws.com/${deployment_name}-baseline-gitops-vault@${vault_digest}"
   fi
 fi
 runtime_images="$source_root/.ci/validator/approved-runtime-images.json"
 client_images="$source_root/.ci/validator/approved-client-images.json"
 [ -f "$runtime_images" ] && [ -f "$client_images" ] || { printf '%s\n' 'release bundle lacks canonical approved image records' >&2; exit 65; }
-web3signer_image="${DEFAULT_WEB3SIGNER_IMAGE:-$(jq -er '.images.web3signer.source' "$runtime_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-validator-runtime-web3signer#")}"
-postgres_image="${DEFAULT_POSTGRES_IMAGE:-$(jq -er '.images.postgres.source' "$runtime_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-validator-runtime-postgres#")}"
-prysm_image="${DEFAULT_PRYSM_IMAGE:-$(jq -er '([.images[] | select(.component == "prysm-validator" and .activation_approved == true and .release_channel == "manual-native-mtls")] + [.images[] | select(.component == "prysm-validator" and .activation_approved == true)]) | .[0].private_image' "$client_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-validator-prysm#")}"
+web3signer_image="${DEFAULT_WEB3SIGNER_IMAGE:-$(jq -er '.images.web3signer.source' "$runtime_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/${deployment_name}-baseline-validator-runtime-web3signer#")}"
+postgres_image="${DEFAULT_POSTGRES_IMAGE:-$(jq -er '.images.postgres.source' "$runtime_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/${deployment_name}-baseline-validator-runtime-postgres#")}"
+prysm_image="${DEFAULT_PRYSM_IMAGE:-$(jq -er '([.images[] | select(.component == "prysm-validator" and .activation_approved == true and .release_channel == "manual-native-mtls")] + [.images[] | select(.component == "prysm-validator" and .activation_approved == true)]) | .[0].private_image' "$client_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/${deployment_name}-baseline-validator-prysm#")}"
 [ "$prysm_image" != null ] && [ -n "$prysm_image" ] || { printf '%s\n' 'approved Prysm activation image is missing' >&2; exit 65; }
 printf 'Using release-approved images:\n  Web3Signer %s\n  PostgreSQL %s\n  Prysm %s\n' "$(display_digest "$web3signer_image")" "$(display_digest "$postgres_image")" "$(display_digest "$prysm_image")" >&2
 if [ -n "$DEFAULT_FENCE_IMAGE" ]; then
@@ -157,7 +157,7 @@ fi
 # Re-home that immutable digest to the selected account/Region so a fresh
 # Region can mirror it without requiring the operator to edit a registry URL.
 if [[ "$fence_image" =~ ^[0-9]{12}\.dkr\.ecr\.[a-z]{2}-[a-z0-9-]+-[0-9]+\.amazonaws\.com/(.+@sha256:[a-f0-9]{64})$ ]]; then
-  fence_image="${account}.dkr.ecr.${region}.amazonaws.com/${BASH_REMATCH[1]}"
+  fence_image="${account}.dkr.ecr.${region}.amazonaws.com/$(printf '%s' "${BASH_REMATCH[1]}" | sed "s#^node-operator-baseline#${deployment_name}-baseline#")"
   printf 'Resolved signing-fence digest for selected Region: %s\n' "$(display_digest "$fence_image")" >&2
 fi
 # The signing-fence policy targets the private EKS API endpoint, which does not
@@ -338,8 +338,8 @@ if [ "${#bootstrap_mirror_images[@]}" -gt 0 ]; then
   printf '%s' "$ecr_auth" | DOCKER_CONFIG="$docker_config" docker login --username AWS --password-stdin "$registry" >/dev/null
   for destination in "${bootstrap_mirror_images[@]}"; do
     case "$destination" in
-      *node-operator-baseline-gitops-argocd@*) key=argocd_bootstrap ;;
-      *node-operator-baseline-gitops-vault@*) key=vault_bootstrap ;;
+      *-baseline-gitops-argocd@*) key=argocd_bootstrap ;;
+      *-baseline-gitops-vault@*) key=vault_bootstrap ;;
       *) printf 'unrecognized bootstrap destination: %s\n' "$destination" >&2; exit 65 ;;
     esac
     source_image="$(jq -er --arg key "$key" '.artifacts[$key].source' "$platform_approval")"
