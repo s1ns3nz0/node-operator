@@ -85,13 +85,7 @@ resource "aws_kms_key" "state" {
     )
   })
   tags = local.tags
-  lifecycle {
-    prevent_destroy = true
-    # Existing bootstrap tables may already be encrypted with an AWS-managed
-    # key. Do not block a fresh-region import on a long-running SSE migration;
-    # newly created tables still use the customer-managed key above.
-    ignore_changes = [server_side_encryption]
-  }
+  lifecycle { prevent_destroy = true }
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "state" {
@@ -113,7 +107,13 @@ resource "aws_s3_bucket" "state_access_logs" {
   bucket        = "${substr(local.state_bucket, 0, 48)}-${substr(sha256(local.state_bucket), 0, 8)}-logs"
   force_destroy = false
   tags          = local.tags
-  lifecycle { prevent_destroy = true }
+  lifecycle {
+    prevent_destroy = true
+    # Existing bootstrap tables may already be encrypted with an AWS-managed
+    # key. Do not block a fresh-region import on a long-running SSE migration;
+    # newly created tables still use the customer-managed key above.
+    ignore_changes = [server_side_encryption]
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "state_access_logs" {
