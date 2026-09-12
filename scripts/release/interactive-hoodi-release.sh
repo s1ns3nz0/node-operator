@@ -45,7 +45,7 @@ if [ -n "$env_file" ]; then
   while IFS='=' read -r key value; do
     key="${key%%[[:space:]]*}"; value="${value##[[:space:]]}"
     case "$key" in ''|'#'*) continue ;; esac
-    case "$key" in REGION) DEFAULT_REGION="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; esac
+    case "$key" in REGION) DEFAULT_REGION="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; CLIENT_CHART_SOURCE_REGION) DEFAULT_CLIENT_CHART_SOURCE_REGION="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; esac
   done < "$env_file"
 fi
 DEFAULT_REGION="${DEFAULT_REGION:-ap-northeast-2}"
@@ -61,6 +61,7 @@ DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="${DEFAULT_ARGOCD_BOOTSTRAP_IMAGE:-}"
 DEFAULT_VAULT_BOOTSTRAP_IMAGE="${DEFAULT_VAULT_BOOTSTRAP_IMAGE:-}"
 DEFAULT_CLIENT_CHART_VERSION="${DEFAULT_CLIENT_CHART_VERSION:-}"
 DEFAULT_CLIENT_CHART_DIGEST="${DEFAULT_CLIENT_CHART_DIGEST:-}"
+DEFAULT_CLIENT_CHART_SOURCE_REGION="${DEFAULT_CLIENT_CHART_SOURCE_REGION:-ap-northeast-2}"
 DEFAULT_VAULT_CHART_VERSION="${DEFAULT_VAULT_CHART_VERSION:-0.31.0}"
 DEFAULT_VAULT_CHART_DIGEST="${DEFAULT_VAULT_CHART_DIGEST:-sha256:85cfa6b40396a198a104fbf06c7cccaf75428db7201394f9061c272441bcd0e4}"
 
@@ -194,8 +195,18 @@ fi
 
 platform_script="$source_root/scripts/release/run-platform-bootstrap.sh"
 [ -x "$platform_script" ] || { printf '%s\n' 'release bundle lacks the unified platform bootstrap helper' >&2; exit 65; }
-client_chart_version="${DEFAULT_CLIENT_CHART_VERSION:-$(prompt 'Published node-operator-client chart version (0.1.N)')}"
-client_chart_digest="${DEFAULT_CLIENT_CHART_DIGEST:-$(prompt 'Published node-operator-client chart manifest digest (sha256:...)')}"
+client_chart_version="$DEFAULT_CLIENT_CHART_VERSION"
+client_chart_digest="$DEFAULT_CLIENT_CHART_DIGEST"
+if [ -z "$client_chart_version" ] || [ -z "$client_chart_digest" ]; then
+  source_chart_digest="$(aws ecr describe-images --region "$DEFAULT_CLIENT_CHART_SOURCE_REGION" --repository-name node-operator-baseline-gitops-client/node-operator-client --image-ids imageTag=0.1.37 --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
+  if [[ "$source_chart_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+    client_chart_version="${client_chart_version:-0.1.37}"
+    client_chart_digest="${client_chart_digest:-$source_chart_digest}"
+    printf 'Using verified chart from %s: %s@%s\n' "$DEFAULT_CLIENT_CHART_SOURCE_REGION" "$client_chart_version" "$client_chart_digest" >&2
+  fi
+fi
+client_chart_version="${client_chart_version:-$(prompt 'Published node-operator-client chart version (0.1.N)')}"
+client_chart_digest="${client_chart_digest:-$(prompt 'Published node-operator-client chart manifest digest (sha256:...)')}"
 zero_inputs="$(jq -er '.zero_resource_inputs' "$inputs")"
 baseline_config="$(jq -er '.baseline_config' "$zero_inputs")"
 platform_subnets=()
