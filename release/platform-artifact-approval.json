@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "release": "0.1.20",
+  "artifacts": {
+    "argocd_bootstrap": {
+      "source": "ghcr.io/s1ns3nz0/node-operator/argocd-bootstrap@sha256:0e2c0f21b1d68945b2470a3a13f675ae205b06edc5e543d222105aa7fffbfa6f",
+      "destination_repository": "node-operator-baseline-gitops-argocd",
+      "purpose": "Private Argo CD bootstrap toolchain approved by the v0.1.20 GitOps catalog"
+    },
+    "vault_bootstrap": {
+      "source": "ghcr.io/s1ns3nz0/node-operator/vault-bootstrap@sha256:2fb3d5c45851a592254a912b5d630b0d3507559d767779ddfdcc280a686602ff",
+      "destination_repository": "node-operator-baseline-gitops-vault",
+      "purpose": "Private Vault bootstrap toolchain using the Vault binary for injected agents"
+    }
+  }
+}

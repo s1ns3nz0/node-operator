@@ -85,6 +85,19 @@ validator_set="$(prompt_default 'Validator set' "$DEFAULT_VALIDATOR_SET")"
 withdrawal="$(prompt_default 'Withdrawal address' "$DEFAULT_WITHDRAWAL")"
 identity="$(aws sts get-caller-identity --output json)"
 account="$(jq -er '.Account | select(test("^[0-9]{12}$"))' <<<"$identity")" || { printf '%s\n' 'AWS identity did not return a 12-digit account' >&2; exit 65; }
+platform_approval="$source_root/release/platform-artifact-approval.json"
+if [ -f "$platform_approval" ]; then
+  approval_schema="$(jq -er '.schema_version' "$platform_approval" 2>/dev/null || true)"
+  [ "$approval_schema" = 1 ] || { printf '%s\n' 'platform artifact approval is malformed' >&2; exit 65; }
+  if [ -z "$DEFAULT_ARGOCD_BOOTSTRAP_IMAGE" ]; then
+    argo_digest="$(jq -er '.artifacts.argocd_bootstrap.source | split("@")[-1]' "$platform_approval")"
+    DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-gitops-argocd@${argo_digest}"
+  fi
+  if [ -z "$DEFAULT_VAULT_BOOTSTRAP_IMAGE" ]; then
+    vault_digest="$(jq -er '.artifacts.vault_bootstrap.source | split("@")[-1]' "$platform_approval")"
+    DEFAULT_VAULT_BOOTSTRAP_IMAGE="${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-gitops-vault@${vault_digest}"
+  fi
+fi
 runtime_images="$source_root/.ci/validator/approved-runtime-images.json"
 client_images="$source_root/.ci/validator/approved-client-images.json"
 [ -f "$runtime_images" ] && [ -f "$client_images" ] || { printf '%s\n' 'release bundle lacks canonical approved image records' >&2; exit 65; }
