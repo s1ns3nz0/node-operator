@@ -59,6 +59,7 @@ class BootstrapCleanup(unittest.TestCase):
                 path.chmod(0o700)
             vault.write_text("""#!/bin/bash
 case "$*" in
+  *"status -format=json"*) echo '{"initialized":true,"sealed":false,"version":"1.18.0"}' ;;
   *"generate-root -status"*) echo '{"started":false}' ;;
   *"generate-root -init"*) echo '{"nonce":"n","otp":"o","required":1}' ;;
   *"generate-root -nonce="*) echo '{"complete":true,"encoded_token":"e"}' ;;

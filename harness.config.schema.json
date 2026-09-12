@@ -1,1 +1,15 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["schemaVersion","project","paperthin","models","policies","graphs","adapters"],"properties":{"schemaVersion":{"const":1},"project":{"type":"object"},"paperthin":{"type":"object"},"models":{"type":"object"},"policies":{"type":"object"},"graphs":{"type":"object"},"adapters":{"type":"object"}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Node Operator harness configuration",
+  "type": "object",
+  "required": ["schemaVersion", "project", "paperthin", "models", "policies", "adapters"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "project": {"type": "object", "required": ["name", "description"]},
+    "paperthin": {"type": "object", "required": ["source", "ref"]},
+    "models": {"type": "object", "required": ["tiers", "fallback", "recordFallbacks"]},
+    "policies": {"type": "object", "required": ["externalActions", "worktreesRequiredForMutations", "humanApprovalForPromotedLearnings", "ambiguityResolution", "admissibility", "roleQuality", "knowledgeSteward", "requirementsSteward", "solidReview", "showDontTell"]},
+    "graphs": {"type": "object", "required": ["directory", "requiredWhen"]},
+    "adapters": {"type": "object", "required": ["active", "definitions"]}
+  }
+}

@@ -23,13 +23,14 @@ done
 
 grep -Fqx '  enabled: true' "$values" || fail 'cert-manager CRDs must be enabled'
 grep -Fq 'kind: Secret' "$tls" && fail 'TLS manifest must not create a Secret directly'
-for required in 'name: vault-selfsigned-bootstrap' 'name: vault-internal-ca' 'secretName: vault-internal-ca' 'name: vault-server-tls' 'secretName: vault-tls' 'rotationPolicy: Always' 'vault-2.vault-internal.vault.svc.cluster.local' 'client auth'; do
+for required in 'name: vault-selfsigned-bootstrap' 'name: vault-internal-ca' 'secretName: vault-internal-ca' 'name: vault-server-tls' 'secretName: vault-tls' 'rotationPolicy: Always' 'vault-2.vault-internal.vault.svc.cluster.local' 'vault-active.vault.svc' 'client auth'; do
   grep -Fq "$required" "$tls" || fail "TLS manifest omits $required"
 done
 
 for required in 'kind: NetworkPolicy' 'name: vault-ingress-private-only' 'node-operator.io/vault-client-access: "true"' 'node-operator.io/vault-client: "true"' 'port: 8201'; do
   grep -Fq "$required" "$network_policy" || fail "network policy omits $required"
 done
+grep -Fq 'rollout status statefulset/vault --timeout=15m' "$root/scripts/release/prepare-vault-bootstrap-tls.sh" || fail 'Vault readiness gate is missing'
 
 if rg -n -i '(secret(data)?\s*:|tls\.key:|BEGIN (CERTIFICATE|.*PRIVATE KEY))' "$values" "$tls" "$network_policy" "$runbook" >/dev/null; then
   fail 'TLS delivery inputs contain Secret data or key material'

@@ -90,6 +90,7 @@ spec:
       containers:
         - name: signing-fence
           image: REPLACE_WITH_SIGNING_FENCE_IMAGE
+          command: [/validator-signing-fence]
           args:
             - --listen=:9001
             - --health-listen=:9002

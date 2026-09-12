@@ -9,8 +9,11 @@
     "immutable_digest_required": true
   },
   "bootstrap": {
+    "interactive_infrastructure_schema": 1,
+    "interactive_ops_access_schema": 1,
+    "interactive_ops_verify_schema": 1,
     "entrypoint": "source/scripts/release/hoodi-validator-release.sh",
-    "supported_commands": ["verify", "interactive prepare", "interactive deploy", "infrastructure apply", "deploy apply", "activate apply", "ops-inputs prepare", "ops-access plan", "ops-access apply", "stage plan", "stage apply"],
+    "supported_commands": ["verify", "interactive prepare", "interactive deploy", "interactive custody", "infrastructure apply", "deploy apply", "custody apply", "evidence signer", "evidence beacon", "activate apply", "ops-inputs prepare", "ops-access plan", "ops-access apply", "stage plan", "stage apply", "stage verify"],
     "requires": ["AWS credentials for the approved account", "Terraform", "a reviewed non-secret tfvars file"],
     "forbidden_inputs": ["Kubernetes Secret data", "Vault token", "Vault recovery material", "validator private key or keystore", "withdrawal credential"]
   },

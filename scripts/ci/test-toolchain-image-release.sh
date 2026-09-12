@@ -63,8 +63,8 @@ chmod +x "$temporary_directory/bin/docker"
 output="$(cd "$root" && EXPECTED_INPUT_SHA="$expected_input_sha" GITHUB_REPOSITORY=s1ns3nz0/node-operator GITHUB_SHA=fixture PATH="$temporary_directory/bin:$PATH" .ci/toolchains/release-toolchain-image.sh terraform-validation .ci/toolchains/terraform-validation.Dockerfile)"
 test "$output" = 'terraform-validation image inputs are unchanged; skipping build and push'
 
-expected_bootstrap_input_sha="$({ sha256sum "$root/.ci/toolchains/argocd-bootstrap.Dockerfile" "$root/docs/gitops/argocd-private-values.example.yaml"; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
-output="$(cd "$root" && EXPECTED_INPUT_SHA="$expected_bootstrap_input_sha" GITHUB_REPOSITORY=s1ns3nz0/node-operator GITHUB_SHA=fixture PATH="$temporary_directory/bin:$PATH" .ci/toolchains/release-toolchain-image.sh argocd-bootstrap .ci/toolchains/argocd-bootstrap.Dockerfile docs/gitops/argocd-private-values.example.yaml)"
+expected_bootstrap_input_sha="$({ sha256sum "$root/.ci/toolchains/argocd-bootstrap.Dockerfile" "$root/docs/gitops/argocd-private-values.example.yaml" "$root/docs/gitops/cert-manager-values.example.yaml" "$root/docs/gitops/vault-tls-internal-ca.example.yaml"; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
+output="$(cd "$root" && EXPECTED_INPUT_SHA="$expected_bootstrap_input_sha" GITHUB_REPOSITORY=s1ns3nz0/node-operator GITHUB_SHA=fixture PATH="$temporary_directory/bin:$PATH" .ci/toolchains/release-toolchain-image.sh argocd-bootstrap .ci/toolchains/argocd-bootstrap.Dockerfile docs/gitops/argocd-private-values.example.yaml docs/gitops/cert-manager-values.example.yaml docs/gitops/vault-tls-internal-ca.example.yaml)"
 test "$output" = 'argocd-bootstrap image inputs are unchanged; skipping build and push'
 
 expected_vault_bootstrap_input_sha="$({ sha256sum "$root/.ci/toolchains/vault-bootstrap.Dockerfile" "$root/docs/gitops/vault-values.example.yaml"; } | awk '{print $1}' | sha256sum | awk '{print $1}')"

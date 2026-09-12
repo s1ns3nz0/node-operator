@@ -16,4 +16,4 @@ parameters:
   encrypted: "true"
   # The T-2 baseline creates this alias. Build integration resolves it in its
   # approved account; this local-only workload does not access AWS.
-  kmsKeyId: alias/node-operator-baseline-ebs
+  kmsKeyId: alias/node-op-2609120620-baseline-ebs

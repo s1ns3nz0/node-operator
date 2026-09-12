@@ -50,7 +50,9 @@ variable "gitops_client_chart_oci_digest" {
 }
 
 locals {
-  argocd_chart_version = "10.4.0"
+  argocd_chart_version               = "10.4.0"
+  cert_manager_chart_version         = "v1.21.1"
+  cert_manager_chart_manifest_digest = "sha256:62c4745561eccfd723678c6547500750ebef5a880d81ff670d33124ab335f877"
 }
 
 resource "aws_security_group" "argocd_bootstrap" {
@@ -152,6 +154,7 @@ data "aws_iam_policy_document" "argocd_bootstrap" {
     actions = [
       "ecr:BatchCheckLayerAvailability",
       "ecr:BatchGetImage",
+      "ecr:DescribeImages",
       "ecr:GetDownloadUrlForLayer",
     ]
     # Keep this existing pull scope independent from unrelated additions to the
@@ -159,7 +162,14 @@ data "aws_iam_policy_document" "argocd_bootstrap" {
     # already enforced by the private GitOps foundation.
     resources = [
       "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.private_gitops_repositories.argocd}",
+      "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.private_gitops_repositories.argocd_chart}",
+      "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.private_gitops_repositories.cert_manager}",
+      "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.private_gitops_repositories.cert_manager_chart}",
       aws_ecr_repository.gitops_client_chart[0].arn,
+      # The v0.1.x release contract points Argo at the immutable baseline
+      # chart repository. Keep this read-only ARN alongside the per-environment
+      # repository so a zero-resource bootstrap can consume an approved bundle.
+      "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/node-operator-baseline-gitops-client/node-operator-client",
     ]
   }
 }
@@ -239,8 +249,23 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
             - set -eu
             - aws eks update-kubeconfig --region ${var.aws_region} --name ${aws_eks_cluster.private.name}
             - aws ecr get-login-password --region ${var.aws_region} | helm registry login --username AWS --password-stdin ${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com
-            - helm upgrade --install argocd oci://${aws_ecr_repository.private_gitops["argocd"].repository_url} --version ${local.argocd_chart_version} --namespace argocd --create-namespace --values /opt/node-operator/argocd-private-values.yaml --atomic --timeout 10m
+            # The release image embeds reviewed values, while repository names
+            # are deployment-scoped. Rewrite only the non-secret ECR prefix at
+            # runtime so a zero-resource account never pulls another stack's
+            # images.
+            - sed -i 's#node-operator-baseline#${local.name_prefix}#g' /opt/node-operator/argocd-private-values.yaml /opt/node-operator/cert-manager-values.yaml
+            - helm upgrade --install argocd oci://${aws_ecr_repository.private_gitops["argocd_chart"].repository_url} --version ${local.argocd_chart_version} --namespace argocd --create-namespace --values /opt/node-operator/argocd-private-values.yaml --atomic --timeout 10m
             - kubectl wait --namespace argocd --for=condition=Available deployment/argocd-server --timeout=10m
+            - helm upgrade --install cert-manager oci://${aws_ecr_repository.private_gitops["cert_manager_chart"].repository_url}@${local.cert_manager_chart_manifest_digest} --version ${local.cert_manager_chart_version} --namespace cert-manager --create-namespace --values /opt/node-operator/cert-manager-values.yaml --atomic --timeout 10m
+            - kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager --timeout=10m
+            - kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager-webhook --timeout=10m
+            - kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager-cainjector --timeout=10m
+            - kubectl create namespace vault --dry-run=client -o yaml | kubectl apply -f -
+            - kubectl label namespace vault pod-security.kubernetes.io/enforce=restricted pod-security.kubernetes.io/enforce-version=latest pod-security.kubernetes.io/audit=restricted pod-security.kubernetes.io/audit-version=latest pod-security.kubernetes.io/warn=restricted pod-security.kubernetes.io/warn-version=latest --overwrite
+            - kubectl apply -f /opt/node-operator/vault-tls-internal-ca.yaml
+            - kubectl -n vault wait --for=condition=Ready certificate/vault-internal-ca --timeout=10m
+            - kubectl -n vault wait --for=condition=Ready certificate/vault-server-tls --timeout=10m
+            - kubectl -n vault get secret vault-tls -o name | grep -Fx 'secret/vault-tls'
             - test "$(aws ecr describe-images --region ${var.aws_region} --repository-name ${aws_ecr_repository.gitops_client_chart[0].name} --image-ids imageTag=${var.gitops_client_chart_version} --query 'imageDetails[0].imageDigest' --output text)" = "${var.gitops_client_chart_oci_digest}"
             - |
               cat <<'EOF' | kubectl apply -f -
@@ -298,7 +323,7 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
                 syncPolicy:
                   automated:
                     prune: false
-                    selfHeal: false
+                    selfHeal: true
                   syncOptions:
                     - CreateNamespace=false
               EOF

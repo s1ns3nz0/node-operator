@@ -23,3 +23,6 @@
 **/*.tfstate
 **/*.tfstate.*
 /.private-*.tfvars
+.env
+release/env
+/node-operator-run-*/

@@ -1,0 +1,8 @@
+{
+  "objective": "Make the interactive Hoodi release ask whether the operator completed the manual deposit and continue only after an affirmative response.",
+  "baseline": "v0.1.20",
+  "authorized": ["local script implementation", "read-only validation"],
+  "excluded": ["wallet interaction", "transaction broadcast", "secret collection"],
+  "completion": ["prompt is phrased as a completion question", "yes/예/완료 continues", "no or blank stops safely", "unrecognized input is reprompted", "shell and interactive contract tests pass"],
+  "integration_owner": "primary Luna session"
+}

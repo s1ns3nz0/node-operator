@@ -7,7 +7,6 @@ metadata:
     app.kubernetes.io/name: prysm-beacon
     app.kubernetes.io/part-of: hoodi-node
 spec:
-  clusterIP: None
   publishNotReadyAddresses: false
   selector:
     app.kubernetes.io/name: prysm-beacon
@@ -21,3 +20,7 @@ spec:
       port: 13000
       protocol: UDP
       targetPort: p2p-udp
+    - name: beacon-api
+      port: 3500
+      protocol: TCP
+      targetPort: 3500

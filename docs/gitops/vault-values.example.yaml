@@ -6,6 +6,7 @@ global:
   tlsDisable: false
 
 server:
+  enabled: true
   # The Terraform Pod Identity association is namespace=vault,
   # serviceAccount=vault. No AWS access keys are mounted in this chart.
   serviceAccount:
@@ -15,7 +16,7 @@ server:
     # The chart renders repository:tag, so retain the reviewed immutable ECR
     # tag while appending the matching manifest digest.
     repository: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault
-    tag: "268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10@sha256:268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10"
+    tag: "5d3802fde4b13b1a7a459cc9a1d1bfab48de3ff88a8c23ed8b89ce6fd6b5ef0d@sha256:5d3802fde4b13b1a7a459cc9a1d1bfab48de3ff88a8c23ed8b89ce6fd6b5ef0d"
   ha:
     enabled: true
     replicas: 3
@@ -61,7 +62,10 @@ server:
   dataStorage:
     enabled: true
     size: 20Gi
-    storageClass: gp3-encrypted
+    # Fresh EKS clusters expose the AWS-managed gp2 class by default. A
+    # deployment-specific encrypted class may be supplied by the platform
+    # bootstrap, but must never be assumed to exist.
+    storageClass: gp2
   resources:
     requests: {cpu: "500m", memory: "1Gi"}
     limits: {cpu: "2", memory: "2Gi"}
@@ -85,7 +89,7 @@ server:
   auditStorage:
     enabled: true
     size: 20Gi
-    storageClass: gp3-encrypted
+    storageClass: gp2
     accessMode: ReadWriteOnce
     labels:
       node-operator.io/encryption-policy: baseline-ebs-kms
@@ -136,15 +140,17 @@ server:
 # in-cluster workloads, and the private release-runner/CodeBuild paths.
 injector:
   enabled: true
+  # Leave externalVaultAddr unset: this release owns the in-cluster Vault
+  # server. The chart will point injected agents at the local active service.
   # This is the image injected into application Pods, distinct from the
   # injector webhook Deployment below. Pin it to the private mirror as well:
   # private EKS workers intentionally have no Docker Hub egress.
   agentImage:
     repository: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault
-    tag: "268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10@sha256:268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10"
+    tag: "5d3802fde4b13b1a7a459cc9a1d1bfab48de3ff88a8c23ed8b89ce6fd6b5ef0d@sha256:5d3802fde4b13b1a7a459cc9a1d1bfab48de3ff88a8c23ed8b89ce6fd6b5ef0d"
   image:
     repository: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault
-    tag: "8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f@sha256:8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f"
+    tag: "41496b509345246f4cb29d7c83c4e99e6eeb891ef756e327617adb458b5c4b8d@sha256:41496b509345246f4cb29d7c83c4e99e6eeb891ef756e327617adb458b5c4b8d"
   resources:
     requests: {cpu: "100m", memory: "128Mi"}
     limits: {cpu: "500m", memory: "512Mi"}

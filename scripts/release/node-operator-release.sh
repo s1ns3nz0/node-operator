@@ -1,6 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set -E
 umask 077
+
+if [ -t 2 ]; then
+  ui_reset=$'\033[0m'; ui_blue=$'\033[1;34m'; ui_green=$'\033[1;32m'; ui_red=$'\033[1;31m'; ui_yellow=$'\033[1;33m';
+else
+  ui_reset=''; ui_blue=''; ui_green=''; ui_red=''; ui_yellow=''
+fi
+release_stage='startup'; release_failed=0; release_last_command=''
+trap 'release_last_command="$BASH_COMMAND"' DEBUG
+release_stage() { release_stage="$1"; printf '\n%s▶ %s%s  %s%s%s\n' "$ui_blue" "$2" "$ui_reset" "$ui_blue" "$1" "$ui_reset" >&2; }
+release_error() { rc=$?; release_failed=1; printf '%s✖ failed:%s stage=%s exit=%s\n  command: %s\n' "$ui_red" "$ui_reset" "$release_stage" "$rc" "$BASH_COMMAND" >&2; return "$rc"; }
+trap release_error ERR
+release_failure() {
+  rc=$?
+  [ "$rc" -eq 0 ] || [ "$release_failed" -eq 1 ] || printf '\n%s✖ RELEASE FAILED%s  %s (exit %s)\n  last command: %s\n' "$ui_red" "$ui_reset" "$release_stage" "$rc" "$release_last_command" >&2
+}
+trap release_failure EXIT
 
 usage() {
   cat <<'USAGE'
@@ -48,9 +65,10 @@ done
 [ -f "$bundle_root/bundle-manifest.json" ] || fail "bundle root must contain bundle-manifest.json"
 require_command jq
 require_command shasum
-require_command rg
+require_command grep
 
 verify_bundle() {
+  release_stage 'bundle verification' '1/4'
   local bad=0 path expected actual
   while IFS=$'\t' read -r path expected; do
     [ -f "$bundle_root/$path" ] || { printf 'missing archived path: %s\n' "$path" >&2; bad=1; continue; }
@@ -65,10 +83,10 @@ verify_bundle() {
 
 reject_privileged_baseline_inputs() {
   local input="$1"
-  if rg -n '^[[:space:]]*enable_temporary_ssm_ops_host[[:space:]]*=[[:space:]]*true([[:space:]]|$)' "$input" >/dev/null; then
+  if grep -E -n '^[[:space:]]*enable_temporary_ssm_ops_host[[:space:]]*=[[:space:]]*true([[:space:]]|$)' "$input" >/dev/null; then
     fail "SSM operations access belongs to the isolated ops-access command"
   fi
-  if rg -n '^[[:space:]]*enable_(argocd|vault)_bootstrap_cluster_admin[[:space:]]*=[[:space:]]*true([[:space:]]|$)' "$input" >/dev/null; then
+  if grep -E -n '^[[:space:]]*enable_(argocd|vault)_bootstrap_cluster_admin[[:space:]]*=[[:space:]]*true([[:space:]]|$)' "$input" >/dev/null; then
     fail "temporary cluster-admin bootstrap requires its separately approved phase"
   fi
 }
@@ -76,7 +94,7 @@ reject_privileged_baseline_inputs() {
 require_nonsecret_file() {
   local input="$1"
   [ -f "$input" ] && [ ! -L "$input" ] || fail "configuration must name a regular non-secret file"
-  if rg -n -i '(vault[_-]?token|recovery[_-]?key|mnemonic|keystore|private[_-]?key|secret[_-]?access[_-]?key|aws_secret_access_key)[[:space:]]*=' "$input" >/dev/null; then
+  if grep -E -n -i '(vault[_-]?token|recovery[_-]?key|mnemonic|keystore|private[_-]?key|secret[_-]?access[_-]?key|aws_secret_access_key)[[:space:]]*=' "$input" >/dev/null; then
     fail "configuration contains a prohibited credential field"
   fi
 }
@@ -113,18 +131,41 @@ copy_module() {
 
 apply_phase() {
   local module="$1" phase_config="$2" backend_config="$3" plan_file="$4"
+  local apply_log apply_rc
   terraform -chdir="$module" init -input=false -backend-config="$backend_config"
   terraform -chdir="$module" plan -input=false -var-file="$phase_config" -out="$plan_file"
-  terraform -chdir="$module" apply -input=false "$plan_file"
+  apply_log="$(mktemp /private/tmp/node-operator-terraform-apply.XXXXXX)"
+  if terraform -chdir="$module" apply -input=false "$plan_file" 2>&1 | tee "$apply_log"; then
+    unlink "$apply_log"
+    return 0
+  fi
+  apply_rc=${PIPESTATUS[0]}
+  # EKS can briefly report ResourceNotFound for Pod Identity associations
+  # immediately after the control plane becomes ACTIVE. Re-plan once after a
+  # bounded delay so the release does not strand a partially created baseline.
+  if grep -q 'No cluster found for name:' "$apply_log"; then
+    printf '[terraform] EKS control plane propagation delay detected; waiting 30s and retrying %s apply.\n' "$module" >&2
+    sleep 30
+    terraform -chdir="$module" plan -input=false -var-file="$phase_config" -out="$plan_file"
+    terraform -chdir="$module" apply -input=false "$plan_file"
+    unlink "$apply_log"
+    return 0
+  fi
+  unlink "$apply_log"
+  return "$apply_rc"
 }
 
 zero_apply() {
+  release_stage 'zero-resource bootstrap' '2/4'
   if [ -n "$inputs" ]; then
     [ -z "$bootstrap_config$foundation_config$baseline_config" ] || fail "--inputs cannot be combined with individual phase configs"
     case "$inputs" in /*) ;; *) fail "--inputs must be an absolute path" ;; esac
     [ -f "$inputs" ] && [ ! -L "$inputs" ] || fail "--inputs must name a regular file"
     local input_parent expected_bootstrap expected_foundation expected_baseline
-    input_parent="$(cd "$(dirname "$inputs")" && pwd -P)"
+    # Preserve the path spelling recorded by the zero-resource handoff. On
+    # macOS /var is an alias of /private/var; canonicalizing here breaks the
+    # contract's exact path bindings even when every file exists.
+    input_parent="$(dirname "$inputs")"
     expected_bootstrap="$input_parent/bootstrap-state.tfvars.json"
     expected_foundation="$input_parent/foundation-network.tfvars.json"
     expected_baseline="$input_parent/baseline.tfvars.json"
@@ -144,9 +185,10 @@ zero_apply() {
     mkdir -p "$work_dir"; chmod 700 "$work_dir"
   fi
   require_command terraform
+  require_command aws
   require_nonsecret_file "$bootstrap_config"; require_nonsecret_file "$foundation_config"; require_nonsecret_file "$baseline_config"
   reject_privileged_baseline_inputs "$baseline_config"
-  if rg -n '^[[:space:]]*(network_source|foundation_network|hoodi_nat_gateway_id)[[:space:]]*=' "$baseline_config" >/dev/null; then
+  if grep -E -n '^[[:space:]]*(network_source|foundation_network|hoodi_nat_gateway_id)[[:space:]]*=' "$baseline_config" >/dev/null; then
     fail "zero apply derives foundation network inputs; remove network_source, foundation_network, and hoodi_nat_gateway_id from --baseline-config"
   fi
 
@@ -157,8 +199,31 @@ zero_apply() {
   if [ ! -f "$bootstrap_output" ]; then
     [ ! -e "$bootstrap_module" ] || fail "incomplete bootstrap checkpoint; use a new work directory"
     copy_module infra/bootstrap-state "$bootstrap_module"
+    printf '[bootstrap] Initializing Terraform provider...\n' >&2
     terraform -chdir="$bootstrap_module" init -input=false -backend=false
+    # A retry after an interrupted bootstrap may find the protected state
+    # buckets/table already present while the bootstrap state itself is not.
+    # Adopt only the deterministic, same-account resources; never delete or
+    # overwrite them. This makes retries idempotent after BucketAlreadyOwnedByYou.
+    # state_bucket_name is intentionally null for the generated deterministic
+    # name. Do not use jq -e here: an empty optional result is not an error.
+    state_bucket_name="$(jq -r '.state_bucket_name // empty' "$bootstrap_config")"
+    [ -n "$state_bucket_name" ] || state_bucket_name="$(jq -er '.name' "$bootstrap_config")-tfstate-$(jq -er '.aws_account_id' "$bootstrap_config")-$(jq -er '.aws_region' "$bootstrap_config" | tr -d '-')"
+    state_log_suffix="$(printf '%s' "$state_bucket_name" | shasum -a 256 | awk '{print substr($1,1,8)}')"
+    state_logs_bucket="${state_bucket_name:0:48}-${state_log_suffix}-logs"
+    bootstrap_state_list="$(terraform -chdir="$bootstrap_module" state list 2>/dev/null || true)"
+    if aws s3api head-bucket --bucket "$state_bucket_name" >/dev/null 2>&1 && ! grep -Fxq 'aws_s3_bucket.state' <<<"$bootstrap_state_list"; then
+      terraform -chdir="$bootstrap_module" import -input=false -var-file="$bootstrap_config" aws_s3_bucket.state "$state_bucket_name"
+    fi
+    if aws s3api head-bucket --bucket "$state_logs_bucket" >/dev/null 2>&1 && ! grep -Fxq 'aws_s3_bucket.state_access_logs' <<<"$bootstrap_state_list"; then
+      terraform -chdir="$bootstrap_module" import -input=false -var-file="$bootstrap_config" aws_s3_bucket.state_access_logs "$state_logs_bucket"
+    fi
+    if aws dynamodb describe-table --region "$(jq -er '.aws_region' "$bootstrap_config")" --table-name "$(jq -er '.name' "$bootstrap_config")-terraform-lock" >/dev/null 2>&1 && ! grep -Fxq 'aws_dynamodb_table.lock' <<<"$bootstrap_state_list"; then
+      terraform -chdir="$bootstrap_module" import -input=false -var-file="$bootstrap_config" aws_dynamodb_table.lock "$(jq -er '.name' "$bootstrap_config")-terraform-lock"
+    fi
+    printf '[bootstrap] Planning state resources...\n' >&2
     terraform -chdir="$bootstrap_module" plan -input=false -var-file="$bootstrap_config" -out="$work_dir/bootstrap.tfplan"
+    printf '[bootstrap] Applying state resources...\n' >&2
     terraform -chdir="$bootstrap_module" apply -input=false "$work_dir/bootstrap.tfplan"
     terraform -chdir="$bootstrap_module" output -json backend > "$bootstrap_output"
   fi

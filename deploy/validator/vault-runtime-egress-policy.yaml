@@ -28,3 +28,20 @@ spec:
       ports:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
+    # Validator clients also need the private Beacon REST API and the
+    # set-scoped signing fence. These are the only non-Vault workload paths.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: node-operator
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prysm-beacon
+      ports:
+        - {protocol: TCP, port: 3500}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: validator-signing-fence
+      ports:
+        - {protocol: TCP, port: 9001}

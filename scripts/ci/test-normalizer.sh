@@ -19,7 +19,7 @@ jq '.result.findings = [{path:"fixture.env", rule_id:"fixture-rule", Secret:"DO_
 mv "$temporary_directory/secret-bearing/gitleaks.next" "$temporary_directory/secret-bearing/gitleaks.json"
 "$script_dir/normalize-evidence.sh" "$temporary_directory/secret-bearing" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$root/policy/tests/fixtures/raw-evidence/clean/scm.json" "$temporary_directory/redacted.json"
 jq -e '.evidence.gitleaks.findings == [{path:"fixture.env",rule_id:"fixture-rule"}]' "$temporary_directory/redacted.json" >/dev/null
-if rg -l 'DO_NOT_PERSIST' "$temporary_directory/redacted.json" >/dev/null; then printf 'normalizer retained a secret-bearing Gitleaks field\n' >&2; exit 1; fi
+if grep -l 'DO_NOT_PERSIST' "$temporary_directory/redacted.json" >/dev/null; then printf 'normalizer retained a secret-bearing Gitleaks field\n' >&2; exit 1; fi
 if incomplete_output="$("$script_dir/normalize-evidence.sh" "$root/policy/tests/fixtures/raw-evidence/incomplete" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$root/policy/tests/fixtures/raw-evidence/clean/scm.json" "$temporary_directory/incomplete.json" 2>&1)"; then
   printf 'incomplete evidence fixture unexpectedly normalized\n' >&2
   exit 1

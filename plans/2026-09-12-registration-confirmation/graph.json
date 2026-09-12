@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "task_id": "2026-09-12-registration-confirmation",
+  "nodes": [
+    {"id": "inspect-gate", "status": "complete"},
+    {"id": "update-prompt", "status": "complete"},
+    {"id": "validate", "status": "complete"}
+  ],
+  "edges": [
+    {"from": "inspect-gate", "to": "update-prompt"},
+    {"from": "update-prompt", "to": "validate"}
+  ]
+}

@@ -30,6 +30,12 @@ variable "audit_replica_region" {
   }
 }
 
+variable "manage_config_recorder" {
+  description = "Create and own the account-regional AWS Config recorder. Set false when the account already has its single recorder."
+  type        = bool
+  default     = true
+}
+
 variable "name" {
   description = "Short, DNS-compatible name used to namespace baseline resources."
   type        = string

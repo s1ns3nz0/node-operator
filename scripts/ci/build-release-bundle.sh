@@ -39,7 +39,7 @@ path_is_in_release_boundary() {
     deploy/kyverno/kustomization.yaml|deploy/kyverno/policies/*.yaml)
       return 0
       ;;
-    deploy/base/*.yaml|deploy/prysm/*.yaml|deploy/nethermind/*.yaml|deploy/vault/*.hcl|deploy/vault/*.json|deploy/argocd/node-operator-client-application.yaml|deploy/validator/*.yaml|infra/terraform/*.tf|infra/terraform/*.json|infra/terraform/terraform.tfvars.example|infra/bootstrap-state/*.tf|infra/bootstrap-state/*.example|infra/foundation-network/*.tf|infra/foundation-network/*.example|infra/ops-access/*.tf|infra/ops-access/*.example|infra/ops-access/.terraform.lock.hcl|infra/baseline/*.tf|policy/data/*.rego|policy/data/*.json|policy/runtime/*.rego|policy/terraform/*.rego|policy/prysm/*.rego|policy/nethermind/hardening.rego|policy/schemas/*.json|policy/*.rego|release/*.json|release/*.example|.ci/validator/approved-client-images.json|scripts/ci/check-ops-access-ssm-retention-plan.sh|scripts/release/*.sh|scripts/ops/*.sh)
+    deploy/base/*.yaml|deploy/prysm/*.yaml|deploy/nethermind/*.yaml|deploy/vault/*.hcl|deploy/vault/*.json|deploy/argocd/node-operator-client-application.yaml|deploy/validator/*.yaml|docs/gitops/vault-tls-internal-ca.example.yaml|infra/terraform/*.tf|infra/terraform/*.json|infra/terraform/terraform.tfvars.example|infra/bootstrap-state/*.tf|infra/bootstrap-state/*.example|infra/foundation-network/*.tf|infra/foundation-network/*.example|infra/ops-access/*.tf|infra/ops-access/*.example|infra/ops-access/.terraform.lock.hcl|infra/baseline/*.tf|policy/data/*.rego|policy/data/*.json|policy/runtime/*.rego|policy/terraform/*.rego|policy/prysm/*.rego|policy/nethermind/hardening.rego|policy/schemas/*.json|policy/*.rego|release/*.json|release/*.example|.ci/validator/approved-client-images.json|.ci/validator/approved-runtime-images.json|scripts/ci/check-ops-access-ssm-retention-plan.sh|scripts/release/*.sh|scripts/release/*.py|scripts/ops/*.sh)
       return 0
       ;;
     *)
@@ -53,7 +53,7 @@ materialize_source_file() {
   mkdir -p "$stage_directory/source/$(dirname "$relative_path")"
   git -C "$root" show "$source_revision:$relative_path" > "$stage_directory/source/$relative_path"
   case "$relative_path" in
-    scripts/release/*.sh|scripts/ops/*|scripts/ci/check-ops-access-ssm-retention-plan.sh) chmod 0755 "$stage_directory/source/$relative_path" ;;
+    scripts/release/*.sh|scripts/release/*.py|scripts/ops/*|scripts/ci/check-ops-access-ssm-retention-plan.sh) chmod 0755 "$stage_directory/source/$relative_path" ;;
   esac
 }
 
@@ -67,7 +67,14 @@ kubectl kustomize "$stage_directory/source/deploy/nethermind" > "$stage_director
 # Kubernetes Secret objects and common private-key encodings do not belong in
 # a distributable release bundle.  This is a boundary check, not a substitute
 # for a secret scanner in CI.
-if rg -n --glob '*' '(^|[[:space:]])kind:[[:space:]]*Secret([[:space:]]|$)|-----BEGIN( [A-Z]+)? PRIVATE KEY-----|DO_NOT_PERSIST_' "$stage_directory" >/dev/null; then
+secret_pattern='(^|[[:space:]])kind:[[:space:]]*Secret([[:space:]]|$)|-----BEGIN( [A-Z]+)? PRIVATE KEY-----|DO_NOT_PERSIST_'
+if command -v rg >/dev/null 2>&1; then
+  secret_scan=(rg -n --glob '*')
+else
+  command -v grep >/dev/null 2>&1 || { printf '%s\n' 'missing command: rg or grep' >&2; exit 69; }
+  secret_scan=(grep -R -n -E)
+fi
+if "${secret_scan[@]}" "$secret_pattern" "$stage_directory" >/dev/null; then
   printf 'release bundle input crosses the non-sensitive artifact boundary\n' >&2
   exit 1
 fi

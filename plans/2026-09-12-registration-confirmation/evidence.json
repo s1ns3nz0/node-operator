@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "status": "complete",
+  "checks": [
+    {"command": "bash -n scripts/release/interactive-hoodi-release.sh", "result": "pass"},
+    {"command": "python3 scripts/ci/test-interactive-deploy.py", "result": "pass"},
+    {"command": "bash scripts/ci/test-hoodi-deposit-data-contract.sh", "result": "pass"},
+    {"command": "git diff --check", "result": "pass"}
+  ],
+  "secret_values_recorded": false
+}

@@ -65,6 +65,12 @@ data "aws_iam_policy_document" "ebs_csi_assume_role" {
   }
 }
 
+locals {
+  # Existing clusters may still reference this pre-baseline EBS key through
+  # the stable alias. Keep it readable during the one-way key migration.
+  legacy_ebs_kms_key_arn = "arn:aws:kms:${var.aws_region}:${var.aws_account_id}:key/284d9f2f-7ace-4313-bd0e-be1cb5b8ecb9"
+}
+
 resource "aws_iam_role" "ebs_csi" {
   name               = "${local.name_prefix}-ebs-csi"
   assume_role_policy = data.aws_iam_policy_document.ebs_csi_assume_role.json
@@ -93,13 +99,25 @@ data "aws_iam_policy_document" "ebs_csi" {
   }
 
   statement {
-    sid = "ManageOnlyCSIManagedVolumes"
+    sid = "CreateOnlyCSIManagedVolumes"
     actions = [
       "ec2:CreateVolume",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = [var.aws_region]
+    }
+  }
+
+  statement {
+    sid = "ManageOnlyCSIManagedVolumes"
+    actions = [
       "ec2:DeleteVolume",
       "ec2:AttachVolume",
       "ec2:DetachVolume",
-      "ec2:CreateTags",
       "ec2:DeleteTags",
       "ec2:ModifyVolume",
     ]
@@ -118,16 +136,32 @@ data "aws_iam_policy_document" "ebs_csi" {
     }
   }
 
+  # The CSI driver applies its Kubernetes ownership tags in a follow-up
+  # CreateTags call.  AWS does not include those request tags in every driver
+  # version, so keep the region boundary here and enforce ownership through
+  # the dedicated CSI role rather than rejecting legitimate volume creation.
+  statement {
+    sid       = "TagOnlyCSIManagedVolumes"
+    actions   = ["ec2:CreateTags"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = [var.aws_region]
+    }
+  }
+
   statement {
     sid       = "UseOnlyBaselineEBSKey"
     actions   = ["kms:Decrypt", "kms:DescribeKey", "kms:Encrypt", "kms:GenerateDataKeyWithoutPlaintext", "kms:ReEncrypt*"]
-    resources = [aws_kms_key.ebs.arn]
+    resources = distinct([aws_kms_key.ebs.arn, local.legacy_ebs_kms_key_arn])
   }
 
   statement {
     sid       = "CreateOnlyAWSResourceGrantsForBaselineEBSKey"
     actions   = ["kms:CreateGrant"]
-    resources = [aws_kms_key.ebs.arn]
+    resources = distinct([aws_kms_key.ebs.arn, local.legacy_ebs_kms_key_arn])
 
     condition {
       test     = "Bool"
@@ -173,7 +207,17 @@ data "aws_iam_policy_document" "vault_pod_assume_role" {
 
 data "aws_iam_policy_document" "vault_kms" {
   statement {
-    actions   = ["kms:Decrypt", "kms:DescribeKey", "kms:Encrypt", "kms:CreateGrant"]
+    actions   = ["kms:DescribeKey"]
+    resources = [aws_kms_key.vault.arn]
+  }
+
+  statement {
+    actions   = ["kms:Decrypt", "kms:Encrypt"]
+    resources = [aws_kms_key.vault.arn]
+  }
+
+  statement {
+    actions   = ["kms:CreateGrant"]
     resources = [aws_kms_key.vault.arn]
     condition {
       test     = "Bool"

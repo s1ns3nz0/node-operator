@@ -32,7 +32,8 @@ for required in \
   '            leader_client_cert_file = "/vault/userconfig/vault-tls/tls.crt"' \
   '            leader_client_key_file  = "/vault/userconfig/vault-tls/tls.key"' \
   '        seal "awskms" {' \
-  '          kms_key_id = "REPLACE_WITH_VAULT_UNSEAL_KEY_ARN"'; do
+  '          kms_key_id = "REPLACE_WITH_VAULT_UNSEAL_KEY_ARN"' \
+  '  externalVaultAddr: https://vault-active.vault.svc:8200'; do
   grep -Fqx "$required" "$values" || fail "Vault values missing required boundary: $required"
 done
 

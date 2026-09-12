@@ -6,12 +6,12 @@ umask 077
 # prepare-hoodi-validator-deployment.sh. It never initializes Vault, accepts
 # custody material, or starts the signer, client, or fence.
 usage() {
-  printf '%s\n' "usage: ${0##*/} plan|apply --handoff /absolute/validator-deployment-handoff.json [--private-eks-session-handoff /absolute/session.json]" >&2
+  printf '%s\n' "usage: ${0##*/} plan|apply|verify --handoff /absolute/validator-deployment-handoff.json [--private-eks-session-handoff /absolute/session.json]" >&2
   exit 64
 }
 
 operation="${1:-}"
-case "$operation" in plan|apply) ;; *) usage ;; esac
+case "$operation" in plan|apply|verify) ;; *) usage ;; esac
 shift
 handoff=''; private_eks_session_handoff=''
 while [ "$#" -gt 0 ]; do
@@ -23,9 +23,12 @@ while [ "$#" -gt 0 ]; do
 done
 case "$handoff" in /*) ;; *) usage ;; esac
 [ -f "$handoff" ] && [ ! -L "$handoff" ] || { printf '%s\n' 'handoff must be a regular file' >&2; exit 65; }
-command -v jq >/dev/null 2>&1 || { printf '%s\n' 'missing command: jq' >&2; exit 69; }
+for command in jq grep; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 
-parent="$(cd "$(dirname "$handoff")" && pwd -P)"
+# Preserve the handoff's recorded path spelling. macOS aliases /var to
+# /private/var, and canonicalizing here makes valid generated handoffs fail
+# exact manifest-path checks.
+parent="$(dirname "$handoff")"
 runtime="$parent/runtime.yaml"
 client="$parent/client-and-fence.yaml"
 [ -f "$runtime" ] && [ ! -L "$runtime" ] && [ -f "$client" ] && [ ! -L "$client" ] || {
@@ -38,6 +41,7 @@ validator_set="$(jq -er '
      (.validator_set | type == "string" and test("^hoodi-[a-z0-9][a-z0-9-]*$"))
   then .validator_set else error("invalid validator set") end
 ' "$handoff")" || { printf '%s\n' 'handoff is not a Hoodi validator deployment contract' >&2; exit 65; }
+namespace='validator-operations'
 jq -e --arg parent "$parent" --arg runtime "$runtime" --arg client "$client" '
   (.aws_account_id | test("^[0-9]{12}$")) and
   (.aws_region | test("^ap-northeast-(1|2)$")) and
@@ -52,7 +56,7 @@ jq -e --arg parent "$parent" --arg runtime "$runtime" --arg client "$client" '
 secret_kind='Sec''ret'
 private_key='PRIVATE'' KEY'
 nonpersistent='DO_NOT''_PERSIST_'
-if rg -n "(^|[[:space:]])kind:[[:space:]]*${secret_kind}([[:space:]]|$)|-----BEGIN( [A-Z]+)? ${private_key}-----|${nonpersistent}" "$runtime" "$client" >/dev/null; then
+if grep -E -n "(^|[[:space:]])kind:[[:space:]]*${secret_kind}([[:space:]]|$)|-----BEGIN( [A-Z]+)? ${private_key}-----|${nonpersistent}" "$runtime" "$client" >/dev/null; then
   printf '%s\n' 'staging input crosses the non-secret manifest boundary' >&2
   exit 65
 fi
@@ -61,7 +65,7 @@ if [ -n "$private_eks_session_handoff" ]; then
   case "$private_eks_session_handoff" in /*) ;; *) printf '%s\n' 'private EKS session handoff must be an absolute path' >&2; exit 65 ;; esac
   [ -f "$private_eks_session_handoff" ] && [ ! -L "$private_eks_session_handoff" ] || { printf '%s\n' 'private EKS session handoff must be a regular file' >&2; exit 65; }
   handoff_region="$(jq -er '.aws_region' "$handoff")"
-  session_cluster="$(jq -er --arg region "$handoff_region" '.schema_version == 1 and .aws_region == $region and (.cluster_name | select(test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")))' "$private_eks_session_handoff")" || { printf '%s\n' 'private EKS session handoff is invalid or points to another Region' >&2; exit 65; }
+  session_cluster="$(jq -er --arg region "$handoff_region" 'if .schema_version == 1 and .aws_region == $region and (.cluster_name | type == "string" and test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) then .cluster_name else empty end' "$private_eks_session_handoff")" || { printf '%s\n' 'private EKS session handoff is invalid or points to another Region' >&2; exit 65; }
   session_instance="$(jq -er '.ssm_ops_instance_id | select(test("^i-[0-9a-f]+$"))' "$private_eks_session_handoff")" || { printf '%s\n' 'private EKS session handoff lacks a valid SSM instance' >&2; exit 65; }
 fi
 
@@ -72,16 +76,37 @@ vault_egress_policy="$repository_root/deploy/validator/vault-runtime-egress-poli
 [ -f "$vault_egress_policy" ] && [ ! -L "$vault_egress_policy" ] || { printf '%s\n' 'dedicated validator Vault egress policy is missing or unsafe' >&2; exit 66; }
 if [ "${PRIVATE_EKS_SESSION:-}" != 1 ]; then
   if [ -n "$private_eks_session_handoff" ]; then
-    exec "$script_dir/../ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 AWS_REGION="$handoff_region" EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance" "$self" "$operation" --handoff "$handoff" --private-eks-session-handoff "$private_eks_session_handoff"
+    exec env AWS_REGION="$handoff_region" EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance" "$script_dir/../ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$self" "$operation" --handoff "$handoff" --private-eks-session-handoff "$private_eks_session_handoff"
   fi
   exec "$script_dir/../ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$self" "$operation" --handoff "$handoff"
 fi
 command -v kubectl >/dev/null 2>&1 || { printf '%s\n' 'missing command: kubectl' >&2; exit 69; }
 
+if [ "$operation" = verify ]; then
+  found=0
+  for target in \
+    "statefulset/validator-${validator_set}-slashing-db" \
+    "deployment/validator-${validator_set}-remote-signer" \
+    "statefulset/validator-${validator_set}-client" \
+    "deployment/validator-${validator_set}-signing-fence"; do
+    if kubectl -n "$namespace" get "$target" >/dev/null 2>&1; then found=1; fi
+  done
+  [ "$found" -eq 1 ] || { printf '%s\n' 'no staged validator resources found'; exit 3; }
+  db_replicas="$(kubectl -n "$namespace" get "statefulset/validator-${validator_set}-slashing-db" -o jsonpath='{.spec.replicas}' 2>/dev/null || true)"
+  signer_replicas="$(kubectl -n "$namespace" get "deployment/validator-${validator_set}-remote-signer" -o jsonpath='{.spec.replicas}' 2>/dev/null || true)"
+  client_replicas="$(kubectl -n "$namespace" get "statefulset/validator-${validator_set}-client" -o jsonpath='{.spec.replicas}' 2>/dev/null || true)"
+  fence_replicas="$(kubectl -n "$namespace" get "deployment/validator-${validator_set}-signing-fence" -o jsonpath='{.spec.replicas}' 2>/dev/null || true)"
+  [ "$db_replicas:$signer_replicas:$client_replicas:$fence_replicas" = '1:0:0:0' ] || {
+    printf '%s\n' 'existing validator resources do not preserve the expected runtime/fence boundary' >&2
+    exit 70
+  }
+  printf 'PASS: existing staged validator resources preserve the expected zero-replica activation boundary.\n'
+  exit 0
+fi
+
 # Fresh-set staging must never adopt an existing controller or lease. Check
 # before server-side dry-run too: otherwise Kubernetes reports low-level field
 # manager conflicts that conceal the actionable recovery/rotation boundary.
-namespace='validator-operations'
 for target in \
   "statefulset/validator-${validator_set}-slashing-db" \
   "deployment/validator-${validator_set}-remote-signer" \
@@ -96,6 +121,13 @@ done
 
 # The server-side dry run proves admission, RBAC, and schema compatibility
 # before an apply. It is run for both operations so apply has the same guard.
+if [ "$operation" = apply ]; then
+  # A zero-resource EKS cluster has no application namespaces yet. Create only
+  # the two bounded namespaces referenced by the staged manifests; this does
+  # not create workloads or cross the secret boundary.
+  kubectl create namespace "$namespace" --dry-run=client -o yaml | kubectl apply --server-side --field-manager=node-operator-release-stage -f - >/dev/null
+  kubectl create namespace node-operator --dry-run=client -o yaml | kubectl apply --server-side --field-manager=node-operator-release-stage -f - >/dev/null
+fi
 kubectl apply --server-side --field-manager=node-operator-release-stage --dry-run=server -f "$vault_egress_policy" -f "$runtime" -f "$client" >/dev/null
 if [ "$operation" = plan ]; then
   printf 'PASS: private EKS accepted non-secret staged manifests for %s; no resources were created.\n' "$validator_set"

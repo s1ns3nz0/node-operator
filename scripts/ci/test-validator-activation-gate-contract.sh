@@ -20,7 +20,7 @@ withdrawal_address="0x$(printf 'b%.0s' {1..40})"
 validator_set='hoodi-001'
 client="validator-${validator_set}-client"
 fence="validator-${validator_set}-signing-fence"
-client_image='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-prysm@sha256:8a1d48b8fddaf6a16d151743624e854bd8cf44267b41e97de53aa2506cd1494f'
+client_image='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-prysm@sha256:f35410bedf15c5a7b710769e1c67c5f77e74f75544fd51084f12d47082c457e3'
 now_epoch="$(date -u +%s)"
 
 timestamp() { jq -nr --argjson epoch "$1" '$epoch | strftime("%Y-%m-%dT%H:%M:%S.123Z")'; }

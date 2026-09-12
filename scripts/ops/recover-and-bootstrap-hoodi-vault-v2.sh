@@ -31,7 +31,7 @@ elif [ "$prepare_existing" = true ]; then
 elif [ -n "$output" ] || [ -n "$preparation" ]; then usage; fi
 
 if [ "${PRIVATE_VAULT_SESSION:-}" != 1 ]; then
-  exec "$dir/with-private-vault.sh" -- env PRIVATE_VAULT_SESSION=1 "$0" "${args[@]}"
+  exec "$dir/with-private-vault.sh" -- env PRIVATE_VAULT_TARGET=pod/vault-0 PRIVATE_VAULT_SESSION=1 "$0" "${args[@]}"
 fi
 for command in vault jq seq; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 
@@ -78,13 +78,80 @@ trap 'exit 129' HUP
 
 # shellcheck source=scripts/ops/lib/vault-recovery-auth.sh
 source "$dir/lib/vault-recovery-auth.sh"
-vault_recovery_auth_preflight
+vault_status_json="$(vault status -format=json 2>/dev/null || true)"
+initialized="$(jq -r '.initialized // empty' <<<"$vault_status_json")"
+if [ "$initialized" = false ]; then
+  printf '\n%s\n' 'Vault is reachable but uninitialized. A first-run initialization ceremony is required.' >&2
+  printf '%s\n' 'Recovery policy: 5 shares will be generated; any 3 shares are required for recovery.' >&2
+  printf '%s\n' 'This will generate recovery shares and a temporary root token. They are shown once only.' >&2
+  printf 'Type INIT to begin, or EXIT to leave Vault untouched: ' >&2
+  IFS= read -r init_action
+  case "$init_action" in
+    INIT) ;;
+    EXIT|'') printf '%s\n' 'Vault initialization cancelled; no changes were made.' >&2; exit 0 ;;
+    *) printf '%s\n' 'Invalid action; Vault initialization cancelled.' >&2; exit 64 ;;
+  esac
+  init_json="$(vault operator init -format=json)"
+  root="$(jq -er '.root_token' <<<"$init_json")"
+  recovery_keys_json="$(jq -cer '.recovery_keys_b64 | if type == "array" and length > 0 then . else error end' <<<"$init_json")"
+  recovery_count="$(jq -er 'length' <<<"$recovery_keys_json")"
+  printf '\n%s\n' 'IMPORTANT: store each recovery share and the root token in your approved secure custody system.' >&2
+  printf 'Recovery policy in effect: %s shares generated; 3 shares required.\n' "$recovery_count" >&2
+  number=0
+  while IFS= read -r share; do
+    number=$((number + 1))
+    printf 'Recovery share %s/%s: %s\n' "$number" "$recovery_count" "$share" >&2
+  done < <(jq -er '.[]' <<<"$recovery_keys_json")
+  printf 'Initial root token (store securely; it will be revoked): %s\n' "$root" >&2
+  unset init_json recovery_keys_json share
+  printf 'Type STORED after secure backup, or EXIT to stop: ' >&2
+  IFS= read -r stored_confirmation
+  [ "$stored_confirmation" = STORED ] || { printf '%s\n' 'Vault initialization acknowledged as incomplete; stopping.' >&2; exit 0; }
+  printf '%s\n' 'Secure backup acknowledged; configuring Vault v2 and Hoodi runtime policies.' >&2
+  VAULT_TOKEN="$root" "$dir/bootstrap-node-operator-vault-v2.sh" >/dev/null
+  VAULT_TOKEN="$root" "$dir/bootstrap-hoodi-engine-api-vault.sh" >/dev/null
+  VAULT_TOKEN="$root" "$dir/bootstrap-hoodi-validator-runtime-vault.sh" --validator-set "$validator_set" >/dev/null
+  bootstrap_complete=true
+else
+  [ "$initialized" = true ] || { printf '%s\n' 'Vault status did not return a valid initialized field' >&2; exit 65; }
+  vault_recovery_auth_preflight
+fi
 if [ "$activate_existing" = true ]; then
   "$dir/assert-hoodi-validator-quiesced.sh" --validator-set "$validator_set" >/dev/null
   mkdir -m 700 "$output"
 fi
+if [ "$bootstrap_complete" = true ]; then
+  # The fresh-init branch already configured Vault with its initial root token.
+  # The cleanup trap will revoke it after the bootstrap commands complete.
+  exit 0
+fi
 status="$(vault operator generate-root -status -format=json)"
-[ "$(jq -r .started <<<"$status")" = false ] || { printf '%s\n' 'root-token ceremony already in progress' >&2; exit 75; }
+if [ "$(jq -r .started <<<"$status")" = true ]; then
+  progress="$(jq -er '.progress // 0' <<<"$status")"
+  required_existing="$(jq -er '.required // 0' <<<"$status")"
+  printf '\n%s\n' 'A Vault root-token ceremony is already in progress.' >&2
+  printf 'Current progress: %s/%s recovery shares.\n' "$progress" "$required_existing" >&2
+  printf '%s\n' 'The original ceremony OTP is not recoverable by this script.' >&2
+  printf '%s\n' 'Type CANCEL to discard that ceremony and start a new interactive one, or EXIT to leave it untouched.' >&2
+  printf 'Action [CANCEL/EXIT]: ' >&2
+  IFS= read -r ceremony_action
+  case "$ceremony_action" in
+    CANCEL)
+      vault operator generate-root -cancel >/dev/null
+      status="$(vault operator generate-root -status -format=json)"
+      [ "$(jq -r .started <<<"$status")" = false ] || { printf '%s\n' 'existing root-token ceremony could not be cancelled' >&2; exit 75; }
+      printf '%s\n' 'Existing root-token ceremony cancelled by operator request.' >&2
+      ;;
+    EXIT|'')
+      printf '%s\n' 'Leaving the existing root-token ceremony untouched.' >&2
+      exit 0
+      ;;
+    *)
+      printf '%s\n' 'Invalid action; leaving the existing root-token ceremony untouched.' >&2
+      exit 64
+      ;;
+  esac
+fi
 init="$(vault operator generate-root -init -format=json)"; started=true
 nonce="$(jq -er .nonce <<<"$init")"; otp="$(jq -er .otp <<<"$init")"; required="$(jq -er .required <<<"$init")"
 for number in $(seq 1 "$required"); do

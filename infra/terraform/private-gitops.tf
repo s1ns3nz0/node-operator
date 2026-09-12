@@ -6,7 +6,11 @@ variable "enable_private_gitops_foundation" {
 
 locals {
   private_gitops_repositories = {
-    argocd       = "${local.name_prefix}-gitops-argocd"
+    argocd = "${local.name_prefix}-gitops-argocd"
+    # The Argo bootstrap image and Helm chart are distinct OCI artifacts. Helm
+    # publishes the chart beneath Chart.yaml's `argo-cd` path, so keep that
+    # chart repository separate from the executable image repository.
+    argocd_chart = "${local.name_prefix}-gitops-argocd/argo-cd"
     charts       = "${local.name_prefix}-gitops-charts"
     nodes        = "${local.name_prefix}-gitops-nodes"
     vault        = "${local.name_prefix}-gitops-vault"
@@ -26,6 +30,11 @@ locals {
 # digest-reviewed mirror action is the only permitted publisher.
 resource "aws_ecr_repository" "private_gitops" {
   for_each = var.enable_private_gitops_foundation ? local.private_gitops_repositories : {}
+
+  # Existing GitOps mirrors are deliberately retained with AWS-managed
+  # encryption (AES256); ECR encryption cannot be changed in place without
+  # replacing deployment artifacts. Secret material is never published here.
+  #checkov:skip=CKV_AWS_136:Existing immutable GitOps mirrors use AES256; migration to KMS requires a separately approved repository cutover.
 
   name                 = each.value
   image_tag_mutability = "IMMUTABLE"

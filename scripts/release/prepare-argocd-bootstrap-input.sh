@@ -10,7 +10,7 @@ case "$promotion:$output" in /*:/*) ;; *) usage;; esac
 [ "${#subnets[@]}" -gt 0 ] || usage
 for subnet in "${subnets[@]}"; do [[ "$subnet" =~ ^subnet-[a-z0-9]+$ ]] || usage; done
 command -v jq >/dev/null 2>&1 || { printf '%s\n' 'missing command: jq' >&2; exit 127; }
-account="$(jq -er '.schema_version == "v1" and .aws_account_id | select(test("^[0-9]{12}$"))' "$promotion")" || exit 65
+account="$(jq -er 'select(.schema_version == "v1") | .aws_account_id | select(test("^[0-9]{12}$"))' "$promotion")" || exit 65
 version="$(jq -er '.chart_version | select(test("^0\\.1\\.[0-9]+$"))' "$promotion")" || exit 65
 digest="$(jq -er '.chart_oci_digest | select(test("^sha256:[a-f0-9]{64}$"))' "$promotion")" || exit 65
 [[ "$image" == "$account".* ]] || { printf '%s\n' 'Argo bootstrap image belongs to another account' >&2; exit 65; }

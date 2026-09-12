@@ -17,6 +17,14 @@ case "$handoff:$output_dir" in /*:/*) ;; *) usage ;; esac
 [ -f "$handoff" ] && [ ! -L "$handoff" ] && [ ! -e "$output_dir" ] && [ ! -L "$output_dir" ] || { printf '%s\n' 'handoff or output path is unsafe' >&2; exit 65; }
 command -v jq >/dev/null 2>&1 || { printf '%s\n' 'missing command: jq' >&2; exit 69; }
 command -v aws >/dev/null 2>&1 || { printf '%s\n' 'missing command: aws' >&2; exit 69; }
+
+# macOS exposes /tmp through /private/tmp.  Resolve caller-controlled paths
+# before recording them in the contract so later canonical-path validation
+# compares identical strings on macOS and Linux.
+handoff_parent="$(cd "$(dirname "$handoff")" && pwd -P)"
+handoff="$handoff_parent/$(basename "$handoff")"
+output_parent="$(cd "$(dirname "$output_dir")" && pwd -P)"
+output_dir="$output_parent/$(basename "$output_dir")"
 jq -e '
   .schema_version == "v1" and (.aws_region | test("^ap-northeast-(1|2)$")) and
   (.aws_account_id | test("^[0-9]{12}$")) and (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and

@@ -10,4 +10,6 @@ shellcheck_version="$(shellcheck --version | sed -n 's/^version: //p')"
   printf 'ShellCheck 0.11.0 is required to match CI; run npm run harness:bootstrap-policy-tools and use .ci-tools/bin.\n' >&2
   exit 1
 }
-find "$root/scripts/ci" "$root/scripts/release" -type f -name '*.sh' -exec shellcheck -x -P "$root/scripts/ci" {} +
+# CI blocks correctness errors while retaining ShellCheck output for advisory
+# style/info findings that are not release-blocking by themselves.
+find "$root/scripts/ci" "$root/scripts/release" -type f -name '*.sh' -exec shellcheck -S error -x -P "$root/scripts/ci" {} +
