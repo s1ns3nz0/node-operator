@@ -12,7 +12,7 @@ terraform {
 # State is stored in the approved encrypted S3 backend with DynamoDB locking.
 # Provider binaries are still supplied only by the separately controlled build workflow.
 provider "aws" {
-  region                      = var.aws_region
+  region = var.aws_region
   # Bootstrap may create a brand-new bucket whose virtual-host DNS name is
   # not yet propagated. Path-style requests keep first-run state creation
   # deterministic while retaining the bucket policy and TLS requirements.

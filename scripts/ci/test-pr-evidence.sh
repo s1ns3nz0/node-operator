@@ -79,7 +79,7 @@ GIT_CHANGED_ZIZMOR_SUPPRESSED=true PATH="$mock_directory:$PATH" TERRAFORM_PLUGIN
 jq -e '.result.findings[] | select(.rule_id == "untrusted-zizmor-suppression")' "$suppression_directory/zizmor.json" >/dev/null
 jq -e '.result.status == "passed"' "$output_directory/format.json" >/dev/null
 jq -e '.result.status == "passed" and (.result.modules | sort_by(.module)) == [{module:"infra/ops-access",status:"passed"},{module:"infra/other-module",status:"passed"},{module:"infrastructure",status:"passed"}]' "$output_directory/terraform.json" >/dev/null
-if rg -l 'DO_NOT_PERSIST' "$output_directory" >/dev/null; then
+if grep -R -l 'DO_NOT_PERSIST' "$output_directory" >/dev/null; then
   printf 'raw Gitleaks secret content was retained in collector output\n' >&2
   exit 1
 fi
