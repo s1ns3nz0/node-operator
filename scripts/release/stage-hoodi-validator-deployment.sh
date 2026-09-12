@@ -41,6 +41,7 @@ validator_set="$(jq -er '
      (.validator_set | type == "string" and test("^hoodi-[a-z0-9][a-z0-9-]*$"))
   then .validator_set else error("invalid validator set") end
 ' "$handoff")" || { printf '%s\n' 'handoff is not a Hoodi validator deployment contract' >&2; exit 65; }
+namespace='validator-operations'
 jq -e --arg parent "$parent" --arg runtime "$runtime" --arg client "$client" '
   (.aws_account_id | test("^[0-9]{12}$")) and
   (.aws_region | test("^ap-northeast-(1|2)$")) and
@@ -64,7 +65,7 @@ if [ -n "$private_eks_session_handoff" ]; then
   case "$private_eks_session_handoff" in /*) ;; *) printf '%s\n' 'private EKS session handoff must be an absolute path' >&2; exit 65 ;; esac
   [ -f "$private_eks_session_handoff" ] && [ ! -L "$private_eks_session_handoff" ] || { printf '%s\n' 'private EKS session handoff must be a regular file' >&2; exit 65; }
   handoff_region="$(jq -er '.aws_region' "$handoff")"
-  session_cluster="$(jq -er --arg region "$handoff_region" '.schema_version == 1 and .aws_region == $region and (.cluster_name | select(test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")))' "$private_eks_session_handoff")" || { printf '%s\n' 'private EKS session handoff is invalid or points to another Region' >&2; exit 65; }
+  session_cluster="$(jq -er --arg region "$handoff_region" 'if .schema_version == 1 and .aws_region == $region and (.cluster_name | type == "string" and test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) then .cluster_name else empty end' "$private_eks_session_handoff")" || { printf '%s\n' 'private EKS session handoff is invalid or points to another Region' >&2; exit 65; }
   session_instance="$(jq -er '.ssm_ops_instance_id | select(test("^i-[0-9a-f]+$"))' "$private_eks_session_handoff")" || { printf '%s\n' 'private EKS session handoff lacks a valid SSM instance' >&2; exit 65; }
 fi
 
@@ -106,7 +107,6 @@ fi
 # Fresh-set staging must never adopt an existing controller or lease. Check
 # before server-side dry-run too: otherwise Kubernetes reports low-level field
 # manager conflicts that conceal the actionable recovery/rotation boundary.
-namespace='validator-operations'
 for target in \
   "statefulset/validator-${validator_set}-slashing-db" \
   "deployment/validator-${validator_set}-remote-signer" \
