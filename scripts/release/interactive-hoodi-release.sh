@@ -116,7 +116,7 @@ fi
 api_cidr="$(prompt 'Kubernetes API operator IPv4 CIDR (/32)')"
 output_dir="$(prompt 'New absolute working directory')"
 absolute_new_dir "$output_dir"
-trap 'unset confirmation validator_key expected_key withdrawal web3signer_image postgres_image prysm_image fence_image; rm -f "$output_dir/.interactive-inputs.tmp" 2>/dev/null || true' EXIT
+trap 'unset confirmation validator_key expected_key withdrawal web3signer_image postgres_image prysm_image fence_image ecr_auth source_image; rm -f "$output_dir/.interactive-inputs.tmp" 2>/dev/null || true' EXIT
 
 # Collect and verify the immutable platform bootstrap artifacts before creating
 # any foundation resources. A missing mirror must fail closed without leaving a
@@ -173,8 +173,11 @@ if [ "${#bootstrap_mirror_images[@]}" -gt 0 ]; then
   [ -f "$platform_approval" ] || { printf '%s\n' 'release bundle lacks platform artifact approval for automatic mirroring' >&2; exit 65; }
   command -v docker >/dev/null 2>&1 || { printf '%s\n' 'docker is required to mirror missing approved bootstrap artifacts' >&2; exit 69; }
   registry="${account}.dkr.ecr.${region}.amazonaws.com"
+  docker_config="$(mktemp -d "$output_dir/.docker-config.XXXXXX")"
+  chmod 700 "$docker_config"
+  trap 'unset confirmation validator_key expected_key withdrawal web3signer_image postgres_image prysm_image fence_image ecr_auth source_image; rm -f "$output_dir/.interactive-inputs.tmp" 2>/dev/null || true; rm -rf "$docker_config" 2>/dev/null || true' EXIT
   ecr_auth="$(aws ecr get-login-password --region "$region")"
-  printf '%s' "$ecr_auth" | docker login --username AWS --password-stdin "$registry" >/dev/null
+  printf '%s' "$ecr_auth" | DOCKER_CONFIG="$docker_config" docker login --username AWS --password-stdin "$registry" >/dev/null
   for destination in "${bootstrap_mirror_images[@]}"; do
     case "$destination" in
       *node-operator-baseline-gitops-argocd@*) key=argocd_bootstrap ;;
@@ -185,9 +188,9 @@ if [ "${#bootstrap_mirror_images[@]}" -gt 0 ]; then
     digest="${destination##*@}"; repository="${destination#*/}"; repository="${repository%@*}"
     aws ecr describe-repositories --region "$region" --repository-names "$repository" >/dev/null 2>&1 || \
       aws ecr create-repository --region "$region" --repository-name "$repository" >/dev/null
-    docker pull "$source_image" >/dev/null
-    docker tag "$source_image" "$registry/$repository:${digest#sha256:}"
-    docker push "$registry/$repository:${digest#sha256:}" >/dev/null
+    DOCKER_CONFIG="$docker_config" docker pull "$source_image" >/dev/null
+    DOCKER_CONFIG="$docker_config" docker tag "$source_image" "$registry/$repository:${digest#sha256:}"
+    DOCKER_CONFIG="$docker_config" docker push "$registry/$repository:${digest#sha256:}" >/dev/null
     mirrored="$(aws ecr describe-images --region "$region" --repository-name "$repository" --image-ids imageTag="${digest#sha256:}" --query 'imageDetails[0].imageDigest' --output text)"
     [ "$mirrored" = "$digest" ] || { printf 'mirrored bootstrap digest mismatch: expected %s got %s\n' "$digest" "$mirrored" >&2; exit 65; }
   done
