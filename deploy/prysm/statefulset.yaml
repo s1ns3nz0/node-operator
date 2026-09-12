@@ -83,6 +83,7 @@ spec:
             - --p2p-host-ip=$(POD_IP)
             - --p2p-tcp-port=13000
             - --p2p-udp-port=13000
+            - --p2p-quic-port=13001
             - --p2p-max-peers=50
             - --http-host=0.0.0.0
             - --http-port=3500
@@ -90,6 +91,8 @@ spec:
             - --monitoring-port=8080
             - --execution-endpoint=http://nethermind-execution.node-operator.svc:8551
             - --jwt-secret=/vault/secrets/engine.jwt
+            - --checkpoint-sync-url=https://checkpoint-sync.hoodi.ethpandaops.io
+            - --genesis-beacon-api-url=https://beaconstate-hoodi.chainsafe.io
           env:
             - name: POD_IP
               valueFrom:

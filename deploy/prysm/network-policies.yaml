@@ -47,6 +47,8 @@ spec:
       ports:
         - protocol: UDP
           port: 13000
+        - protocol: UDP
+          port: 13001
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
