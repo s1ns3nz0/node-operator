@@ -44,7 +44,7 @@ if [ -n "$env_file" ]; then
   while IFS='=' read -r key value; do
     key="${key%%[[:space:]]*}"; value="${value##[[:space:]]}"
     case "$key" in ''|'#'*) continue ;; esac
-    case "$key" in REGION) DEFAULT_REGION="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; esac
+    case "$key" in REGION) DEFAULT_REGION="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; esac
   done < "$env_file"
 fi
 DEFAULT_REGION="${DEFAULT_REGION:-ap-northeast-2}"
@@ -56,6 +56,12 @@ DEFAULT_POSTGRES_IMAGE="${DEFAULT_POSTGRES_IMAGE:-}"
 DEFAULT_PRYSM_IMAGE="${DEFAULT_PRYSM_IMAGE:-}"
 DEFAULT_FENCE_IMAGE="${DEFAULT_FENCE_IMAGE:-}"
 DEFAULT_BACKEND_PRINCIPAL_ARN="${DEFAULT_BACKEND_PRINCIPAL_ARN:-}"
+DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="${DEFAULT_ARGOCD_BOOTSTRAP_IMAGE:-}"
+DEFAULT_VAULT_BOOTSTRAP_IMAGE="${DEFAULT_VAULT_BOOTSTRAP_IMAGE:-}"
+DEFAULT_CLIENT_CHART_VERSION="${DEFAULT_CLIENT_CHART_VERSION:-}"
+DEFAULT_CLIENT_CHART_DIGEST="${DEFAULT_CLIENT_CHART_DIGEST:-}"
+DEFAULT_VAULT_CHART_VERSION="${DEFAULT_VAULT_CHART_VERSION:-0.31.0}"
+DEFAULT_VAULT_CHART_DIGEST="${DEFAULT_VAULT_CHART_DIGEST:-sha256:85cfa6b40396a198a104fbf06c7cccaf75428db7201394f9061c272441bcd0e4}"
 
 [ -d "$bundle_root/source" ] && [ -f "$bundle_root/bundle-manifest.json" ] || {
   printf '%s\n' 'a verified v0.1.20 release bundle is required' >&2; exit 65;
@@ -112,6 +118,21 @@ inputs="$output_dir/inputs/hoodi-zero-release-inputs.json"
 session="$output_dir/private-eks-session.json"
 
 "$release" deploy apply --bundle-root "$bundle_root" --inputs "$inputs" --work-dir "$output_dir/deployment-work" --private-eks-session-handoff "$session" --allow-create
+
+platform_script="$source_root/scripts/release/run-platform-bootstrap.sh"
+[ -x "$platform_script" ] || { printf '%s\n' 'release bundle lacks the unified platform bootstrap helper' >&2; exit 65; }
+argocd_bootstrap_image="${DEFAULT_ARGOCD_BOOTSTRAP_IMAGE:-$(prompt 'Private ECR Argo bootstrap image@sha256 digest')}"
+vault_bootstrap_image="${DEFAULT_VAULT_BOOTSTRAP_IMAGE:-$(prompt 'Private ECR Vault bootstrap image@sha256 digest')}"
+client_chart_version="${DEFAULT_CLIENT_CHART_VERSION:-$(prompt 'Published node-operator-client chart version (0.1.N)')}"
+client_chart_digest="${DEFAULT_CLIENT_CHART_DIGEST:-$(prompt 'Published node-operator-client chart manifest digest (sha256:...)')}"
+zero_inputs="$(jq -er '.zero_resource_inputs' "$inputs")"
+baseline_config="$(jq -er '.baseline_config' "$zero_inputs")"
+platform_subnets=()
+while IFS= read -r subnet; do [ -n "$subnet" ] && platform_subnets+=("$subnet"); done < <(jq -er '.hoodi_subnet_ids[]' "$output_dir/deployment-work/foundation-output.json")
+[ "${#platform_subnets[@]}" -gt 0 ] || { printf '%s\n' 'foundation output lacks Hoodi private subnets for platform bootstrap' >&2; exit 65; }
+platform_args=(--baseline-work-dir "$output_dir/deployment-work" --baseline-config "$baseline_config" --account "$account" --region "$region" --argocd-image "$argocd_bootstrap_image" --vault-image "$vault_bootstrap_image" --client-chart-version "$client_chart_version" --client-chart-digest "$client_chart_digest" --vault-chart-version "$DEFAULT_VAULT_CHART_VERSION" --vault-chart-digest "$DEFAULT_VAULT_CHART_DIGEST")
+for subnet in "${platform_subnets[@]}"; do platform_args+=(--subnet-id "$subnet"); done
+"$platform_script" "${platform_args[@]}"
 
 printf '%s\n' 'Preparing cert-manager-managed Vault TLS through the private EKS session.' >&2
 eks_env=(env PRIVATE_EKS_SESSION=1 AWS_REGION="$region" EKS_CLUSTER_NAME="$(jq -er '.cluster_name' "$session")" SSM_OPS_INSTANCE_ID="$(jq -er '.ssm_ops_instance_id' "$session")")
