@@ -44,6 +44,7 @@ for required_path in \
   source/scripts/ops/apply-kyverno-project-coverage.sh \
   source/deploy/validator/onboarding-contract.yaml \
   source/deploy/validator/vault-runtime-egress-policy.yaml \
+  source/docs/gitops/vault-tls-internal-ca.example.yaml \
   source/infra/terraform/eks.tf \
   source/infra/terraform/gitops-client-chart-retention.json \
   source/infra/bootstrap-state/main.tf \
