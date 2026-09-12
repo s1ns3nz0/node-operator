@@ -55,7 +55,7 @@ jobs:
           IMAGE: ghcr.io/${{ github.repository_owner }}/node-operator/security-scanners
         run: bash scripts/release/build-scanner-image.sh
       # Role: Upload the exact files and artifact name below for later inspection or same-run consumption.
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: scanner-image-${{ github.sha }}
           path: |
@@ -77,7 +77,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
       # Role: Download the named build artifact from this workflow run before publication checks.
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5.0.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v5.0.0
         with:
           name: scanner-image-${{ github.sha }}
           path: /tmp/scanner-image
@@ -112,7 +112,7 @@ jobs:
           IMAGE_NAME: ${{ matrix.image }}
         run: bash scripts/release/build-toolchain-image.sh
       # Role: Upload the exact files and artifact name below for later inspection or same-run consumption.
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: toolchain-${{ matrix.image }}-${{ github.sha }}
           path: |
@@ -136,7 +136,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
       # Role: Download the named build artifact from this workflow run before publication checks.
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5.0.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v5.0.0
         with:
           name: toolchain-${{ matrix.image }}-${{ github.sha }}
           path: /tmp/toolchain-image
@@ -181,7 +181,7 @@ jobs:
         run: scripts/release/publish-fence-image.sh
       # Role: Upload the bounded Fence release verification result.
       - name: Sanitized release verification
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: validator-signing-fence-release-verification
           path: ${{ runner.temp }}/fence-release-verification.json
@@ -212,7 +212,7 @@ jobs:
       # Role: Upload selected relay release evidence rather than runner credentials.
       - name: Non-secret release evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: vault-audit-relay-release-evidence
           path: ${{ runner.temp }}/vault-audit-relay-release-evidence/*.json
