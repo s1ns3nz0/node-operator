@@ -18,7 +18,7 @@ output="$2"
 jq -e --arg repo "$GITHUB_REPOSITORY" '
   .workflow_run.event == "pull_request" and
   .workflow_run.name == "CI" and
-  .workflow_run.path == ".github/workflows/ci.yml" and
+  .workflow_run.path == ".github/workflows/continuous-integration.yml" and
   .workflow_run.repository.full_name == $repo and
   (.workflow_run.head_sha | test("^[0-9a-f]{40}$")) and
   (.workflow_run.pull_requests | type == "array" and length == 1) and

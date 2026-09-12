@@ -7,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 OWNERS = {
-    "ci.yml": ("test-policy.sh", "test-terraform-policy.sh", "test-conftest.sh",
+    "continuous-integration.yml": ("test-policy.sh", "test-terraform-policy.sh", "test-conftest.sh",
                "test-normalizer.sh", "test-pr-gate.sh", "test-pr-baseline-findings.sh",
                "test-dast-target-contract.sh", "test-script-quality.sh"),
 }

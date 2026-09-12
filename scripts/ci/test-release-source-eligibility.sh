@@ -10,8 +10,8 @@ trap 'rm -rf "$temporary_directory"' EXIT
 mkdir -p "$temporary_directory/bin"
 sha="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
-grep -Fq 'pull_request:' "$root/.github/workflows/ci.yml"
-grep -Fq 'branches: [main]' "$root/.github/workflows/ci.yml"
+grep -Fq 'pull_request:' "$root/.github/workflows/continuous-integration.yml"
+grep -Fq 'branches: [main]' "$root/.github/workflows/continuous-integration.yml"
 
 printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'exit "${GIT_RESULT:-0}"' > "$temporary_directory/bin/git"
 printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' \
@@ -30,7 +30,7 @@ jq -n --arg sha "$sha" '
 ' > "$temporary_directory/pass.json"
 printf '%s\n' '{"total_count":1,"check_runs":[{"id":900,"external_id":"ci-evidence-workflow-run:106:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","name":"CI Evidence Decision","status":"completed","conclusion":"success","head_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","app":{"slug":"github-actions"},"details_url":"https://github.com/owner/repo/actions/runs/106"}]}' > "$temporary_directory/pr-check.json"
 printf '%s\n' '[{"merged_at":"2026-09-08T00:00:00Z","merge_commit_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","base":{"ref":"main","repo":{"full_name":"owner/repo"}},"head":{"sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}]' > "$temporary_directory/pulls.json"
-jq -n --arg sha "$sha" '[101,102,103,104,105,106] as $ids | {"101":{repository:{full_name:"owner/repo"},path:".github/workflows/ci.yml",event:"push",head_sha:$sha},"102":{repository:{full_name:"owner/repo"},path:".github/workflows/ci.yml",event:"push",head_sha:$sha},"103":{repository:{full_name:"owner/repo"},path:".github/workflows/ci.yml",event:"push",head_sha:$sha},"104":{repository:{full_name:"owner/repo"},path:".github/workflows/ci.yml",event:"push",head_sha:$sha},"105":{repository:{full_name:"owner/repo"},path:".github/workflows/ci.yml",event:"push",head_sha:$sha},"106":{repository:{full_name:"owner/repo"},path:".github/workflows/opa-pr-gate.yml",event:"workflow_run",head_sha:"cccccccccccccccccccccccccccccccccccccccc"}} | with_entries(.value.status="completed" | .value.conclusion="success")' > "$temporary_directory/runs.json"
+jq -n --arg sha "$sha" '[101,102,103,104,105,106] as $ids | {"101":{repository:{full_name:"owner/repo"},path:".github/workflows/continuous-integration.yml",event:"push",head_sha:$sha},"102":{repository:{full_name:"owner/repo"},path:".github/workflows/continuous-integration.yml",event:"push",head_sha:$sha},"103":{repository:{full_name:"owner/repo"},path:".github/workflows/continuous-integration.yml",event:"push",head_sha:$sha},"104":{repository:{full_name:"owner/repo"},path:".github/workflows/continuous-integration.yml",event:"push",head_sha:$sha},"105":{repository:{full_name:"owner/repo"},path:".github/workflows/continuous-integration.yml",event:"push",head_sha:$sha},"106":{repository:{full_name:"owner/repo"},path:".github/workflows/evidence-gate.yml",event:"workflow_run",head_sha:"cccccccccccccccccccccccccccccccccccccccc"}} | with_entries(.value.status="completed" | .value.conclusion="success")' > "$temporary_directory/runs.json"
 printf '%s\n' '{"artifacts":[{"id":777,"name":"ci-evidence-gate-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","expired":false,"workflow_run":{"id":106}}]}' > "$temporary_directory/artifacts.json"
 printf '%s\n' '{"subject":{"commit_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}' > "$temporary_directory/evidence.json"
 printf '%s\n' '{"summary":{"block":0,"require_approval":0},"violations":[]}' > "$temporary_directory/decision.json"

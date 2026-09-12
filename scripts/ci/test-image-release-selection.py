@@ -100,7 +100,7 @@ class Selection(unittest.TestCase):
 
 class Workflow(unittest.TestCase):
     def test_single_workflow_retains_separate_privileges(self):
-        source = (ROOT / ".github/workflows/image-release.yml").read_text()
+        source = (ROOT / ".github/workflows/image-publish.yml").read_text()
         jobs = dict(re.findall(r"^  ([\w-]+):\n([\s\S]*?)(?=^  [\w-]+:\n|\Z)", source.split("jobs:\n", 1)[1], re.M))
         self.assertEqual(set(jobs), {"select", "scanner-build", "scanner-publish", "toolchain-build",
                                     "toolchain-publish", "fence-security", "fence-publish", "relay-publish"})

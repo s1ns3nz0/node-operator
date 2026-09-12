@@ -82,15 +82,15 @@ are offline. Keep ordinary validation in independently executable test scripts.
 
 ## Workflow and job identities
 
-`ci.yml` contains independent quality, policy, Terraform and scanner jobs for
+`continuous-integration.yml` contains independent quality, policy, Terraform and scanner jobs for
 pull requests and main pushes. Package read is scoped to scanner and Terraform
 jobs; no CI job gets write permissions. The `quality` and `scanners` compatibility
 checks remain separate. Fence Security remains reusable by CI and image release.
-Release Integrity is now an ordinary job inside `release.yml`.
+Release Integrity is now an ordinary job inside `release-bundle.yml`.
 
-The eight entrypoints are `ci.yml`, `fence-security.yml`, `opa-pr-gate.yml`,
-`ci-review-refresh.yml`, `release.yml`, `image-release.yml`,
-`private-ecr-mirror.yml`, and `operations-check.yml`.
+The nine entrypoints are `continuous-integration.yml`, `fence-security.yml`, `evidence-gate.yml`,
+`review-signal.yml`, `release-bundle.yml`, `image-publish.yml`,
+`private-ecr-mirror.yml`, `operations-verification.yml`, and `evidence-archive.yml`.
 
 Manual release dispatch defaults to `mode=verify-only`: integrity and SCA run,
 but source publication eligibility and the privileged publisher do not. Select
@@ -103,11 +103,11 @@ Runner diagnostics retain their private runner/environment without OIDC signing
 permission. Vault verification retains its own roles and component matrix;
 `sign_evidence` defaults to false. Neither target deploys running workloads.
 
-`image-release.yml` owns the scanner, toolchain, signing-fence and audit-relay
+`image-publish.yml` owns the scanner, toolchain, signing-fence and audit-relay
 publisher jobs. Signing-fence evidence recognizes the two exact historical and
 current workflow identities so already signed fence images remain verifiable;
-new publications use only the `image-release.yml` identity. `private-ecr-mirror.yml` and
-`release.yml` remain separate authority boundaries. `opa-pr-gate.yml` and
+new publications use only the `image-publish.yml` identity. `private-ecr-mirror.yml` and
+`release-bundle.yml` remain separate authority boundaries. `evidence-gate.yml` and
 the unprivileged review signal retain trusted/untrusted execution separation.
 Do not merge privileged publication into PR-controlled CI to reduce file count.
 
@@ -119,7 +119,7 @@ trigger automatic security checks and protected publication on main, replacing
 the previous manual-only Fence entrypoint. Existing protected environments remain.
 Manual dispatch accepts `target=all`, `scanner`, `toolchains`, `fence`, `relay`,
 or an individual toolchain name. The signed deployment bundle still uses
-`release.yml`; combining image publishers does not publish a deployment bundle
+`release-bundle.yml`; combining image publishers does not publish a deployment bundle
 or update running workloads.
 
 `private-ecr-mirror.yml` consolidates eight manual mirror entrypoints. Dispatch
@@ -134,7 +134,7 @@ Each selected job retains its own environment and IAM role; only signer gets
 `packages: read`. Target-specific source checks remain in the existing scripts.
 This workflow copies artifacts into ECR; it does not deploy them or run DAST.
 
-Review events now enter a dedicated job in `opa-pr-gate.yml`; the separate
+Review events now enter a dedicated job in `evidence-gate.yml`; the separate
 refresh handler and its Actions rerun permission are removed. The signal
 workflow still has no permissions and runs no repository code. The trusted gate
 reuses only its own evidence artifact bound to the current head, base, trusted
@@ -149,7 +149,7 @@ Main branch protection currently requires `quality`, `scanners`, and
 implementation jobs; always-run compatibility gates preserve those first two
 required contexts and reject failed, cancelled or skipped dependencies. Release
 eligibility additionally checks exact-SHA `Policy Rules`, `Terraform Validation`
-and `Evidence Contracts` from the exact `ci.yml` main-push workflow. The trusted
+and `Evidence Contracts` from the exact `continuous-integration.yml` main-push workflow. The trusted
 gate is triggered when the entire CI run completes, not just the scanner job;
 an unsuccessful CI run cannot create a successful evidence decision. Previously
 cached artifacts naming the old scanner workflow are intentionally not reused.

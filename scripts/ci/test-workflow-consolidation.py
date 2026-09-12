@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Check objective: Preserve the eight workflow entrypoints, CI authority boundaries and non-publishing release verification mode.
+# Check objective: Preserve the workflow entrypoints, CI authority boundaries and non-publishing release verification mode.
 import itertools
 from pathlib import Path
 import re
@@ -18,14 +18,15 @@ def jobs(name):
 class Consolidation(unittest.TestCase):
     def test_entrypoints(self):
         self.assertEqual({p.name for p in WORKFLOWS.glob("*.yml")}, {
-            "ci.yml", "fence-security.yml", "opa-pr-gate.yml", "ci-review-refresh.yml",
-            "release.yml", "image-release.yml", "private-ecr-mirror.yml", "operations-check.yml"})
+            "continuous-integration.yml", "fence-security.yml", "evidence-gate.yml", "review-signal.yml",
+            "release-bundle.yml", "image-publish.yml", "private-ecr-mirror.yml", "operations-verification.yml",
+            "evidence-archive.yml"})
 
     def test_ci_permissions_and_checks(self):
-        source = (WORKFLOWS / "ci.yml").read_text()
+        source = (WORKFLOWS / "continuous-integration.yml").read_text()
         self.assertNotIn(": write", source)
         self.assertNotIn("packages:", source.split("jobs:\n")[0])
-        parsed = jobs("ci.yml")
+        parsed = jobs("continuous-integration.yml")
         self.assertEqual(set(parsed), {"fence-security", "quality-tests", "quality", "policy",
                                       "policy-foundation", "terraform", "security-scans", "scanners"})
         for job, title in {"quality": "quality", "scanners": "scanners", "policy": "Policy Rules",
@@ -35,9 +36,9 @@ class Consolidation(unittest.TestCase):
             self.assertEqual("packages: read" in parsed[job], job in {"terraform", "security-scans"})
 
     def test_release_modes(self):
-        source = (WORKFLOWS / "release.yml").read_text()
+        source = (WORKFLOWS / "release-bundle.yml").read_text()
         self.assertIn("default: verify-only", source)
-        parsed = jobs("release.yml")
+        parsed = jobs("release-bundle.yml")
         self.assertNotIn(": write", parsed["reproducibility"])
         self.assertIn("artifact_digest: ${{ steps.sca-binding.outputs.artifact_digest }}", parsed["reproducibility"])
         expression = re.search(r"    if: >-\n((?:      .*\n)+)", parsed["build-and-publish"]).group(1)
@@ -54,7 +55,7 @@ class Consolidation(unittest.TestCase):
             self.assertEqual(actual, expected, (event, mode, eligible, integrity))
 
     def test_verify_only_runs_without_eligibility(self):
-        job = jobs("release.yml")["reproducibility"]
+        job = jobs("release-bundle.yml")["reproducibility"]
         expression = re.search(r"    if: >-\n((?:      .*\n)+)", job).group(1)
         expression = expression.replace("${{", "").replace("}}", "")
         for event, mode, eligible, cancelled in itertools.product(
@@ -69,7 +70,7 @@ class Consolidation(unittest.TestCase):
             self.assertEqual(actual, expected)
 
     def test_operations_boundaries(self):
-        parsed = jobs("operations-check.yml")
+        parsed = jobs("operations-verification.yml")
         self.assertEqual(set(parsed), {"smoke", "verify", "sign-evidence"})
         self.assertIn("environment: private-runner-smoke", parsed["smoke"])
         self.assertIn("codebuild-node-operator-baseline-private-release-", parsed["smoke"])

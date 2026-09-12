@@ -167,7 +167,7 @@ Operator-controlled values are not treated as anonymous remote attacker input. T
 
 **Review scenarios:** If a live AWS identity can access evidence objects, responders should confirm whether both S3 server access logs and CloudTrail data events identify it. If any live identity can bypass Governance retention, review whether a permissions boundary or SCP prevents early removal. Neither prerequisite is established by repository evidence, so these scenarios remain open control questions.
 
-### 3.6 GitHub pull-request evidence gate (`.github/workflows/opa-pr-gate.yml`, `scripts/ci`)
+### 3.6 GitHub pull-request evidence gate (`.github/workflows/evidence-gate.yml`, `scripts/ci`)
 
 **Surface:** An unprivileged pull-request CI run triggers a default-branch `workflow_run` workflow. Trusted host steps query GitHub, check out trusted and untrusted revisions, run digest-pinned scanner/Terraform containers, normalize and evaluate evidence, upload summaries, and publish an exact-head required check.
 

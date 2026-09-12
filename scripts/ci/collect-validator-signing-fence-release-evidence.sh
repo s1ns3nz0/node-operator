@@ -18,7 +18,7 @@ scratch="$(mktemp -d)"; temporary=''
 cleanup() { set +e; [ -z "$temporary" ] || [ ! -e "$temporary" ] || rm -f "$temporary"; rm -rf "$scratch"; }
 trap cleanup EXIT
 legacy_identity='https://github.com/s1ns3nz0/node-operator/.github/workflows/validator-signing-fence-image.yml@refs/heads/main'
-current_identity='https://github.com/s1ns3nz0/node-operator/.github/workflows/image-release.yml@refs/heads/main'
+current_identity='https://github.com/s1ns3nz0/node-operator/.github/workflows/image-publish.yml@refs/heads/main'
 issuer='https://token.actions.githubusercontent.com'
 digest="${image##*@}"
 

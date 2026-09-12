@@ -85,11 +85,11 @@ trusted_check_present() {
 }
 fetch_checks "$source_sha" "$checks"
 
-trusted_check_present "$checks" quality "$source_sha" '.github/workflows/ci.yml' push true || { printf 'required trusted source check is absent or invalid: quality\n' >&2; exit 1; }
-trusted_check_present "$checks" scanners "$source_sha" '.github/workflows/ci.yml' push true || { printf 'required trusted source check is absent or invalid: scanners\n' >&2; exit 1; }
-trusted_check_present "$checks" 'Policy Rules' "$source_sha" '.github/workflows/ci.yml' push true || { printf 'required trusted source check is absent or invalid: policy\n' >&2; exit 1; }
-trusted_check_present "$checks" 'Terraform Validation' "$source_sha" '.github/workflows/ci.yml' push true || { printf 'required trusted source check is absent or invalid: terraform\n' >&2; exit 1; }
-trusted_check_present "$checks" 'Evidence Contracts' "$source_sha" '.github/workflows/ci.yml' push true || { printf 'required trusted source check is absent or invalid: policy-foundation\n' >&2; exit 1; }
+trusted_check_present "$checks" quality "$source_sha" '.github/workflows/continuous-integration.yml' push true || { printf 'required trusted source check is absent or invalid: quality\n' >&2; exit 1; }
+trusted_check_present "$checks" scanners "$source_sha" '.github/workflows/continuous-integration.yml' push true || { printf 'required trusted source check is absent or invalid: scanners\n' >&2; exit 1; }
+trusted_check_present "$checks" 'Policy Rules' "$source_sha" '.github/workflows/continuous-integration.yml' push true || { printf 'required trusted source check is absent or invalid: policy\n' >&2; exit 1; }
+trusted_check_present "$checks" 'Terraform Validation' "$source_sha" '.github/workflows/continuous-integration.yml' push true || { printf 'required trusted source check is absent or invalid: terraform\n' >&2; exit 1; }
+trusted_check_present "$checks" 'Evidence Contracts' "$source_sha" '.github/workflows/continuous-integration.yml' push true || { printf 'required trusted source check is absent or invalid: policy-foundation\n' >&2; exit 1; }
 
 pulls="$temporary_directory/pulls.json"
 gh api -H 'Accept: application/vnd.github+json' "repos/$GITHUB_REPOSITORY/commits/$source_sha/pulls" > "$pulls"
@@ -100,7 +100,7 @@ jq -e --arg repo "$GITHUB_REPOSITORY" --arg sha "$source_sha" 'type == "array" a
 pr_head_sha="$(jq -er --arg repo "$GITHUB_REPOSITORY" --arg sha "$source_sha" '[.[] | select(.merged_at != null and .merge_commit_sha == $sha and .base.ref == "main" and .base.repo.full_name == $repo)][0].head.sha | select(test("^[0-9a-f]{40}$"))' "$pulls")"
 pr_checks="$temporary_directory/pr-checks.json"
 fetch_checks "$pr_head_sha" "$pr_checks"
-trusted_check_present "$pr_checks" 'CI Evidence Decision' "$pr_head_sha" '.github/workflows/opa-pr-gate.yml' workflow_run false || {
+trusted_check_present "$pr_checks" 'CI Evidence Decision' "$pr_head_sha" '.github/workflows/evidence-gate.yml' workflow_run false || {
   printf 'merged pull-request head lacks the trusted CI Evidence Decision\n' >&2
   exit 1
 }

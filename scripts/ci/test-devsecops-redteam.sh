@@ -25,15 +25,15 @@ if grep -REn 'curl[^\n]*\|[[:space:]]*(bash|sh|tar|unzip|install)' "$root/.githu
   fail 'unverified curl-to-shell or curl-to-extractor pipeline detected'
 fi
 
-ci="$root/.github/workflows/ci.yml"
-opa="$root/.github/workflows/opa-pr-gate.yml"
-release="$root/.github/workflows/release.yml"
+ci="$root/.github/workflows/continuous-integration.yml"
+opa="$root/.github/workflows/evidence-gate.yml"
+release="$root/.github/workflows/release-bundle.yml"
 grep -Fq 'gitleaks' "$root/scripts/ci/collect-pr-evidence.sh" || fail 'secret scanning is absent'
 grep -Fq 'osv-scanner' "$root/scripts/ci/collect-pr-evidence.sh" || fail 'dependency scanning is absent'
 grep -Fq 'semgrep scan' "$root/scripts/ci/collect-pr-evidence.sh" || fail 'SAST is absent'
 grep -Fq 'checkov' "$root/scripts/ci/collect-pr-evidence.sh" || fail 'IaC scanning is absent'
 grep -Fq 'run-fence-security-dast.sh' "$root/.github/workflows/fence-security.yml" || fail 'DAST is absent from the required security workflow'
-grep -Fq 'sbom.cyclonedx.json' "$root/.github/workflows/release.yml" || fail 'release SBOM is absent'
+grep -Fq 'sbom.cyclonedx.json' "$root/.github/workflows/release-bundle.yml" || fail 'release SBOM is absent'
 grep -Fq 'cosign attest' "$root/scripts/release/publish-fence-image.sh" || fail 'artifact attestation is absent'
 grep -Fq 'needs: [eligibility, reproducibility]' "$release" || fail 'release publication is not gated on eligibility and reproducibility'
 grep -Fq "needs.eligibility.result == 'success'" "$release" || fail 'release publication lacks an explicit eligibility success gate'

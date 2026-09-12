@@ -32,7 +32,7 @@ class RefreshEvidenceTest(unittest.TestCase):
         self.fixtures.mkdir()
         self.event = self.work / "event.json"
         write_json(self.event, {"workflow_run": {
-            "name": "CI Evidence Review Signal", "path": ".github/workflows/ci-review-refresh.yml",
+            "name": "CI Evidence Review Signal", "path": ".github/workflows/review-signal.yml",
             "event": "pull_request_review", "conclusion": "success", "repository": {"full_name": "owner/repo"},
             "pull_requests": [{"number": 7}],
         }})
@@ -44,12 +44,12 @@ class RefreshEvidenceTest(unittest.TestCase):
         }]})
         write_json(self.fixtures / "gate.json", {
             "repository": {"full_name": "owner/repo"}, "name": "CI Evidence Gate",
-            "path": ".github/workflows/opa-pr-gate.yml", "event": "workflow_run", "status": "completed",
+            "path": ".github/workflows/evidence-gate.yml", "event": "workflow_run", "status": "completed",
             "conclusion": "failure", "head_sha": TRUSTED,
         })
         write_json(self.fixtures / "source.json", {
             "repository": {"full_name": "owner/repo"}, "name": "CI",
-            "path": ".github/workflows/ci.yml", "event": "pull_request", "status": "completed",
+            "path": ".github/workflows/continuous-integration.yml", "event": "pull_request", "status": "completed",
             "conclusion": "success", "head_sha": HEAD, "pull_requests": [{"number": 7}],
         })
         self.write_archive()

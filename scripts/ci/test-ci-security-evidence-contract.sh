@@ -6,9 +6,9 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib/workflow-contract.sh"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-workflow="$script_dir/../../.github/workflows/ci.yml"
-gate_workflow="$script_dir/../../.github/workflows/opa-pr-gate.yml"
-review_workflow="$script_dir/../../.github/workflows/ci-review-refresh.yml"
+workflow="$script_dir/../../.github/workflows/continuous-integration.yml"
+gate_workflow="$script_dir/../../.github/workflows/evidence-gate.yml"
+review_workflow="$script_dir/../../.github/workflows/review-signal.yml"
 review_handler="$gate_workflow"
 
 check_scanner_images() {
@@ -45,7 +45,7 @@ run_scanner_image_guard_tests() {
 
   test_dir="$(mktemp -d)"
   ci_fixture="$test_dir/ci.yml"
-  gate_fixture="$test_dir/opa-pr-gate.yml"
+  gate_fixture="$test_dir/evidence-gate.yml"
   trap 'rm -rf "$test_dir"' RETURN
 
   printf 'SCANNER_IMAGE: %s\n' "$valid_image" > "$ci_fixture"

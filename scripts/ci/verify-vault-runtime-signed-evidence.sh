@@ -16,7 +16,7 @@ test -s "$bundle" && test ! -L "$bundle"
 # consolidation; both candidates retain every other exact certificate constraint.
 verified_identity=''
 for identity in \
-  'https://github.com/s1ns3nz0/node-operator/.github/workflows/operations-check.yml@refs/heads/main' \
+  'https://github.com/s1ns3nz0/node-operator/.github/workflows/operations-verification.yml@refs/heads/main' \
   'https://github.com/s1ns3nz0/node-operator/.github/workflows/vault-runtime-candidate-verification.yml@refs/heads/main'; do
   if cosign verify-blob --bundle "$bundle" \
     --certificate-identity "$identity" \

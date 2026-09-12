@@ -4,7 +4,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$root/scripts/ci/lib/workflow-contract.sh"
-workflow="$root/.github/workflows/image-release.yml"
+workflow="$root/.github/workflows/image-publish.yml"
 
 if ! ruby -ryaml -e '
   jobs = YAML.load_file(ARGV[0]).fetch("jobs")

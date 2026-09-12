@@ -7,7 +7,7 @@ root="$(repo_root)"
 fail() { printf 'FAIL CodeBuild release activation: %s\n' "$*" >&2; exit 1; }
 
 terraform_file="$root/infra/terraform/vault-signer.tf"
-workflow="$root/.github/workflows/release.yml"
+workflow="$root/.github/workflows/release-bundle.yml"
 contract="$root/docs/gitops/codebuild-signing-input-contract.md"
 for file in "$terraform_file" "$workflow" "$contract"; do
   test -f "$file" || fail "missing required file: $file"

@@ -23,7 +23,7 @@
     {
       "rule": "workflow.unsafe",
       "check_id": "dangerous-triggers",
-      "subject": ".github/workflows/opa-pr-gate.yml",
+      "subject": ".github/workflows/evidence-gate.yml",
       "owner": "fjybjinsu",
       "rationale": "CI-EVIDENCE-GATE: reviewed privileged trigger with trusted-main control code and isolated untrusted inputs; residual risk retained for explicit review",
       "issue": "docs/security/workflow-trigger-exception.md#ci-evidence-gate",

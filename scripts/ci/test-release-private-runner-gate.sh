@@ -9,9 +9,9 @@ source "$script_dir/lib/common.sh"
 root="$(repo_root)"
 fail() { printf 'FAIL %s\n' "$*" >&2; exit 1; }
 
-workflow="$root/.github/workflows/release.yml"
+workflow="$root/.github/workflows/release-bundle.yml"
 contract="$root/docs/gitops/private-release-runner-contract.md"
-operations_workflow="$root/.github/workflows/operations-check.yml"
+operations_workflow="$root/.github/workflows/operations-verification.yml"
 
 test -f "$workflow" || fail 'missing release workflow'
 test -f "$contract" || fail 'missing private release-runner contract'
