@@ -7,13 +7,14 @@ if [ -t 2 ]; then
 else
   ui_reset=''; ui_blue=''; ui_green=''; ui_red=''; ui_yellow=''
 fi
-release_stage='startup'; release_failed=0
+release_stage='startup'; release_failed=0; release_last_command=''
+trap 'release_last_command="$BASH_COMMAND"' DEBUG
 release_stage() { release_stage="$1"; printf '\n%s▶ %s%s  %s%s%s\n' "$ui_blue" "$2" "$ui_reset" "$ui_blue" "$1" "$ui_reset" >&2; }
 release_error() { rc=$?; release_failed=1; printf '%s✖ failed:%s stage=%s exit=%s\n  command: %s\n' "$ui_red" "$ui_reset" "$release_stage" "$rc" "$BASH_COMMAND" >&2; return "$rc"; }
 trap release_error ERR
 release_failure() {
   rc=$?
-  [ "$rc" -eq 0 ] || [ "$release_failed" -eq 1 ] || printf '\n%s✖ RELEASE FAILED%s  %s (exit %s)\n' "$ui_red" "$ui_reset" "$release_stage" "$rc" >&2
+  [ "$rc" -eq 0 ] || [ "$release_failed" -eq 1 ] || printf '\n%s✖ RELEASE FAILED%s  %s (exit %s)\n  last command: %s\n' "$ui_red" "$ui_reset" "$release_stage" "$rc" "$release_last_command" >&2
 }
 trap release_failure EXIT
 
