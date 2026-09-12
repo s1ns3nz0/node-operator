@@ -25,7 +25,10 @@ case "$handoff" in /*) ;; *) usage ;; esac
 [ -f "$handoff" ] && [ ! -L "$handoff" ] || { printf '%s\n' 'handoff must be a regular file' >&2; exit 65; }
 for command in jq grep; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 
-parent="$(cd "$(dirname "$handoff")" && pwd -P)"
+# Preserve the handoff's recorded path spelling. macOS aliases /var to
+# /private/var, and canonicalizing here makes valid generated handoffs fail
+# exact manifest-path checks.
+parent="$(dirname "$handoff")"
 runtime="$parent/runtime.yaml"
 client="$parent/client-and-fence.yaml"
 [ -f "$runtime" ] && [ ! -L "$runtime" ] && [ -f "$client" ] && [ ! -L "$client" ] || {
