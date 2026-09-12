@@ -131,7 +131,10 @@ case "$bundle_root:$inputs" in */*:/*) ;; *) usage ;; esac
 [ -f "$inputs" ] && [ ! -L "$inputs" ] || { printf '%s\n' 'inputs must name a regular file' >&2; exit 65; }
 command -v jq >/dev/null 2>&1 || { printf '%s\n' 'missing command: jq' >&2; exit 69; }
 
-input_parent="$(cd "$(dirname "$inputs")" && pwd -P)"
+# Preserve the absolute path spelling recorded by the preparation handoff.
+# macOS aliases /var to /private/var; canonicalizing here would make valid
+# handoff references fail string equality even though the files are identical.
+input_parent="$(dirname "$inputs")"
 zero_inputs="$input_parent/zero-resource/zero-resource-inputs.json"
 validator_handoff="$input_parent/validator-deployment/validator-deployment-handoff.json"
 jq -e --arg zero "$zero_inputs" --arg validator "$validator_handoff" '
