@@ -50,8 +50,9 @@ if [ -n "$env_file" ]; then
 fi
 DEFAULT_REGION="${DEFAULT_REGION:-ap-northeast-2}"
 # Fresh runs must not accidentally adopt a prior baseline. Keep an explicit
-# env override available, but default to a UTC timestamped deployment name.
-DEFAULT_DEPLOYMENT_NAME="${DEFAULT_DEPLOYMENT_NAME:-node-operator-$(date -u +%Y%m%d%H%M%S)}"
+# env override available, but default to a compact UTC date/time deployment name.
+# The 20-character Terraform naming limit requires a short prefix and YYMMDDHHMM.
+DEFAULT_DEPLOYMENT_NAME="${DEFAULT_DEPLOYMENT_NAME:-node-op-$(date -u +%y%m%d%H%M)}"
 DEFAULT_KEYSTORE_DIR="${DEFAULT_KEYSTORE_DIR:-}"
 DEFAULT_VALIDATOR_SET="${DEFAULT_VALIDATOR_SET:-hoodi-001}"
 DEFAULT_VALIDATOR_KEY="${DEFAULT_VALIDATOR_KEY:-}"
@@ -93,7 +94,7 @@ region="$(prompt_default 'AWS Region' "$DEFAULT_REGION")"
 case "$region" in ap-northeast-1|ap-northeast-2) ;; *) printf '%s\n' 'unsupported Region' >&2; exit 64 ;; esac
 validator_set="$(prompt_default 'Validator set' "$DEFAULT_VALIDATOR_SET")"
 deployment_name="$(prompt_default 'Deployment name' "$DEFAULT_DEPLOYMENT_NAME")"
-[[ "$deployment_name" =~ ^[a-z][a-z0-9-]{1,38}[a-z0-9]$ ]] || { printf '%s\n' 'deployment name must be a DNS-compatible name of 3-40 characters' >&2; exit 64; }
+[[ "$deployment_name" =~ ^[a-z][a-z0-9-]{1,18}[a-z0-9]$ ]] || { printf '%s\n' 'deployment name must be a DNS-compatible name of 3-20 characters' >&2; exit 64; }
 withdrawal="$(prompt_default 'Withdrawal address' "$DEFAULT_WITHDRAWAL")"
 identity="$(aws sts get-caller-identity --output json)"
 account="$(jq -er '.Account | select(test("^[0-9]{12}$"))' <<<"$identity")" || { printf '%s\n' 'AWS identity did not return a 12-digit account' >&2; exit 65; }

@@ -24,7 +24,7 @@ while [ "$#" -gt 0 ]; do
 done
 case "$account" in [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;; *) usage ;; esac
 case "$aws_region" in ap-northeast-1|ap-northeast-2) ;; *) usage ;; esac
-case "$name" in [a-z][a-z0-9-][a-z0-9-]*[a-z0-9]) [ "${#name}" -le 40 ] ;; *) usage ;; esac
+case "$name" in [a-z][a-z0-9-][a-z0-9-]*[a-z0-9]) [ "${#name}" -le 20 ] ;; *) usage ;; esac
 case "$output_dir" in /*) ;; *) usage ;; esac
 [ ! -e "$output_dir" ] && [ ! -L "$output_dir" ] || { printf '%s\n' 'output directory already exists or is a symlink' >&2; exit 65; }
 command -v jq >/dev/null 2>&1 || { printf '%s\n' 'missing command: jq' >&2; exit 69; }
