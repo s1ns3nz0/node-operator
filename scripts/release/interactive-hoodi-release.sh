@@ -90,6 +90,18 @@ deployment_name="$(prompt_default 'Deployment name' "$DEFAULT_DEPLOYMENT_NAME")"
 withdrawal="$(prompt_default 'Withdrawal address' "$DEFAULT_WITHDRAWAL")"
 identity="$(aws sts get-caller-identity --output json)"
 account="$(jq -er '.Account | select(test("^[0-9]{12}$"))' <<<"$identity")" || { printf '%s\n' 'AWS identity did not return a 12-digit account' >&2; exit 65; }
+if [ -n "$DEFAULT_BACKEND_PRINCIPAL_ARN" ]; then
+  case "$DEFAULT_BACKEND_PRINCIPAL_ARN" in
+    "arn:aws:iam::${account}:role/"*) ;;
+    *) printf '%s\n' 'BACKEND_PRINCIPAL_ARN must be a same-account IAM role ARN' >&2; exit 65 ;;
+  esac
+  backend_role_name="${DEFAULT_BACKEND_PRINCIPAL_ARN##*/}"
+  aws iam get-role --role-name "$backend_role_name" --query 'Role.Arn' --output text >/dev/null 2>&1 || {
+    printf 'configured Terraform backend role does not exist: %s\n' "$DEFAULT_BACKEND_PRINCIPAL_ARN" >&2
+    printf '%s\n' 'Create or select an existing same-account backend role, then update release/env before retrying. No resources were changed by this preflight.' >&2
+    exit 65
+  }
+fi
 platform_approval="$source_root/release/platform-artifact-approval.json"
 if [ -f "$platform_approval" ]; then
   approval_schema="$(jq -er '.schema_version' "$platform_approval" 2>/dev/null || true)"
