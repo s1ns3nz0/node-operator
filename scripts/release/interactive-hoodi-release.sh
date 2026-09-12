@@ -80,6 +80,22 @@ IFS= read -r confirmation
 prompt() { local label="$1" value; printf '%s: ' "$label" >&2; IFS= read -r value; printf '%s' "$value"; }
 prompt_default() { local label="$1" fallback="$2" value; printf '%s [%s]: ' "$label" "$fallback" >&2; IFS= read -r value; printf '%s' "${value:-$fallback}"; }
 prompt_secret() { local label="$1" value; printf '%s: ' "$label" >&2; IFS= read -r -s value; printf '\n' >&2; printf '%s' "$value"; }
+prompt_ipv4_cidr() {
+  local value octet valid
+  while :; do
+    value="$(prompt 'Kubernetes API operator IPv4 CIDR (/32)')"
+    valid=1
+    if [[ "$value" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})/32$ ]]; then
+      for octet in "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" "${BASH_REMATCH[4]}"; do
+        [ "$octet" -le 255 ] || valid=0
+      done
+    else
+      valid=0
+    fi
+    [ "$valid" -eq 1 ] && { printf '%s' "$value"; return; }
+    printf '%s\n' 'enter one explicit IPv4 address with /32, for example 203.0.113.10/32' >&2
+  done
+}
 absolute_new_dir() { case "$1" in /*) ;; *) printf '%s\n' 'path must be absolute' >&2; exit 64 ;; esac; [ ! -e "$1" ] && [ ! -L "$1" ] || { printf 'path already exists: %s\n' "$1" >&2; exit 65; }; }
 
 region="$(prompt_default 'AWS Region' "$DEFAULT_REGION")"
@@ -117,7 +133,7 @@ if [ -n "$DEFAULT_FENCE_IMAGE" ]; then
 else
   fence_image="$(prompt 'Approved signing-fence private ECR image@sha256 digest (v0.1.20 has no canonical default)')"
 fi
-api_cidr="$(prompt 'Kubernetes API operator IPv4 CIDR (/32)')"
+api_cidr="$(prompt_ipv4_cidr)"
 if [ -n "${NODE_OPERATOR_SOURCE_REPOSITORY_ROOT:-}" ]; then
   default_output_dir="${TMPDIR:-/tmp}/node-operator-run-$(date -u +%Y%m%dT%H%M%SZ)"
 else
