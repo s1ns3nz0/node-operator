@@ -82,7 +82,7 @@ if [ ! -f "$revoke_plan" ]; then
   terraform -chdir="$work_dir/baseline" show -json "$revoke_plan" | jq -e '
     all(.resource_changes[]?;
       (.change.actions | index("delete") | not) or
-      (.address | test("^(aws_(codebuild_project|cloudwatch_log_group|eks_access_(entry|policy_association)|iam_role|iam_role_policy|security_group|vpc_security_group_(egress_rule|ingress_rule))\\.(argocd_bootstrap|vault_bootstrap|argocd_bootstrap_cluster_admin|vault_bootstrap_cluster_admin))(\\[[0-9]+\\])?$"))
+      (.address | test("^(aws_(codebuild_project|cloudwatch_log_group|eks_access_(entry|policy_association)|iam_role|iam_role_policy|security_group|vpc_security_group_(egress_rule|ingress_rule))\\.(argocd_bootstrap|vault_bootstrap|argocd_bootstrap_cluster_admin|vault_bootstrap_cluster_admin)|aws_vpc_endpoint\\.private|aws_vpc_security_group_egress_rule\\.endpoints_to_(argocd|vault)_bootstrap)(\\[[0-9]+\\])?$"))
     )
   ' >/dev/null || { printf '%s\n' 'revoke plan contains an unexpected deletion; refusing cleanup' >&2; exit 70; }
 fi
