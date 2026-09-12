@@ -258,7 +258,11 @@ printf '%s4.%s Connect your own Hoodi wallet and submit exactly one 32 HoodiETH 
 printf '%s5.%s Save the mined transaction hash; it is required for public receipt verification before activation.\n' "$ui_yellow" "$ui_reset" >&2
 printf '%s!%s Do not paste mnemonics, keystore passwords, private keys, or wallet credentials into this shell, Git, CI, or Vault.\n' "$ui_red" "$ui_reset" >&2
 printf '   Deposit data directory: %s\n' "$(dirname "$deposit_data")" >&2
-printf '   Registration is intentionally manual and must be completed with your own Hoodi wallet.\n' >&2
+if [ -n "$existing_keystore_dir" ]; then
+  printf '   Existing keystore selected: treating the previously registered Hoodi validator as already deposited.\n' >&2
+  printf '%s✓%s Existing Hoodi registration acknowledged; no wallet interaction is requested.\n' "$ui_green" "$ui_reset" >&2
+else
+  printf '   Registration is intentionally manual and must be completed with your own Hoodi wallet.\n' >&2
 while :; do
   registration_confirmation="$(prompt 'Have you completed and confirmed the 32 HoodiETH deposit? [yes/no]')"
   case "$(printf '%s' "$registration_confirmation" | tr '[:upper:]' '[:lower:]')" in
@@ -275,6 +279,7 @@ while :; do
       ;;
   esac
 done
+fi
 
 zones=()
 while IFS= read -r zone; do
