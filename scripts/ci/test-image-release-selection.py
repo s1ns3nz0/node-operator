@@ -17,6 +17,14 @@ SPEC.loader.exec_module(M)
 
 
 class Selection(unittest.TestCase):
+    def test_shared_sbom_inputs_rebuild_their_consumers(self):
+        for path in M.IMAGE_SBOM_INPUTS:
+            result = M.select([path])
+            self.assertTrue(result["scanner"] and result["toolchains"])
+            self.assertEqual(result["toolchain_matrix"]["include"], M.TOOLCHAINS)
+            self.assertEqual(result["fence"], path in M.SIGNING)
+            self.assertEqual(result["relay"], path in M.SIGNING)
+
     def test_unrelated_changes_select_nothing(self):
         result = M.select(["README.md", "docs/operations/guide.md"])
         self.assertFalse(any(result[key] for key in ("scanner", "toolchains", "fence", "relay")))
@@ -113,7 +121,10 @@ class Workflow(unittest.TestCase):
             self.assertIn(f"needs: [select, {kind}-build]", jobs[kind + "-publish"])
             self.assertIn(f"needs.{kind}-build.result == 'success'", jobs[kind + "-publish"])
             self.assertIn("packages: write", jobs[kind + "-publish"])
-            self.assertNotIn("id-token: write", jobs[kind + "-publish"])
+            self.assertIn("id-token: write", jobs[kind + "-publish"])
+            self.assertIn("SBOM Policy Tools", jobs[kind + "-publish"])
+            self.assertIn("Image Signing Tools", jobs[kind + "-publish"])
+            self.assertIn(f"{kind}-signing-evidence", jobs[kind + "-publish"])
         self.assertIn("needs: [select, fence-security]", jobs["fence-publish"])
         self.assertIn("needs.fence-security.result == 'success'", jobs["fence-publish"])
         self.assertIn("uses: ./.github/workflows/fence-security.yml", jobs["fence-security"])

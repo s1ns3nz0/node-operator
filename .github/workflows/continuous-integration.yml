@@ -159,6 +159,30 @@ jobs:
       # Role: Contract test: Verify pinned offline SBOM vulnerability scanning and its release evidence contract.
       - name: Release SBOM SCA gate
         run: scripts/ci/test-release-sbom-sca.sh
+      # Role: Reject tampered image archives, SBOMs and build-subject receipts before publication.
+      - name: Image SBOM Evidence Contract
+        run: python3 scripts/ci/test-image-sbom-evidence.py
+      # Role: Exercise exact-digest signature/attestation bindings and denial paths without registry credentials.
+      - name: CI Image Signature Contract
+        run: python3 scripts/ci/test-ci-image-attestation.py
+      # Role: Reject invalid consumer evidence and tool versions using mocked Cosign; this is not live signature admission.
+      - name: CI Image Consumer Contract
+        run: python3 scripts/ci/test-verify-ci-image-evidence.py
+      # Role: Verify private-runner denial occurs before Docker or registry credential use.
+      - name: Private Runner Image Admission
+        run: python3 scripts/ci/test-private-runner-image-admission.py
+      # Role: Run both publisher scripts against traced doubles to prove denial blocks registry login or main promotion.
+      - name: CI Image Publication Ordering
+        run: python3 scripts/ci/test-ci-image-publication.py
+      # Role: Reject incomplete kube-bench EKS reports and keep raw audit details out of normalized evidence.
+      - name: EKS CIS Evidence Contract
+        run: python3 scripts/ci/test-eks-cis-normalizer.py
+      # Role: Test benchmark job rendering against synthetic selected-region AL2023 inventories; do not apply jobs.
+      - name: EKS CIS Job Contract
+        run: python3 scripts/ci/test-eks-cis-jobs.py
+      # Role: Require complete node coverage and preserve failed assessments; no live benchmark execution.
+      - name: EKS CIS Inventory Gate
+        run: python3 scripts/ci/test-eks-cis-inventory.py
       # Role: Contract test: Verify release source eligibility accepts only approved workflow provenance.
       - name: Release source eligibility
         run: scripts/ci/test-release-source-eligibility.sh

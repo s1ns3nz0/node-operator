@@ -15,4 +15,6 @@ if [ "$IMAGE_NAME" = release-build ]; then
   docker run --rm --user "$(id -u):$(id -g)" --volume "$GITHUB_WORKSPACE:/workspace:ro" --workdir /workspace "$IMAGE:build-${GITHUB_SHA}" bash scripts/ci/test-build-release-bundle.sh
 fi
 docker save --output toolchain-image.tar "$IMAGE:build-${GITHUB_SHA}"
+bash scripts/ci/generate-image-sbom.sh toolchain-image.tar toolchain-sbom "$IMAGE_NAME" "$GITHUB_SHA" \
+  "$(docker image inspect --format '{{.Id}}' "$IMAGE:build-${GITHUB_SHA}")"
 printf '%s\n' "$input_sha" > toolchain-input.sha256
