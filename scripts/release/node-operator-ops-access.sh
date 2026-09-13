@@ -255,6 +255,19 @@ classify_plan() {
   if bash "$guard" "$json" >/dev/null; then
     [ "$allow_create" = false ] || { printf 'retained-host plan must not use --allow-create\n' >&2; return 1; }
     printf 'retention\n'
+  elif jq -e '
+    # A resumed zero-resource release can legitimately produce a no-op plan
+    # for its own already-created host. Accept only an entirely no-op plan
+    # whose host still satisfies the fresh-host security invariants.
+    ([.resource_changes[]?.change.actions] | all(. == ["no-op"])) and
+    ([.resource_changes[]? | select(.address == "aws_instance.host") | .change.after] | length == 1) and
+    ([.resource_changes[]? | select(.address == "aws_instance.host") | .change.after] | .[0].ebs_optimized == true and
+      .[0].monitoring == false and .[0].associate_public_ip_address == false and
+      .[0].instance_type == "t3.micro" and .[0].metadata_options[0].http_tokens == "required" and
+      .[0].metadata_options[0].http_put_response_hop_limit == 1 and
+      .[0].root_block_device[0].encrypted == true and .[0].root_block_device[0].volume_type == "gp3")
+  ' "$json" >/dev/null; then
+    printf 'retention\n'
   else
     [ "$allow_create" = true ] || { printf 'fresh creation requires --allow-create\n' >&2; return 1; }
     fresh_plan "$json" || { printf 'plan is neither the reviewed retained host nor a secure fresh create\n' >&2; return 1; }
@@ -317,7 +330,7 @@ case "$operation" in
       instance_id="$(terraform_scoped -chdir="$module" output -raw instance_id)"
       [[ "$instance_id" =~ ^i-[0-9a-f]+$ ]] || { printf '%s\n' 'ops-access apply did not return a valid SSM instance ID' >&2; exit 70; }
       cluster_name="$(jq -er '.cluster_name' "$inputs")"
-      aws_region="$(jq -er '.aws_region | select(test("^ap-northeast-(1|2)$"))' "$config")"
+      aws_region="$(jq -er '.aws_region | select(test("^[a-z]{2}-[a-z0-9-]+-[0-9]+$"))' "$config")"
       jq -n --arg cluster "$cluster_name" --arg region "$aws_region" --arg instance "$instance_id" \
         '{schema_version:1,aws_region:$region,cluster_name:$cluster,ssm_ops_instance_id:$instance}' > "$session_handoff"
       chmod 600 "$session_handoff"

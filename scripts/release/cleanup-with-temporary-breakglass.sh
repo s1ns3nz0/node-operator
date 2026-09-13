@@ -20,7 +20,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 [ "$execute" = true ] && [ -n "$vpc_id" ] && [ -n "$object_bucket" ] || usage
-[[ "$region" =~ ^ap-northeast-(1|2)$ ]] || { printf '%s\n' 'unsupported region' >&2; exit 64; }
+[[ "$region" =~ ^[a-z]{2}-[a-z0-9-]+-[0-9]+$ ]] || { printf '%s\n' 'unsupported region' >&2; exit 64; }
 [[ "$vpc_id" =~ ^vpc-[0-9a-f]+$ ]] || { printf '%s\n' 'invalid VPC id' >&2; exit 64; }
 [[ "$object_bucket" =~ ^[a-z0-9.-]{3,63}$ ]] || { printf '%s\n' 'invalid bucket name' >&2; exit 64; }
 for c in aws jq; do command -v "$c" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$c" >&2; exit 69; }; done

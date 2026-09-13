@@ -1,7 +1,7 @@
 # Raft snapshots contain encrypted Vault state and must never share the
 # validator evidence archive.  Object Lock is enabled only at bucket creation.
 resource "aws_s3_bucket" "vault_snapshot" {
-  bucket_prefix       = "${local.name_prefix}-vs-"
+  bucket_prefix       = "${substr(local.name_prefix, 0, 20)}-vs-"
   force_destroy       = false
   object_lock_enabled = true
 

@@ -89,7 +89,7 @@ if [ "$command_name" = interactive ]; then
   case "$bundle_root:$output_dir" in */*:/*) ;; *) usage ;; esac
   [ -t 0 ] && [ -t 1 ] || { printf '%s\n' 'interactive preparation requires a terminal' >&2; exit 69; }
   command -v aws >/dev/null 2>&1 || { printf '%s\n' 'missing command: aws' >&2; exit 69; }
-  case "$aws_region" in ap-northeast-1|ap-northeast-2) ;; *) printf '%s\n' 'aws region must be ap-northeast-1 or ap-northeast-2' >&2; exit 64 ;; esac
+  [[ "$aws_region" =~ ^[a-z]{2}-[a-z0-9-]+-[0-9]+$ ]] || { printf '%s\n' 'aws region must be a valid AWS commercial region identifier' >&2; exit 64; }
   identity="$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN aws sts get-caller-identity --output json)"
   account="$(jq -er '.Account' <<<"$identity")"
   [[ "$account" =~ ^[0-9]{12}$ ]] || { printf '%s\n' 'current AWS identity did not return a valid account' >&2; exit 65; }
@@ -141,7 +141,7 @@ jq -e --arg zero "$zero_inputs" --arg validator "$validator_handoff" '
   .schema_version == 1 and .network == "hoodi" and
   (.aws_account_id | test("^[0-9]{12}$")) and
   (.validator_set | test("^hoodi-[a-z0-9][a-z0-9-]*$")) and
-  (.aws_region | test("^ap-northeast-(1|2)$")) and .zero_resource_inputs == $zero and .validator_deployment_handoff == $validator and
+  (.aws_region | test("^[a-z]{2}-[a-z0-9-]+-[0-9]+$")) and .zero_resource_inputs == $zero and .validator_deployment_handoff == $validator and
   (.required_checkpoints | type == "array" and length == 6)
 ' "$inputs" >/dev/null || { printf '%s\n' 'inputs are not a bounded Hoodi zero-release contract' >&2; exit 65; }
 [ -f "$zero_inputs" ] && [ ! -L "$zero_inputs" ] && [ -f "$validator_handoff" ] && [ ! -L "$validator_handoff" ] || { printf '%s\n' 'release contract references missing or unsafe inputs' >&2; exit 65; }
@@ -253,7 +253,7 @@ PY
     [ -f "$session_handoff" ] && [ ! -L "$session_handoff" ] || { printf '%s\n' 'custody session handoff must be a regular file' >&2; exit 65; }
     [ -d "$keystore_dir" ] && [ ! -L "$keystore_dir" ] || { printf '%s\n' 'custody keystore directory must be a real local directory' >&2; exit 65; }
     [ ! -e "$ceremony_dir" ] && [ ! -L "$ceremony_dir" ] || { printf '%s\n' 'custody ceremony directory must be new so public CA evidence cannot be overwritten' >&2; exit 65; }
-    session_region="$(jq -er 'select(.schema_version == 1 and (.aws_region | test("^ap-northeast-(1|2)$")) and (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and (.ssm_ops_instance_id | test("^i-[0-9a-f]+$"))) | .aws_region' "$session_handoff")" || { printf '%s\n' 'custody session handoff is invalid' >&2; exit 65; }
+    session_region="$(jq -er 'select(.schema_version == 1 and (.aws_region | test("^[a-z]{2}-[a-z0-9-]+-[0-9]+$")) and (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and (.ssm_ops_instance_id | test("^i-[0-9a-f]+$"))) | .aws_region' "$session_handoff")" || { printf '%s\n' 'custody session handoff is invalid' >&2; exit 65; }
     session_cluster="$(jq -er '.cluster_name' "$session_handoff")"; session_instance="$(jq -er '.ssm_ops_instance_id' "$session_handoff")"
     [ "$session_region" = "$input_region" ] || { printf '%s\n' 'custody session points to another Region' >&2; exit 65; }
     validator_set="$(jq -er '.validator_set' "$validator_handoff")"
@@ -269,7 +269,7 @@ PY
     [ -n "$session_handoff$output_dir" ] && [ -z "$work_dir$ops_inputs$plan_file$expected_sha$keystore_dir$ceremony_dir$deposit_attestation$public_deposit_verification$private_evidence$signer_evidence$confirm_public_key$confirm_withdrawal_address" ] || usage
     case "$session_handoff:$output_dir" in /*:/*) ;; *) usage ;; esac
     [ -f "$session_handoff" ] && [ ! -L "$session_handoff" ] || { printf '%s\n' 'signer evidence session handoff must be a regular file' >&2; exit 65; }
-    session_region="$(jq -er 'select(.schema_version == 1 and (.aws_region | test("^ap-northeast-(1|2)$")) and (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and (.ssm_ops_instance_id | test("^i-[0-9a-f]+$"))) | .aws_region' "$session_handoff")" || { printf '%s\n' 'signer evidence session handoff is invalid' >&2; exit 65; }
+    session_region="$(jq -er 'select(.schema_version == 1 and (.aws_region | test("^[a-z]{2}-[a-z0-9-]+-[0-9]+$")) and (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and (.ssm_ops_instance_id | test("^i-[0-9a-f]+$"))) | .aws_region' "$session_handoff")" || { printf '%s\n' 'signer evidence session handoff is invalid' >&2; exit 65; }
     session_cluster="$(jq -er '.cluster_name' "$session_handoff")"; session_instance="$(jq -er '.ssm_ops_instance_id' "$session_handoff")"
     [ "$session_region" = "$input_region" ] || { printf '%s\n' 'signer evidence session points to another Region' >&2; exit 65; }
     validator_set="$(jq -er '.validator_set' "$validator_handoff")"
@@ -292,7 +292,7 @@ PY
     session_region="$(jq -er '
       select(
         .schema_version == 1 and
-        (.aws_region | test("^ap-northeast-(1|2)$")) and
+        (.aws_region | test("^[a-z]{2}-[a-z0-9-]+-[0-9]+$")) and
         (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and
         (.ssm_ops_instance_id | test("^i-[0-9a-f]+$"))
       ) | .aws_region

@@ -26,13 +26,13 @@ handoff="$handoff_parent/$(basename "$handoff")"
 output_parent="$(cd "$(dirname "$output_dir")" && pwd -P)"
 output_dir="$output_parent/$(basename "$output_dir")"
 jq -e '
-  .schema_version == "v1" and (.aws_region | test("^ap-northeast-(1|2)$")) and
+  .schema_version == "v1" and (.aws_region | test("^[a-z]{2}-[a-z0-9-]+-[0-9]+$")) and
   (.aws_account_id | test("^[0-9]{12}$")) and (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and
   (.vpc_id | test("^vpc-[0-9a-f]+$")) and (.subnet_id | test("^subnet-[0-9a-f]+$")) and
   (.backend | type == "object" and (.bucket | test("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$")) and
    (.dynamodb_table | type == "string" and length > 0) and
-   (.kms_key_id | test("^arn:aws:kms:ap-northeast-(1|2):[0-9]{12}:key/[A-Za-z0-9-]+$")) and
-   (.region | test("^ap-northeast-(1|2)$")) and .key == "node-operator/ops-access/terraform.tfstate")
+   (.kms_key_id | test("^arn:aws:kms:[a-z]{2}-[a-z0-9-]+-[0-9]+:[0-9]{12}:key/[A-Za-z0-9-]+$")) and
+   (.region | test("^[a-z]{2}-[a-z0-9-]+-[0-9]+$")) and .key == "node-operator/ops-access/terraform.tfstate")
 ' "$handoff" >/dev/null || { printf '%s\n' 'handoff is not an isolated ops-access contract' >&2; exit 65; }
 
 account="$(jq -r '.aws_account_id' "$handoff")"

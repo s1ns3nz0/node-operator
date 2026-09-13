@@ -45,7 +45,7 @@ if [ -n "$env_file" ]; then
   while IFS='=' read -r key value; do
     key="${key%%[[:space:]]*}"; value="${value##[[:space:]]}"
     case "$key" in ''|'#'*) continue ;; esac
-    case "$key" in REGION) DEFAULT_REGION="$value" ;; DEPLOYMENT_NAME) DEFAULT_DEPLOYMENT_NAME="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; EXISTING_KEYSTORE_DIR) DEFAULT_KEYSTORE_DIR="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; CLIENT_CHART_SOURCE_REGION) DEFAULT_CLIENT_CHART_SOURCE_REGION="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; esac
+    case "$key" in REGION) DEFAULT_REGION="$value" ;; DEPLOYMENT_NAME) DEFAULT_DEPLOYMENT_NAME="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; EXISTING_KEYSTORE_DIR) DEFAULT_KEYSTORE_DIR="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; CLIENT_CHART_SOURCE_REGION) DEFAULT_CLIENT_CHART_SOURCE_REGION="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; CERT_MANAGER_CHART_DIGEST) DEFAULT_CERT_MANAGER_CHART_DIGEST="$value" ;; DEPOSIT_TX_HASH) DEFAULT_DEPOSIT_TX_HASH="$value" ;; HOODI_PUBLIC_RPC_URL) DEFAULT_HOODI_PUBLIC_RPC_URL="$value" ;; esac
   done < "$env_file"
 fi
 DEFAULT_REGION="${DEFAULT_REGION:-ap-northeast-2}"
@@ -69,6 +69,9 @@ DEFAULT_CLIENT_CHART_DIGEST="${DEFAULT_CLIENT_CHART_DIGEST:-}"
 DEFAULT_CLIENT_CHART_SOURCE_REGION="${DEFAULT_CLIENT_CHART_SOURCE_REGION:-ap-northeast-2}"
 DEFAULT_VAULT_CHART_VERSION="${DEFAULT_VAULT_CHART_VERSION:-0.31.0}"
 DEFAULT_VAULT_CHART_DIGEST="${DEFAULT_VAULT_CHART_DIGEST:-sha256:85cfa6b40396a198a104fbf06c7cccaf75428db7201394f9061c272441bcd0e4}"
+DEFAULT_CERT_MANAGER_CHART_DIGEST="${DEFAULT_CERT_MANAGER_CHART_DIGEST:-sha256:62c4745561eccfd723678c6547500750ebef5a880d81ff670d33124ab335f877}"
+DEFAULT_DEPOSIT_TX_HASH="${DEFAULT_DEPOSIT_TX_HASH:-}"
+DEFAULT_HOODI_PUBLIC_RPC_URL="${DEFAULT_HOODI_PUBLIC_RPC_URL:-}"
 
 [ -d "$bundle_root/source" ] && [ -f "$bundle_root/bundle-manifest.json" ] || {
   printf '%s\n' 'a verified v0.1.20 release bundle is required' >&2; exit 65;
@@ -91,7 +94,7 @@ absolute_new_dir() { case "$1" in /*) ;; *) printf '%s\n' 'path must be absolute
 
 step 'Collecting deployment settings'
 region="$(prompt_default 'AWS Region' "$DEFAULT_REGION")"
-case "$region" in ap-northeast-1|ap-northeast-2) ;; *) printf '%s\n' 'unsupported Region' >&2; exit 64 ;; esac
+[[ "$region" =~ ^[a-z]{2}-[a-z0-9-]+-[0-9]+$ ]] || { printf '%s\n' 'unsupported AWS Region format' >&2; exit 64; }
 validator_set="$(prompt_default 'Validator set' "$DEFAULT_VALIDATOR_SET")"
 deployment_name="$(prompt_default 'Deployment name' "$DEFAULT_DEPLOYMENT_NAME")"
 [[ "$deployment_name" =~ ^[a-z][a-z0-9-]{1,18}[a-z0-9]$ ]] || { printf '%s\n' 'deployment name must be a DNS-compatible name of 3-20 characters' >&2; exit 64; }
@@ -132,19 +135,19 @@ if [ -f "$platform_approval" ]; then
   [ "$approval_schema" = 1 ] || { printf '%s\n' 'platform artifact approval is malformed' >&2; exit 65; }
   if [ -z "$DEFAULT_ARGOCD_BOOTSTRAP_IMAGE" ]; then
     argo_digest="$(jq -er '.artifacts.argocd_bootstrap.source | split("@")[-1]' "$platform_approval")"
-    DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-gitops-argocd@${argo_digest}"
+    DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="${account}.dkr.ecr.${region}.amazonaws.com/${deployment_name}-baseline-gitops-argocd@${argo_digest}"
   fi
   if [ -z "$DEFAULT_VAULT_BOOTSTRAP_IMAGE" ]; then
     vault_digest="$(jq -er '.artifacts.vault_bootstrap.source | split("@")[-1]' "$platform_approval")"
-    DEFAULT_VAULT_BOOTSTRAP_IMAGE="${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-gitops-vault@${vault_digest}"
+    DEFAULT_VAULT_BOOTSTRAP_IMAGE="${account}.dkr.ecr.${region}.amazonaws.com/${deployment_name}-baseline-gitops-vault@${vault_digest}"
   fi
 fi
 runtime_images="$source_root/.ci/validator/approved-runtime-images.json"
 client_images="$source_root/.ci/validator/approved-client-images.json"
 [ -f "$runtime_images" ] && [ -f "$client_images" ] || { printf '%s\n' 'release bundle lacks canonical approved image records' >&2; exit 65; }
-web3signer_image="${DEFAULT_WEB3SIGNER_IMAGE:-$(jq -er '.images.web3signer.source' "$runtime_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-validator-runtime-web3signer#")}"
-postgres_image="${DEFAULT_POSTGRES_IMAGE:-$(jq -er '.images.postgres.source' "$runtime_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-validator-runtime-postgres#")}"
-prysm_image="${DEFAULT_PRYSM_IMAGE:-$(jq -er '([.images[] | select(.component == "prysm-validator" and .activation_approved == true and .release_channel == "manual-native-mtls")] + [.images[] | select(.component == "prysm-validator" and .activation_approved == true)]) | .[0].private_image' "$client_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-validator-prysm#")}"
+web3signer_image="${DEFAULT_WEB3SIGNER_IMAGE:-$(jq -er '.images.web3signer.source' "$runtime_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/${deployment_name}-baseline-validator-runtime-web3signer#")}"
+postgres_image="${DEFAULT_POSTGRES_IMAGE:-$(jq -er '.images.postgres.source' "$runtime_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/${deployment_name}-baseline-validator-runtime-postgres#")}"
+prysm_image="${DEFAULT_PRYSM_IMAGE:-$(jq -er '([.images[] | select(.component == "prysm-validator" and .activation_approved == true and .release_channel == "manual-native-mtls")] + [.images[] | select(.component == "prysm-validator" and .activation_approved == true)]) | .[0].private_image' "$client_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/${deployment_name}-baseline-validator-prysm#")}"
 [ "$prysm_image" != null ] && [ -n "$prysm_image" ] || { printf '%s\n' 'approved Prysm activation image is missing' >&2; exit 65; }
 printf 'Using release-approved images:\n  Web3Signer %s\n  PostgreSQL %s\n  Prysm %s\n' "$(display_digest "$web3signer_image")" "$(display_digest "$postgres_image")" "$(display_digest "$prysm_image")" >&2
 if [ -n "$DEFAULT_FENCE_IMAGE" ]; then
@@ -152,6 +155,13 @@ if [ -n "$DEFAULT_FENCE_IMAGE" ]; then
   printf 'Using env-file signing-fence image: %s\n' "$fence_image" >&2
 else
   fence_image="$(prompt 'Approved signing-fence private ECR image@sha256 digest (v0.1.20 has no canonical default)')"
+fi
+# Non-secret env files may carry the approved digest from the source Region.
+# Re-home that immutable digest to the selected account/Region so a fresh
+# Region can mirror it without requiring the operator to edit a registry URL.
+if [[ "$fence_image" =~ ^[0-9]{12}\.dkr\.ecr\.[a-z]{2}-[a-z0-9-]+-[0-9]+\.amazonaws\.com/(.+@sha256:[a-f0-9]{64})$ ]]; then
+  fence_image="${account}.dkr.ecr.${region}.amazonaws.com/$(printf '%s' "${BASH_REMATCH[1]}" | sed "s#^node-operator-baseline#${deployment_name}-baseline#")"
+  printf 'Resolved signing-fence digest for selected Region: %s\n' "$(display_digest "$fence_image")" >&2
 fi
 # The signing-fence policy targets the private EKS API endpoint, which does not
 # exist until foundation/EKS creation. A guarded deploy step replaces this
@@ -251,7 +261,11 @@ printf '%s4.%s Connect your own Hoodi wallet and submit exactly one 32 HoodiETH 
 printf '%s5.%s Save the mined transaction hash; it is required for public receipt verification before activation.\n' "$ui_yellow" "$ui_reset" >&2
 printf '%s!%s Do not paste mnemonics, keystore passwords, private keys, or wallet credentials into this shell, Git, CI, or Vault.\n' "$ui_red" "$ui_reset" >&2
 printf '   Deposit data directory: %s\n' "$(dirname "$deposit_data")" >&2
-printf '   Registration is intentionally manual and must be completed with your own Hoodi wallet.\n' >&2
+if [ -n "$existing_keystore_dir" ]; then
+  printf '   Existing keystore selected: treating the previously registered Hoodi validator as already deposited.\n' >&2
+  printf '%s✓%s Existing Hoodi registration acknowledged; no wallet interaction is requested.\n' "$ui_green" "$ui_reset" >&2
+else
+  printf '   Registration is intentionally manual and must be completed with your own Hoodi wallet.\n' >&2
 while :; do
   registration_confirmation="$(prompt 'Have you completed and confirmed the 32 HoodiETH deposit? [yes/no]')"
   case "$(printf '%s' "$registration_confirmation" | tr '[:upper:]' '[:lower:]')" in
@@ -268,6 +282,7 @@ while :; do
       ;;
   esac
 done
+fi
 
 zones=()
 while IFS= read -r zone; do
@@ -326,8 +341,8 @@ if [ "${#bootstrap_mirror_images[@]}" -gt 0 ]; then
   printf '%s' "$ecr_auth" | DOCKER_CONFIG="$docker_config" docker login --username AWS --password-stdin "$registry" >/dev/null
   for destination in "${bootstrap_mirror_images[@]}"; do
     case "$destination" in
-      *node-operator-baseline-gitops-argocd@*) key=argocd_bootstrap ;;
-      *node-operator-baseline-gitops-vault@*) key=vault_bootstrap ;;
+      *-baseline-gitops-argocd@*) key=argocd_bootstrap ;;
+      *-baseline-gitops-vault@*) key=vault_bootstrap ;;
       *) printf 'unrecognized bootstrap destination: %s\n' "$destination" >&2; exit 65 ;;
     esac
     source_image="$(jq -er --arg key "$key" '.artifacts[$key].source' "$platform_approval")"
@@ -362,7 +377,7 @@ baseline_config="$(jq -er '.baseline_config' "$zero_inputs")"
 platform_subnets=()
 while IFS= read -r subnet; do [ -n "$subnet" ] && platform_subnets+=("$subnet"); done < <(jq -er '.hoodi_subnet_ids[]' "$output_dir/deployment-work/foundation-output.json")
 [ "${#platform_subnets[@]}" -gt 0 ] || { printf '%s\n' 'foundation output lacks Hoodi private subnets for platform bootstrap' >&2; exit 65; }
-platform_args=(--baseline-work-dir "$output_dir/deployment-work" --baseline-config "$baseline_config" --account "$account" --region "$region" --argocd-image "$argocd_bootstrap_image" --vault-image "$vault_bootstrap_image" --client-chart-version "$client_chart_version" --client-chart-digest "$client_chart_digest" --vault-chart-version "$DEFAULT_VAULT_CHART_VERSION" --vault-chart-digest "$DEFAULT_VAULT_CHART_DIGEST")
+platform_args=(--baseline-work-dir "$output_dir/deployment-work" --baseline-config "$baseline_config" --account "$account" --region "$region" --argocd-image "$argocd_bootstrap_image" --vault-image "$vault_bootstrap_image" --client-chart-version "$client_chart_version" --client-chart-digest "$client_chart_digest" --vault-chart-version "$DEFAULT_VAULT_CHART_VERSION" --vault-chart-digest "$DEFAULT_VAULT_CHART_DIGEST" --cert-manager-chart-digest "$DEFAULT_CERT_MANAGER_CHART_DIGEST")
 for subnet in "${platform_subnets[@]}"; do platform_args+=(--subnet-id "$subnet"); done
 client_repository="$(terraform -chdir="$output_dir/deployment-work/baseline" output -raw gitops_client_ecr_repository_url 2>/dev/null || true)"
 case "$client_repository" in
@@ -371,8 +386,30 @@ case "$client_repository" in
 esac
 client_repository="${client_repository#*/}"
 client_found="$(aws ecr describe-images --region "$region" --repository-name "$client_repository" --image-ids imageTag="$client_chart_version" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
-[ "$client_found" = "$client_chart_digest" ] || { printf 'client chart %s with digest %s is missing from private ECR\n' "$client_chart_version" "$client_chart_digest" >&2; printf '%s\n' 'Publish or mirror the reviewed immutable client chart, then rerun the single installer.' >&2; exit 65; }
-"$platform_script" "${platform_args[@]}"
+if [ "$client_found" != "$client_chart_digest" ]; then
+  # A fresh region has an empty chart repository. Mirror the reviewed,
+  # immutable chart automatically instead of requiring a manual publish step.
+  command -v docker >/dev/null 2>&1 || { printf '%s\n' 'docker is required to mirror the reviewed client chart' >&2; exit 69; }
+  if [ -z "${docker_config:-}" ]; then
+    docker_config="$(mktemp -d "$output_dir/.docker-config.XXXXXX")"
+    chmod 700 "$docker_config"
+    trap 'unset confirmation validator_key expected_key withdrawal web3signer_image postgres_image prysm_image fence_image ecr_auth source_image; rm -f "$output_dir/.interactive-inputs.tmp" 2>/dev/null || true; rm -rf "$docker_config" 2>/dev/null || true' EXIT
+  fi
+  source_registry="$(printf '%s' "$account.dkr.ecr.$DEFAULT_CLIENT_CHART_SOURCE_REGION.amazonaws.com")"
+  target_registry="$(printf '%s' "$account.dkr.ecr.$region.amazonaws.com")"
+  source_repository="node-operator-baseline-gitops-client/node-operator-client"
+  source_image="$source_registry/$source_repository:$client_chart_version"
+  source_auth="$(aws ecr get-login-password --region "$DEFAULT_CLIENT_CHART_SOURCE_REGION")"
+  printf '%s' "$source_auth" | DOCKER_CONFIG="$docker_config" docker login --username AWS --password-stdin "$source_registry" >/dev/null
+  ecr_auth="$(aws ecr get-login-password --region "$region")"
+  printf '%s' "$ecr_auth" | DOCKER_CONFIG="$docker_config" docker login --username AWS --password-stdin "$target_registry" >/dev/null
+  DOCKER_CONFIG="$docker_config" docker pull "$source_image" >/dev/null
+  DOCKER_CONFIG="$docker_config" docker tag "$source_image" "$target_registry/$client_repository:$client_chart_version"
+  DOCKER_CONFIG="$docker_config" docker push "$target_registry/$client_repository:$client_chart_version" >/dev/null
+  client_found="$(aws ecr describe-images --region "$region" --repository-name "$client_repository" --image-ids imageTag="$client_chart_version" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
+fi
+[ "$client_found" = "$client_chart_digest" ] || { printf 'client chart %s with digest %s is missing or mismatched in private ECR\n' "$client_chart_version" "$client_chart_digest" >&2; exit 65; }
+NODE_OPERATOR_AUTOMATED_CEREMONY="${NODE_OPERATOR_AUTOMATED_CEREMONY:-0}" "$platform_script" "${platform_args[@]}"
 
 step 'Configuring private Vault TLS'
 printf '%s\n' 'Preparing cert-manager-managed Vault TLS through the private EKS session.' >&2
@@ -383,7 +420,7 @@ tls_manifest="$source_root/docs/gitops/vault-tls-internal-ca.example.yaml"
 
 step 'Running Vault v2 recovery and validator custody'
 printf '%s\n' 'Next ceremony: Vault v2 recovery. Recovery shares will be requested silently by the delegated script.' >&2
-"$bundle_root/source/scripts/ops/recover-and-bootstrap-hoodi-vault-v2.sh" --validator-set "$validator_set"
+NODE_OPERATOR_AUTOMATED_CEREMONY="${NODE_OPERATOR_AUTOMATED_CEREMONY:-0}" "$bundle_root/source/scripts/ops/recover-and-bootstrap-hoodi-vault-v2.sh" --validator-set "$validator_set"
 
 "$release" custody apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --keystore-dir "$keystore_dir_for_custody" --ceremony-dir "$output_dir/ceremony"
 
@@ -407,10 +444,22 @@ mkdir -m 700 "$output_dir/evidence"
 printf 'Generated and validated deposit attestation: %s\n' "$deposit_attestation" >&2
 printf '%s\n' 'Activation requires independently reviewed public deposit, private Beacon, and signer evidence. Enter paths only; secret material is not accepted.' >&2
 step 'Guarded validator activation'
-public_deposit="$(prompt 'Absolute public deposit verification JSON')"
-private_evidence="$(prompt 'Absolute private Beacon evidence JSON')"
-signer_evidence="$(prompt 'Absolute signer evidence JSON')"
-confirm_key="$(prompt 'Confirm validator public key (0x...)')"
-confirm_withdrawal="$(prompt 'Confirm withdrawal address (0x...)')"
+if [ "${NODE_OPERATOR_AUTOMATED_CEREMONY:-0}" = 1 ] && [ -n "$DEFAULT_DEPOSIT_TX_HASH" ] && [ -n "$DEFAULT_HOODI_PUBLIC_RPC_URL" ]; then
+  external_dir="$output_dir/evidence/public"; mkdir -m 700 "$external_dir"
+  withdrawal_credentials="$(jq -er '.withdrawal_credentials' "$deposit_attestation")"
+  "$source_root/scripts/ops/observe-external-hoodi-validator.sh" --validator-set "$validator_set" --validator-public-key "$validator_key" --correlation-id "$(printf '%s' "$validator_set-$deployment_name" | shasum -a 256 | cut -c1-32)" --output-dir "$external_dir" --deposit-tx "$DEFAULT_DEPOSIT_TX_HASH" --withdrawal-credentials "$withdrawal_credentials" --public-rpc-url "$DEFAULT_HOODI_PUBLIC_RPC_URL" >/dev/null
+  public_deposit="$(find "$external_dir" -type f -name '*public-rpc*.json' -print -quit)"
+  private_evidence="$(find "$output_dir/evidence/beacon" -type f -name '*.json' -print -quit)"
+  signer_evidence="$(find "$output_dir/evidence/signer" -type f -name '*.json' -print -quit)"
+  confirm_key="$validator_key"; confirm_withdrawal="$withdrawal"
+  [ -n "$public_deposit" ] && [ -n "$private_evidence" ] && [ -n "$signer_evidence" ] || { printf '%s\n' 'automated activation evidence collection was incomplete' >&2; exit 65; }
+  printf '%s\n' 'Automated disposable-run mode: public receipt, Beacon, and signer evidence were collected; activating the existing Hoodi validator.' >&2
+else
+  public_deposit="$(prompt 'Absolute public deposit verification JSON')"
+  private_evidence="$(prompt 'Absolute private Beacon evidence JSON')"
+  signer_evidence="$(prompt 'Absolute signer evidence JSON')"
+  confirm_key="$(prompt 'Confirm validator public key (0x...)')"
+  confirm_withdrawal="$(prompt 'Confirm withdrawal address (0x...)')"
+fi
 "$release" activate apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --deposit-attestation "$deposit_attestation" --public-deposit-verification "$public_deposit" --private-evidence "$private_evidence" --signer-evidence "$signer_evidence" --confirm-public-key "$confirm_key" --confirm-withdrawal-address "$confirm_withdrawal"
 printf 'PASS: v0.1.20 interactive Hoodi release completed. Non-secret handoffs and evidence are under %s.\n' "$output_dir"

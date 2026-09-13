@@ -31,7 +31,7 @@ mode="$(stat -f '%Lp' "$plan_parent" 2>/dev/null || stat -c '%a' "$plan_parent")
 
 jq -e '
   .enable_vault_bootstrap_runner == true and .enable_vault_bootstrap_cluster_admin == true and
-  (.vault_bootstrap_image | test("^[0-9]{12}\\.dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com/.+@sha256:[a-f0-9]{64}$")) and
+  (.vault_bootstrap_image | test("^[0-9]{12}\\.dkr\\.ecr\\.[a-z]{2}-[a-z0-9-]+-[0-9]+\\.amazonaws\\.com/.+@sha256:[a-f0-9]{64}$")) and
   (.vault_bootstrap_subnet_ids | type == "array" and length > 0 and all(.[]; test("^subnet-[a-z0-9]+$"))) and
   (.vault_chart_version | test("^[0-9]+\\.[0-9]+\\.[0-9]+$")) and
   (.vault_chart_manifest_digest | test("^sha256:[a-f0-9]{64}$"))

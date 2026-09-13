@@ -19,7 +19,7 @@ role="node-operator-full-cleanup-$(date -u +%Y%m%d%H%M%S)"; role_arn="arn:aws:ia
 cleanup(){ set +e; unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_SECURITY_TOKEN; aws iam delete-user-policy --user-name "$user_name" --policy-name "$policy_name" >/dev/null 2>&1 || true; aws iam delete-role-policy --role-name "$role" --policy-name cleanup >/dev/null 2>&1 || true; aws iam delete-role --role-name "$role" >/dev/null 2>&1 || true; unlink "$policy_file" >/dev/null 2>&1 || true; }; trap cleanup EXIT INT TERM
 
 jq -n --arg region "$region" --arg bucket "$object_bucket" '{Version:"2012-10-17",Statement:[
- {Effect:"Allow",Action:["ec2:Describe*","ec2:Delete*","ec2:DetachInternetGateway","ssm:DescribeInstanceInformation"],Resource:"*",Condition:{StringEquals:{"aws:RequestedRegion":$region}}},
+ {Effect:"Allow",Action:["ec2:Describe*","ec2:Delete*","ec2:TerminateInstances","ec2:DetachInternetGateway","ssm:DescribeInstanceInformation"],Resource:"*",Condition:{StringEquals:{"aws:RequestedRegion":$region}}},
  {Effect:"Allow",Action:["eks:DescribeCluster","eks:ListNodegroups","eks:DeleteNodegroup","eks:DeleteCluster"],Resource:"*",Condition:{StringEquals:{"aws:RequestedRegion":$region}}},
  {Effect:"Allow",Action:["s3:ListBucket","s3:ListBucketVersions","s3:GetObjectRetention","s3:DeleteObject","s3:DeleteObjectVersion","s3:BypassGovernanceRetention","s3:DeleteBucket"],Resource:[("arn:aws:s3:::"+$bucket),("arn:aws:s3:::"+$bucket+"/*")]},
  {Effect:"Allow",Action:["kms:ListAliases","kms:DeleteAlias","kms:DescribeKey","kms:ScheduleKeyDeletion"],Resource:"*"},
@@ -75,7 +75,7 @@ if [ -n "$root_profile" ]; then
 else
   for alias in $(aws kms list-aliases --region "$region" --query 'Aliases[?starts_with(AliasName, `alias/node-operator-baseline-`)].AliasName' --output text); do aws kms delete-alias --region "$region" --alias-name "$alias" 2>/dev/null || printf 'WARN: KMS alias denied by key policy (rerun with --root-profile): %s\n' "$alias"; done
 fi
-for repo in $(aws ecr describe-repositories --region "$region" --query 'repositories[?starts_with(repositoryName, `node-operator-baseline-`)].repositoryName' --output text); do aws ecr delete-repository --region "$region" --repository-name "$repo" --force 2>/dev/null || printf 'WARN: ECR repository could not be deleted: %s\n' "$repo"; done
+for repo in $(aws ecr describe-repositories --region "$region" --query 'repositories[?starts_with(repositoryName, `node-operator-baseline-`) || starts_with(repositoryName, `node-op-`)].repositoryName' --output text); do aws ecr delete-repository --region "$region" --repository-name "$repo" --force 2>/dev/null || printf 'WARN: ECR repository could not be deleted: %s\n' "$repo"; done
 
 if [ -n "$vpc_id" ]; then
   for ep in $(aws ec2 describe-vpc-endpoints --region "$region" --filters Name=vpc-id,Values="$vpc_id" --query 'VpcEndpoints[].VpcEndpointId' --output text); do aws ec2 delete-vpc-endpoints --region "$region" --vpc-endpoint-ids "$ep" >/dev/null 2>&1 || true; done

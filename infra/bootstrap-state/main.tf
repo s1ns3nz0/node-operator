@@ -240,5 +240,11 @@ resource "aws_dynamodb_table" "lock" {
     enabled = true
   }
   tags = local.tags
-  lifecycle { prevent_destroy = true }
+  lifecycle {
+    prevent_destroy = true
+    # Existing bootstrap tables may already be encrypted with an AWS-managed
+    # key. Do not block a fresh-region import on a long-running SSE migration;
+    # newly created tables still use the customer-managed key above.
+    ignore_changes = [server_side_encryption]
+  }
 }
