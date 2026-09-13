@@ -61,8 +61,18 @@ jobs:
           path: |
             scanner-image.tar
             scanner-input.sha256
+            scanner-sbom/
           if-no-files-found: error
           retention-days: 1
+      # Role: Retain the small SBOM/receipt independently of the large image archive.
+      - name: Scanner SBOM Evidence
+        if: ${{ !cancelled() && hashFiles('scanner-sbom/**') != '' }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: scanner-sbom-${{ github.sha }}
+          path: scanner-sbom/
+          if-no-files-found: error
+          retention-days: 90
   # Role: Verify the same-run build artifact and publish the scanner image to GHCR.
   scanner-publish:
     name: Scanner Publication
@@ -72,6 +82,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
     steps:
       # Role: Retrieve the configured source revision without persisting checkout credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -81,12 +92,28 @@ jobs:
         with:
           name: scanner-image-${{ github.sha }}
           path: /tmp/scanner-image
+      # Role: Install checksum-verified policy tools before evaluating SBOM publication prerequisites.
+      - name: SBOM Policy Tools
+        run: scripts/ci/install-policy-tools.sh "$RUNNER_TEMP/sbom-policy-tools"
+      # Role: Install the existing checksum-pinned signing toolchain for keyless image and SBOM signatures.
+      - name: Image Signing Tools
+        run: |
+          scripts/ci/install-validator-signing-fence-release-tools.sh "$RUNNER_TEMP/image-signing-tools"
+          printf '%s\n' "$RUNNER_TEMP/image-signing-tools" >> "$GITHUB_PATH"
       # Role: Verify the downloaded scanner build inputs and publish with this job's registry token.
       - env:
           IMAGE: ghcr.io/${{ github.repository_owner }}/node-operator/security-scanners
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
         run: bash scripts/release/publish-scanner-image.sh
+      # Role: Retain successful exact-digest signature and attestation verification evidence.
+      - name: Scanner Signing Evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: scanner-signing-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/scanner-signing-evidence/
+          if-no-files-found: error
+          retention-days: 90
 
   # Role: Build only selected toolchain matrix entries without registry write permission.
   toolchain-build:
@@ -118,8 +145,18 @@ jobs:
           path: |
             toolchain-image.tar
             toolchain-input.sha256
+            toolchain-sbom/
           if-no-files-found: error
           retention-days: 1
+      # Role: Retain stage-specific SBOM/receipt evidence without keeping image tarballs for 90 days.
+      - name: Toolchain SBOM Evidence
+        if: ${{ !cancelled() && hashFiles('toolchain-sbom/**') != '' }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: toolchain-sbom-${{ matrix.image }}-${{ github.sha }}
+          path: toolchain-sbom/
+          if-no-files-found: error
+          retention-days: 90
   # Role: Verify selected same-run artifacts and publish toolchain images to GHCR.
   toolchain-publish:
     name: Toolchain Publication (${{ matrix.image }})
@@ -129,6 +166,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
     strategy:
       matrix: ${{ fromJSON(needs.select.outputs.toolchain_matrix) }}
     steps:
@@ -140,6 +178,14 @@ jobs:
         with:
           name: toolchain-${{ matrix.image }}-${{ github.sha }}
           path: /tmp/toolchain-image
+      # Role: Install checksum-verified policy tools before evaluating SBOM publication prerequisites.
+      - name: SBOM Policy Tools
+        run: scripts/ci/install-policy-tools.sh "$RUNNER_TEMP/sbom-policy-tools"
+      # Role: Install the existing checksum-pinned signing toolchain only in the main publication job.
+      - name: Image Signing Tools
+        run: |
+          scripts/ci/install-validator-signing-fence-release-tools.sh "$RUNNER_TEMP/image-signing-tools"
+          printf '%s\n' "$RUNNER_TEMP/image-signing-tools" >> "$GITHUB_PATH"
       # Role: Verify the downloaded toolchain build inputs and publish with this job's registry token.
       - env:
           IMAGE: ghcr.io/${{ github.repository_owner }}/node-operator/${{ matrix.image }}
@@ -149,6 +195,14 @@ jobs:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
         run: bash scripts/release/publish-toolchain-image.sh
+      # Role: Preserve image, SBOM and build-receipt signature verification for each toolchain.
+      - name: Toolchain Signing Evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: toolchain-signing-evidence-${{ matrix.image }}-${{ github.sha }}
+          path: ${{ runner.temp }}/toolchain-signing-evidence/${{ matrix.image }}/
+          if-no-files-found: error
+          retention-days: 90
 
   # Role: Require the reusable Fence SAST and isolated DAST suite before publishing Fence.
   fence-security:

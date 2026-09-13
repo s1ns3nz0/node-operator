@@ -20,6 +20,12 @@ TOOLCHAINS = [
     )
 ]
 SHARED = {".github/workflows/image-publish.yml", "scripts/ci/select-image-release.py"}
+IMAGE_SBOM_INPUTS = {
+    "scripts/ci/generate-image-sbom.sh", "scripts/ci/image_sbom_evidence.py",
+    "policy/image_sbom.rego", "scripts/ci/install-policy-tools.sh",
+    "scripts/release/sign-ci-image-evidence.sh", "scripts/ci/ci_image_attestation.py",
+    "scripts/ci/install-validator-signing-fence-release-tools.sh",
+}
 SIGNING = {
     "scripts/ci/lib/common.sh",
     "scripts/ci/install-validator-signing-fence-release-tools.sh",
@@ -34,13 +40,13 @@ def select(paths=(), target=None, all_inputs=False):
     allowed = {"all", "scanner", "toolchains", "fence", "relay"} | {item["image"] for item in TOOLCHAINS}
     if target is not None and target not in allowed:
         raise ValueError("unknown image release target")
-    scanner = all_inputs or target == "scanner" or any(
+    scanner = all_inputs or target == "scanner" or bool(paths & IMAGE_SBOM_INPUTS) or any(
         path.startswith(".ci/scanners/") or path in {
             "scripts/ci/collect-pr-evidence.sh", "scripts/ci/collect-security-evidence.sh",
             "scripts/ci/lib/common.sh", "scripts/release/build-scanner-image.sh",
             "scripts/release/publish-scanner-image.sh",
         } for path in paths)
-    toolchain_all = all_inputs or target == "toolchains" or bool(paths & {
+    toolchain_all = all_inputs or target == "toolchains" or bool(paths & IMAGE_SBOM_INPUTS) or bool(paths & {
         "scripts/release/build-toolchain-image.sh", "scripts/release/publish-toolchain-image.sh",
         ".ci/toolchains/release-toolchain-image.sh",
     })
