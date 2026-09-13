@@ -282,9 +282,9 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
             # digest here would produce ImagePullBackOff in a fresh region.
             - |
               for image_tag in 416a2d76870d996460e62bd7f521bf14fa017be9e3e904aab92163a331fcb61a d8b3961b51c8c7320633f8208dc46bf88aa13804d0f7cbe48a096b2c523cee42 ccf6b919ec0500745a47a910118f834f9636d0aac1ff221245cd2557ed8c7c98 d8ab6416e6e7303a86fa0a8daa82c94a8001f21c9d78eb2e7db20534e5d07ae8; do
-                destination_digest="$(aws ecr describe-images --region ${var.aws_region} --repository-name ${aws_ecr_repository.private_gitops[\"cert_manager\"].name} --image-ids imageTag="$image_tag" --query 'imageDetails[0].imageDigest' --output text)"
-                test "$destination_digest" != None
-                sed -i "s#sha256:$image_tag#$destination_digest#g" /opt/node-operator/cert-manager-values.yaml
+                destination_digest="$(aws ecr describe-images --region ${var.aws_region} --repository-name ${aws_ecr_repository.private_gitops["cert_manager"].name} --image-ids imageTag="$$image_tag" --query 'imageDetails[0].imageDigest' --output text)"
+                test "$$destination_digest" != None
+                sed -i "s#sha256:$$image_tag#$$destination_digest#g" /opt/node-operator/cert-manager-values.yaml
               done
             - helm upgrade --install argocd oci://${aws_ecr_repository.private_gitops["argocd_chart"].repository_url} --version ${local.argocd_chart_version} --namespace argocd --create-namespace --values /opt/node-operator/argocd-private-values.yaml --atomic --timeout 10m
             - kubectl wait --namespace argocd --for=condition=Available deployment/argocd-server --timeout=10m
