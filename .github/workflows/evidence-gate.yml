@@ -56,7 +56,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DETAILS_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: scripts/ci/publish-pr-evidence-check.sh "$SUBJECT_SHA" - "$DETAILS_URL"
+        run: |
+          scripts/ci/publish-pr-evidence-check.sh "$SUBJECT_SHA" - "$DETAILS_URL"
+          # Publishing the failed check must not make this producer successful.
+          exit 1
   # Role: Collect trusted head/base findings and Terraform evidence, add current reviews, evaluate OPA and publish a decision.
   evidence-gate:
     name: Pull Request Policy

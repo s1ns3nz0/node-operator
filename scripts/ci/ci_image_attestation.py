@@ -191,7 +191,9 @@ def signature(path: Path, image: str, digest: str) -> None:
     for record in records(path):
         try:
             critical = record["critical"]
-            if critical["identity"]["docker-reference"] == image and critical["image"]["docker-manifest-digest"] == expected:
+            if (critical.get("type") == "https://sigstore.dev/cosign/sign/v1"
+                    and critical["identity"]["docker-reference"] == f"{image}@{digest}"
+                    and critical["image"]["docker-manifest-digest"] == expected):
                 return
         except (KeyError, TypeError):
             pass
