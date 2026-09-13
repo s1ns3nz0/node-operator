@@ -29,7 +29,7 @@ args=sys.argv[1:]; open(os.environ['TEST_LOG'],'a').write(' '.join(args)+'\\n')
 if args[0]=='version': print(os.environ.get('TEST_VERSION','GitVersion: v3.1.2')); raise SystemExit()
 if os.environ.get('TEST_FAIL') == args[0]: raise SystemExit(9)
 subject=args[-1]; image,digest=subject.split('@',1)
-if args[0]=='verify': print(json.dumps([{'critical':{'identity':{'docker-reference':image},'image':{'docker-manifest-digest':digest}}}])); raise SystemExit()
+if args[0]=='verify': print(json.dumps([{'critical':{'type':'https://sigstore.dev/cosign/sign/v1','identity':{'docker-reference':subject},'image':{'docker-manifest-digest':digest}}}])); raise SystemExit()
 typ=args[args.index('--type')+1]; predicate=json.load(open(os.environ['TEST_SBOM'] if typ=='cyclonedx' else os.environ['TEST_RECEIPT']))
 if os.environ.get('TEST_BAD') == typ: predicate={}
 if os.environ.get('TEST_TYPE_CONFUSION') == typ: predicate['flag']=1

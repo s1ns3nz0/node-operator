@@ -119,7 +119,10 @@ if grep -Fq 'Download scanner evidence from the completed PR run' <(workflow_sou
   exit 1
 fi
 grep -Fq 'run: scripts/ci/publish-pr-evidence-check.sh "$SUBJECT_SHA" "$EVIDENCE_ROOT/published/decision.json"' "$gate_workflow"
-grep -Fq 'run: scripts/ci/publish-pr-evidence-check.sh "$SUBJECT_SHA" - "$DETAILS_URL"' "$gate_workflow"
+# The failure producer uses a multiline block so publishing cannot turn failure
+# into workflow success. Its executable exit behavior is tested by the archive contract.
+grep -Fq 'scripts/ci/publish-pr-evidence-check.sh "$SUBJECT_SHA" - "$DETAILS_URL"' <(workflow_job_source "$gate_workflow" upstream-failure)
+grep -Eq '^[[:space:]]+exit 1$' <(workflow_job_source "$gate_workflow" upstream-failure)
 grep -Fq 'publish-pr-evidence-check.sh "$SUBJECT_SHA"' <(workflow_source "$gate_workflow")
 
 printf 'PASS: scanner evidence is confined to a non-hidden dedicated directory.\n'

@@ -48,7 +48,14 @@ def env(predicate, kind):
     statement = {'_type': 'https://in-toto.io/Statement/v0.1', 'subject': [{'name': image, 'digest': {'sha256': digest.split(':', 1)[1]}}], 'predicateType': kind, 'predicate': predicate}
     return {'payloadType': 'application/vnd.in-toto+json', 'payload': base64.b64encode(json.dumps(statement, separators=(',', ':')).encode()).decode(), 'signatures': []}
 if args[0] == 'verify':
-    print(json.dumps([{'critical': {'identity': {'docker-reference': image}, 'image': {'docker-manifest-digest': digest}}}]))
+    critical = {'type': 'https://sigstore.dev/cosign/sign/v1', 'identity': {'docker-reference': subject}, 'image': {'docker-manifest-digest': digest}}
+    case = os.environ.get('MOCK_SIGNATURE_CASE')
+    if case == 'bare': critical['identity']['docker-reference'] = image
+    if case == 'wrong-reference': critical['identity']['docker-reference'] = image + '@sha256:' + '0' * 64
+    if case == 'wrong-digest': critical['image']['docker-manifest-digest'] = 'sha256:' + '0' * 64
+    if case == 'attestation-type': critical['type'] = 'https://cyclonedx.org/bom'
+    if case == 'missing-type': del critical['type']
+    print(json.dumps([{'critical': critical}]))
 elif args[0] == 'verify-attestation':
     if os.environ.get('MOCK_MALFORMED') == 'verify-attestation':
         print('not-json')
@@ -81,6 +88,13 @@ elif args[0] == 'verify-attestation':
         self.assertLess(log.index("cosign sign"), log.index("cosign verify"))
         self.assertIn("--certificate-github-workflow-sha " + REVISION, log)
         self.assertNotIn("insecure-ignore", log)
+
+    def test_rejects_unbound_or_non_signature_cosign_v3_records(self):
+        for case in ('bare', 'wrong-reference', 'wrong-digest', 'attestation-type', 'missing-type'):
+            with self.subTest(case=case):
+                result, exists, _, _ = self.execute(MOCK_SIGNATURE_CASE=case)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(exists)
 
     def test_rejects_wrong_branch_before_registry_or_signing(self):
         result, exists, _, log = self.execute(GITHUB_REF="refs/heads/feature")
