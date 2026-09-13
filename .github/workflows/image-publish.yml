@@ -66,6 +66,7 @@ jobs:
           retention-days: 1
       # Role: Retain the small SBOM/receipt independently of the large image archive.
       - name: Scanner SBOM Evidence
+        if: ${{ !cancelled() && hashFiles('scanner-sbom/**') != '' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: scanner-sbom-${{ github.sha }}
@@ -149,6 +150,7 @@ jobs:
           retention-days: 1
       # Role: Retain stage-specific SBOM/receipt evidence without keeping image tarballs for 90 days.
       - name: Toolchain SBOM Evidence
+        if: ${{ !cancelled() && hashFiles('toolchain-sbom/**') != '' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: toolchain-sbom-${{ matrix.image }}-${{ github.sha }}

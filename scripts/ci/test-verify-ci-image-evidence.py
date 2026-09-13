@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Reject untrusted CI image evidence before consumer admission.
 """Mocked consumer verification tests; they do not prove real keyless Cosign trust."""
 import base64
 import hashlib

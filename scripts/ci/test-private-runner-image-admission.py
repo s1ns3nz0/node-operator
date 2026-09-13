@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Block Docker access before approved image evidence verification.
 """Prove verifier ordering using doubles; actual Cosign validation has its own suite."""
 import os
 from pathlib import Path

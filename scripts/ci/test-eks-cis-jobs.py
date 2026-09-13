@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Validate bounded EKS CIS job rendering without cluster mutation.
 """Offline renderer tests; rendering does not approve images or assess CIS compliance."""
 import importlib.util
 import json

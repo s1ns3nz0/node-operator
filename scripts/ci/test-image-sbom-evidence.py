@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
+# Check objective: Reject incomplete or tampered image SBOM and archive evidence.
 """Offline tests for local Docker-archive SBOM evidence receipts."""
 import importlib.util
+import io
+import hashlib
 import json
 import re
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import tarfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -29,6 +33,23 @@ def sbom(archive_sha: str) -> dict:
             {"type": "library", "name": "openssl", "version": "3.0", "purl": "pkg:apk/alpine/openssl@3.0"},
         ],
     }
+
+
+def docker_archive(path: Path, members: list[tuple[tarfile.TarInfo, bytes]], duplicate_manifest: bool = False, duplicate_layer: bool = False, layers=None) -> None:
+    layer = io.BytesIO()
+    with tarfile.open(fileobj=layer, mode="w") as contents:
+        for member, content in members:
+            contents.addfile(member, io.BytesIO(content) if member.isreg() else None)
+    manifest = json.dumps([{"Config": "config.json", "RepoTags": [], "Layers": ["layer.tar"] if layers is None else layers}]).encode()
+    with tarfile.open(path, mode="w") as archive:
+        outer = [("manifest.json", manifest), ("layer.tar", layer.getvalue())]
+        if duplicate_manifest:
+            outer.append(("manifest.json", manifest))
+        if duplicate_layer:
+            outer.append(("layer.tar", layer.getvalue()))
+        for name, value in outer:
+            info = tarfile.TarInfo(name); info.size = len(value)
+            archive.addfile(info, io.BytesIO(value))
 
 
 class SbomEvidenceTests(unittest.TestCase):
@@ -105,6 +126,43 @@ class SbomEvidenceTests(unittest.TestCase):
                 document.write_text(json.dumps(bad))
                 with self.assertRaises(MODULE.EvidenceError):
                     MODULE.create(archive, document, REVISION, CONFIG, "release-build", receipt)
+
+    def test_hydrates_only_a_final_regular_file_component_from_the_same_archive(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary); archive = base / "image.tar"; member = tarfile.TarInfo("usr/share/keyrings/removed.gpg")
+            member.size = 0; docker_archive(archive, [(member, b"")])
+            document = base / "sbom.json"; value = sbom(MODULE._sha256(archive, MODULE.MAX_ARCHIVE))
+            value["components"][0] = {"type": "file", "name": "/usr/share/keyrings/removed.gpg"}
+            document.write_text(json.dumps(value))
+            MODULE.hydrate_file_hashes(archive, document)
+            self.assertEqual(json.loads(document.read_text())["components"][0]["hashes"], [{"alg": "SHA-256", "content": hashlib.sha256(b"").hexdigest()}])
+            link = tarfile.TarInfo("usr/share/keyrings/removed.gpg"); link.type = tarfile.SYMTYPE; link.linkname = "elsewhere"
+            docker_archive(archive, [(link, b"")]); document.write_text(json.dumps(value))
+            with self.assertRaises(MODULE.EvidenceError):
+                MODULE.hydrate_file_hashes(archive, document)
+
+    def test_hydration_rejects_nonempty_ancestor_whiteout_and_duplicate_members(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary); archive = base / "image.tar"; document = base / "sbom.json"
+            value = sbom("a" * 64); value["components"][0] = {"type": "file", "name": "/usr/share/keyrings/removed.gpg"}
+            def regular(name: str, content: bytes = b""):
+                member = tarfile.TarInfo(name); member.size = len(content); return member, content
+            link = tarfile.TarInfo("usr"); link.type = tarfile.SYMTYPE; link.linkname = "elsewhere"
+            cases = (
+                ([(regular("usr/share/keyrings/removed.gpg", b"not-empty"))], {}),
+                ([(regular(".wh.usr"))], {}),
+                ([(link, b"")], {}),
+                ([(regular("usr/share/keyrings/removed.gpg")), (regular("usr/share/keyrings/removed.gpg"))], {}),
+                ([(regular("usr/share/keyrings/removed.gpg")), (regular("usr/share/keyrings/.wh.removed.gpg")), (regular("usr/share/keyrings/removed.gpg"))], {}),
+                ([(regular("usr/share/keyrings/removed.gpg"))], {"duplicate_manifest": True}),
+                ([(regular("usr/share/keyrings/removed.gpg"))], {"duplicate_layer": True}),
+                ([(regular("usr/share/keyrings/removed.gpg"))], {"layers": ["layer.tar", {"invalid": True}]}),
+            )
+            for members, kwargs in cases:
+                with self.subTest(kwargs=kwargs, entries=len(members)):
+                    docker_archive(archive, members, **kwargs); document.write_text(json.dumps(value))
+                    with self.assertRaises(MODULE.EvidenceError):
+                        MODULE.hydrate_file_hashes(archive, document)
 
 
 if __name__ == "__main__":

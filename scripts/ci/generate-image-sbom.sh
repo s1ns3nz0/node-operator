@@ -29,6 +29,11 @@ docker run --rm --network none --read-only --cap-drop ALL \
   --env SYFT_CHECK_FOR_APP_UPDATE=false --entrypoint syft "$tool_image" \
   scan docker-archive:/input/image.tar --source-name "$subject" \
   --source-version "$archive_digest" --output cyclonedx-json=/output/sbom.cyclonedx.json --quiet
+# Syft 1.37.0 inventories some final regular files without a component hash
+# (including zero-byte keyring placeholders). Resolve only those paths from
+# the same Docker archive; reject anything not a final unambiguous zero-byte regular file.
+python3 "$script_dir/image_sbom_evidence.py" hydrate \
+  --archive "$archive" --sbom "$output/sbom.cyclonedx.json"
 python3 "$script_dir/image_sbom_evidence.py" create \
   --archive "$archive" --sbom "$output/sbom.cyclonedx.json" \
   --subject "$subject" --revision "$revision" --image-config-digest "$config_digest" \

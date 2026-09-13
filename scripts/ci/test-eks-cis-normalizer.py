@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Reject incomplete EKS CIS reports and redact raw audit details.
 """Offline tests for the EKS worker-node CIS result normalizer."""
 import importlib.util
 import json

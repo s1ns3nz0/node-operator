@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Require complete EKS node assessment coverage without claiming live execution.
 """Offline tests for complete local EKS CIS inventory aggregation."""
 import json
 import importlib.util

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Prevent image promotion when publication prerequisites fail.
 """Run real publishers with synthetic archives and traced registry/signing doubles.
 
 Objective: prove rejected evidence never reaches login, and signing failure

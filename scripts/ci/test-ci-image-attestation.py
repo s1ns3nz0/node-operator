@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Check objective: Verify image signature and attestation subject bindings with fixtures.
 """Mocked command tests for sign-ci-image-evidence; they prove no real cryptography."""
 from __future__ import annotations
 
