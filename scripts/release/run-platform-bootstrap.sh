@@ -134,14 +134,18 @@ jq -n --arg image "$vault_image" --arg version "$vault_version" --arg digest "$v
   '{enable_vault_bootstrap_runner:true,enable_vault_bootstrap_cluster_admin:true,vault_bootstrap_image:$image,vault_bootstrap_subnet_ids:$subnets,vault_chart_version:$version,vault_chart_manifest_digest:$digest,vault_runtime_images:{server:$server,agent:$server,injector:$injector,audit_relay:$relay},vault_image_values_overlay_base64:$overlay,vault_approved_catalog_base64:$catalog}' | "$replay" materialize --output "$vault_input"
 "$replay" initialize --work-dir "$work_dir" --account "$account" --region "$region" --deployment "$deployment_name" --baseline-config "$baseline_config" --session "$private_eks_session" --argocd-input "$argocd_input" --vault-input "$vault_input" --vault-overlay "$vault_overlay"
 phase() { "$replay" phase --work-dir "$work_dir" --phase "$1" --action "$2"; }
-if [ "$(phase revoke_complete get)" = complete ]; then
+phase_status=''
+read_phase() { phase_status="$(phase "$1" get)" || { printf '%s\n' 'platform replay phase lookup failed' >&2; exit 65; }; }
+read_phase revoke_complete
+if [ "$phase_status" = complete ]; then
   printf '%s\n' 'COMPLETED: platform bootstrap replay checkpoint is complete; no platform mutation was rerun.'
   exit 0
 fi
 
 platform_dir="$work_dir/platform-bootstrap-plans"; "$replay" directory --path "$platform_dir"
 argocd_plan="$platform_dir/argocd.tfplan"; vault_plan="$platform_dir/vault.tfplan"
-if [ "$(phase argocd_apply get)" != complete ]; then
+read_phase argocd_apply
+if [ "$phase_status" != complete ]; then
   platform_stage 'Planning Argo CD bootstrap runner'
   "$replay" discard --path "$argocd_plan"
   "$script_dir/apply-argocd-bootstrap.sh" plan --baseline-work-dir "$work_dir" --baseline-config "$baseline_config" --bootstrap-input "$argocd_input" --plan-file "$argocd_plan"
@@ -155,7 +159,8 @@ else
   IFS= read -r confirmation
 fi
 [ "$confirmation" = PLATFORM-BOOTSTRAP ] || { printf '%s\n' 'platform bootstrap cancelled' >&2; exit 130; }
-if [ "$(phase argocd_apply get)" != complete ]; then
+read_phase argocd_apply
+if [ "$phase_status" != complete ]; then
   platform_stage 'Applying Argo CD bootstrap runner'
   phase argocd_apply intent
   "$script_dir/apply-argocd-bootstrap.sh" apply --baseline-work-dir "$work_dir" --baseline-config "$baseline_config" --bootstrap-input "$argocd_input" --plan-file "$argocd_plan"
@@ -168,14 +173,16 @@ run_bootstrap_project() {
   python3 "$script_dir/platform_bootstrap_build.py" --work-dir "$work_dir" --phase "$phase" --account "$account" --region "$region" --project "$project" --profile "$aws_profile"
 }
 
-if [ "$(phase argocd_build get)" != complete ]; then
+read_phase argocd_build
+if [ "$phase_status" != complete ]; then
   platform_stage 'Waiting for Argo CD and cert-manager bootstrap completion'
   phase argocd_build intent
   run_bootstrap_project argocd "$(terraform -chdir="$work_dir/baseline" output -raw argocd_bootstrap_project_name 2>/dev/null || true)"
   phase argocd_build complete
 fi
 
-if [ "$(phase tls_ready get)" != complete ]; then
+read_phase tls_ready
+if [ "$phase_status" != complete ]; then
   platform_stage 'Preparing Vault TLS before sealed Vault deployment'
   tls_manifest="$script_dir/../../docs/gitops/vault-tls-internal-ca.example.yaml"
   [ -f "$tls_manifest" ] && [ ! -L "$tls_manifest" ] || { printf '%s\n' 'reviewed Vault TLS manifest is unavailable' >&2; exit 65; }
@@ -194,7 +201,8 @@ fi
 # Terraform does not plan to delete the already-applied Argo runner.
 vault_baseline_config="$platform_dir/vault-baseline.tfvars.json"
 jq -s '.[0] * .[1]' "$baseline_config" "$argocd_input" | "$replay" materialize --output "$vault_baseline_config"
-if [ "$(phase vault_apply get)" != complete ]; then
+read_phase vault_apply
+if [ "$phase_status" != complete ]; then
   platform_stage 'Planning Vault bootstrap runner'
   "$replay" discard --path "$vault_plan"
   "$script_dir/apply-vault-bootstrap.sh" plan --baseline-work-dir "$work_dir" --baseline-config "$vault_baseline_config" --bootstrap-input "$vault_input" --plan-file "$vault_plan"
@@ -204,7 +212,8 @@ if [ "$(phase vault_apply get)" != complete ]; then
   phase vault_apply complete
 fi
 
-if [ "$(phase vault_build get)" != complete ]; then
+read_phase vault_build
+if [ "$phase_status" != complete ]; then
   platform_stage 'Waiting for Vault sealed-release bootstrap completion'
   phase vault_build intent
   run_bootstrap_project vault "$(terraform -chdir="$work_dir/baseline" output -raw vault_bootstrap_project_name 2>/dev/null || true)"
@@ -216,14 +225,15 @@ fi
 # bootstrap resources may be deleted by this revoke plan.
 platform_stage 'Revoking temporary runners and authority'
 revoke_plan="$platform_dir/revoke.tfplan"
-if [ "$(phase revoke_complete get)" != complete ]; then
+read_phase revoke_complete
+if [ "$phase_status" != complete ]; then
   phase revoke_complete intent
   "$replay" discard --path "$revoke_plan"
   terraform -chdir="$work_dir/baseline" plan -input=false -var-file="$baseline_config" -out="$revoke_plan"
   terraform -chdir="$work_dir/baseline" show -json "$revoke_plan" | jq -e '
     all(.resource_changes[]?;
       (.change.actions | index("delete") | not) or
-      (.address | test("^(aws_(codebuild_project|cloudwatch_log_group|eks_access_(entry|policy_association)|iam_role|iam_role_policy|security_group|vpc_security_group_(egress_rule|ingress_rule))\\.(argocd_bootstrap|vault_bootstrap|argocd_bootstrap_cluster_admin|vault_bootstrap_cluster_admin)|aws_vpc_endpoint\\.private|aws_vpc_security_group_egress_rule\\.endpoints_to_(argocd|vault)_bootstrap)(\\[[0-9]+\\])?$"))
+      ((.change.actions == ["delete"]) and (.address | test("^(aws_(codebuild_project|cloudwatch_log_group|eks_access_entry|iam_role|iam_role_policy|security_group)\\.(argocd_bootstrap|vault_bootstrap)\\[0\\]|aws_eks_access_policy_association\\.(argocd_bootstrap|vault_bootstrap_cluster_admin)\\[0\\]|aws_vpc_endpoint\\.required_interface\\[\\\"(eks|sts)\\\"\\]|aws_vpc_security_group_ingress_rule\\.(cluster_api_from_(argocd|vault)_bootstrap|endpoints_https_from_(argocd|vault)_bootstrap)\\[0\\])$")))
     )
   ' >/dev/null || { printf '%s\n' 'revoke plan contains an unexpected deletion; refusing cleanup' >&2; exit 70; }
   terraform -chdir="$work_dir/baseline" apply -input=false "$revoke_plan"

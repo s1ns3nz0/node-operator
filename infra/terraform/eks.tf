@@ -182,9 +182,9 @@ resource "aws_eks_node_group" "private" {
     aws_vpc_endpoint.s3,
   ]
 
-  # Operators scale desired capacity up for a session and back to zero after
-  # it. Terraform owns the secure bounds but must not immediately undo that
-  # operational action between applies.
+  # Terraform establishes the reviewed initial HA capacity. Operators may
+  # subsequently adjust desired capacity inside the secure bounds; Terraform
+  # must not immediately undo an operational stop/start action between applies.
   lifecycle {
     ignore_changes = [scaling_config[0].desired_size]
   }

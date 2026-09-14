@@ -150,8 +150,8 @@ def _context(args: argparse.Namespace) -> dict[str, object]:
             "deployment": args.deployment, "files": files, "phases": {}}
 
 
-def _validate_context(root: Path, candidate: dict[str, object] | None = None) -> dict[str, object]:
-    state = _json(root / "checkpoint.json")
+def _validate_context(root: Path, candidate: dict[str, object] | None = None, state: dict[str, object] | None = None) -> dict[str, object]:
+    state = _json(root / "checkpoint.json") if state is None else state
     required = {"schema_version", "work_dir", "account", "region", "deployment", "files", "phases"}
     if set(state) != required or state.get("schema_version") != 1 or not isinstance(state.get("files"), dict) or not isinstance(state.get("phases"), dict):
         raise ReplayError("platform replay checkpoint is malformed")
@@ -192,6 +192,7 @@ def initialize(args: argparse.Namespace) -> None:
     if path.exists() or path.is_symlink():
         _validate_context(root, candidate)
     else:
+        _validate_context(root, candidate, candidate)
         _publish(path, candidate)
 
 

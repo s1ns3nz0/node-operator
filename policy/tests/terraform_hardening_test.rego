@@ -16,7 +16,7 @@ secure_input := {
       "address": "aws_eks_node_group.private",
       "instance_types": ["m7i.2xlarge"],
       "labels": {"node-operator.io/role": "system"},
-      "scaling": {"min_size": 1, "desired_size": 1, "max_size": 3},
+      "scaling": {"min_size": 3, "desired_size": 3, "max_size": 3},
       "availability_zones": ["ap-northeast-2a", "ap-northeast-2c"],
       "public_ip_association": false,
       "private_subnet_ids": ["subnet-private-a", "subnet-private-c"]
@@ -24,7 +24,7 @@ secure_input := {
       "address": "aws_eks_node_group.consensus",
       "instance_types": ["m7i.2xlarge"],
       "labels": {"node-operator.io/role": "consensus"},
-      "scaling": {"min_size": 0, "desired_size": 0, "max_size": 1},
+      "scaling": {"min_size": 0, "desired_size": 1, "max_size": 1},
       "availability_zones": ["ap-northeast-2a", "ap-northeast-2c"],
       "public_ip_association": false,
       "private_subnet_ids": ["subnet-private-a", "subnet-private-c"]
@@ -32,7 +32,7 @@ secure_input := {
       "address": "aws_eks_node_group.execution",
       "instance_types": ["m7i.4xlarge"],
       "labels": {"node-operator.io/role": "execution"},
-      "scaling": {"min_size": 0, "desired_size": 0, "max_size": 1},
+      "scaling": {"min_size": 0, "desired_size": 1, "max_size": 1},
       "availability_zones": ["ap-northeast-2a", "ap-northeast-2c"],
       "public_ip_association": false,
       "private_subnet_ids": ["subnet-private-a", "subnet-private-c"]
@@ -73,7 +73,7 @@ test_missing_control_plane_encryption_is_rejected if {
 }
 
 test_invalid_node_capacity_or_topology_is_rejected if {
-  invalid_system := object.union(secure_input.baseline.managed_node_groups[0], {"instance_types": ["m7i.large"], "scaling": {"min_size": 1, "desired_size": 1, "max_size": 4}, "availability_zones": ["ap-northeast-2a", "ap-northeast-2a"], "public_ip_association": true, "private_subnet_ids": ["subnet-private-a"]})
+  invalid_system := object.union(secure_input.baseline.managed_node_groups[0], {"instance_types": ["m7i.large"], "scaling": {"min_size": 3, "desired_size": 3, "max_size": 4}, "availability_zones": ["ap-northeast-2a", "ap-northeast-2a"], "public_ip_association": true, "private_subnet_ids": ["subnet-private-a"]})
   fixture := object.union(secure_input, {"baseline": object.union(secure_input.baseline, {"managed_node_groups": [invalid_system, secure_input.baseline.managed_node_groups[1], secure_input.baseline.managed_node_groups[2]]})})
   denial := terraform.deny with input as fixture
   denial[_].id == "terraform.node-group.instance-type"

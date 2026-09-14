@@ -20,6 +20,8 @@ metadata:
     app.kubernetes.io/component: validator-client
     node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET
 spec:
+  # Staging only: guarded activation starts exactly one client after deposit,
+  # Beacon readiness and exclusive-signing evidence have been verified.
   replicas: 0
   serviceName: validator-REPLACE_WITH_VALIDATOR_SET-client-headless
   podManagementPolicy: OrderedReady

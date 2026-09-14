@@ -148,24 +148,24 @@ variable "temporary_ssm_ops_host_termination_at" {
 }
 
 variable "system_node_min_size" {
-  description = "Minimum system-pool capacity. One system node keeps Argo CD and platform services available."
+  description = "Minimum system-pool capacity. Three nodes are required for the reviewed Vault HA anti-affinity placement."
   type        = number
-  default     = 1
+  default     = 3
 
   validation {
-    condition     = var.system_node_min_size == 1
-    error_message = "system_node_min_size must remain one so Argo CD and platform services stay available."
+    condition     = var.system_node_min_size == 3
+    error_message = "system_node_min_size must remain three for reviewed Vault HA placement."
   }
 }
 
 variable "system_node_desired_size" {
-  description = "Initial system-pool capacity. One system node keeps Argo CD and platform services available."
+  description = "Initial system-pool capacity. Three nodes place the reviewed Vault HA replicas."
   type        = number
-  default     = 1
+  default     = 3
 
   validation {
-    condition     = var.system_node_desired_size == 1
-    error_message = "system_node_desired_size must remain one so Argo CD and platform services stay available."
+    condition     = var.system_node_desired_size == 3
+    error_message = "system_node_desired_size must remain three for reviewed Vault HA placement."
   }
 }
 
@@ -181,24 +181,24 @@ variable "system_node_max_size" {
 }
 
 variable "consensus_node_min_size" {
-  description = "Minimum consensus-pool capacity."
+  description = "Consensus-pool stop floor. Desired capacity starts at one but operations may stop this pool at zero."
   type        = number
   default     = 0
 
   validation {
     condition     = var.consensus_node_min_size == 0
-    error_message = "consensus_node_min_size must be zero while idle."
+    error_message = "consensus_node_min_size must remain zero so an explicit stop does not drift."
   }
 }
 
 variable "consensus_node_desired_size" {
   description = "Initial consensus-pool capacity."
   type        = number
-  default     = 0
+  default     = 1
 
   validation {
-    condition     = var.consensus_node_desired_size == 0
-    error_message = "consensus_node_desired_size must be zero; use the scale-up runbook before applying Prysm."
+    condition     = var.consensus_node_desired_size == 1
+    error_message = "consensus_node_desired_size must remain one for the initial paired-node deployment."
   }
 }
 
@@ -214,24 +214,24 @@ variable "consensus_node_max_size" {
 }
 
 variable "execution_node_min_size" {
-  description = "Minimum execution-pool capacity."
+  description = "Execution-pool stop floor. Desired capacity starts at one but operations may stop this pool at zero."
   type        = number
   default     = 0
 
   validation {
     condition     = var.execution_node_min_size == 0
-    error_message = "execution_node_min_size must be zero while idle."
+    error_message = "execution_node_min_size must remain zero so an explicit stop does not drift."
   }
 }
 
 variable "execution_node_desired_size" {
   description = "Initial execution-pool capacity."
   type        = number
-  default     = 0
+  default     = 1
 
   validation {
-    condition     = var.execution_node_desired_size == 0
-    error_message = "execution_node_desired_size must be zero; use the scale-up runbook before applying Nethermind."
+    condition     = var.execution_node_desired_size == 1
+    error_message = "execution_node_desired_size must remain one for the initial paired-node deployment."
   }
 }
 

@@ -100,6 +100,16 @@ status=$?
 set -e
 [ "$status" = 77 ] || fail "valid authority did not reach the fake Argo plan (status $status)"
 [ "$(cat "$temporary/marker")" = argocd-plan-requested ] || fail 'valid authority did not request the first plan'
+cp "$temporary/work/platform-bootstrap-replay/checkpoint.json" "$temporary/checkpoint-before-corruption.json"
+printf '%s\n' '{"malformed":true}' > "$temporary/work/platform-bootstrap-replay/checkpoint.json"
+rm -f "$temporary/corrupt-phase-marker"
+set +e
+PATH="$temporary/bin:$PATH" TEST_MARKER="$temporary/corrupt-phase-marker" NODE_OPERATOR_AUTOMATED_CEREMONY=1 "$scripts/run-platform-bootstrap.sh" "${common[@]}" >/dev/null 2>&1
+status=$?
+set -e
+[ "$status" = 65 ] || fail "corrupt phase lookup did not fail closed (status $status)"
+[ ! -e "$temporary/corrupt-phase-marker" ] || fail 'corrupt phase lookup reached Terraform plan'
+cp "$temporary/checkpoint-before-corruption.json" "$temporary/work/platform-bootstrap-replay/checkpoint.json"
 jq -e --arg server "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/test-node-baseline-gitops-vault@$(jq -r '.artifacts[] | select(.source | startswith("docker.io/hashicorp/vault@")) | .source | split("@")[1]' "$catalog")" '
   .vault_runtime_images.server == $server and .vault_runtime_images.agent == $server and
   (.vault_runtime_images.injector | test("@sha256:[a-f0-9]{64}$")) and
@@ -196,7 +206,8 @@ case "$*" in
   *' plan -input=false '*revoke.tfplan*) printf 'revoke-plan\n' >> "$TEST_TRACE"; exit 0 ;;
   *' apply -input=false '*revoke.tfplan*) printf 'revoke-apply\n' >> "$TEST_TRACE"; [ "${FAIL_REVOKE:-0}" = 1 ] && exit 75; exit 0 ;;
   *' plan -input=false '*|*' apply -input=false '*) exit 0 ;;
-  *' show -json '*) printf '%s\n' '{"resource_changes":[]}' ;;
+  *' show -json '*)
+    if [ -n "${REVOKE_PLAN_JSON+x}" ]; then printf '%s\n' "$REVOKE_PLAN_JSON"; else printf '%s\n' '{"resource_changes":[]}'; fi ;;
   *) printf 'unexpected terraform invocation: %s\n' "$*" >&2; exit 99 ;;
 esac
 EOF
@@ -221,6 +232,53 @@ set -e
 [ "$status" = 0 ] || fail "successful TLS fixture returned $status"
 expected=$'verify\nargocd-plan\nargocd-apply\naws-start-argocd\naws-argocd-terminal\ntunnel:chosen:ap-northeast-2:test-node:i-0123456789abcdef0\ntls\nvault-plan\nvault-apply\naws-start-vault\naws-success-vault\nrevoke-plan\nrevoke-apply'
 [ "$(cat "$trace")" = "$expected" ] || fail "TLS order differs from the required Argo-success -> tunnel/TLS -> Vault sequence: $(tr '\n' ' ' < "$trace")"
+
+# Revoke cleanup may remove exactly the temporary bootstrap runners, their
+# authority, and the conditional EKS/STS endpoint access.  Permanent endpoint
+# and node-rule ownership must remain outside this narrow plan allowlist.
+revoke_addresses=()
+for address in \
+  'aws_cloudwatch_log_group.argocd_bootstrap[0]' 'aws_cloudwatch_log_group.vault_bootstrap[0]' \
+  'aws_codebuild_project.argocd_bootstrap[0]' 'aws_codebuild_project.vault_bootstrap[0]' \
+  'aws_eks_access_entry.argocd_bootstrap[0]' 'aws_eks_access_entry.vault_bootstrap[0]' \
+  'aws_eks_access_policy_association.argocd_bootstrap[0]' 'aws_eks_access_policy_association.vault_bootstrap_cluster_admin[0]' \
+  'aws_iam_role.argocd_bootstrap[0]' 'aws_iam_role.vault_bootstrap[0]' \
+  'aws_iam_role_policy.argocd_bootstrap[0]' 'aws_iam_role_policy.vault_bootstrap[0]' \
+  'aws_security_group.argocd_bootstrap[0]' 'aws_security_group.vault_bootstrap[0]' \
+  'aws_vpc_endpoint.required_interface["eks"]' 'aws_vpc_endpoint.required_interface["sts"]' \
+  'aws_vpc_security_group_ingress_rule.cluster_api_from_argocd_bootstrap[0]' 'aws_vpc_security_group_ingress_rule.cluster_api_from_vault_bootstrap[0]' \
+  'aws_vpc_security_group_ingress_rule.endpoints_https_from_argocd_bootstrap[0]' 'aws_vpc_security_group_ingress_rule.endpoints_https_from_vault_bootstrap[0]'; do
+  revoke_addresses+=("$address")
+done
+valid_revoke_plan="$(printf '%s\n' "${revoke_addresses[@]}" | jq -R '{address: ., change: {actions: ["delete"]}}' | jq -sc '{resource_changes: .}')"
+replacement_plan="$(jq '.resource_changes[0].change.actions = ["delete", "create"]' <<<"$valid_revoke_plan")"
+: > "$trace"
+rm -rf "$temporary/work/platform-bootstrap-inputs" "$temporary/work/platform-bootstrap-plans" "$temporary/work/platform-bootstrap-replay" "$temporary/work/platform-bootstrap-builds"
+set +e
+PATH="$temporary/bin:$PATH" TEST_TRACE="$trace" REVOKE_PLAN_JSON="$replacement_plan" NODE_OPERATOR_AUTOMATED_CEREMONY=1 AWS_PROFILE=chosen "$scripts/run-platform-bootstrap.sh" "${common[@]}" >/dev/null 2>&1
+status=$?
+set -e
+[ "$status" = 70 ] || fail "bootstrap replacement deletion was not refused (status $status)"
+! rg -q '^revoke-apply$' "$trace" || fail 'bootstrap replacement deletion reached apply'
+for unsafe_address in 'aws_vpc_endpoint.required_interface["logs"]' 'aws_vpc_security_group_ingress_rule.cluster_api_from_nodes'; do
+  : > "$trace"
+  rm -rf "$temporary/work/platform-bootstrap-inputs" "$temporary/work/platform-bootstrap-plans" "$temporary/work/platform-bootstrap-replay" "$temporary/work/platform-bootstrap-builds"
+  set +e
+  PATH="$temporary/bin:$PATH" TEST_TRACE="$trace" REVOKE_PLAN_JSON="$valid_revoke_plan" NODE_OPERATOR_AUTOMATED_CEREMONY=1 AWS_PROFILE=chosen "$scripts/run-platform-bootstrap.sh" "${common[@]}" >/dev/null
+  status=$?
+  set -e
+  [ "$status" = 0 ] || fail "exact 20-resource revoke allowlist rejected (status $status)"
+  rg -q '^revoke-apply$' "$trace" || fail 'exact 20-resource revoke plan did not apply'
+  : > "$trace"
+  rm -rf "$temporary/work/platform-bootstrap-inputs" "$temporary/work/platform-bootstrap-plans" "$temporary/work/platform-bootstrap-replay" "$temporary/work/platform-bootstrap-builds"
+  rejected_plan="$(jq --arg address "$unsafe_address" '.resource_changes += [{address: $address, change: {actions: ["delete"]}}]' <<<"$valid_revoke_plan")"
+  set +e
+  PATH="$temporary/bin:$PATH" TEST_TRACE="$trace" REVOKE_PLAN_JSON="$rejected_plan" NODE_OPERATOR_AUTOMATED_CEREMONY=1 AWS_PROFILE=chosen "$scripts/run-platform-bootstrap.sh" "${common[@]}" >/dev/null 2>&1
+  status=$?
+  set -e
+  [ "$status" = 70 ] || fail "unsafe revoke deletion $unsafe_address was not refused (status $status)"
+  ! rg -q '^revoke-apply$' "$trace" || fail "unsafe revoke deletion $unsafe_address reached apply"
+done
 
 # A TLS failure leaves the completed Argo phases bound in the replay
 # checkpoint.  The next invocation may re-read the durable build status, but
