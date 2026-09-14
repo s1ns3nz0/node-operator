@@ -8,7 +8,7 @@ usage() {
 }
 
 original_args=("$@")
-work_dir=''; baseline_config=''; account=''; region=''; argocd_image=''; vault_image=''; client_version=''; client_digest=''; vault_version=''; vault_digest=''; cert_manager_digest=''; vault_catalog=''; vault_index=''; vault_receipt=''; private_eks_session=''; subnets=()
+work_dir=''; baseline_config=''; account=''; region=''; argocd_image=''; vault_image=''; client_version=''; client_digest=''; vault_version=''; vault_digest=''; cert_manager_digest=''; vault_catalog=''; vault_index=''; vault_receipt=''; private_eks_session=''; client_values=''; subnets=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --baseline-work-dir) work_dir="${2:-}"; shift 2 ;;
@@ -26,6 +26,7 @@ while [ "$#" -gt 0 ]; do
     --vault-artifact-index) vault_index="${2:-}"; shift 2 ;;
     --vault-mirror-receipt) vault_receipt="${2:-}"; shift 2 ;;
     --private-eks-session-handoff) private_eks_session="${2:-}"; shift 2 ;;
+    --client-values) client_values="${2:-}"; shift 2 ;;
     --subnet-id) subnets+=("${2:-}"); shift 2 ;;
     *) usage ;;
   esac
@@ -58,6 +59,7 @@ fi
 [ -f "$vault_catalog" ] && [ ! -L "$vault_catalog" ] || { printf '%s\n' 'Vault approved catalog must be a regular selected-release file' >&2; exit 65; }
 [ -f "$vault_index" ] && [ ! -L "$vault_index" ] || { printf '%s\n' 'Vault artifact index must be a regular selected-release file' >&2; exit 65; }
 [ -f "$vault_receipt" ] && [ ! -L "$vault_receipt" ] || { printf '%s\n' 'Vault mirror receipt must be a regular verified deployment file' >&2; exit 65; }
+[ -f "$client_values" ] && [ ! -L "$client_values" ] || { printf '%s\n' 'deployment-bound client values must be a regular verified file' >&2; exit 65; }
 deployment_name="$(jq -er '.name | select(type == "string" and test("^[a-z][a-z0-9-]{1,18}[a-z0-9]$"))' "$baseline_config")" || { printf '%s\n' 'baseline config lacks a safe deployment name' >&2; exit 65; }
 session_verifier="$script_dir/verify-platform-private-eks-session.py"
 [ -f "$session_verifier" ] && [ ! -L "$session_verifier" ] || { printf '%s\n' 'release bundle lacks the private EKS session verifier' >&2; exit 65; }
@@ -128,8 +130,8 @@ python3 "$renderer" --approved-catalog "$vault_catalog" --account "$account" --r
 vault_overlay_b64="$(base64 < "$vault_overlay" | tr -d '\n')"
 vault_catalog_b64="$(base64 < "$vault_catalog" | tr -d '\n')"
 subnet_json="$(printf '%s\n' "${subnets[@]}" | jq -R . | jq -s .)"
-jq -n --arg image "$argocd_image" --arg version "$client_version" --arg digest "$client_digest" --arg cert_digest "$cert_manager_digest" --argjson subnets "$subnet_json" \
-  '{enable_argocd_bootstrap_runner:true,enable_argocd_bootstrap_cluster_admin:true,argocd_bootstrap_image:$image,argocd_bootstrap_subnet_ids:$subnets,gitops_client_chart_version:$version,gitops_client_chart_oci_digest:$digest,cert_manager_chart_manifest_digest:$cert_digest}' | "$replay" materialize --output "$argocd_input"
+jq -n --arg image "$argocd_image" --arg version "$client_version" --arg digest "$client_digest" --arg cert_digest "$cert_manager_digest" --argjson values "$(cat "$client_values")" --argjson subnets "$subnet_json" \
+  '{enable_argocd_bootstrap_runner:true,enable_argocd_bootstrap_cluster_admin:true,argocd_bootstrap_image:$image,argocd_bootstrap_subnet_ids:$subnets,gitops_client_chart_version:$version,gitops_client_chart_oci_digest:$digest,gitops_client_chart_values:$values,cert_manager_chart_manifest_digest:$cert_digest}' | "$replay" materialize --output "$argocd_input"
 jq -n --arg image "$vault_image" --arg version "$vault_version" --arg digest "$vault_digest" --arg server "$vault_server_image" --arg injector "$vault_injector_image" --arg relay "$vault_relay_image" --arg overlay "$vault_overlay_b64" --arg catalog "$vault_catalog_b64" --argjson subnets "$subnet_json" \
   '{enable_vault_bootstrap_runner:true,enable_vault_bootstrap_cluster_admin:true,vault_bootstrap_image:$image,vault_bootstrap_subnet_ids:$subnets,vault_chart_version:$version,vault_chart_manifest_digest:$digest,vault_runtime_images:{server:$server,agent:$server,injector:$injector,audit_relay:$relay},vault_image_values_overlay_base64:$overlay,vault_approved_catalog_base64:$catalog}' | "$replay" materialize --output "$vault_input"
 "$replay" initialize --work-dir "$work_dir" --account "$account" --region "$region" --deployment "$deployment_name" --baseline-config "$baseline_config" --session "$private_eks_session" --argocd-input "$argocd_input" --vault-input "$vault_input" --vault-overlay "$vault_overlay"

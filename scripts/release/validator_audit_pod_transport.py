@@ -92,7 +92,7 @@ class PodAWSTransport:
                 options[flag] = args[index + 1]; index += 2
         allowed = {"--bucket", "--region", "--no-cli-pager", "--output"}
         allowed |= {"--prefix", "--max-keys", "--continuation-token", "--no-paginate"} if operation == "list-objects-v2" else {"--key"}
-        if operation == "get-object": allowed.add("--version-id")
+        if operation in ("get-object", "head-object"): allowed.add("--version-id")
         if (set(options) - allowed or options.get("--bucket") != self.bucket
                 or options.get("--region") != self.region or options.get("--output", "json") != "json"):
             raise TransportError("AWS request escaped reader scope")
@@ -106,6 +106,9 @@ class PodAWSTransport:
             key = options.get("--key")
             if not isinstance(key, str) or not key.startswith(self.prefix) or len(key.encode()) > 1024:
                 raise TransportError("object escaped reader prefix")
+        if operation == "head-object" and "--version-id" in options:
+            version = options["--version-id"]
+            if not isinstance(version, str) or not version or version == "null" or len(version) > 1024: raise TransportError("invalid object version")
         if operation != "get-object":
             return self._exec(["aws", *args])
         version = options.get("--version-id")

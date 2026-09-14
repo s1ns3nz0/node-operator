@@ -17,7 +17,7 @@ BASE_PHASES = (
     "platform-complete",
 )
 CONTINUATION_PHASES = (
-    "vault-started", "vault-complete", "custody-started", "custody-complete",
+    "vault-started", "vault-complete", "collector-complete", "audit-started", "audit-complete", "custody-started", "custody-complete",
     "runtime-complete", "activation-pending", "activation-started", "activated",
     "observing", "complete",
 )
@@ -27,6 +27,9 @@ VALIDATOR_SET = re.compile(r"hoodi-[a-z0-9][a-z0-9-]*\Z")
 UID_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,255}\Z")
 CUSTODY_RESULT_REL = "custody/custody-completion.json"
 ACTIVATION_RECEIPT_REL = "evidence/activation-receipt.json"
+AUDIT_RECEIPT_REL = "audit/audit-challenge.json"
+AUDIT_COMPLETION_KEY = "audit_completion_sha256"
+AUDIT_CONTINUATION_KEYS = {"audit_operation_id", "audit_receipt_rel"}
 CONTINUATION_KEYS = {
     "keystore_dir", "keystore_device", "keystore_inode", "public_key",
     "deposit_attestation_rel", "deposit_attestation_sha256",
@@ -204,10 +207,20 @@ def read(root: Path, manifest: Path):
         return value
     allowed_continuation_keys = {
         frozenset(CONTINUATION_KEYS),
+        frozenset(CONTINUATION_KEYS | AUDIT_CONTINUATION_KEYS),
+        frozenset(CONTINUATION_KEYS | AUDIT_CONTINUATION_KEYS | {AUDIT_COMPLETION_KEY}),
         frozenset(CONTINUATION_KEYS | CUSTODY_CONTINUATION_KEYS),
+        frozenset(CONTINUATION_KEYS | AUDIT_CONTINUATION_KEYS | CUSTODY_CONTINUATION_KEYS),
+        frozenset(CONTINUATION_KEYS | AUDIT_CONTINUATION_KEYS | {AUDIT_COMPLETION_KEY} | CUSTODY_CONTINUATION_KEYS),
         frozenset(CONTINUATION_KEYS | CUSTODY_CONTINUATION_KEYS | {CUSTODY_COMPLETION_KEY}),
+        frozenset(CONTINUATION_KEYS | AUDIT_CONTINUATION_KEYS | CUSTODY_CONTINUATION_KEYS | {CUSTODY_COMPLETION_KEY}),
+        frozenset(CONTINUATION_KEYS | AUDIT_CONTINUATION_KEYS | {AUDIT_COMPLETION_KEY} | CUSTODY_CONTINUATION_KEYS | {CUSTODY_COMPLETION_KEY}),
         frozenset(CONTINUATION_KEYS | CUSTODY_CONTINUATION_KEYS | {CUSTODY_COMPLETION_KEY} | ACTIVATION_CONTINUATION_KEYS),
+        frozenset(CONTINUATION_KEYS | AUDIT_CONTINUATION_KEYS | CUSTODY_CONTINUATION_KEYS | {CUSTODY_COMPLETION_KEY} | ACTIVATION_CONTINUATION_KEYS),
+        frozenset(CONTINUATION_KEYS | AUDIT_CONTINUATION_KEYS | {AUDIT_COMPLETION_KEY} | CUSTODY_CONTINUATION_KEYS | {CUSTODY_COMPLETION_KEY} | ACTIVATION_CONTINUATION_KEYS),
         frozenset(CONTINUATION_KEYS | CUSTODY_CONTINUATION_KEYS | {CUSTODY_COMPLETION_KEY} | ACTIVATION_CONTINUATION_KEYS | {ACTIVATION_COMPLETION_KEY}),
+        frozenset(CONTINUATION_KEYS | AUDIT_CONTINUATION_KEYS | CUSTODY_CONTINUATION_KEYS | {CUSTODY_COMPLETION_KEY} | ACTIVATION_CONTINUATION_KEYS | {ACTIVATION_COMPLETION_KEY}),
+        frozenset(CONTINUATION_KEYS | AUDIT_CONTINUATION_KEYS | {AUDIT_COMPLETION_KEY} | CUSTODY_CONTINUATION_KEYS | {CUSTODY_COMPLETION_KEY} | ACTIVATION_CONTINUATION_KEYS | {ACTIVATION_COMPLETION_KEY}),
     }
     if not isinstance(continuation, dict) or frozenset(continuation) not in allowed_continuation_keys:
         raise ResumeError("resume continuation context is invalid")
@@ -238,6 +251,20 @@ def read(root: Path, manifest: Path):
             raise ResumeError("resume continuation evidence is invalid")
         if hashlib.sha256(bound.read_bytes()).hexdigest() != continuation[hash_key]:
             raise ResumeError("resume continuation evidence changed")
+    has_audit = AUDIT_CONTINUATION_KEYS <= set(continuation)
+    if has_audit:
+        if (not re.fullmatch(r"[0-9a-f]{32}", continuation["audit_operation_id"])
+                or continuation["audit_receipt_rel"] != AUDIT_RECEIPT_REL):
+            raise ResumeError("resume audit operation context is invalid")
+    elif value["phase"] in ALL_PHASES[ALL_PHASES.index("audit-started"):]:
+        raise ResumeError("resume audit operation context is required")
+    has_audit_completion = AUDIT_COMPLETION_KEY in continuation
+    if has_audit_completion:
+        if (not re.fullmatch(r"[0-9a-f]{64}", continuation[AUDIT_COMPLETION_KEY]) or ALL_PHASES.index(value["phase"]) < ALL_PHASES.index("audit-complete")):
+            raise ResumeError("resume audit completion context is invalid")
+        validate_audit_completion(root, value, continuation)
+    elif value["phase"] == "audit-complete":
+        raise ResumeError("resume audit completion receipt is required")
     has_custody = CUSTODY_CONTINUATION_KEYS <= set(continuation)
     has_completion = CUSTODY_COMPLETION_KEY in continuation
     if has_custody:
@@ -316,6 +343,16 @@ def validate_custody_completion(root: Path, continuation: dict):
                 or not re.fullmatch(r"[0-9a-f]{64}", outputs[key])
                 or hashlib.sha256(output.read_bytes()).hexdigest() != outputs[key]):
             raise ResumeError("custody public output does not match completion receipt")
+    return hashlib.sha256(raw).hexdigest()
+
+def validate_audit_completion(root: Path, value: dict, continuation: dict):
+    receipt = child(root, AUDIT_RECEIPT_REL, True); info = receipt.lstat()
+    if receipt.is_symlink() or not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600: raise ResumeError("audit completion receipt is unsafe")
+    raw = receipt.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != continuation[AUDIT_COMPLETION_KEY]: raise ResumeError("audit completion receipt changed")
+    record = strict_json(raw, "audit completion receipt")
+    expected = {"schema_version":1,"result":"socket-audit-challenge-emitted-and-root-revoked","aws_account_id":value["aws_account_id"],"aws_region":value["aws_region"],"deployment_name":value["deployment_name"],"release_revision":value["release_revision"],"operation_id":continuation["audit_operation_id"]}
+    if (not isinstance(record, dict) or set(record) != set(expected) | {"marker_hmac","request_id","after_ms"} or any(record.get(key) != wanted for key,wanted in expected.items()) or not re.fullmatch(r"hmac-sha256:[0-9a-f]{64}", record.get("marker_hmac", "")) or not re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", record.get("request_id", "")) or type(record.get("after_ms")) is not int or record["after_ms"] < 0): raise ResumeError("audit completion receipt is invalid")
     return hashlib.sha256(raw).hexdigest()
 
 
@@ -412,6 +449,9 @@ def main():
             "platform-complete",
             "vault-started",
             "vault-complete",
+            "collector-complete",
+            "audit-started",
+            "audit-complete",
             "custody-started",
             "custody-complete",
             "runtime-complete",
@@ -436,6 +476,12 @@ def main():
     z = sub.add_parser("reconcile-custody-complete")
     z.add_argument("--work-dir", type=Path, required=True)
     z.add_argument("--manifest", type=Path, required=True)
+    ac = sub.add_parser("reconcile-audit-complete")
+    ac.add_argument("--work-dir", type=Path, required=True)
+    ac.add_argument("--manifest", type=Path, required=True)
+    aa = sub.add_parser("prepare-audit")
+    aa.add_argument("--work-dir", type=Path, required=True)
+    aa.add_argument("--manifest", type=Path, required=True)
     ap = sub.add_parser("prepare-activation")
     ap.add_argument("--work-dir", type=Path, required=True)
     ap.add_argument("--manifest", type=Path, required=True)
@@ -510,7 +556,7 @@ def main():
         elif a.op == "prepare-custody":
             value = read(a.work_dir, a.manifest)
             if (value.get("schema_version") != 2
-                    or value["phase"] not in ("platform-complete", "vault-complete")
+                    or value["phase"] not in ("platform-complete", "vault-complete", "audit-complete")
                     or not isinstance(value.get("continuation"), dict)):
                 raise ResumeError("custody operation cannot be prepared at this phase")
             continuation = value["continuation"]
@@ -542,6 +588,33 @@ def main():
                 "result_output": str(a.work_dir / CUSTODY_RESULT_REL),
                 "validator_set": continuation["validator_set"],
             }, sort_keys=True))
+        elif a.op == "prepare-audit":
+            value = read(a.work_dir, a.manifest)
+            if value["phase"] != "collector-complete" or not isinstance(value.get("continuation"), dict):
+                raise ResumeError("audit operation cannot be prepared at this phase")
+            continuation = value["continuation"]
+            receipt = child(a.work_dir, AUDIT_RECEIPT_REL, False)
+            parent_info = receipt.parent.lstat()
+            if (receipt.parent.is_symlink() or not stat.S_ISDIR(parent_info.st_mode)
+                    or stat.S_IMODE(parent_info.st_mode) != 0o700 or receipt.exists() or receipt.is_symlink()):
+                raise ResumeError("audit completion receipt target is unavailable or unsafe")
+            if AUDIT_CONTINUATION_KEYS <= set(continuation):
+                if (not re.fullmatch(r"[0-9a-f]{32}", continuation["audit_operation_id"])
+                        or continuation["audit_receipt_rel"] != AUDIT_RECEIPT_REL):
+                    raise ResumeError("resume audit operation context is invalid")
+            else:
+                continuation.update({"audit_operation_id": secrets.token_hex(16), "audit_receipt_rel": AUDIT_RECEIPT_REL})
+                write(a.work_dir / "interactive-resume.json", value)
+            print(json.dumps({"operation_id": continuation["audit_operation_id"], "receipt_output": str(receipt)}, sort_keys=True))
+        elif a.op == "reconcile-audit-complete":
+            value = read(a.work_dir, a.manifest)
+            if value["phase"] != "audit-started": raise ResumeError("audit completion cannot be reconciled at this phase")
+            continuation = value.get("continuation")
+            if not isinstance(continuation, dict) or not AUDIT_CONTINUATION_KEYS <= set(continuation): raise ResumeError("resume audit operation context is required")
+            receipt = child(a.work_dir, AUDIT_RECEIPT_REL, True)
+            continuation[AUDIT_COMPLETION_KEY] = hashlib.sha256(receipt.read_bytes()).hexdigest()
+            validate_audit_completion(a.work_dir, value, continuation)
+            value["phase"] = "audit-complete"; write(a.work_dir / "interactive-resume.json", value)
         elif a.op == "reconcile-custody-complete":
             value = read(a.work_dir, a.manifest)
             if value["phase"] != "custody-started":
@@ -604,6 +677,12 @@ def main():
                 raise ResumeError("continuation context is required before custody lifecycle transitions")
             if a.phase == "custody-complete":
                 raise ResumeError("custody completion requires its bound completion receipt")
+            if a.phase == "audit-started":
+                continuation = value.get("continuation")
+                if not isinstance(continuation, dict) or not AUDIT_CONTINUATION_KEYS <= set(continuation):
+                    raise ResumeError("audit operation must be prepared before it starts")
+            if a.phase == "audit-complete":
+                raise ResumeError("audit completion requires its bound completion receipt")
             if a.phase == "activated":
                 raise ResumeError("activation completion requires its bound lower-bound receipt")
             if a.phase == "activation-started":

@@ -57,7 +57,7 @@ elif op=='show':
  else: print(json.dumps({'format_version':'1.0','values':{'root_module':None},'configuration':{'root_module':{'resources':[{'address':'aws_test.x'}]}},'resource_changes':[{'address':'aws_test.x','change':{'actions':['create']}}]}))
 elif op=='output':
  if kind=='bootstrap': print(json.dumps({'bucket':'node-operator-tfstate-111111111111-useast1','region':'us-east-1','dynamodb_table':'node-operator-terraform-lock','kms_key_id':'arn:aws:kms:us-east-1:111111111111:key/abc'}))
- elif kind=='foundation': print(json.dumps({'vpc_id':'vpc-abc','vpc_cidr':'10.0.0.0/16','system_subnet_ids':['subnet-a','subnet-b'],'hoodi_subnet_ids':['subnet-c'],'system_route_table_id':'rtb-a','hoodi_route_table_id':'rtb-b','hoodi_nat_gateway_id':'nat-a'}))
+ elif kind=='foundation': print(json.dumps({'vpc_id':'vpc-abc','vpc_cidr':'10.0.0.0/16','system_subnet_ids':['subnet-a','subnet-b'],'hoodi_subnet_ids':['subnet-c'],'system_route_table_id':'rtb-a','hoodi_route_table_id':'rtb-b','hoodi_nat_gateway_id':'nat-a','hoodi_nat_public_ip':'198.51.100.42'}))
  else: print(json.dumps({'deployment_account_id':{'value':'111111111111'},'cluster_name':{'value':'node-operator'},'gitops_client_ecr_repository_url':{'value':'111111111111.dkr.ecr.us-east-1.amazonaws.com/x'},'github_gitops_client_ecr_publisher_role_arn':{'value':'arn:aws:iam::111111111111:role/x'}}))
 elif op=='apply' and kind=='foundation' and os.environ.get('FAIL_FOUNDATION_ONCE'):
  marker=pathlib.Path(os.environ['TF_FAIL_MARKER'])

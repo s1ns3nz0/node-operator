@@ -61,6 +61,11 @@ output "vault_unseal_key_arn" {
   value       = aws_kms_key.vault.arn
 }
 
+output "ebs_kms_key_arn" {
+  description = "Deployment-owned EBS KMS key used by the client chart StorageClasses."
+  value       = aws_kms_key.ebs.arn
+}
+
 output "vault_role_arn" {
   description = "IAM role ARN for the Vault Pod Identity association."
   value       = aws_iam_role.vault.arn

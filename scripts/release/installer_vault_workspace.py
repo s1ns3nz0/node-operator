@@ -34,7 +34,10 @@ def validate_vault_workspace(bundle_root: Path, state_dir: Path, discovery: dict
  for rel, content in expected.items():
   if (module/rel).read_bytes()!=content: raise VaultWorkspaceError("Baseline module differs from verified release.")
  foundation=_read(work/"foundation-output.json","Foundation output is unsafe.")
- derived={"network_source":"foundation","foundation_network":{key:foundation[key] for key in ("vpc_id","vpc_cidr","system_subnet_ids","hoodi_subnet_ids","system_route_table_id","hoodi_route_table_id","hoodi_nat_gateway_id")}}
+ try:
+  network={key:foundation[key] for key in ("vpc_id","vpc_cidr","system_subnet_ids","hoodi_subnet_ids","system_route_table_id","hoodi_route_table_id","hoodi_nat_gateway_id","hoodi_nat_public_ip")}
+ except (KeyError,TypeError) as error: raise VaultWorkspaceError("Foundation output lacks the required NAT public IP handoff.") from error
+ derived={"network_source":"foundation","foundation_network":network}
  for path in (work/"foundation-network.auto.tfvars.json",module/"foundation-network.auto.tfvars.json"):
   if _read(path,"Derived network input is unsafe.") != derived: raise VaultWorkspaceError("Derived network input differs from foundation output.")
  bootstrap=_read(work/"bootstrap-output.json","Bootstrap output is unsafe.")

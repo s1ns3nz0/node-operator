@@ -173,14 +173,17 @@ class ApplyCollector(unittest.TestCase):
         with self.assertRaises(installer.CollectorInstallError): self.invoke()
         self.assertTrue(any("rollout" in call for call in self.calls))
 
-    def test_public_installer_places_collector_after_custody_and_before_runtime_apply(self):
+    def test_public_installer_places_collector_before_audit_custody_and_runtime_apply(self):
         source = (ROOT / "scripts/release/interactive-hoodi-release.sh").read_text()
-        custody = source.index('if [ "$lifecycle_phase" = custody-complete ]; then')
-        collector = source.index('Applying verified validator log collector', custody)
+        collector = source.index('Applying verified validator log collector')
+        audit = source.index('Configuring Vault audit devices before custody', collector)
+        custody = source.index('if [ "$lifecycle_phase" = audit-complete ]; then', audit)
         runtime = source.index('Applying Vault-backed validator runtime', custody)
-        self.assertLess(custody, collector)
         self.assertLess(collector, runtime)
-        hook = source[collector:runtime]
+        self.assertLess(collector, audit)
+        self.assertLess(audit, custody)
+        self.assertLess(custody, runtime)
+        hook = source[collector:audit]
         self.assertIn('"$collector_apply"', hook)
         self.assertIn('--release-sha "$release_revision"', hook)
         self.assertIn('--work-dir "$output_dir/deployment-work"', hook)

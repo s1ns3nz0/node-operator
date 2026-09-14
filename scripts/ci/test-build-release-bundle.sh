@@ -238,6 +238,7 @@ for required_path in \
   source/scripts/ops/verify-live-vault-cutover-convergence.sh \
   source/scripts/ops/collect-hoodi-signer-public-key-evidence.sh \
   source/scripts/ops/recover-and-onboard-hoodi-validator-keystore.sh \
+  source/scripts/ops/recover-missing-hoodi-slashing-history.py \
   source/.ci/validator/approved-runtime-images.json \
   source/.ci/validator/approved-client-images.json \
   source/.ci/gitops/approved-oci-artifacts.json \

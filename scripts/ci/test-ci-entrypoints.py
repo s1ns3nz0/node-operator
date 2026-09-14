@@ -67,7 +67,25 @@ class Entrypoints(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         docker_calls = [args for args in self.calls() if args[0] == "run"]
         python_calls = [args for args in self.calls() if args[0] != "run"]
-        self.assertEqual(len(docker_calls), 13)
+        self.assertEqual(
+            [args[args.index("bash") + 1] for args in docker_calls],
+            [
+                "/workspace/scripts/ci/validate-terraform-offline.sh",
+                "/workspace/scripts/ci/test-selected-terraform-apply-role-plan.sh",
+                "/workspace/scripts/ci/test-validator-runtime-mirror-enabled-plan.sh",
+                "/workspace/scripts/ci/test-argocd-bootstrap-enabled-plan.sh",
+                "/workspace/scripts/ci/test-argocd-bootstrap-destination-contract.sh",
+                "/workspace/scripts/ci/test-pre-eks-artifact-plan.sh",
+                "/workspace/scripts/ci/validate-terraform-module-offline.sh",
+                "/workspace/scripts/ci/validate-terraform-module-offline.sh",
+                "/workspace/scripts/ci/validate-terraform-module-offline.sh",
+                "/workspace/scripts/ci/validate-terraform-module-offline.sh",
+                "/workspace/scripts/ci/test-bootstrap-state-cli.sh",
+                "/workspace/scripts/ci/test-foundation-backend-contract.sh",
+                "/workspace/scripts/ci/test-ops-access-basic-monitoring.sh",
+                "/workspace/scripts/ci/test-ops-access-ebs-binding.sh",
+            ],
+        )
         for args in docker_calls:
             self.assertEqual(args[:2], ["run", "--rm"])
             self.assertEqual(args[args.index("--network") + 1], "none")

@@ -36,6 +36,7 @@ fi
 [ "$1" = deploy ] || exit 0''')
     exe(release / "hoodi-validator-release.sh", deploy)
     exe(release / "run-platform-bootstrap.sh", "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" > \"$PLATFORM_LOG\"\nexit \"${PLATFORM_EXIT:-97}\"\n")
+    exe(release / "build-deployment-bound-chart-values-input.py", "#!/usr/bin/env python3\nimport os,sys,json\nopen(os.environ['VALUES_LOG'],'w').write(' '.join(sys.argv[1:]))\nout=sys.argv[sys.argv.index('--output')+1]; json.dump({'schema_version':1},open(out,'w')); os.chmod(out,0o600)\n")
     exe(release / "platform_bootstrap_replay.py", "#!/usr/bin/env python3\nimport sys\nif sys.argv[1:2] == ['phase']: print('complete')\nelse: raise SystemExit(99)\n")
     exe(release / "verify-platform-private-eks-session.py", "#!/usr/bin/env python3\nimport os\nopen(os.environ['SESSION_LOG'], 'w').write('|'.join(os.environ.get(k, '') for k in ('AWS_PROFILE','AWS_REGION','AWS_DEFAULT_REGION','AWS_EC2_METADATA_DISABLED','EKS_CLUSTER_NAME','SSM_OPS_INSTANCE_ID','AWS_ACCESS_KEY_ID','PRIVATE_EKS_SESSION','PRIVATE_VAULT_SESSION','KUBECONFIG','VAULT_TOKEN')))\nif os.environ.get('SESSION_FAIL') == '1': raise SystemExit(65)\nprint('node-op-auth\\ti-0123456789abcdef0')\n")
     for name in ("prepare-vault-bootstrap-tls.sh", "verify-existing-hoodi-validator.py", "verify-hoodi-vault-readiness.sh"):
@@ -45,6 +46,9 @@ import json, os, sys
 if sys.argv[1] == "prepare-custody":
     work = sys.argv[sys.argv.index("--work-dir") + 1]
     print(json.dumps({"operation_id":"a" * 32,"result_output":work + "/custody/custody-completion.json"}))
+if sys.argv[1] == "prepare-audit":
+    work = sys.argv[sys.argv.index("--work-dir") + 1]
+    print(json.dumps({"operation_id":"b" * 32,"receipt_output":work + "/audit/audit-challenge.json"}))
 raise SystemExit(65 if sys.argv[1:2] == ['bind-continuation'] and os.environ.get('CONTINUATION_BIND_FAIL') == '1' else 0)
 ''')
     # The collector installer is a required bundle member and must be invoked
@@ -58,6 +62,7 @@ raise SystemExit(65 if sys.argv[1:2] == ['bind-continuation'] and os.environ.get
     exe(ops / "validate-hoodi-deposit-data.sh", "#!/usr/bin/env bash\nmkdir -p \"$6\"; printf '{\"validator_public_key\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}' > \"$6/uc-1-deposit-attestation.json\"\n")
     exe(ops / "with-private-vault.sh", "#!/usr/bin/env bash\nprintf '%s' \"$AWS_PROFILE|$AWS_REGION|$AWS_DEFAULT_REGION|$AWS_EC2_METADATA_DISABLED|$EKS_CLUSTER_NAME|$SSM_OPS_INSTANCE_ID|${AWS_ACCESS_KEY_ID:-}|${PRIVATE_EKS_SESSION:-}|${PRIVATE_VAULT_SESSION:-}|${KUBECONFIG:-}|${VAULT_TOKEN:-}|${PRIVATE_VAULT_TARGET:-}\" > \"$VAULT_LOG\"\nif [ \"${VAULT_EXEC_CHILD:-0}\" = 1 ]; then\n  [ \"$1\" = -- ] || exit 64; shift\n  exec \"$@\"\nfi\nexit \"${VAULT_RC:-75}\"\n")
     exe(ops / "recover-and-bootstrap-hoodi-vault-v2.sh", "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" > \"$VAULT_HELPER_LOG\"\ncase \" $* \" in *\" --verify-initialization-completion \"*) exit \"${VERIFY_RC:-0}\" ;; *) exit 88 ;; esac\n")
+    exe(ops / "recover-and-configure-private-vault-validator-audit.sh", "#!/usr/bin/env bash\nprintf 'audit-setup\\n' >> \"$VAULT_HELPER_LOG\"\nexit \"${AUDIT_RC:-0}\"\n")
     exe(ops / "verify-hoodi-vault-readiness.sh", "#!/usr/bin/env bash\nexit \"${READINESS_RC:-0}\"\n")
     exe(ops / "with-private-eks.sh", "#!/usr/bin/env bash\nprintf '%s\\n' \"$AWS_PROFILE|$AWS_REGION|$AWS_DEFAULT_REGION|$AWS_EC2_METADATA_DISABLED|$EKS_CLUSTER_NAME|$SSM_OPS_INSTANCE_ID|${AWS_ACCESS_KEY_ID:-}|${KUBECONFIG:-}\" >> \"$EKS_LOG\"\n[ \"$1\" = -- ] && shift\nKUBECONFIG=generated-kube \"$@\"\n")
     exe(ops / "ensure-vault-agent-ca.sh", "#!/usr/bin/env bash\nprintf 'ca:%s\\n' \"${KUBECONFIG:-}\" >> \"$EKS_LOG\"\n")
@@ -70,11 +75,15 @@ raise SystemExit(65 if sys.argv[1:2] == ['bind-continuation'] and os.environ.get
     aws = "#!/usr/bin/env bash\nprintf 'aws %s\\n' \"$*\" >> \"$AWS_LOG\"\ncase \"$1:$2\" in\nsts:get-caller-identity) printf '{\"Account\":\"123456789012\",\"Arn\":\"arn:aws:iam::123456789012:user/test\"}\\n' ;;\niam:get-role) printf '(NoSuchEntity)' >&2; exit 1 ;;\niam:create-role|iam:put-role-policy) exit 0 ;;\nec2:describe-availability-zones) printf 'ap-northeast-2a\\tap-northeast-2b\\n' ;;\nconfigservice:describe-configuration-recorders) printf '1\\n' ;;\necr:describe-images) repository=''; previous=''; for arg in \"$@\"; do [ \"$previous\" = --repository-name ] && repository=$arg; previous=$arg; done; if [ \"$repository\" = \"${ECR_FAIL_REPOSITORY:-}\" ]; then case \"${ECR_RESULT:?}\" in missing) printf 'None\\n' ;; wrong) printf 'sha256:'; printf '9%.0s' {1..64}; printf '\\n' ;; esac; exit 0; fi; for arg in \"$@\"; do case \"$arg\" in imageDigest=*) printf '%s\\n' \"${arg#imageDigest=}\"; exit 0 ;; imageTag=*) printf 'sha256:'; printf '7%.0s' {1..64}; printf '\\n'; exit 0 ;; esac; done ;;\n*) exit 88 ;;\nesac\n"
     exe(fake / "aws", aws)
     exe(fake / "docker", "#!/usr/bin/env bash\nprintf 'docker %s\\n' \"$*\" >> \"$DOCKER_LOG\"\nexit 94\n")
+    # The wrapper preflights these release dependencies. Chart rendering is
+    # intentionally outside this PTY fixture; fail if either command is used.
+    exe(fake / "helm", "#!/usr/bin/env bash\nexit 99\n")
+    exe(fake / "ruby", "#!/usr/bin/env bash\nexit 99\n")
     exe(fake / "kubectl", "#!/usr/bin/env bash\nprintf 'kubectl:%s\\n' \"${KUBECONFIG:-}\" >> \"$EKS_LOG\"\nexit 76\n")
     return bundle, fake, release / "interactive-hoodi-release.sh"
 
 def run(script, fake, work, answers, **extra):
-    master, slave = pty.openpty(); env = {**os.environ, "PATH": str(fake) + os.pathsep + os.environ["PATH"], "AWS_LOG": str(work / "aws.log"), "DOCKER_LOG": str(work / "docker.log"), "PREPARE_LOG": str(work / "prepare.log"), "PLATFORM_LOG": str(work / "platform.log"), "RELEASE_LOG": str(work / "release.log"), "SESSION_LOG": str(work / "session.log"), "VAULT_LOG": str(work / "vault.log"), "VAULT_HELPER_LOG": str(work / "vault-helper.log"), "EKS_LOG": str(work / "eks.log"), "COLLECTOR_LOG": str(work / "collector.log"), **extra}
+    master, slave = pty.openpty(); env = {**os.environ, "PATH": str(fake) + os.pathsep + os.environ["PATH"], "AWS_LOG": str(work / "aws.log"), "DOCKER_LOG": str(work / "docker.log"), "PREPARE_LOG": str(work / "prepare.log"), "PLATFORM_LOG": str(work / "platform.log"), "RELEASE_LOG": str(work / "release.log"), "SESSION_LOG": str(work / "session.log"), "VAULT_LOG": str(work / "vault.log"), "VAULT_HELPER_LOG": str(work / "vault-helper.log"), "EKS_LOG": str(work / "eks.log"), "COLLECTOR_LOG": str(work / "collector.log"), "VALUES_LOG": str(work / "values.log"), **extra}
     for key in ("WORK_DIR", "REGION", "DEPLOYMENT_NAME", "VALIDATOR_SET", "VALIDATOR_PUBLIC_KEY", "WITHDRAWAL_ADDRESS", "EXISTING_KEYSTORE_DIR", "WEB3SIGNER_IMAGE", "POSTGRES_IMAGE", "PRYSM_IMAGE", "FENCE_IMAGE", "ARGOCD_BOOTSTRAP_IMAGE", "VAULT_BOOTSTRAP_IMAGE", "CLIENT_CHART_VERSION", "CLIENT_CHART_DIGEST"):
         env.pop(key, None)
     for key in tuple(env):
@@ -220,7 +229,10 @@ def bound_continuation_resume():
             else:
                 assert code == 76 and (work / "eks.log").exists(), (code, out)
                 collector = (work / "collector.log")
-                assert collector.exists() and "--validator-set hoodi-001" in collector.read_text() and "--release-sha " + "a" * 40 in collector.read_text() and "b" * 40 not in collector.read_text(), (code, out)
+                # Collection now completes before the audit and custody
+                # ceremonies. A resume already past custody must never replay
+                # it merely to reconstruct the old ordering.
+                assert not collector.exists(), (code, out)
 
 def vault_initialization_resume_verification():
     for case in ("completed", "missing", "mismatched"):
@@ -284,8 +296,14 @@ def actual_custody_receipt_resume_contract():
             runtime = selected / "custody-verifier-runtime"; runtime.mkdir(mode=0o700)
             (runtime / "receipt.json").write_text('{"schema_version":1}'); (runtime / "receipt.json").chmod(0o600)
             subprocess.run(["python3", str(helper), "bind-continuation", "--work-dir", str(selected), "--manifest", str(manifest), "--keystore-dir", str(keys), "--public-key", public_key, "--deposit-attestation", str(attestation)], check=True)
-            for phase in ("vault-started", "vault-complete"):
+            for phase in ("vault-started", "vault-complete", "collector-complete"):
                 subprocess.run(["python3", str(helper), "phase", "--work-dir", str(selected), "--manifest", str(manifest), "--phase", phase], check=True)
+            audit = selected / "audit"; audit.mkdir(mode=0o700)
+            audit_operation = json.loads(subprocess.run(["python3", str(helper), "prepare-audit", "--work-dir", str(selected), "--manifest", str(manifest)], check=True, text=True, capture_output=True).stdout)
+            subprocess.run(["python3", str(helper), "phase", "--work-dir", str(selected), "--manifest", str(manifest), "--phase", "audit-started"], check=True)
+            audit_receipt = pathlib.Path(audit_operation["receipt_output"])
+            audit_receipt.write_text(json.dumps({"schema_version":1,"result":"socket-audit-challenge-emitted-and-root-revoked","aws_account_id":ACCOUNT,"aws_region":REGION,"deployment_name":DEPLOYMENT,"release_revision":"a" * 40,"operation_id":audit_operation["operation_id"],"marker_hmac":"hmac-sha256:" + "a" * 64,"request_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","after_ms":1})); audit_receipt.chmod(0o600)
+            subprocess.run(["python3", str(helper), "reconcile-audit-complete", "--work-dir", str(selected), "--manifest", str(manifest)], check=True)
             prepared = json.loads(subprocess.run(["python3", str(helper), "prepare-custody", "--work-dir", str(selected), "--manifest", str(manifest), "--validator-set", "hoodi-001"], check=True, text=True, capture_output=True).stdout)
             subprocess.run(["python3", str(helper), "phase", "--work-dir", str(selected), "--manifest", str(manifest), "--phase", "custody-started"], check=True)
             ceremony = selected / "ceremony"; ceremony.mkdir(mode=0o700)
@@ -332,7 +350,8 @@ def actual_custody_receipt_resume_contract():
                 assert json.loads((selected / "interactive-resume.json").read_text())["phase"] == "observing"
                 assert "observe-only:" in (work / "eks.log").read_text() and not (work / "release.log").exists(), (code, out)
                 code, out = run(script, fake, work, "RESUME\n", WORK_DIR=str(selected), AWS_PROFILE="chosen", OBSERVE_RC="0")
-                assert code == 75 and "required Vault and AWS audit delivery" in out, (code, out)
+                assert code == 0 and "delivery-metadata gates currently pass" in out, (code, out)
+                assert json.loads((selected / "interactive-resume.json").read_text())["phase"] == "complete", (code, out)
                 assert (work / "eks.log").read_text().count("observe-only:") == 2
                 assert not (work / "release.log").exists(), (code, out)
                 activation_receipt.write_text(activation_receipt.read_text() + "\n")

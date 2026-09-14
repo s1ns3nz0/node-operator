@@ -37,3 +37,10 @@ python3 scripts/ci/test-installer-full-artifact-mirror.py
 python3 scripts/ci/test-hoodi-artifact-first.py
 bash scripts/ci/test-interactive-hoodi-config-recorder-contract.sh
 python3 scripts/ci/test-verify-existing-hoodi-validator.py
+# Check offline archive correlation and immutable deployment-chart input boundaries.
+python3 scripts/ci/test-vault-audit-archive-matcher.py
+python3 scripts/ci/test-vault-audit-archive-reader.py
+python3 scripts/ci/test-recover-and-configure-private-vault-validator-audit.py
+python3 scripts/ci/test-build-deployment-bound-chart-values-input.py
+python3 scripts/ci/test-verify-client-chart-deployment-capability.py
+python3 scripts/ci/test-render-deployment-bound-chart-values.py

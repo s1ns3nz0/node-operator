@@ -3,15 +3,18 @@
 
 Internal entrypoint: the release caller verifies its bundle and live private
 EKS session before invoking this program inside the selected tunnel. A zero
-exit proves three finalized duties and configured AWS delivery metadata,
-not all workload/Vault audit content or deployment requirements.
+exit proves three finalized duties, configured AWS delivery metadata, and the
+resume-bound Vault audit challenge correlation; deployment completion remains
+the caller's lifecycle decision.
 """
 from __future__ import annotations
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import stat
 import subprocess
@@ -37,9 +40,15 @@ observer = module("observe-hoodi-finalized-attestations.py")
 operational_delivery = module("operational_log_delivery.py")
 registration = module("verify-existing-hoodi-validator.py")
 chain_emf = module("validator_monitoring_chain.py")
+vault_audit_reader = module("vault_audit_archive_reader.py")
 
 
 class Pending(RuntimeError): pass
+
+
+_AUDIT_MARKER = re.compile(r"hmac-sha256:[0-9a-f]{64}\Z")
+_AUDIT_REQUEST = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
+_AUDIT_LOG_GROUP = re.compile(r"/aws/eks/[a-z][a-z0-9-]{1,38}[a-z0-9]/validator-security\Z")
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -170,8 +179,54 @@ def verify_reader_role(transport, role_arn, account, region):
         raise Pending("reader PodIdentity does not match the deployment reader role")
 
 
+def verify_vault_audit(transport, context, reader, directory, verifier=vault_audit_reader.verify):
+    """Correlate the resume-bound Vault challenge through the existing reader Pod.
+
+    The cursor retains only a hash of the challenge binding plus opaque archive
+    continuation state. It is never accepted across a new challenge receipt.
+    """
+    challenge, log_group = context.get("audit_challenge"), context.get("vault_security_log_group")
+    if (not isinstance(challenge, dict) or set(challenge) != {"marker_hmac", "after_ms", "request_id"}
+            or not isinstance(challenge["marker_hmac"], str) or not _AUDIT_MARKER.fullmatch(challenge["marker_hmac"])
+            or type(challenge["after_ms"]) is not int or challenge["after_ms"] < 0
+            or not isinstance(challenge["request_id"], str) or not _AUDIT_REQUEST.fullmatch(challenge["request_id"])
+            or not isinstance(log_group, str) or not _AUDIT_LOG_GROUP.fullmatch(log_group)):
+        raise Pending("validated Vault audit challenge context is unavailable")
+    scope = hashlib.sha256(json.dumps(challenge, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    cursor_path = directory / "vault-audit-cursor.json"
+    token, matches = None, None
+    if cursor_path.exists():
+        try:
+            cursor = collector.load(cursor_path)
+            if not isinstance(cursor, dict) or set(cursor) != {"schema_version", "scope", "continuation_token", "matches"}:
+                raise ValueError()
+            if cursor["schema_version"] == 1 and cursor["scope"] == scope:
+                token, matches = cursor["continuation_token"], cursor["matches"]
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+    try:
+        result = verifier(transport, reader["bucket"], reader["prefix"], context["aws_region"], context["aws_account_id"],
+                          log_group, challenge["marker_hmac"], challenge["after_ms"], reader["kms_key_arn"], token, matches)
+    except Exception as error:
+        raise Pending("Vault audit archive correlation is unavailable") from error
+    if not isinstance(result, dict) or result.get("state") not in {"pending", "matched"}:
+        raise Pending("Vault audit archive correlation is invalid")
+    if result["state"] == "pending":
+        if set(result) != {"state", "continuation_token", "matches"}:
+            raise Pending("Vault audit archive correlation is invalid")
+        collector.write(cursor_path, {"schema_version": 1, "scope": scope,
+                                      "continuation_token": result["continuation_token"], "matches": result["matches"]})
+        return {"state": "pending", "reason": "archive-correlation-pending"}
+    required = {"state", "bucket", "key", "version_id", "event_id", "request_id", "timestamp_ms"}
+    if set(result) != required or result["request_id"] != challenge["request_id"]:
+        return {"state": "pending", "reason": "request-id-mismatch"}
+    proof = {key: result[key] for key in ("bucket", "key", "version_id", "event_id", "request_id", "timestamp_ms")}
+    collector.write(directory / "vault-audit-correlation.json", {"schema_version": 1, **proof})
+    return {"state": "matched", **proof}
+
+
 def observe_once(context, work_dir, public_url, port, beacon_factory=PrivateBeaconSession, reader_factory=ReaderPod,
-                 observer_function=observer.observe, emit_emf=None):
+                 observer_function=observer.observe, emit_emf=None, vault_audit_verifier=vault_audit_reader.verify):
     identity, reader = context["identity"], context["reader"]
     directory = work_dir / "evidence/observation"; private_directory(directory)
     workload, delivery = directory / "workload.json", directory / "delivery.json"
@@ -192,6 +247,7 @@ def observe_once(context, work_dir, public_url, port, beacon_factory=PrivateBeac
             metadata = operational_delivery.verify(context["operational_log_delivery"], since_ms, int(time.time() * 1000), transport, cursor)
             collector.write(directory / "operational-delivery.json", metadata)
             collector.write(cursor_path, metadata["cursor"])
+            vault_audit = verify_vault_audit(transport, context, reader, directory, vault_audit_verifier)
         beacon.verify()
         if result == 75:
             if emit_emf is not None:
@@ -206,7 +262,8 @@ def observe_once(context, work_dir, public_url, port, beacon_factory=PrivateBeac
             emit_emf(context, proof, True)
         proof["duties_complete"] = rc == 0
         proof["operational_log_delivery"] = metadata
-        if metadata["result"] != "PASS_OPERATIONAL_METADATA": rc = 75
+        proof["vault_audit"] = vault_audit
+        if metadata["result"] != "PASS_OPERATIONAL_METADATA" or vault_audit["state"] != "matched": rc = 75
         return rc, proof
 
 
@@ -245,17 +302,17 @@ def main():
                 emit(context, None, False)
                 # Never repeat a prior PASS on a failed fresh collection. The
                 # redacted state is intentionally not a finalized-duty claim.
-                print(json.dumps({"scope":"finalized duties and AWS delivery metadata; full audit/deployment completion is separate",
+                print(json.dumps({"scope":"finalized duties, Vault audit correlation, and AWS delivery metadata; deployment completion is separate",
                                   "epochs":[], "pending_log_sources":[], "complete":False, "state":"unavailable"}), flush=True)
                 time.sleep(30)
                 continue
             epochs = result.get("consecutive_finalized_epochs", [])
-            print(json.dumps({"scope":"finalized duties and AWS delivery metadata; full audit/deployment completion is separate",
+            print(json.dumps({"scope":"finalized duties, Vault audit correlation, and AWS delivery metadata; deployment completion is separate",
                               "epochs":epochs, "pending_log_sources":result.get("operational_log_delivery", {}).get("pending", []),
                               "complete":rc == 0, "state":"verified" if rc == 0 else "pending",
                               "timestamp_ms":int(time.time() * 1000), "required_finalized_epochs":args.required_finalized_epochs}), flush=True)
             if not args.continuous and (rc == 0 or args.once): return rc
-            print(f"PENDING: waiting for {args.required_finalized_epochs} consecutive finalized duties, archived signer/fence logs and AWS delivery metadata; retrying in 30 seconds", file=sys.stderr, flush=True)
+            print(f"PENDING: waiting for {args.required_finalized_epochs} consecutive finalized duties, archived signer/fence logs, Vault audit correlation and AWS delivery metadata; retrying in 30 seconds", file=sys.stderr, flush=True)
             time.sleep(30)
     except KeyboardInterrupt:
         print("PENDING: observation interrupted; resume this WORK_DIR without reactivation", file=sys.stderr); return 75

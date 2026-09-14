@@ -79,6 +79,7 @@ variable "foundation_network" {
     hoodi_subnet_ids      = list(string)
     hoodi_route_table_id  = string
     hoodi_nat_gateway_id  = string
+    hoodi_nat_public_ip   = string
   })
   default  = null
   nullable = true
@@ -92,6 +93,7 @@ variable "foundation_network" {
       can(regex("^rtb-[0-9a-f]+$", var.foundation_network.system_route_table_id)) &&
       can(regex("^rtb-[0-9a-f]+$", var.foundation_network.hoodi_route_table_id)) &&
       can(regex("^nat-[0-9a-f]+$", var.foundation_network.hoodi_nat_gateway_id))
+      && can(cidrhost("${var.foundation_network.hoodi_nat_public_ip}/32", 0))
     )
     error_message = "foundation_network must contain reviewed VPC, subnet, route-table, and NAT identifiers."
   }
