@@ -2,7 +2,7 @@
 # Check objective: Validate the private whole-platform replay checkpoint.
 """Offline contract checks for the private whole-platform replay checkpoint."""
 from __future__ import annotations
-import json, os, shutil, subprocess, sys, tempfile, unittest
+import json, os, shutil, signal, subprocess, sys, tempfile, time, unittest
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[2]
@@ -36,17 +36,27 @@ class Replay(unittest.TestCase):
   value=json.loads(path.read_text());value['phases']={'unreviewed_phase':'complete'};path.write_text(json.dumps(value));path.chmod(0o600)
   self.assertEqual(self.call('phase','--work-dir',str(self.work),'--phase','argocd_apply','--action','get',ok=False).returncode,65)
  def test_killed_supervisor_leaves_lock_with_child(self):
-  outer=subprocess.Popen([sys.executable,str(HELPER),'lock','--work-dir',str(self.work),'--',sys.executable,'-c','import time; time.sleep(2)'])
+  ready=self.temp/'child-ready';release=self.temp/'child-release'
+  child='from pathlib import Path\nimport sys, time\nready, release = map(Path, sys.argv[1:])\nready.write_text("ready")\ndeadline = time.monotonic() + 30\nwhile not release.exists() and time.monotonic() < deadline: time.sleep(.01)'
+  outer=subprocess.Popen([sys.executable,str(HELPER),'lock','--work-dir',str(self.work),'--',sys.executable,'-c',child,str(ready),str(release)],start_new_session=True)
   try:
-   lock=self.work/'platform-bootstrap-replay/.platform.lock'
-   for _ in range(50):
-    if lock.exists():break
-    __import__('time').sleep(.02)
+   deadline=time.monotonic()+10
+   while not ready.exists() and time.monotonic()<deadline:
+    time.sleep(.02)
+   self.assertTrue(ready.exists(), 'child did not confirm readiness')
    outer.kill();outer.wait(timeout=3)
+   # POSIX flock remains held through the inherited child descriptor.
    self.assertEqual(self.call('lock','--work-dir',str(self.work),'--',sys.executable,'-c','pass',ok=False).returncode,65)
-   __import__('time').sleep(2.1)
-   self.call('lock','--work-dir',str(self.work),'--',sys.executable,'-c','pass')
+   release.write_text('release')
+   deadline=time.monotonic()+10
+   while time.monotonic()<deadline:
+    if self.call('lock','--work-dir',str(self.work),'--',sys.executable,'-c','pass',ok=False).returncode == 0: break
+    time.sleep(.02)
+   else:self.fail('child did not release inherited lock')
   finally:
+   release.touch()
+   try: os.killpg(outer.pid,signal.SIGKILL)
+   except ProcessLookupError: pass
    if outer.poll() is None:outer.kill();outer.wait(timeout=3)
  def test_tmp_work_directory_is_accepted(self):
   work=Path('/tmp')/f'platform-bootstrap-replay-{os.getpid()}'

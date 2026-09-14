@@ -249,6 +249,19 @@ if [ -n "$publication_records_directory" ]; then
     --audit-relay-record "$publication_records_directory/vault-audit-relay-publication-record.json" \
     --gitops-oci-mirror-record "$publication_records_directory/gitops-oci-mirror-publication-record.json" \
     --output "$stage_directory/rendered/installer-artifact-index.json"
+  # Check the generated real catalog with the same validator used by mirroring,
+  # before a reproducible but unusable index can become release evidence.
+  PYTHONDONTWRITEBYTECODE=1 python3 -B - "$stage_directory/source/scripts/release" "$stage_directory/rendered/installer-artifact-index.json" <<'PY'
+import json
+from pathlib import Path
+import sys
+sys.path.insert(0, sys.argv[1])
+from installer_artifact_receipt import _validate_index, _validate_raw_index
+raw = Path(sys.argv[2]).read_bytes()
+index = json.loads(raw)
+_validate_raw_index(index, raw)
+_validate_index(index)
+PY
 fi
 
 # Kubernetes Secret objects and common private-key encodings do not belong in
