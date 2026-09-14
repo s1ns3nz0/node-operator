@@ -88,6 +88,10 @@ mkdir -p "$stage_directory/source" "$stage_directory/rendered"
 
 path_is_in_release_boundary() {
   case "$1" in
+    # Missing-history preparation verifies this exact non-secret source pin.
+    .ci/web3signer-hardened/source.lock.json|scripts/ops/lib/uc5-beacon-reader.py)
+      return 0
+      ;;
     # Bind the reviewed, non-secret Prysm advisory and expiry policy in bundles.
     .ci/prysm-mtls-applicability.json|.ci/prysm-mtls-applicability/GO-2026-5932.json)
       return 0

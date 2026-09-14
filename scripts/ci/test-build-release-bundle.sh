@@ -11,6 +11,8 @@ source "$script_dir/lib/common.sh"
 require_command jq
 require_command tar
 require_command cmp
+python3 "$script_dir/test-slashing-recovery-bundle-inputs.py"
+python3 "$script_dir/test-prepare-hoodi-missing-slashing-history.py"
 
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
@@ -32,6 +34,10 @@ if [ "$offline_fixture" = true ] && [ -z "$publication_records_directory$prysm_p
   done
   # Exercise this test revision, including uncommitted test-only changes.
   cp "$script_dir/test-build-release-bundle.sh" "$fixture/scripts/ci/test-build-release-bundle.sh"
+  cp "$script_dir/build-release-bundle.sh" "$fixture/scripts/ci/build-release-bundle.sh"
+  cp "$script_dir/test-slashing-recovery-bundle-inputs.py" "$fixture/scripts/ci/test-slashing-recovery-bundle-inputs.py"
+  cp "$script_dir/test-prepare-hoodi-missing-slashing-history.py" "$fixture/scripts/ci/test-prepare-hoodi-missing-slashing-history.py"
+  cp "$script_dir/../ops/prepare-hoodi-missing-slashing-history.sh" "$fixture/scripts/ops/prepare-hoodi-missing-slashing-history.sh"
   git -C "$fixture" init -q
   git -C "$fixture" add .
   git -C "$fixture" -c user.name=Fixture -c user.email=fixture@example.invalid -c commit.gpgsign=false commit -qm 'Offline legacy bundle fixture'
@@ -239,6 +245,9 @@ for required_path in \
   source/scripts/ops/collect-hoodi-signer-public-key-evidence.sh \
   source/scripts/ops/recover-and-onboard-hoodi-validator-keystore.sh \
   source/scripts/ops/recover-missing-hoodi-slashing-history.py \
+  source/.ci/web3signer-hardened/source.lock.json \
+  source/scripts/ops/lib/uc5-beacon-reader.py \
+  source/scripts/ops/prepare-hoodi-missing-slashing-history.sh \
   source/.ci/validator/approved-runtime-images.json \
   source/.ci/validator/approved-client-images.json \
   source/.ci/gitops/approved-oci-artifacts.json \

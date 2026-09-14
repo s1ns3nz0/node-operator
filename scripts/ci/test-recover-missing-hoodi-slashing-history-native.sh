@@ -77,4 +77,14 @@ EOF
 status="$(attestation_request 1 | docker exec -i "$signer" curl --silent --output /tmp/below.json --write-out '%{http_code}' -H 'Content-Type: application/json' --data-binary @- "http://127.0.0.1:9000/api/v1/eth2/sign/$key")"; docker cp "$signer:/tmp/below.json" "$fixture/below.json"; if [ "$status" != 412 ]; then cat "$fixture/below.json" >&2; docker logs "$signer" >&2; exit 1; fi
 status="$(attestation_request 2 | docker exec -i "$signer" curl --silent --output /tmp/equal.json --write-out '%{http_code}' -H 'Content-Type: application/json' --data-binary @- "http://127.0.0.1:9000/api/v1/eth2/sign/$key")"; docker cp "$signer:/tmp/equal.json" "$fixture/equal.json"; if [ "$status" != 200 ]; then cat "$fixture/equal.json" >&2; docker logs "$signer" >&2; exit 1; fi
 python3 -c 'import json,sys; result=json.load(open(sys.argv[1])); assert isinstance(result.get("signature"),str) and result["signature"].startswith("0x")' "$fixture/equal.json"
+docker stop "$signer" >/dev/null
+# Exercise the maintenance predicates on native BYTEA keys, and prove repair
+# preserves an existing partial signing record rather than reconstructing it.
+history_before="$(docker exec "$database" psql -Atq -U web3signer -d web3signer -c 'SELECT row_to_json(a) FROM signed_attestations a ORDER BY target_epoch, source_epoch')"
+test -n "$history_before"
+"${native[@]}" watermark-repair --slot 96 --epoch 3 >/dev/null
+test "$(docker exec "$database" psql -Atq -U web3signer -d web3signer -c 'SELECT row_to_json(a) FROM signed_attestations a ORDER BY target_epoch, source_epoch')" = "$history_before"
+test "$(docker exec "$database" psql -Atq -U web3signer -d web3signer -c "SELECT count(*) FROM metadata WHERE encode(genesis_validators_root, 'hex') = '${root#0x}'")" = 1
+test "$(docker exec "$database" psql -Atq -U web3signer -d web3signer -c "SELECT count(*) FROM low_watermarks lw JOIN validators v ON v.id = lw.validator_id WHERE encode(v.public_key, 'hex') = '${key#0x}' AND lw.slot >= 64 AND lw.source_epoch >= 2 AND lw.target_epoch >= 2")" = 1
 printf '%s\n' 'PASS: disposable pinned native repair preserved slot 64/epoch 2 across lower no-op and restart; below-floor signing returned 412 and equality signed.'
+printf '%s\n' 'PASS: later native repair preserved partial signing history; BYTEA identity/genesis and minimum-floor queries passed.'
