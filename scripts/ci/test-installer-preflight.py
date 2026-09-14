@@ -58,6 +58,10 @@ class PreflightTests(unittest.TestCase):
                            ("UserId", role["role_id"] + ":other"), ("Arn", "arn:aws:iam::123456789012:user/operator")):
             with patch.object(module, "aws_read", return_value={**identity, field: bad}), self.assertRaises(module.PreflightError):
                 module.verify_execution_profile(context, role, "execution")
+        other_role = {"Account": "123456789012", "Arn": "arn:aws:sts::123456789012:assumed-role/other/session",
+                      "UserId": "AROA" + "B" * 17 + ":session"}
+        with patch.object(module, "aws_read", return_value=other_role), self.assertRaises(module.PreflightError):
+            module.verify_execution_profile(context, role, "execution")
 
     def test_backend_role_lookup_checks_exact_identity_not_permissions(self):
         context = {"aws_profile": "test", "aws_region": "ap-northeast-1", "aws_account_id": "123456789012"}
@@ -99,7 +103,7 @@ class PreflightTests(unittest.TestCase):
     def test_discovery_does_not_claim_apply_permission(self):
         responses = [{"Account": "123456789012", "Arn": "arn:aws:sts::123456789012:assumed-role/operator/session"},
                      {"AvailabilityZones": [{"ZoneName": "ap-northeast-1c", "State": "available"}, {"ZoneName": "ap-northeast-1a", "State": "available"}]},
-                     {"clusters": ["test-node"]}, [], [], ["test-node-foundation-flow-logs", "test-node-baseline-eks-cluster", "unrelated-role"],
+                     {"clusters": ["test-node"]}, [], [], [], ["test-node-foundation-flow-logs", "test-node-baseline-eks-cluster", "unrelated-role"],
                      {"Quota": {"QuotaCode": "L-0263D0A3", "ServiceCode": "ec2", "Value": 5}}, []]
         with patch.object(module, "aws_read", side_effect=responses) as read:
             result = module.discover("test", "ap-northeast-1", "test-node")
@@ -107,8 +111,24 @@ class PreflightTests(unittest.TestCase):
         self.assertTrue(result["cluster_name_present"])
         self.assertEqual(result["provisioning_permissions"], "not_verified")
         self.assertEqual(result["iam_role_collisions"]["deployment_role_name_conflicts"], ["test-node-baseline-eks-cluster", "test-node-foundation-flow-logs"])
+        self.assertEqual(result["configuration_recorder"], {"result": "recorder_absent_verified", "existing_count": 0, "manage_config_recorder": True, "existing_recorder_adoption": "not_authorized"})
         self.assertEqual(result["iam_role_collisions"]["iam_permissions"], "not_verified")
-        self.assertEqual([c.args[2][0] for c in read.call_args_list], ["sts", "ec2", "eks", "s3api", "dynamodb", "iam", "service-quotas", "ec2"])
+        self.assertEqual([c.args[2][0] for c in read.call_args_list], ["sts", "ec2", "eks", "configservice", "s3api", "dynamodb", "iam", "service-quotas", "ec2"])
+
+    def test_configuration_recorder_observation_is_read_only_and_fail_closed(self):
+        with patch.object(module, "aws_read", return_value=["node-operator-baseline-config"]) as read:
+            existing = module.configuration_recorder_observation("test", "ap-northeast-2")
+        self.assertEqual(existing, {"result": "existing_recorder_verified", "existing_count": 1, "manage_config_recorder": False, "existing_recorder_adoption": "not_authorized"})
+        self.assertEqual(read.call_args.args[2], ["configservice", "describe-configuration-recorders", "--query", "ConfigurationRecorders[].name"])
+        with patch.object(module, "aws_read", return_value=[]):
+            absent = module.configuration_recorder_observation("test", "ap-northeast-2")
+        self.assertTrue(absent["manage_config_recorder"])
+        for response in (None, {}, ["one", "two"], ["bad/name"]):
+            with self.subTest(response=response), patch.object(module, "aws_read", return_value=response), self.assertRaises(module.PreflightError):
+                module.configuration_recorder_observation("test", "ap-northeast-2")
+        with patch.object(module, "aws_read", side_effect=module.PreflightError("denied detail")), self.assertRaisesRegex(module.PreflightError, "could not be read") as error:
+            module.configuration_recorder_observation("test", "ap-northeast-2")
+        self.assertNotIn("denied detail", str(error.exception))
 
     def test_elastic_ip_headroom_and_exhaustion_never_mutate(self):
         for allocated, expected in [(0, "sufficient_at_observation"), (4, "sufficient_at_observation"), (5, "requires_capacity_review")]:

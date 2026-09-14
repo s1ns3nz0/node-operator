@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "audit" {
-  bucket_prefix = "${local.name_prefix}-audit-"
+  bucket_prefix = "${substr(local.name_prefix, 0, 20)}-audit-"
   force_destroy = false
 
   tags = merge(local.common_tags, {
@@ -76,7 +76,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit" {
 # audited source continues to use its purpose-specific KMS key above.
 resource "aws_s3_bucket" "audit_access_logs" {
   #checkov:skip=CKV_AWS_145:S3 server access log delivery does not support a default SSE-KMS destination key.
-  bucket_prefix = "${local.name_prefix}-al-"
+  bucket_prefix = "${substr(local.name_prefix, 0, 20)}-al-"
   force_destroy = false
 
   tags = merge(local.common_tags, {

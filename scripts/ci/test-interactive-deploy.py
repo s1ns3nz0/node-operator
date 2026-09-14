@@ -407,7 +407,7 @@ class InstallerCommandTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary).resolve() / "state"
             bundle = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=Mock(return_value=directory / "release"))
-            discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"]}
+            discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"], "configuration_recorder": {"result":"recorder_absent_verified","existing_count":0,"manage_config_recorder":True,"existing_recorder_adoption":"not_authorized"}}
             options = ["--release-dir", temporary, "--aws-profile", "test", "--aws-region", "ap-northeast-1", "--name", "test-node",
                        "--apply-infrastructure", "--backend-principal-arn", "arn:aws:iam::123456789012:role/backend"]
             with patch.dict(sys.modules, {"installer_bundle": bundle}), patch.object(cli, "discover", return_value=discovery), patch.object(cli, "verify_backend_role", return_value={}), patch.object(cli, "prepare_inputs"), patch.object(cli, "apply_infrastructure") as apply, patch.object(cli.sys.stdin, "isatty", return_value=True), patch("builtins.input", return_value="yes"), self.assertRaises(cli.StateError):
@@ -421,7 +421,7 @@ class InstallerCommandTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as temporary:
                 directory = Path(temporary).resolve() / "state"
                 bundle = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=Mock(return_value=directory / "release"))
-                discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"]}
+                discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"], "configuration_recorder": {"result":"recorder_absent_verified","existing_count":0,"manage_config_recorder":True,"existing_recorder_adoption":"not_authorized"}}
                 options = ["--release-dir", temporary, "--aws-profile", "test", "--aws-region", "ap-northeast-1", "--name", "test-node",
                            "--apply-infrastructure", "--backend-principal-arn", "arn:aws:iam::123456789012:role/backend"]
                 with patch.dict(sys.modules, {"installer_bundle": bundle}), patch.object(cli, "discover", return_value=discovery), patch.object(cli, "verify_backend_role", return_value={}), patch.object(cli, "prepare_inputs"), patch.object(cli, "apply_infrastructure", side_effect=outcome) as apply, patch.object(cli.sys.stdin, "isatty", return_value=True), patch("builtins.input", return_value="APPLY 123456789012 ap-northeast-1 test-node AUDIT ap-northeast-2"):
@@ -459,6 +459,12 @@ class InstallerCommandTests(unittest.TestCase):
             with patch.object(cli, "discover", return_value={**DISCOVERY, "aws_account_id": "999999999999"}), self.assertRaises(cli.StateError):
                 self.invoke(directory, "resume", ["--release-dir", temporary])
 
+    def test_start_defaults_region_to_seoul(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(sys.modules, {"installer_bundle": types.SimpleNamespace(verify_release=lambda _: RELEASE)}), patch.object(cli, "discover", return_value={**DISCOVERY, "aws_region": "ap-northeast-2"}) as discover, patch.object(cli, "prompt", side_effect=lambda supplied, _label, default=None: supplied if supplied is not None else default):
+            directory = Path(temporary) / "state"
+            self.invoke(directory, "start", ["--release-dir", temporary, "--aws-profile", "test", "--name", "test-node"])
+        discover.assert_called_once_with("test", "ap-northeast-2", "test-node")
+
     def test_running_stage_is_not_retried_or_completed(self):
         with tempfile.TemporaryDirectory() as temporary, patch.dict(sys.modules, {"installer_bundle": types.SimpleNamespace(verify_release=lambda _: RELEASE)}), patch.object(cli, "discover", return_value=DISCOVERY):
             directory = Path(temporary) / "state"
@@ -485,7 +491,7 @@ class InstallerCommandTests(unittest.TestCase):
             directory = Path(temporary).resolve() / "state"
             materialize = Mock(return_value=directory / "release")
             bundle_module = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=materialize)
-            discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"]}
+            discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"], "configuration_recorder": {"result":"recorder_absent_verified","existing_count":0,"manage_config_recorder":True,"existing_recorder_adoption":"not_authorized"}}
             role = "arn:aws:iam::123456789012:role/backend"
             options = ["--release-dir", temporary, "--aws-profile", "test", "--aws-region", "ap-northeast-1", "--name", "test-node",
                        "--prepare-infrastructure", "--backend-principal-arn", role, "--execution-profile", "execution"]
@@ -494,7 +500,7 @@ class InstallerCommandTests(unittest.TestCase):
             verify_role.assert_called_once_with(discovery, role)
             execution.assert_called_once_with(discovery, discovery["backend_role"], "execution")
             materialize.assert_called_once_with(Path(temporary), directory / "release", RELEASE["release_sha"], RELEASE["bundle_digest"])
-            prepare.assert_called_once_with(directory / "release", directory / "infrastructure-inputs", discovery, role)
+            prepare.assert_called_once_with(directory / "release", directory / "infrastructure-inputs", discovery, role, directory)
             self.assertEqual(result["result"], "infrastructure_inputs_ready")
             self.assertFalse(result["deployment_complete"])
             _, status = self.invoke(directory, "status")
@@ -504,7 +510,7 @@ class InstallerCommandTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             materialize = Mock()
             bundle_module = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=materialize)
-            discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"]}
+            discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"], "configuration_recorder": {"result":"recorder_absent_verified","existing_count":0,"manage_config_recorder":True,"existing_recorder_adoption":"not_authorized"}}
             options = ["--release-dir", temporary, "--aws-profile", "test", "--aws-region", "ap-northeast-1", "--name", "test-node",
                        "--prepare-infrastructure", "--backend-principal-arn", "arn:aws:iam::999999999999:role/backend"]
             with patch.dict(sys.modules, {"installer_bundle": bundle_module}), patch.object(cli, "discover", return_value=discovery), patch.object(cli, "prepare_inputs") as prepare, self.assertRaises(cli.InfrastructureError):
@@ -516,7 +522,7 @@ class InstallerCommandTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             materialize = Mock()
             bundle_module = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=materialize)
-            discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"]}
+            discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"], "configuration_recorder": {"result":"recorder_absent_verified","existing_count":0,"manage_config_recorder":True,"existing_recorder_adoption":"not_authorized"}}
             options = ["--release-dir", temporary, "--aws-profile", "test", "--aws-region", "ap-northeast-1", "--name", "test-node",
                        "--prepare-infrastructure", "--backend-principal-arn", "arn:aws:iam::123456789012:role/backend", "--execution-profile", "wrong"]
             with patch.dict(sys.modules, {"installer_bundle": bundle_module}), patch.object(cli, "discover", return_value=discovery), patch.object(cli, "verify_backend_role", return_value={}), patch.object(cli, "verify_execution_profile", side_effect=cli.PreflightError("wrong role")), patch.object(cli, "prepare_inputs") as prepare, self.assertRaises(cli.PreflightError):
@@ -528,7 +534,7 @@ class InstallerCommandTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             materialize = Mock()
             bundle_module = types.SimpleNamespace(verify_release=lambda _: RELEASE, materialize_release=materialize)
-            discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"]}
+            discovery = {**DISCOVERY, "availability_zones": ["ap-northeast-1a", "ap-northeast-1c"], "configuration_recorder": {"result":"recorder_absent_verified","existing_count":0,"manage_config_recorder":True,"existing_recorder_adoption":"not_authorized"}}
             options = ["--release-dir", temporary, "--aws-profile", "test", "--aws-region", "ap-northeast-1", "--name", "test-node",
                        "--prepare-infrastructure", "--backend-principal-arn", "arn:aws:iam::123456789012:role/missing"]
             with patch.dict(sys.modules, {"installer_bundle": bundle_module}), patch.object(cli, "discover", return_value=discovery), patch.object(cli, "verify_backend_role", side_effect=cli.PreflightError("unavailable")), patch.object(cli, "prepare_inputs") as prepare, self.assertRaises(cli.PreflightError):

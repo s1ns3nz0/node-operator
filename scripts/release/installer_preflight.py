@@ -234,6 +234,34 @@ def elastic_ip_headroom(profile: str, region: str) -> dict:
             "reservation_created": False, "other_quotas": "not_verified"}
 
 
+def configuration_recorder_observation(profile: str, region: str) -> dict:
+    """Observe the regional Config recorder without adopting or changing it.
+
+    AWS permits one recorder per Region. A verified existing recorder means the
+    baseline must not attempt a second one; an unreadable or malformed
+    inventory is never interpreted as absence.
+    """
+    try:
+        recorders = aws_read(profile, region,
+                             ["configservice", "describe-configuration-recorders",
+                              "--query", "ConfigurationRecorders[].name"])
+    except PreflightError as error:
+        raise PreflightError("AWS Config recorder inventory could not be read; no recorder ownership was assumed.") from error
+    if (not isinstance(recorders, list)
+            or len(recorders) > 1
+            or not all(isinstance(item, str)
+                       and re.fullmatch(r"[A-Za-z0-9_.-]{1,256}", item)
+                       for item in recorders)):
+        raise PreflightError("AWS Config recorder inventory is incomplete; no recorder ownership was assumed.")
+    existing = len(recorders) == 1
+    return {
+        "result": "existing_recorder_verified" if existing else "recorder_absent_verified",
+        "existing_count": len(recorders),
+        "manage_config_recorder": not existing,
+        "existing_recorder_adoption": "not_authorized",
+    }
+
+
 def aws_read(profile: str, region: str, arguments: list[str]) -> object:
     if shutil.which("aws") is None:
         raise PreflightError("AWS CLI is missing; install it before target discovery.")
@@ -287,6 +315,7 @@ def discover(profile: str, region: str, name: str) -> dict:
             "principal_arn": arn,
             "deployment_name": name, "availability_zones": available[:2],
             "cluster_name_present": name in clusters["clusters"],
+            "configuration_recorder": configuration_recorder_observation(profile, region),
             "local_prerequisites": local_prerequisites(),
             "backend_collisions": backend_collisions(profile, region, name, account),
             "iam_role_collisions": iam_role_collisions(profile, region, name),

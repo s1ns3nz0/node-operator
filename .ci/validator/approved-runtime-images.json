@@ -8,6 +8,10 @@
     "postgres": {
       "source": "postgres@sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825",
       "reference": "16-bookworm"
+    },
+    "fluent-bit": {
+      "source": "cr.fluentbit.io/fluent/fluent-bit@sha256:a5761fa961cb22dd0875883a4d446b1acd99d4935d77358aa9f50ee177e44fe2",
+      "reference": "v0.1.20 retained collector digest"
     }
   }
 }

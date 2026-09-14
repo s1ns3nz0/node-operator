@@ -14,6 +14,16 @@ resource "aws_iam_role" "kms_administrator" {
   assume_role_policy = data.aws_iam_policy_document.kms_administrator_assume_role.json
 
   tags = local.common_tags
+
+  lifecycle {
+    # Terraform 1.5 variable validation cannot bind this ARN to another
+    # variable. Keep the account check on an existing KMS dependency rather
+    # than introducing a standalone resource into the pre-EKS closure.
+    precondition {
+      condition     = var.terraform_apply_role_arn == null || var.terraform_apply_role_arn == "" || can(regex("^arn:aws:iam::${var.aws_account_id}:role/[A-Za-z0-9+=,.@_/-]{1,64}$", var.terraform_apply_role_arn))
+      error_message = "terraform_apply_role_arn must be empty or an IAM role in aws_account_id."
+    }
+  }
 }
 
 data "aws_iam_policy_document" "kms_key_administrator" {
@@ -46,35 +56,36 @@ data "aws_iam_policy_document" "kms_key_administrator" {
     resources = ["*"]
   }
 
-  # Terraform executes as this role, rather than as the dedicated break-glass
-  # KMS administrator.  AWS validates that the creating principal will retain
-  # permission to manage a new key policy, so grant only the lifecycle and
-  # policy actions already scoped to the Terraform apply role.  This does not
-  # grant cryptographic use, grants, or wildcard KMS administration.
-  statement {
-    sid    = "AllowTerraformApplyKeyLifecycleManagement"
-    effect = "Allow"
+  # This conditional statement never invents a fixed role principal. The
+  # selected ARN receives lifecycle management only, never cryptographic use,
+  # grants, or wildcard KMS administration.
+  dynamic "statement" {
+    for_each = var.terraform_apply_role_arn == null || var.terraform_apply_role_arn == "" ? [] : [var.terraform_apply_role_arn]
+    content {
+      sid    = "AllowSelectedTerraformApplyKeyLifecycleManagement"
+      effect = "Allow"
 
-    principals {
-      type        = "AWS"
-      identifiers = ["arn:aws:iam::${var.aws_account_id}:role/NodeOperatorTerraformApply"]
+      principals {
+        type        = "AWS"
+        identifiers = [statement.value]
+      }
+
+      actions = [
+        "kms:CancelKeyDeletion",
+        "kms:CreateAlias",
+        "kms:DeleteAlias",
+        "kms:DescribeKey",
+        "kms:EnableKeyRotation",
+        "kms:GetKeyPolicy",
+        "kms:GetKeyRotationStatus",
+        "kms:ListAliases",
+        "kms:ListResourceTags",
+        "kms:PutKeyPolicy",
+        "kms:ScheduleKeyDeletion",
+        "kms:TagResource",
+      ]
+      resources = ["*"]
     }
-
-    actions = [
-      "kms:CancelKeyDeletion",
-      "kms:CreateAlias",
-      "kms:DeleteAlias",
-      "kms:DescribeKey",
-      "kms:EnableKeyRotation",
-      "kms:GetKeyPolicy",
-      "kms:GetKeyRotationStatus",
-      "kms:ListAliases",
-      "kms:ListResourceTags",
-      "kms:PutKeyPolicy",
-      "kms:ScheduleKeyDeletion",
-      "kms:TagResource",
-    ]
-    resources = ["*"]
   }
 }
 

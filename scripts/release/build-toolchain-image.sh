@@ -6,7 +6,12 @@
 # Side effects: Builds and saves a local Docker image; release-build also runs its bundle contract.
 set -euo pipefail
 
-input_sha="$({ sha256sum "$DOCKERFILE" ${INPUT_FILE:+"$INPUT_FILE"}; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
+input_files=("$DOCKERFILE")
+if [ -n "${INPUT_FILE:-}" ]; then
+  IFS=',' read -r -a extra_input_files <<<"$INPUT_FILE"
+  input_files+=("${extra_input_files[@]}")
+fi
+input_sha="$(sha256sum "${input_files[@]}" | awk '{print $1}' | sha256sum | awk '{print $1}')"
 docker build --build-arg "TOOLCHAIN_INPUT_SHA=$input_sha" --file "$DOCKERFILE" --tag "$IMAGE:build-${GITHUB_SHA}" .
 # A Dockerfile build alone cannot prove that its declared commands
 # satisfy the release bundle contract. Exercise the newly built,

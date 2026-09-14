@@ -1,7 +1,9 @@
-# Copy this reviewed example into the approved GitOps repository as
-# platform/vault/vault-values.yaml. It intentionally references existing
-# non-secret Kubernetes and AWS resources; it creates neither credentials nor
-# secret values.
+# This is the base template consumed only by the private Vault bootstrap
+# runner. It intentionally references existing non-secret Kubernetes and AWS
+# resources; it creates neither credentials nor secret values. The immutable
+# runtime image fields below are placeholders: the runner must pass the
+# canonical catalog-bound image overlay as a later Helm values file. Do not
+# apply this base template by itself.
 global:
   tlsDisable: false
 
@@ -12,11 +14,17 @@ server:
   serviceAccount:
     create: true
     name: vault
+  # Vault uses its locally mounted server ServiceAccount token as the
+  # Kubernetes TokenReview credential. The pinned Vault chart renders this
+  # exact ServiceAccount into a system:auth-delegator ClusterRoleBinding.
+  # Do not replace it with a stored reviewer JWT.
+  authDelegator:
+    enabled: true
   image:
-    # The chart renders repository:tag, so retain the reviewed immutable ECR
-    # tag while appending the matching manifest digest.
-    repository: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault
-    tag: "5d3802fde4b13b1a7a459cc9a1d1bfab48de3ff88a8c23ed8b89ce6fd6b5ef0d@sha256:5d3802fde4b13b1a7a459cc9a1d1bfab48de3ff88a8c23ed8b89ce6fd6b5ef0d"
+    # The later canonical overlay supplies the selected private ECR
+    # repository and catalog-approved immutable tag@digest.
+    repository: REPLACE_WITH_PRIVATE_VAULT_SERVER_REPOSITORY
+    tag: REPLACE_WITH_PRIVATE_VAULT_SERVER_TAG
   ha:
     enabled: true
     replicas: 3
@@ -56,16 +64,15 @@ server:
         # approved GitOps runner workspace. The Vault Pod Identity role, not
         # this file, grants seal/unseal access.
         seal "awskms" {
-          region = "ap-northeast-2"
+          region = "REPLACE_WITH_VAULT_AWS_REGION"
           kms_key_id = "REPLACE_WITH_VAULT_UNSEAL_KEY_ARN"
         }
   dataStorage:
     enabled: true
     size: 20Gi
-    # Fresh EKS clusters expose the AWS-managed gp2 class by default. A
-    # deployment-specific encrypted class may be supplied by the platform
-    # bootstrap, but must never be assumed to exist.
-    storageClass: gp2
+    # The private bootstrap verifies or creates this exact deployment-bound
+    # EBS CSI StorageClass before Helm runs. Existing PVCs are never migrated.
+    storageClass: gp3-encrypted
   resources:
     requests: {cpu: "500m", memory: "1Gi"}
     limits: {cpu: "2", memory: "2Gi"}
@@ -89,7 +96,7 @@ server:
   auditStorage:
     enabled: true
     size: 20Gi
-    storageClass: gp2
+    storageClass: gp3-encrypted
     accessMode: ReadWriteOnce
     labels:
       node-operator.io/encryption-policy: baseline-ebs-kms
@@ -143,14 +150,15 @@ injector:
   # Leave externalVaultAddr unset: this release owns the in-cluster Vault
   # server. The chart will point injected agents at the local active service.
   # This is the image injected into application Pods, distinct from the
-  # injector webhook Deployment below. Pin it to the private mirror as well:
-  # private EKS workers intentionally have no Docker Hub egress.
+  # injector webhook Deployment below. The canonical later overlay supplies
+  # private catalog-bound image references; private EKS workers intentionally
+  # have no Docker Hub egress.
   agentImage:
-    repository: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault
-    tag: "5d3802fde4b13b1a7a459cc9a1d1bfab48de3ff88a8c23ed8b89ce6fd6b5ef0d@sha256:5d3802fde4b13b1a7a459cc9a1d1bfab48de3ff88a8c23ed8b89ce6fd6b5ef0d"
+    repository: REPLACE_WITH_PRIVATE_VAULT_AGENT_REPOSITORY
+    tag: REPLACE_WITH_PRIVATE_VAULT_AGENT_TAG
   image:
-    repository: 106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault
-    tag: "41496b509345246f4cb29d7c83c4e99e6eeb891ef756e327617adb458b5c4b8d@sha256:41496b509345246f4cb29d7c83c4e99e6eeb891ef756e327617adb458b5c4b8d"
+    repository: REPLACE_WITH_PRIVATE_VAULT_INJECTOR_REPOSITORY
+    tag: REPLACE_WITH_PRIVATE_VAULT_INJECTOR_TAG
   resources:
     requests: {cpu: "100m", memory: "128Mi"}
     limits: {cpu: "500m", memory: "512Mi"}

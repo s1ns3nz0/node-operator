@@ -16,6 +16,7 @@ import sys
 from installer_preflight import PreflightError, discover, validate_inputs, verify_backend_role, verify_execution_profile, bootstrap_permission_probe
 from installer_state import CheckpointStore, StateError, STAGE_NAMES
 from installer_infrastructure import InfrastructureError, prepare_inputs, apply_infrastructure
+from installer_artifact_receipt import validate as validate_artifact_receipt, ReceiptError
 
 
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -87,11 +88,11 @@ def _guided_mirror_ready(state_dir: Path, bundle_root: Path, discovery: dict, re
         receipt = _read_object(path)
         index_path = bundle_root / "rendered" / "installer-artifact-index.json"
         index = _read_object(index_path)
-        index_hash = hashlib.sha256(index_path.read_bytes()).hexdigest()
-    except (InfrastructureError, OSError) as error:
+        baseline = _read_object(state_dir / "terraform-work" / "baseline-output.json")
+        validate_artifact_receipt(index, receipt, baseline, discovery, index_path.read_bytes())
+    except (InfrastructureError, OSError, ReceiptError) as error:
         raise StateError("Vault mirror evidence or materialized release index is unavailable or unsafe.") from error
-    required = {"vault-bootstrap", "vault-audit-relay", "vault-server", "vault-injector", "cert-manager-controller", "cert-manager-webhook", "cert-manager-cainjector", "cert-manager-startupapicheck", "vault-chart", "cert-manager-chart"}
-    if not isinstance(receipt, dict) or receipt.get("schema_version") != 1 or receipt.get("status") != "verified" or receipt.get("release_revision") != release_sha or receipt.get("index_sha256") != index_hash or any(receipt.get(key) != discovery[key] for key in ("aws_account_id", "aws_region", "deployment_name")) or not isinstance(receipt.get("artifacts"), dict) or set(receipt["artifacts"]) != required or not isinstance(index, dict) or index.get("release_revision") != release_sha:
+    if not isinstance(index, dict) or index.get("release_revision") != release_sha:
         raise StateError("Vault mirror receipt is malformed or does not bind the selected materialized release.")
     return True
 
@@ -288,7 +289,7 @@ def run(argv: list[str] | None = None) -> int:
         if args.state_dir.exists() or args.state_dir.is_symlink():
             raise StateError("State path already exists. Use resume; no state was overwritten.")
         profile = prompt(args.aws_profile, "AWS profile", "default")
-        region = prompt(args.aws_region, "AWS Region", "ap-northeast-1")
+        region = prompt(args.aws_region, "AWS Region", "ap-northeast-2")
         name = prompt(args.name, "Deployment name")
     validate_inputs(profile, region, name)
     discovery = discover(profile, region, name)
@@ -418,7 +419,7 @@ def run(argv: list[str] | None = None) -> int:
                 discovery["bootstrap_permission_probe"] = bootstrap_permission_probe(discovery, discovery["backend_role"])
             bundle_root = materialize_release(args.release_dir, args.state_dir / "release",
                                               release["release_sha"], release["bundle_digest"])
-            prepare_inputs(bundle_root, inputs_dir, discovery, principal)
+            prepare_inputs(bundle_root, inputs_dir, discovery, principal, args.state_dir)
             store.set_stage("infrastructure", "awaiting_input")
             if args.apply_infrastructure:
                 if args.execution_profile and discovery["bootstrap_permission_probe"]["result"] != "limited_checks_passed":

@@ -29,11 +29,26 @@ openssl version | grep -q '^OpenSSL 3\.' || {
   exit 69
 }
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/node-operator-v2-transport.XXXXXX")"
+scratch_files=("$scratch/record" "$scratch/read-error" "$scratch/signer.json" "$scratch/client.json" "$scratch/issued" "$scratch/key" "$scratch/cert" "$scratch/ca" "$scratch/password" "$scratch/server.p12" "$scratch/p12-b64" "$scratch/cert-b64" "$scratch/key-b64" "$scratch/ca-b64" "$scratch/payload" "$scratch/server.crt" "$scratch/server.key" "$scratch/client.crt" "$scratch/client.key" "$scratch/ca.crt" "$scratch/cert-public" "$scratch/key-public" "$scratch/signer-pkcs12.b64" "$scratch/client-crt.b64" "$scratch/client-key.b64" "$scratch/client-ca.b64")
+operation_complete=false
 cleanup() {
   local rc=$?
   trap - EXIT
-  find "$scratch" -type f -exec unlink {} \;
-  rmdir "$scratch"
+  set +e
+  for scratch_file in "${scratch_files[@]}"; do
+    [ ! -e "$scratch_file" ] && [ ! -L "$scratch_file" ] && continue
+    if ! unlink "$scratch_file"; then
+      printf '%s\n' 'CRITICAL: private transport-validation scratch cleanup could not be confirmed.' >&2
+      [ "$rc" -ne 0 ] || rc=70
+    fi
+  done
+  if ! rmdir "$scratch"; then
+    printf '%s\n' 'CRITICAL: private transport-validation scratch directory cleanup could not be confirmed.' >&2
+    [ "$rc" -ne 0 ] || rc=70
+  fi
+  if [ "$rc" -eq 0 ] && [ "$operation_complete" = true ]; then
+    printf '%s\n' 'PASS: Vault PKI transport records prepared and verified; public trust outputs written. Live workloads and policies unchanged.'
+  fi
   exit "$rc"
 }
 trap cleanup EXIT
@@ -47,11 +62,13 @@ client="validator-$validator_set-client.validator-operations.svc"
 
 for identity in signer client; do
   destination="$base/$identity-tls"
-  if vault read -format=json "$destination" > "$scratch/record" 2>/dev/null; then
+  if vault read -format=json "$destination" > "$scratch/record" 2>"$scratch/read-error"; then
     jq -e '.data.data | select(type == "object")' "$scratch/record" > "$scratch/$identity.json"
     continue
   fi
   [ "$verify_only" = false ] || { printf '%s\n' 'required transport record is unavailable; refusing authorization cutover' >&2; exit 65; }
+  read_error="$(<"$scratch/read-error")"
+  [ "$read_error" = "No value found at $destination" ] || { printf '%s\n' 'stored transport record could not be read; refusing to issue a replacement' >&2; exit 69; }
   common_name="$client"; [ "$identity" != signer ] || common_name="$server"
   vault write -format=json node-operator-pki/issue/validator-mtls common_name="$common_name" alt_names="$common_name.cluster.local" ttl=720h > "$scratch/issued"
   jq -er '.data.private_key' "$scratch/issued" > "$scratch/key"
@@ -74,25 +91,10 @@ for identity in signer client; do
   jq -e --slurpfile expected "$scratch/$identity.json" '.data.data == $expected[0]' "$scratch/record" >/dev/null
 done
 
-# Validate stored bytes, including retries, before publishing public outputs.
-jq -er '.pkcs12_b64' "$scratch/signer.json" | openssl base64 -d -A > "$scratch/server.p12"
-jq -er '.password' "$scratch/signer.json" > "$scratch/password"
-openssl pkcs12 -in "$scratch/server.p12" -passin "file:$scratch/password" -clcerts -nokeys -out "$scratch/server.crt" >/dev/null 2>&1
-openssl pkcs12 -in "$scratch/server.p12" -passin "file:$scratch/password" -nocerts -noenc -out "$scratch/server.key" >/dev/null 2>&1
-jq -er '.tls_crt_b64' "$scratch/client.json" | openssl base64 -d -A > "$scratch/client.crt"
-jq -er '.tls_key_b64' "$scratch/client.json" | openssl base64 -d -A > "$scratch/client.key"
-jq -er '.ca_crt_b64' "$scratch/client.json" | openssl base64 -d -A > "$scratch/ca.crt"
-openssl verify -CAfile "$scratch/ca.crt" -purpose sslserver -verify_hostname "$server" "$scratch/server.crt" >/dev/null
-openssl verify -CAfile "$scratch/ca.crt" -purpose sslclient "$scratch/client.crt" >/dev/null
-for identity in server client; do openssl x509 -in "$scratch/$identity.crt" -checkend 86400 -noout >/dev/null; done
-for identity in server client; do
-  openssl x509 -in "$scratch/$identity.crt" -pubkey -noout > "$scratch/cert-public"
-  openssl pkey -in "$scratch/$identity.key" -pubout > "$scratch/key-public"
-  cmp "$scratch/cert-public" "$scratch/key-public" >/dev/null
-done
-fingerprint="$(openssl x509 -in "$scratch/client.crt" -noout -fingerprint -sha256)"
-fingerprint="${fingerprint#*=}"
-mkdir -m 700 "$output"
-install -m 644 "$scratch/ca.crt" "$output/signer-ca.crt"
-printf '%s %s\n' "$client" "$fingerprint" > "$output/known-clients.txt"
-printf '%s\n' 'PASS: Vault PKI transport records prepared and verified; public trust outputs written. Live workloads and policies unchanged.'
+"$dir/verify-hoodi-vault-v2-transport-records.sh" \
+  --validator-set "$validator_set" \
+  --signer-record "$scratch/signer.json" \
+  --client-record "$scratch/client.json" \
+  --scratch-dir "$scratch" \
+  --output-dir "$output"
+operation_complete=true

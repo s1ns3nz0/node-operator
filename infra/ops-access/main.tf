@@ -6,7 +6,12 @@ terraform {
   required_providers { aws = { source = "hashicorp/aws", version = ">= 5.31.0, < 6.0.0" } }
 }
 
-provider "aws" { region = var.aws_region }
+provider "aws" {
+  region = var.aws_region
+  default_tags {
+    tags = { ManagedBy = "terraform", Project = "node-operator", Deployment = var.name, DeploymentRegion = var.aws_region, Purpose = "ops-access" }
+  }
+}
 
 data "aws_ssm_parameter" "al2023" { name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64" }
 
@@ -150,6 +155,7 @@ resource "aws_instance" "host" {
     encrypted   = true
     volume_type = "gp3"
     volume_size = 8
+    tags        = { ManagedBy = "terraform", Project = "node-operator", Deployment = var.name, DeploymentRegion = var.aws_region }
   }
   tags       = { ManagedBy = "terraform", Project = "node-operator", Purpose = "ops-access" }
   depends_on = [aws_iam_role_policy_attachment.ssm, aws_vpc_endpoint.ssm]

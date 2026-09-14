@@ -31,6 +31,7 @@ for required in 'kind: NetworkPolicy' 'name: vault-ingress-private-only' 'node-o
   grep -Fq "$required" "$network_policy" || fail "network policy omits $required"
 done
 grep -Fq 'rollout status statefulset/vault --timeout=15m' "$root/scripts/release/prepare-vault-bootstrap-tls.sh" || fail 'Vault readiness gate is missing'
+grep -Fq 'kubectl label namespace vault --overwrite' "$root/scripts/release/prepare-vault-bootstrap-tls.sh" || fail 'Vault namespace labels are not reconciled for an interrupted first preparation'
 
 if rg -n -i '(secret(data)?\s*:|tls\.key:|BEGIN (CERTIFICATE|.*PRIVATE KEY))' "$values" "$tls" "$network_policy" "$runbook" >/dev/null; then
   fail 'TLS delivery inputs contain Secret data or key material'

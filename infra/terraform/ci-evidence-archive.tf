@@ -45,7 +45,7 @@ resource "aws_s3_bucket" "ci_evidence_archive" {
   #checkov:skip=CKV2_AWS_61:Lifecycle retention is configured by aws_s3_bucket_lifecycle_configuration.ci_evidence_archive.
   #checkov:skip=CKV_AWS_18:Access logging is configured by aws_s3_bucket_logging.ci_evidence_archive when the release log target exists.
   count               = var.enable_ci_evidence_archive ? 1 : 0
-  bucket_prefix       = "${local.name_prefix}-ci-evidence-"
+  bucket_prefix       = "${substr(local.name_prefix, 0, 20)}-ci-"
   force_destroy       = false
   object_lock_enabled = true
   tags = merge(local.common_tags, {

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Validate the Vault GitOps contract.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,6 +21,10 @@ grep -Fqx '        - vault-values.yaml' "$application" || fail "Vault Applicatio
 for required in \
   '  tlsDisable: false' \
   '    enabled: true' \
+  '    create: true' \
+  '    name: vault' \
+  '  authDelegator:' \
+  '    enabled: true' \
   '    replicas: 3' \
   '      enabled: true' \
   '      setNodeId: true' \
@@ -32,12 +37,21 @@ for required in \
   '            leader_client_cert_file = "/vault/userconfig/vault-tls/tls.crt"' \
   '            leader_client_key_file  = "/vault/userconfig/vault-tls/tls.key"' \
   '        seal "awskms" {' \
-  '          kms_key_id = "REPLACE_WITH_VAULT_UNSEAL_KEY_ARN"' \
-  '  externalVaultAddr: https://vault-active.vault.svc:8200'; do
+  '          kms_key_id = "REPLACE_WITH_VAULT_UNSEAL_KEY_ARN"'; do
   grep -Fqx "$required" "$values" || fail "Vault values missing required boundary: $required"
 done
 
+# This release owns the in-cluster server. Setting either chart external address
+# would suppress that server deployment, so an external endpoint is forbidden.
+if grep -Eq '^[[:space:]]*externalVaultAddr:' "$values"; then
+  fail 'Vault values must not configure an external Vault address'
+fi
+
 for required in \
+  '  dataStorage:' \
+  '    enabled: true' \
+  '    size: 20Gi' \
+  '    storageClass: gp3-encrypted' \
   '  auditStorage:' \
   '    enabled: true' \
   '    size: 20Gi' \
@@ -45,12 +59,25 @@ for required in \
   '    accessMode: ReadWriteOnce'; do
   grep -Fqx "$required" "$values" || fail "Vault values omit required audit-storage boundary: $required"
 done
+if grep -Fqx '    storageClass: gp2' "$values"; then
+  fail 'Vault values retain an AWS-managed gp2 PVC class'
+fi
 
-private_vault_repository='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-vault'
-for image_tag in '268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10' '8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f'; do
-  grep -Fqx "    repository: $private_vault_repository" "$values" || fail "Vault runtime image repository is not private ECR"
-  grep -Fqx "    tag: \"$image_tag@sha256:$image_tag\"" "$values" || fail "Vault runtime image is not pinned to the approved manifest digest"
+for placeholder in \
+  '    repository: REPLACE_WITH_PRIVATE_VAULT_SERVER_REPOSITORY' \
+  '    tag: REPLACE_WITH_PRIVATE_VAULT_SERVER_TAG' \
+  '    repository: REPLACE_WITH_PRIVATE_VAULT_AGENT_REPOSITORY' \
+  '    tag: REPLACE_WITH_PRIVATE_VAULT_AGENT_TAG' \
+  '    repository: REPLACE_WITH_PRIVATE_VAULT_INJECTOR_REPOSITORY' \
+  '    tag: REPLACE_WITH_PRIVATE_VAULT_INJECTOR_TAG'; do
+  grep -Fqx "$placeholder" "$values" || fail "Vault base template omits canonical-overlay placeholder: $placeholder"
 done
+if grep -Eq '^[[:space:]]*tag:[[:space:]]*"?[0-9a-f]{64}@sha256:[0-9a-f]{64}"?' "$values"; then
+  fail 'Vault base template retains a copied runtime digest instead of a canonical-overlay placeholder'
+fi
+bootstrap_tf="$root/infra/terraform/vault-bootstrap.tf"
+grep -Fq -- '--values /tmp/vault-values.yaml --values /tmp/vault-image-overrides.json' "$bootstrap_tf" || fail 'Vault bootstrap does not apply the canonical image overlay after the base template'
+grep -Fq 'vault_image_values_overlay_base64' "$bootstrap_tf" || fail 'Vault bootstrap does not require a catalog-bound image overlay'
 
 if grep -Eq '(type:[[:space:]]*(LoadBalancer|NodePort)|tls_disable[[:space:]]*=[[:space:]]*1|AWS_(ACCESS|SECRET)_ACCESS_KEY|aws_access_key|aws_secret_key)' "$values"; then
   fail "Vault values include a public, plaintext, or static-credential configuration"

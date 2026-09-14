@@ -4,7 +4,7 @@
 resource "aws_s3_bucket" "validator_audit" {
   # bucket_prefix leaves room for Terraform's random suffix (S3 permits at
   # most 37 prefix characters).
-  bucket_prefix       = "${local.name_prefix}-va-"
+  bucket_prefix       = "${substr(local.name_prefix, 0, 20)}-va-"
   force_destroy       = false
   object_lock_enabled = true
 
@@ -201,12 +201,30 @@ resource "aws_s3_bucket_policy" "validator_audit" {
 
 # Only the collector has write access. The reader role is deliberately separate
 # so an ingestion compromise cannot retrieve archive contents.
+# EKS Pod Identity request tags bind the cluster, namespace and service account:
+# https://docs.aws.amazon.com/eks/latest/userguide/pod-id-role.html
+# The created cluster also uses var.name; no arbitrary external cluster is adopted.
 data "aws_iam_policy_document" "validator_collector_assume_role" {
   statement {
     actions = ["sts:AssumeRole", "sts:TagSession"]
     principals {
       type        = "Service"
       identifiers = ["pods.eks.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/eks-cluster-arn"
+      values   = ["arn:aws:eks:${var.aws_region}:${var.aws_account_id}:cluster/${var.name}"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/kubernetes-namespace"
+      values   = ["validator-observability"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/kubernetes-service-account"
+      values   = ["validator-log-collector"]
     }
   }
 }
@@ -223,6 +241,21 @@ data "aws_iam_policy_document" "validator_audit_reader_assume_role" {
     principals {
       type        = "Service"
       identifiers = ["pods.eks.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/eks-cluster-arn"
+      values   = ["arn:aws:eks:${var.aws_region}:${var.aws_account_id}:cluster/${var.name}"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/kubernetes-namespace"
+      values   = ["validator-observability"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/kubernetes-service-account"
+      values   = ["validator-audit-reader"]
     }
   }
 }
@@ -249,9 +282,12 @@ resource "aws_cloudwatch_log_group" "validator_security" {
 
 data "aws_iam_policy_document" "validator_log_collector" {
   statement {
-    sid       = "WriteOnlyValidatorCloudWatchLogs"
-    actions   = ["logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents"]
-    resources = ["${aws_cloudwatch_log_group.validator_workloads.arn}:*", "${aws_cloudwatch_log_group.validator_security.arn}:*"]
+    sid     = "WriteOnlyValidatorCloudWatchLogs"
+    actions = ["logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents"]
+    # The collector relays the approved chain observer's stdout EMF as well as
+    # workload/audit logs. DescribeLogStreams reads stream metadata, not events.
+    # It cannot read stored events, create groups or change retention.
+    resources = ["${aws_cloudwatch_log_group.validator_workloads.arn}:*", "${aws_cloudwatch_log_group.validator_security.arn}:*", "${aws_cloudwatch_log_group.validator_metrics.arn}:*"]
   }
 }
 
@@ -402,18 +438,15 @@ resource "aws_cloudwatch_log_subscription_filter" "validator_security_archive" {
 }
 
 resource "aws_eks_pod_identity_association" "validator_log_collector" {
-  # An association is accepted by EKS independently of the agent add-on.  Use
-  # the validated cluster name rather than a baseline-resource reference so a
-  # collector association can be reconciled without pulling legacy network
-  # resources into a targeted maintenance plan.
-  cluster_name    = var.name
+  # Fresh deployments must create EKS before associating its workload role.
+  cluster_name    = aws_eks_cluster.private.name
   namespace       = "validator-observability"
   service_account = "validator-log-collector"
   role_arn        = aws_iam_role.validator_log_collector.arn
 }
 
 resource "aws_eks_pod_identity_association" "validator_audit_reader" {
-  cluster_name    = var.name
+  cluster_name    = aws_eks_cluster.private.name
   namespace       = "validator-observability"
   service_account = "validator-audit-reader"
   role_arn        = aws_iam_role.validator_audit_reader.arn

@@ -45,6 +45,12 @@ if ! ruby -ryaml -e '
   printf 'relay publication must remain main-only, selected, OIDC-enabled, and bound to its protected environment\n' >&2
   exit 1
 fi
+# The publisher derives its private ECR destination from this protected
+# workflow input; the explicit default preserves legacy node-operator runs.
+grep -Fq 'DEPLOYMENT_NAME: ${{ vars.DEPLOYMENT_NAME || '\''node-operator'\'' }}' "$workflow" || {
+  printf 'relay publication does not bind the deployment-scoped repository input\n' >&2
+  exit 1
+}
 # shellcheck disable=SC2016 # Workflow snippets intentionally contain shell variables literally.
 for required in \
   'install-validator-signing-fence-release-tools.sh' \

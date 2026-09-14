@@ -1,7 +1,7 @@
 locals {
   existing_mode  = var.network_mode == "existing"
   existing_ready = local.existing_mode && var.existing_network != null
-  tags           = { ManagedBy = "terraform", Project = "node-operator", Purpose = "zero-resource-foundation-network" }
+  tags           = { ManagedBy = "terraform", Project = "node-operator", Deployment = var.name, DeploymentRegion = var.aws_region, Purpose = "zero-resource-foundation-network" }
 }
 
 # Baseline-owned objects are data only in existing mode.

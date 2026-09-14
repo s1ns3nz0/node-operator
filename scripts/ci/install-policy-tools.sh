@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Purpose: Download and checksum-verify pinned OPA, Conftest, and ShellCheck for CI policy checks.
+# Purpose: Download and checksum-verify pinned OPA, Conftest, ShellCheck, and ripgrep for CI policy checks.
 # Inputs: Optional installation directory and the host OS/architecture.
 # Outputs: Executable tools in the chosen local directory and optional GITHUB_PATH entry.
 # Side effects: Downloads pinned public releases and writes only the caller-selected local tool directory.
@@ -19,6 +19,9 @@ case "$platform" in
     shellcheck_url="https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.aarch64.tar.xz"
     shellcheck_sha256="56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79"
     shellcheck_member="shellcheck-v0.11.0/shellcheck"
+    ripgrep_url="https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-apple-darwin.tar.gz"
+    ripgrep_sha256="3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4"
+    ripgrep_member="ripgrep-15.2.0-aarch64-apple-darwin/rg"
     ;;
   Linux_x86_64)
     opa_url="https://github.com/open-policy-agent/opa/releases/download/v1.17.0/opa_linux_amd64_static"
@@ -28,6 +31,9 @@ case "$platform" in
     shellcheck_url="https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz"
     shellcheck_sha256="8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"
     shellcheck_member="shellcheck-v0.11.0/shellcheck"
+    ripgrep_url="https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz"
+    ripgrep_sha256="33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c"
+    ripgrep_member="ripgrep-15.2.0-x86_64-unknown-linux-musl/rg"
     ;;
   *) printf 'unsupported policy-tool platform: %s\n' "$platform" >&2; exit 64 ;;
 esac
@@ -50,6 +56,9 @@ chmod 0755 "$destination/conftest"
 download_and_verify "$shellcheck_url" "$shellcheck_sha256" "$temporary_directory/shellcheck.tar.xz"
 tar -xJf "$temporary_directory/shellcheck.tar.xz" -C "$temporary_directory" "$shellcheck_member"
 install -m 0755 "$temporary_directory/$shellcheck_member" "$destination/shellcheck"
+download_and_verify "$ripgrep_url" "$ripgrep_sha256" "$temporary_directory/ripgrep.tar.gz"
+tar -xzf "$temporary_directory/ripgrep.tar.gz" -C "$temporary_directory" "$ripgrep_member"
+install -m 0755 "$temporary_directory/$ripgrep_member" "$destination/rg"
 
 if [ -n "${GITHUB_PATH:-}" ]; then printf '%s\n' "$destination" >> "$GITHUB_PATH"; fi
-printf 'Installed pinned OPA 1.17.0, Conftest 0.69.0, and ShellCheck 0.11.0 in %s\n' "$destination"
+printf 'Installed pinned OPA 1.17.0, Conftest 0.69.0, ShellCheck 0.11.0, and ripgrep 15.2.0 in %s\n' "$destination"

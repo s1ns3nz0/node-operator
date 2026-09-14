@@ -3,7 +3,7 @@
 # replication role cannot delete either source or destination records.
 resource "aws_s3_bucket" "audit_replica" {
   provider      = aws.audit_replica
-  bucket_prefix = "${local.name_prefix}-audit-dr-"
+  bucket_prefix = "${substr(local.name_prefix, 0, 20)}-audit-dr-"
   force_destroy = false
 
   tags = merge(local.common_tags, {
@@ -69,33 +69,35 @@ data "aws_iam_policy_document" "audit_replica_key" {
     resources = ["*"]
   }
 
-  # Keep the Tokyo key independently manageable by the Terraform execution
-  # role.  The action set mirrors the primary-key policy-management statement
-  # and deliberately excludes cryptographic use, grants, and kms:*.
-  statement {
-    sid    = "AllowTerraformApplyKeyLifecycleManagement"
-    effect = "Allow"
+  # Keep the replica key independently manageable only by an explicitly
+  # selected role; an omitted role produces no synthetic policy principal.
+  dynamic "statement" {
+    for_each = var.terraform_apply_role_arn == null || var.terraform_apply_role_arn == "" ? [] : [var.terraform_apply_role_arn]
+    content {
+      sid    = "AllowSelectedTerraformApplyKeyLifecycleManagement"
+      effect = "Allow"
 
-    principals {
-      type        = "AWS"
-      identifiers = ["arn:aws:iam::${var.aws_account_id}:role/NodeOperatorTerraformApply"]
+      principals {
+        type        = "AWS"
+        identifiers = [statement.value]
+      }
+
+      actions = [
+        "kms:CancelKeyDeletion",
+        "kms:CreateAlias",
+        "kms:DeleteAlias",
+        "kms:DescribeKey",
+        "kms:EnableKeyRotation",
+        "kms:GetKeyPolicy",
+        "kms:GetKeyRotationStatus",
+        "kms:ListAliases",
+        "kms:ListResourceTags",
+        "kms:PutKeyPolicy",
+        "kms:ScheduleKeyDeletion",
+        "kms:TagResource",
+      ]
+      resources = ["*"]
     }
-
-    actions = [
-      "kms:CancelKeyDeletion",
-      "kms:CreateAlias",
-      "kms:DeleteAlias",
-      "kms:DescribeKey",
-      "kms:EnableKeyRotation",
-      "kms:GetKeyPolicy",
-      "kms:GetKeyRotationStatus",
-      "kms:ListAliases",
-      "kms:ListResourceTags",
-      "kms:PutKeyPolicy",
-      "kms:ScheduleKeyDeletion",
-      "kms:TagResource",
-    ]
-    resources = ["*"]
   }
 
   statement {
@@ -124,6 +126,13 @@ resource "aws_kms_key" "audit_replica" {
   deletion_window_in_days = 30
   enable_key_rotation     = true
   policy                  = data.aws_iam_policy_document.audit_replica_key.json
+
+  lifecycle {
+    precondition {
+      condition     = var.terraform_apply_role_arn == null || var.terraform_apply_role_arn == "" || can(regex("^arn:aws:iam::${var.aws_account_id}:role/[A-Za-z0-9+=,.@_/-]{1,64}$", var.terraform_apply_role_arn))
+      error_message = "terraform_apply_role_arn must be empty or an IAM role in aws_account_id."
+    }
+  }
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-audit-dr"
@@ -185,7 +194,7 @@ resource "aws_s3_bucket" "audit_replica_access_logs" {
   #checkov:skip=CKV_AWS_144:Replicating this DR delivery target would create a second unbounded audit-log stream; the audited source is replicated instead.
   #checkov:skip=CKV_AWS_145:S3 server access log delivery does not support a default SSE-KMS destination key.
   provider      = aws.audit_replica
-  bucket_prefix = "${local.name_prefix}-al-dr-"
+  bucket_prefix = "${substr(local.name_prefix, 0, 20)}-al-dr-"
   force_destroy = false
 
   tags = merge(local.common_tags, {

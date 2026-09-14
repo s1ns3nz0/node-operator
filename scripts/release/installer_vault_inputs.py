@@ -1,6 +1,8 @@
 """Bind reviewed non-secret Vault artifacts to completed baseline outputs."""
 from __future__ import annotations
+import base64
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -23,6 +25,27 @@ _INDEX_COMPONENTS = {
     "cert-manager-startupapicheck", "vault-chart", "cert-manager-chart",
 }
 _MIRRORED_ARTIFACTS = _INDEX_COMPONENTS - {"gitops-oci-mirror"}
+
+
+def _overlay(state_dir: Path, discovery: dict, repositories: dict, images: dict) -> str:
+    """Run the reviewed renderer against the selected release's catalog only."""
+    source = state_dir / "release" / "source"
+    program = source / "scripts" / "release" / "render-private-vault-values.py"
+    catalog = source / ".ci" / "gitops" / "approved-oci-artifacts.json"
+    if any(not item.is_file() or item.is_symlink() for item in (program, catalog)):
+        raise VaultInputsError("Verified release lacks the Vault image authority renderer or catalog.")
+    spec = importlib.util.spec_from_file_location("installer_vault_renderer", program)
+    if spec is None or spec.loader is None:
+        raise VaultInputsError("Verified release Vault image authority renderer is unavailable.")
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+        overlay = module.render(catalog, discovery["aws_account_id"], discovery["aws_region"], repositories["vault"],
+                                images["server"], images["agent"], images["injector"])
+        encoded = json.dumps(overlay, sort_keys=True, separators=(",", ":")).encode()
+    except Exception as error:
+        raise VaultInputsError("Vault image authority is not valid for the selected release.") from error
+    return base64.b64encode(encoded).decode("ascii")
 
 def _read(path: Path, message: str) -> dict:
     try: return _read_object(path)
@@ -85,6 +108,18 @@ def _expected(destination: Path, baseline: dict, artifact: dict, digest: str, di
     required = {"cert-manager-controller", "cert-manager-webhook", "cert-manager-cainjector", "cert-manager-startupapicheck", "cert-manager-chart"}
     if set(mirrored) != _MIRRORED_ARTIFACTS or not required <= set(mirrored):
         raise VaultInputsError("Verified mirror receipt lacks cert-manager platform artifacts.")
+    for artifact_name, image_name in (("vault-server", "server"), ("vault-server", "agent"), ("vault-injector", "injector"), ("vault-audit-relay", "audit_relay")):
+        record = mirrored.get(artifact_name)
+        source = index["components"].get(artifact_name)
+        image = artifact["images"].get(image_name)
+        if not (isinstance(record, dict) and isinstance(source, dict) and isinstance(image, str)
+                and record.get("manifest_digest") == source.get("manifest_digest")
+                and record.get("image_ref") == image):
+            raise VaultInputsError("Verified mirror receipt has invalid Vault runtime image authority.")
+    relay_source = index["components"]["vault-audit-relay"]
+    if not (relay_source.get("verification") == {"method": "cosign-and-slsa", "status": "passed"}
+            and relay_source.get("manifest_digest") == mirrored["vault-audit-relay"].get("manifest_digest")):
+        raise VaultInputsError("Verified mirror receipt lacks the approved Vault audit relay authority.")
     cert_images = {}
     for key, source in (("controller", "cert-manager-controller"), ("webhook", "cert-manager-webhook"), ("cainjector", "cert-manager-cainjector"), ("startupapicheck", "cert-manager-startupapicheck")):
         image = mirrored[source].get("image_ref") if isinstance(mirrored[source], dict) else None
@@ -101,10 +136,13 @@ def _expected(destination: Path, baseline: dict, artifact: dict, digest: str, di
     chart_version = chart_index.get("version") if isinstance(chart_index, dict) else None
     if not isinstance(chart_digest, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", chart_digest) or not isinstance(chart_ref, str) or chart_ref != repositories["cert_manager_chart"] + "@" + chart_digest or not isinstance(chart_version, str) or receipt_version != chart_version or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", chart_version) or chart_digest != chart_index.get("expected_oci_manifest_digest"):
         raise VaultInputsError("Verified mirror receipt has invalid cert-manager chart binding.")
+    runtime_images = {key: artifact["images"][key] for key in ("server", "agent", "injector", "audit_relay")}
     tfvars = {"enable_vault_bootstrap_runner": True, "enable_vault_bootstrap_cluster_admin": False,
               "vault_bootstrap_subnet_ids": subnets, "vault_bootstrap_image": artifact["images"]["bootstrap"],
               "vault_chart_version": artifact["chart"]["version"], "vault_chart_manifest_digest": artifact["chart"]["digest"],
-              "vault_runtime_images": {key: artifact["images"][key] for key in ("server", "agent", "injector", "audit_relay")},
+              "vault_runtime_images": runtime_images,
+              "vault_image_values_overlay_base64": _overlay(destination.parent, discovery, repositories, runtime_images),
+              "vault_approved_catalog_base64": base64.b64encode((destination.parent / "release" / "source" / ".ci" / "gitops" / "approved-oci-artifacts.json").read_bytes()).decode("ascii"),
               "cert_manager_runtime_images": cert_images, "cert_manager_chart_manifest_digest": chart_digest,
               "cert_manager_chart_version": chart_version}
     role = _value(baseline, "vault_role_arn")

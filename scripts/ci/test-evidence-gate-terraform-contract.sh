@@ -15,4 +15,10 @@ grep -Fq '"$script_dir/validate-terraform-offline.sh" "$root_module" "$validatio
 grep -Fq '{"status":"passed","modules":[{"module":"infra/terraform","status":"passed"}]}' "$collector"
 grep -Fq '{"status":"failed","modules":[{"module":"infra/terraform","status":"failed"}]}' "$collector"
 
+# The trusted collector stages only the root module. Keep its public GitOps
+# inputs local and identical to their operator-facing canonical examples.
+for example in argocd-private-values.example.yaml cert-manager-values.example.yaml vault-tls-internal-ca.example.yaml; do
+  cmp -s "$script_dir/../../infra/terraform/$example" "$script_dir/../../docs/gitops/$example"
+done
+
 printf 'PASS: evidence-gate Terraform validation uses the CI root-module contract.\n'

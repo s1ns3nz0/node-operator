@@ -2,8 +2,9 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$script_dir/lib/common.sh"
-root="$(repo_root)"
+# A container-mounted worktree has host-only Git metadata. Only source paths
+# are needed, so this check also works from an extracted release bundle.
+root="$(cd "$script_dir/../.." && pwd -P)"
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
 fail() { printf 'FAIL Argo CD bootstrap enabled plan: %s\n' "$*" >&2; exit 1; }
@@ -14,6 +15,15 @@ fail() { printf 'FAIL Argo CD bootstrap enabled plan: %s\n' "$*" >&2; exit 1; }
   fixtures/offline-argocd-bootstrap.tfvars
 
 plan="$temporary_directory/plan.json"
+if [ "$#" -eq 1 ]; then
+  # Export a synthetic plan for the host Python verifier when the pinned
+  # Terraform container has no Python. The runner must verify this artifact.
+  cp "$plan" "$1"
+elif [ "$#" -eq 0 ]; then
+  python3 "$script_dir/test-deployment-tags.py" "$plan"
+else
+  fail 'expected at most one synthetic plan output path'
+fi
 jq -e '
   any(.resource_changes[]?; .address == "aws_codebuild_project.argocd_bootstrap[0]" and (.change.actions | index("create")))
   and any(.resource_changes[]?; .address == "aws_eks_access_entry.argocd_bootstrap[0]" and (.change.actions | index("create")))

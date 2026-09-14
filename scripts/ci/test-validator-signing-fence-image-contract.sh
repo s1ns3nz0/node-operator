@@ -22,7 +22,12 @@ grep -Fq 'file://$token_file' <(workflow_source "$workflow") || fail 'OIDC token
 if grep -Fq -- '--web-identity-token "$token"' <(workflow_source "$workflow"); then fail 'OIDC token appears directly in process argv'; fi
 grep -Fq '::add-mask::' <(workflow_source "$workflow") || fail 'temporary credentials are not masked'
 grep -Fq 'persist-credentials: false' <(workflow_source "$workflow") || fail 'checkout credentials persist'
-grep -Fq 'repository=node-operator-baseline-validator-fence' <(workflow_source "$workflow") || fail 'fence image is not type-separated from Prysm'
+# shellcheck disable=SC2016 # Literal workflow source.
+grep -Fq "DEPLOYMENT_NAME: \${{ vars.DEPLOYMENT_NAME || 'node-operator' }}" "$workflow" || fail 'fence workflow does not supply the deployment context'
+# shellcheck disable=SC2016 # Literal workflow source.
+grep -Fq 'DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-node-operator}"' <(workflow_source "$workflow") || fail 'fence publisher has no compatibility deployment default'
+# shellcheck disable=SC2016 # Literal workflow source.
+grep -Fq 'repository="${DEPLOYMENT_NAME}-baseline-validator-fence"' <(workflow_source "$workflow") || fail 'fence image is not deployment-scoped and type-separated'
 grep -Fq 'install-validator-signing-fence-release-tools.sh' <(workflow_source "$workflow") || fail 'pinned release tools are not installed'
 # shellcheck disable=SC2016 # Literal workflow source.
 grep -Fq 'cosign sign --yes "$subject"' <(workflow_source "$workflow") || fail 'exact image digest is not signed'

@@ -12,12 +12,12 @@ usage:
   hoodi-validator-release.sh interactive prepare --bundle-root DIRECTORY --output-dir /new-absolute-directory [--aws-region ap-northeast-1|ap-northeast-2]
   hoodi-validator-release.sh interactive deploy --bundle-root DIRECTORY --output-dir /new-absolute-directory [--aws-region ap-northeast-1|ap-northeast-2]
   hoodi-validator-release.sh interactive custody --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json --custody-dir /new-absolute/local-custody-directory
-  hoodi-validator-release.sh infrastructure apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory
+  hoodi-validator-release.sh infrastructure apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory [--profile PROFILE]
   hoodi-validator-release.sh deploy apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --work-dir /new-absolute-directory --private-eks-session-handoff /new-absolute/session.json --allow-create
-  hoodi-validator-release.sh custody apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json --keystore-dir /absolute/local-custody-directory --ceremony-dir /new-absolute/local-ceremony-directory
+  hoodi-validator-release.sh custody apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json --keystore-dir /absolute/local-custody-directory --ceremony-dir /new-absolute/local-ceremony-directory [--custody-result-output /absolute/onboarding-result.json --custody-operation-id <32-lowercase-hex>]
   hoodi-validator-release.sh evidence signer --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json --output-dir /absolute/nonsecret-evidence-directory
   hoodi-validator-release.sh evidence beacon --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json --output-dir /absolute/nonsecret-evidence-directory
-  hoodi-validator-release.sh activate apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json --deposit-attestation /absolute/file.json --public-deposit-verification /absolute/file.json --private-evidence /absolute/file.json --signer-evidence /absolute/file.json --confirm-public-key 0x... --confirm-withdrawal-address 0x...
+  hoodi-validator-release.sh activate apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json --deposit-attestation /absolute/file.json --public-deposit-verification /absolute/file.json --private-evidence /absolute/file.json --signer-evidence /absolute/file.json --confirm-public-key 0x... --confirm-withdrawal-address 0x... [--activation-receipt /absolute/new.json --deployment-name <name> --release-revision <40-lowercase-hex> --operation-id <32-lowercase-hex>]
   hoodi-validator-release.sh ops-inputs prepare --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --zero-work-dir /absolute/zero-work-dir --output-dir /new-absolute-directory
   hoodi-validator-release.sh ops-access plan|apply --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --ops-inputs /absolute/ops-access-inputs.json --plan-file /absolute/private.tfplan [--expected-sha SHA256] [--allow-create] [--private-eks-session-handoff /absolute/session.json]
   hoodi-validator-release.sh stage plan|apply|verify --bundle-root DIRECTORY --inputs /absolute/hoodi-zero-release-inputs.json --private-eks-session-handoff /absolute/session.json
@@ -27,7 +27,7 @@ USAGE
 
 command_name="${1:-}"; [ -n "$command_name" ] || usage
 shift
-operation=''; bundle_root=''; inputs=''; work_dir=''; session_handoff=''; output_dir=''; ops_inputs=''; plan_file=''; expected_sha=''; aws_region='ap-northeast-2'; allow_create=false; deposit_attestation=''; public_deposit_verification=''; private_evidence=''; signer_evidence=''; confirm_public_key=''; confirm_withdrawal_address=''; keystore_dir=''; ceremony_dir=''
+operation=''; bundle_root=''; inputs=''; work_dir=''; session_handoff=''; output_dir=''; ops_inputs=''; plan_file=''; expected_sha=''; aws_region='ap-northeast-2'; profile="${AWS_PROFILE:-default}"; allow_create=false; deposit_attestation=''; public_deposit_verification=''; private_evidence=''; signer_evidence=''; confirm_public_key=''; confirm_withdrawal_address=''; keystore_dir=''; ceremony_dir=''; custody_result_output=''; custody_operation_id=''; activation_receipt=''; deployment_name=''; release_revision=''; operation_id=''
 case "$command_name" in
   interactive|infrastructure|deploy|custody|evidence|activate|ops-inputs|ops-access|stage)
     [ "$#" -gt 0 ] || usage
@@ -48,6 +48,7 @@ while [ "$#" -gt 0 ]; do
     --plan-file) plan_file="${2:-}"; shift 2 ;;
     --expected-sha) expected_sha="${2:-}"; shift 2 ;;
     --aws-region) aws_region="${2:-}"; shift 2 ;;
+    --profile) profile="${2:-}"; shift 2 ;;
     --allow-create) allow_create=true; shift ;;
     --private-eks-session-handoff) session_handoff="${2:-}"; shift 2 ;;
     --deposit-attestation) deposit_attestation="${2:-}"; shift 2 ;;
@@ -59,9 +60,51 @@ while [ "$#" -gt 0 ]; do
     --keystore-dir) keystore_dir="${2:-}"; shift 2 ;;
     --ceremony-dir) ceremony_dir="${2:-}"; shift 2 ;;
     --custody-dir) ceremony_dir="${2:-}"; shift 2 ;;
+    --custody-result-output) custody_result_output="${2:-}"; shift 2 ;;
+    --custody-operation-id) custody_operation_id="${2:-}"; shift 2 ;;
+    --activation-receipt) activation_receipt="${2:-}"; shift 2 ;;
+    --deployment-name) deployment_name="${2:-}"; shift 2 ;;
+    --release-revision) release_revision="${2:-}"; shift 2 ;;
+    --operation-id) operation_id="${2:-}"; shift 2 ;;
     *) usage ;;
   esac
 done
+
+# Completion receipts are optional for direct custody calls and paired for the
+# resumable installer. Reject an orphan or malformed binding before any AWS or
+# Vault operation. The onboarding boundary validates the private output path.
+if [ -n "$custody_result_output$custody_operation_id" ]; then
+  [ "$command_name" = custody ] && [ "$operation" = apply ] || usage
+  case "$custody_result_output" in /*) ;; *) usage ;; esac
+  printf '%s\n' "$custody_operation_id" | grep -Eq '^[0-9a-f]{32}$' || usage
+  python3 -I -B - "$custody_result_output" <<'PY' || exit 65
+import os, stat, sys
+from pathlib import Path
+try:
+    path = Path(sys.argv[1])
+    parent = path.parent
+    info = parent.lstat()
+    if (str(path) != sys.argv[1] or parent.resolve() != parent
+            or not stat.S_ISDIR(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o700
+            or info.st_uid != os.geteuid() or os.path.lexists(path)):
+        raise ValueError()
+except (OSError, ValueError):
+    sys.exit("custody receipt requires an owned private canonical parent and an absent target")
+PY
+fi
+
+# The optional activation receipt is a single bound handoff.  Validate its
+# complete local identity before any private-session or Kubernetes access; the
+# activation helper repeats path safety checks immediately before publication.
+activation_receipt_count=0
+for value in "$activation_receipt" "$deployment_name" "$release_revision" "$operation_id"; do [ -z "$value" ] || activation_receipt_count=$((activation_receipt_count + 1)); done
+if [ "$activation_receipt_count" -ne 0 ]; then
+  [ "$command_name" = activate ] && [ "$operation" = apply ] && [ "$activation_receipt_count" -eq 4 ] || usage
+  case "$activation_receipt" in /*) ;; *) usage ;; esac
+  [[ "$deployment_name" =~ ^[a-z][a-z0-9-]{1,18}[a-z0-9]$ ]] || usage
+  [[ "$release_revision" =~ ^[a-f0-9]{40}$ ]] || usage
+  [[ "$operation_id" =~ ^[a-f0-9]{32}$ ]] || usage
+fi
 
 if [ "$command_name" = interactive ]; then
   [ "$operation" = prepare ] || [ "$operation" = deploy ] || [ "$operation" = custody ] || usage
@@ -89,8 +132,10 @@ if [ "$command_name" = interactive ]; then
   case "$bundle_root:$output_dir" in */*:/*) ;; *) usage ;; esac
   [ -t 0 ] && [ -t 1 ] || { printf '%s\n' 'interactive preparation requires a terminal' >&2; exit 69; }
   command -v aws >/dev/null 2>&1 || { printf '%s\n' 'missing command: aws' >&2; exit 69; }
-  case "$aws_region" in ap-northeast-1|ap-northeast-2) ;; *) printf '%s\n' 'aws region must be ap-northeast-1 or ap-northeast-2' >&2; exit 64 ;; esac
-  identity="$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN aws sts get-caller-identity --output json)"
+  [[ "$aws_region" =~ ^[a-z]{2}-[a-z0-9-]+-[0-9]+$ ]] || { printf '%s\n' 'aws region must be a valid AWS commercial region identifier' >&2; exit 64; }
+  [[ "$profile" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]] || { printf '%s\n' 'AWS profile is invalid' >&2; exit 64; }
+  interactive_env=(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN -u BASH_ENV AWS_PROFILE="$profile" AWS_REGION="$aws_region")
+  identity="$("${interactive_env[@]}" aws sts get-caller-identity --cli-connect-timeout 10 --cli-read-timeout 20 --output json)"
   account="$(jq -er '.Account' <<<"$identity")"
   [[ "$account" =~ ^[0-9]{12}$ ]] || { printf '%s\n' 'current AWS identity did not return a valid account' >&2; exit 65; }
   prompt() { local label="$1" value; printf '%s: ' "$label" >&2; IFS= read -r value; printf '%s' "$value"; }
@@ -103,7 +148,7 @@ if [ "$command_name" = interactive ]; then
   fence_image="$(prompt 'Approved signing-fence private ECR digest')"
   kubernetes_api_cidr="$(prompt 'Operator public IPv4 /32')"
   availability_zones=()
-  while IFS= read -r zone; do availability_zones+=("$zone"); done < <(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN aws ec2 describe-availability-zones --region "$aws_region" --filters Name=state,Values=available --query 'AvailabilityZones[].ZoneName' --output text | tr '\t' '\n' | sort | head -n 2)
+  while IFS= read -r zone; do availability_zones+=("$zone"); done < <("${interactive_env[@]}" aws ec2 describe-availability-zones --region "$aws_region" --filters Name=state,Values=available --query 'AvailabilityZones[].ZoneName' --output text | tr '\t' '\n' | sort | head -n 2)
   [ "${#availability_zones[@]}" -eq 2 ] || { printf '%s\n' 'could not discover two available zones in the selected Region' >&2; exit 65; }
   backend_args=()
   identity_arn="$(jq -er '.Arn' <<<"$identity")"
@@ -113,13 +158,13 @@ if [ "$command_name" = interactive ]; then
       backend_args=(--backend-principal-arn "$backend_role")
       ;;
   esac
-  "$bundle_root/source/scripts/release/prepare-hoodi-zero-release-inputs.sh" \
+  "${interactive_env[@]}" "$bundle_root/source/scripts/release/prepare-hoodi-zero-release-inputs.sh" \
     --aws-account-id "$account" --aws-region "$aws_region" --availability-zone "${availability_zones[0]}" --availability-zone "${availability_zones[1]}" --validator-set "$validator_set" --validator-public-key "$validator_key" \
     --withdrawal-address "$withdrawal_address" --web3signer-image "$web3signer_image" \
     --postgres-image "$postgres_image" --prysm-validator-image "$prysm_image" \
-    --signing-fence-image "$fence_image" --kubernetes-api-cidr "$kubernetes_api_cidr" --output-dir "$output_dir" "${backend_args[@]}"
+    --signing-fence-image "$fence_image" --kubernetes-api-cidr "$kubernetes_api_cidr" --output-dir "$output_dir" ${backend_args[@]+"${backend_args[@]}"}
   if [ "$operation" = deploy ]; then
-    "$0" deploy apply --bundle-root "$bundle_root" --inputs "$output_dir/hoodi-zero-release-inputs.json" --work-dir "$output_dir/deployment-work" --private-eks-session-handoff "$output_dir/private-eks-session.json" --allow-create
+    "$0" deploy apply --bundle-root "$bundle_root" --inputs "$output_dir/hoodi-zero-release-inputs.json" --work-dir "$output_dir/deployment-work" --private-eks-session-handoff "$output_dir/private-eks-session.json" --allow-create --profile "$profile"
     printf 'NEXT: run %s interactive custody --bundle-root %s --inputs %s/hoodi-zero-release-inputs.json --private-eks-session-handoff %s/private-eks-session.json --custody-dir /new-absolute/local-custody-directory\n' "${0##*/}" "$bundle_root" "$output_dir" "$output_dir"
   fi
   printf 'PASS: initial release values are prepared in %s.\n' "$output_dir"
@@ -141,7 +186,7 @@ jq -e --arg zero "$zero_inputs" --arg validator "$validator_handoff" '
   .schema_version == 1 and .network == "hoodi" and
   (.aws_account_id | test("^[0-9]{12}$")) and
   (.validator_set | test("^hoodi-[a-z0-9][a-z0-9-]*$")) and
-  (.aws_region | test("^ap-northeast-(1|2)$")) and .zero_resource_inputs == $zero and .validator_deployment_handoff == $validator and
+  (.aws_region | test("^[a-z]{2}-[a-z0-9-]+-[0-9]+$")) and .zero_resource_inputs == $zero and .validator_deployment_handoff == $validator and
   (.required_checkpoints | type == "array" and length == 6)
 ' "$inputs" >/dev/null || { printf '%s\n' 'inputs are not a bounded Hoodi zero-release contract' >&2; exit 65; }
 [ -f "$zero_inputs" ] && [ ! -L "$zero_inputs" ] && [ -f "$validator_handoff" ] && [ ! -L "$validator_handoff" ] || { printf '%s\n' 'release contract references missing or unsafe inputs' >&2; exit 65; }
@@ -159,7 +204,24 @@ case "$command_name" in
     ;;
   infrastructure)
     [ "$operation" = apply ] && [ -n "$work_dir" ] && [ -z "$session_handoff$output_dir" ] || usage
-    "$release_dir/node-operator-release.sh" zero apply --bundle-root "$bundle_root" --inputs "$zero_inputs" --work-dir "$work_dir"
+    [[ "$profile" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]] || { printf '%s\n' 'AWS profile is invalid' >&2; exit 64; }
+    revision="$(jq -er '.source_revision | select(test("^[0-9a-f]{40}$"))' "$bundle_root/bundle-manifest.json")" || { printf '%s\n' 'bundle revision is invalid' >&2; exit 65; }
+    expected_baseline="$(dirname "$zero_inputs")/baseline.tfvars.json"
+    [ "$(jq -er '.baseline_config' "$zero_inputs")" = "$expected_baseline" ] && [ -f "$expected_baseline" ] && [ ! -L "$expected_baseline" ] || { printf '%s\n' 'zero-resource baseline configuration path is invalid' >&2; exit 65; }
+    deployment_name="$(jq -er '.name | select(test("^[a-z][a-z0-9-]{1,18}[a-z0-9]$"))' "$expected_baseline")" || { printf '%s\n' 'zero-resource baseline configuration lacks deployment name' >&2; exit 65; }
+    selected_env=(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN -u BASH_ENV AWS_PROFILE="$profile" AWS_REGION="$input_region")
+    "${selected_env[@]}" aws sts get-caller-identity --cli-connect-timeout 10 --cli-read-timeout 20 --query Account --output text | grep -qx "$account" || { printf '%s\n' 'selected AWS profile does not match release account' >&2; exit 65; }
+    "${selected_env[@]}" python3 "$release_dir/installer_artifact_inventory.py" --bundle-root "$bundle_root" --release-sha "$revision" --aws-account-id "$account" --aws-region "$input_region" --deployment-name "$deployment_name" --require-signer-probe >/dev/null || { printf '%s\n' 'required installer artifact authority is unresolved' >&2; exit 65; }
+    "${selected_env[@]}" "$release_dir/node-operator-release.sh" zero prepare-artifacts --bundle-root "$bundle_root" --inputs "$zero_inputs" --work-dir "$work_dir"
+    adapter=("$release_dir/mirror-installer-vault-artifacts.py")
+    mirror_args=(--bundle-root "$bundle_root" --state-dir "$work_dir" --work-dir "$work_dir" --inputs-dir "$(dirname "$zero_inputs")" --account "$account" --region "$input_region" --deployment-name "$deployment_name" --profile "$profile" --release-sha "$revision")
+    if [ -e "$work_dir/vault-artifact-mirror-receipt.json" ] || [ -e "$work_dir/vault-artifact-manifest.json" ] || [ -e "$work_dir/vault-pre-eks-artifact-mirror-binding.json" ] || [ -e "$work_dir/vault-pre-eks-artifact-mirror-verified.json" ] || [ -e "$work_dir/vault-pre-eks-artifact-mirror-uncertain.json" ] || [ -L "$work_dir/vault-artifact-mirror-receipt.json" ] || [ -L "$work_dir/vault-artifact-manifest.json" ] || [ -L "$work_dir/vault-pre-eks-artifact-mirror-uncertain.json" ]; then vault_operation=resume; else vault_operation=mirror; fi
+    if [ -e "$work_dir/full-artifact-mirror-receipt.json" ] || [ -e "$work_dir/full-artifact-mirror-uncertain.json" ] || [ -L "$work_dir/full-artifact-mirror-receipt.json" ] || [ -L "$work_dir/full-artifact-mirror-uncertain.json" ]; then non_vault_operation=resume; else non_vault_operation=mirror; fi
+    "${selected_env[@]}" python3 "${adapter[0]}" "$vault_operation" "${mirror_args[@]}"
+    "${selected_env[@]}" python3 "${adapter[0]}" verify "${mirror_args[@]}"
+    "${selected_env[@]}" python3 "${adapter[0]}" "$non_vault_operation" --scope non-vault "${mirror_args[@]}"
+    "${selected_env[@]}" python3 "${adapter[0]}" verify --scope non-vault "${mirror_args[@]}"
+    "${selected_env[@]}" "$release_dir/node-operator-release.sh" zero apply --bundle-root "$bundle_root" --inputs "$zero_inputs" --work-dir "$work_dir"
     ;;
   deploy)
     [ "$operation" = apply ] && [ -n "$work_dir$session_handoff" ] && [ -z "$output_dir$ops_inputs$plan_file$expected_sha" ] && [ "$allow_create" = true ] || usage
@@ -167,7 +229,10 @@ case "$command_name" in
     # Vault, custody, GitOps publication, deposit, and validator activation
     # remain separate operator ceremonies. Non-secret workload staging is safe
     # to continue once private EKS access has been established.
-    "$0" infrastructure apply --bundle-root "$bundle_root" --inputs "$inputs" --work-dir "$work_dir"
+    [[ "$profile" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]] || { printf '%s\n' 'AWS profile is invalid' >&2; exit 64; }
+    export AWS_PROFILE="$profile" AWS_REGION="$input_region"
+    unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_SECURITY_TOKEN BASH_ENV
+    "$0" infrastructure apply --bundle-root "$bundle_root" --inputs "$inputs" --work-dir "$work_dir" --profile "$profile"
     deploy_ops_dir="$work_dir/ops-access-inputs"
     deploy_ops_inputs="$deploy_ops_dir/ops-access-inputs.json"
     deploy_plan="$work_dir/ops-access.tfplan"
@@ -253,15 +318,41 @@ PY
     [ -f "$session_handoff" ] && [ ! -L "$session_handoff" ] || { printf '%s\n' 'custody session handoff must be a regular file' >&2; exit 65; }
     [ -d "$keystore_dir" ] && [ ! -L "$keystore_dir" ] || { printf '%s\n' 'custody keystore directory must be a real local directory' >&2; exit 65; }
     [ ! -e "$ceremony_dir" ] && [ ! -L "$ceremony_dir" ] || { printf '%s\n' 'custody ceremony directory must be new so public CA evidence cannot be overwritten' >&2; exit 65; }
-    session_region="$(jq -er 'select(.schema_version == 1 and (.aws_region | test("^ap-northeast-(1|2)$")) and (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and (.ssm_ops_instance_id | test("^i-[0-9a-f]+$"))) | .aws_region' "$session_handoff")" || { printf '%s\n' 'custody session handoff is invalid' >&2; exit 65; }
+    session_region="$(jq -er 'select(.schema_version == 1 and (.aws_region | test("^[a-z]{2}-[a-z0-9-]+-[0-9]+$")) and (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and (.ssm_ops_instance_id | test("^i-[0-9a-f]+$"))) | .aws_region' "$session_handoff")" || { printf '%s\n' 'custody session handoff is invalid' >&2; exit 65; }
     session_cluster="$(jq -er '.cluster_name' "$session_handoff")"; session_instance="$(jq -er '.ssm_ops_instance_id' "$session_handoff")"
     [ "$session_region" = "$input_region" ] || { printf '%s\n' 'custody session points to another Region' >&2; exit 65; }
+    [[ "$profile" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]] || { printf '%s\n' 'AWS profile is invalid' >&2; exit 64; }
+    custody_work="$(dirname "$session_handoff")"
+    [ "$session_handoff" = "$custody_work/private-eks-session.json" ] && [ "$input_parent" = "$custody_work/inputs" ] || { printf '%s\n' 'custody session and release inputs are not the selected deployment layout' >&2; exit 65; }
+    custody_env=(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN -u AWS_ACCESS_KEY -u AWS_SECRET_KEY -u AWS_DEFAULT_PROFILE -u AWS_WEB_IDENTITY_TOKEN_FILE -u AWS_ROLE_ARN -u AWS_ROLE_SESSION_NAME -u AWS_CONTAINER_CREDENTIALS_RELATIVE_URI -u AWS_CONTAINER_CREDENTIALS_FULL_URI -u AWS_CONTAINER_AUTHORIZATION_TOKEN -u AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE -u PRIVATE_EKS_SESSION -u PRIVATE_VAULT_SESSION -u PRIVATE_VAULT_TARGET -u KUBECONFIG -u BASH_ENV -u ENV -u VAULT_ADDR -u VAULT_CACERT -u VAULT_TLS_SERVER_NAME -u VAULT_SKIP_VERIFY -u VAULT_NAMESPACE -u VAULT_TOKEN AWS_PROFILE="$profile" AWS_REGION="$session_region" AWS_DEFAULT_REGION="$session_region" EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance" AWS_EC2_METADATA_DISABLED=true)
+    command -v aws >/dev/null 2>&1 || { printf '%s\n' 'missing command: aws' >&2; exit 69; }
+    "${custody_env[@]}" aws sts get-caller-identity --cli-connect-timeout 10 --cli-read-timeout 20 --query Account --output text | grep -qx "$account" || { printf '%s\n' 'selected AWS profile does not match custody release account' >&2; exit 65; }
+    session_verifier="$release_dir/verify-platform-private-eks-session.py"
+    [ -x "$session_verifier" ] || { printf '%s\n' 'release bundle lacks the private EKS session verifier for custody' >&2; exit 65; }
+    selected_target="$("${custody_env[@]}" python3 "$session_verifier" --work-dir "$custody_work/deployment-work" --baseline-config "$input_parent/zero-resource/baseline.tfvars.json" --session "$session_handoff" --account "$account" --region "$input_region" --profile "$profile")" || { printf '%s\n' 'custody private EKS session is not bound to the selected live deployment' >&2; exit 65; }
+    IFS=$'\t' read -r selected_cluster selected_instance <<<"$selected_target"
+    [ "$selected_cluster" = "$session_cluster" ] && [ "$selected_instance" = "$session_instance" ] || { printf '%s\n' 'custody private EKS verifier returned a mismatched selected target' >&2; exit 65; }
     validator_set="$(jq -er '.validator_set' "$validator_handoff")"
+    validator_key="$(jq -er '.validator_public_key | select(test("^0x[0-9a-fA-F]{96}$"))' "$validator_handoff")" || { printf '%s\n' 'validator handoff lacks a valid public key for custody' >&2; exit 65; }
+    custody_key_guard="$bundle_root/source/scripts/ops/verify-custody-validator-key.py"
+    [ -x "$custody_key_guard" ] || { printf '%s\n' 'release bundle lacks the custody validator-key identity guard' >&2; exit 65; }
+    python3 "$custody_key_guard" --keystore-dir "$keystore_dir" --expected-public-key "$validator_key" >/dev/null || { printf '%s\n' 'custody keystore metadata does not match the selected validator public key' >&2; exit 65; }
+    custody_runtime="$release_dir/custody_verifier_runtime.py"
+    [ -f "$custody_runtime" ] && [ ! -L "$custody_runtime" ] || { printf '%s\n' 'release bundle lacks custody verifier runtime validation' >&2; exit 65; }
+    custody_runtime_context="$(python3 -I -B "$custody_runtime" verify --work-dir "$custody_work" --bundle-root "$bundle_root" --expected-public-key "$validator_key")" || { printf '%s\n' 'custody verification runtime is not prepared or no longer matches this release; no Vault ceremony started' >&2; exit 65; }
+    custody_python="$(jq -er '.python | select(type == "string" and startswith("/"))' <<<"$custody_runtime_context")" || exit 65
+    custody_upstream="$(jq -er '.upstream_root | select(type == "string" and startswith("/"))' <<<"$custody_runtime_context")" || exit 65
+    custody_env+=(CUSTODY_VERIFIER_PYTHON="$custody_python" CUSTODY_VERIFIER_UPSTREAM_ROOT="$custody_upstream")
     mkdir -m 700 "$ceremony_dir"
-    eks_env=(env AWS_REGION="$session_region" EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance")
-    "$bundle_root/source/scripts/ops/with-private-vault.sh" -- "${eks_env[@]}" PRIVATE_VAULT_SESSION=1 "$bundle_root/source/scripts/ops/recover-and-bootstrap-hoodi-validator-runtime-vault.sh" --validator-set "$validator_set"
-    "$bundle_root/source/scripts/ops/with-private-vault.sh" -- "${eks_env[@]}" PRIVATE_VAULT_SESSION=1 "$bundle_root/source/scripts/ops/recover-and-onboard-hoodi-validator-keystore.sh" --validator-set "$validator_set" --keystore-dir "$keystore_dir" --signer-ca-output "$ceremony_dir/signer-ca.crt" --known-clients-output "$ceremony_dir/known-clients.txt"
-    "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" PRIVATE_EKS_SESSION=1 kubectl -n validator-operations create configmap "validator-${validator_set}-known-clients" --from-file="known-clients=$ceremony_dir/known-clients.txt" --dry-run=client -o yaml | "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" PRIVATE_EKS_SESSION=1 kubectl apply -f - >/dev/null
+    "${custody_env[@]}" PRIVATE_VAULT_TARGET=pod/vault-0 "$bundle_root/source/scripts/ops/with-private-vault.sh" -- env PRIVATE_VAULT_SESSION=1 "$bundle_root/source/scripts/ops/recover-and-bootstrap-hoodi-validator-runtime-vault.sh" --validator-set "$validator_set"
+    # Use positional parameters rather than an empty Bash array: macOS Bash
+    # 3.2 treats an empty array expansion as unbound under nounset.
+    set --
+    if [ -n "$custody_result_output" ]; then
+      set -- --result-output "$custody_result_output" --operation-id "$custody_operation_id"
+    fi
+    "${custody_env[@]}" PRIVATE_VAULT_TARGET=pod/vault-0 "$bundle_root/source/scripts/ops/with-private-vault.sh" -- env PRIVATE_VAULT_SESSION=1 "$bundle_root/source/scripts/ops/recover-and-onboard-hoodi-validator-keystore.sh" --validator-set "$validator_set" --expected-public-key "$validator_key" --keystore-dir "$keystore_dir" --signer-ca-output "$ceremony_dir/signer-ca.crt" --known-clients-output "$ceremony_dir/known-clients.txt" "$@"
+    "${custody_env[@]}" "$bundle_root/source/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 kubectl -n validator-operations create configmap "validator-${validator_set}-known-clients" --from-file="known-clients=$ceremony_dir/known-clients.txt" --dry-run=client -o yaml | "${custody_env[@]}" "$bundle_root/source/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 kubectl apply -f - >/dev/null
     printf 'PASS: Vault runtime, encrypted local custody onboarding, and transport TLS were configured. Public CA evidence is in %s; no validator workload was started.\n' "$ceremony_dir"
     ;;
   evidence)
@@ -269,15 +360,30 @@ PY
     [ -n "$session_handoff$output_dir" ] && [ -z "$work_dir$ops_inputs$plan_file$expected_sha$keystore_dir$ceremony_dir$deposit_attestation$public_deposit_verification$private_evidence$signer_evidence$confirm_public_key$confirm_withdrawal_address" ] || usage
     case "$session_handoff:$output_dir" in /*:/*) ;; *) usage ;; esac
     [ -f "$session_handoff" ] && [ ! -L "$session_handoff" ] || { printf '%s\n' 'signer evidence session handoff must be a regular file' >&2; exit 65; }
-    session_region="$(jq -er 'select(.schema_version == 1 and (.aws_region | test("^ap-northeast-(1|2)$")) and (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and (.ssm_ops_instance_id | test("^i-[0-9a-f]+$"))) | .aws_region' "$session_handoff")" || { printf '%s\n' 'signer evidence session handoff is invalid' >&2; exit 65; }
+    session_region="$(jq -er 'select(.schema_version == 1 and (.aws_region | test("^[a-z]{2}-[a-z0-9-]+-[0-9]+$")) and (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and (.ssm_ops_instance_id | test("^i-[0-9a-f]+$"))) | .aws_region' "$session_handoff")" || { printf '%s\n' 'signer evidence session handoff is invalid' >&2; exit 65; }
     session_cluster="$(jq -er '.cluster_name' "$session_handoff")"; session_instance="$(jq -er '.ssm_ops_instance_id' "$session_handoff")"
     [ "$session_region" = "$input_region" ] || { printf '%s\n' 'signer evidence session points to another Region' >&2; exit 65; }
     validator_set="$(jq -er '.validator_set' "$validator_handoff")"
     validator_key="$(jq -er '.validator_public_key | select(test("^0x[0-9a-fA-F]{96}$"))' "$validator_handoff")" || { printf '%s\n' 'validator handoff lacks a valid public key for signer evidence' >&2; exit 65; }
     eks_env=(env PRIVATE_EKS_SESSION=1 AWS_REGION="$session_region" EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance")
     if [ "$operation" = signer ]; then
+      revision="$(jq -er '.source_revision | select(test("^[0-9a-f]{40}$"))' "$bundle_root/bundle-manifest.json")" || { printf '%s\n' 'bundle revision is invalid for signer evidence' >&2; exit 65; }
+      expected_baseline="$(dirname "$zero_inputs")/baseline.tfvars.json"
+      [ "$(jq -er '.baseline_config' "$zero_inputs")" = "$expected_baseline" ] && [ -f "$expected_baseline" ] && [ ! -L "$expected_baseline" ] || { printf '%s\n' 'zero-resource baseline configuration path is invalid for signer evidence' >&2; exit 65; }
+      deployment_name="$(jq -er '.name | select(test("^[a-z][a-z0-9-]{1,18}[a-z0-9]$"))' "$expected_baseline")" || { printf '%s\n' 'zero-resource baseline configuration lacks deployment name for signer evidence' >&2; exit 65; }
+      signer_inventory="$(python3 "$release_dir/installer_artifact_inventory.py" --bundle-root "$bundle_root" --release-sha "$revision" --aws-account-id "$account" --aws-region "$input_region" --deployment-name "$deployment_name" --require-signer-probe)" || { printf '%s\n' 'required signer-probe artifact authority is unresolved' >&2; exit 65; }
+      probe_image="$(jq -er --arg revision "$revision" --arg account "$account" --arg region "$input_region" --arg deployment "$deployment_name" '
+        select(.schema_version == 1 and .complete == true and .release_revision == $revision and
+          .deployment == {aws_account_id:$account,aws_region:$region,deployment_name:$deployment}) |
+        ($account + ".dkr.ecr." + $region + ".amazonaws.com/" + $deployment + "-baseline-validator-signer-identity-probe@") as $destination_prefix |
+        [.artifacts[] | select(.component == "validator-signer-identity-probe" and .required == true and
+          .status == "source-approved" and .authority == "signer-probe-release-authorization" and
+          (.source | type == "string" and test("^[0-9]{12}\\.dkr\\.ecr\\.ap-northeast-[12]\\.amazonaws\\.com/[a-z][a-z0-9-]{1,18}[a-z0-9]-baseline-validator-signer-identity-probe@sha256:[a-f0-9]{64}$")) and
+          (.destination | type == "string" and startswith($destination_prefix) and test("@sha256:[a-f0-9]{64}$")))] |
+        if length == 1 then .[0].destination else error("signer-probe authority is missing or ambiguous") end
+      ' <<<"$signer_inventory")" || { printf '%s\n' 'signer-probe artifact authority is missing, invalid, or ambiguous' >&2; exit 65; }
       "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$bundle_root/source/scripts/ops/start-hoodi-validator-signer.sh" --validator-set "$validator_set"
-      "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$bundle_root/source/scripts/ops/collect-hoodi-signer-public-key-evidence.sh" --validator-set "$validator_set" --validator-public-key "$validator_key" --output-dir "$output_dir"
+      "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$bundle_root/source/scripts/ops/collect-hoodi-signer-public-key-evidence.sh" --validator-set "$validator_set" --validator-public-key "$validator_key" --probe-image "$probe_image" --output-dir "$output_dir"
       printf 'PASS: signer is running at one replica and fresh TLS public-key evidence was collected in %s. Wait for matching public deposit and private Beacon active evidence before activation.\n' "$output_dir"
     else
       command -v uuidgen >/dev/null 2>&1 || { printf '%s\n' 'missing command: uuidgen' >&2; exit 69; }
@@ -289,10 +395,32 @@ PY
   activate)
     [ "$operation" = apply ] && [ -n "$session_handoff$deposit_attestation$public_deposit_verification$private_evidence$signer_evidence$confirm_public_key$confirm_withdrawal_address" ] && [ -z "$work_dir$output_dir$ops_inputs$plan_file$expected_sha" ] || usage
     for evidence in "$session_handoff" "$deposit_attestation" "$public_deposit_verification" "$private_evidence" "$signer_evidence"; do case "$evidence" in /*) ;; *) usage ;; esac; [ -f "$evidence" ] && [ ! -L "$evidence" ] || { printf '%s\n' 'activation input must be a regular file' >&2; exit 65; }; done
+    if [ "$activation_receipt_count" -eq 4 ]; then
+      bundle_revision="$(jq -er '.source_revision | select(test("^[0-9a-f]{40}$"))' "$bundle_root/bundle-manifest.json")" || { printf '%s\n' 'bundle revision is invalid for activation receipt' >&2; exit 65; }
+      [ "$release_revision" = "$bundle_revision" ] || { printf '%s\n' 'activation receipt release revision does not match the verified bundle' >&2; exit 65; }
+      expected_baseline="$(dirname "$zero_inputs")/baseline.tfvars.json"
+      [ "$(jq -er '.baseline_config' "$zero_inputs")" = "$expected_baseline" ] && [ -f "$expected_baseline" ] && [ ! -L "$expected_baseline" ] || { printf '%s\n' 'zero-resource baseline configuration path is invalid for activation receipt' >&2; exit 65; }
+      input_deployment="$(jq -er '.name | select(test("^[a-z][a-z0-9-]{1,18}[a-z0-9]$"))' "$expected_baseline")" || { printf '%s\n' 'zero-resource baseline configuration lacks deployment name for activation receipt' >&2; exit 65; }
+      [ "$deployment_name" = "$input_deployment" ] || { printf '%s\n' 'activation receipt deployment name does not match bounded release inputs' >&2; exit 65; }
+      python3 -I -B - "$activation_receipt" <<'PY' || exit 65
+import os, stat, sys
+from pathlib import Path
+try:
+    path = Path(sys.argv[1])
+    parent = path.parent
+    info = parent.lstat()
+    if (str(path) != sys.argv[1] or parent.resolve() != parent
+            or not stat.S_ISDIR(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o700
+            or info.st_uid != os.geteuid() or os.path.lexists(path)):
+        raise ValueError()
+except (OSError, ValueError):
+    sys.exit("activation receipt requires an owned private canonical parent and an absent target")
+PY
+    fi
     session_region="$(jq -er '
       select(
         .schema_version == 1 and
-        (.aws_region | test("^ap-northeast-(1|2)$")) and
+        (.aws_region | test("^[a-z]{2}-[a-z0-9-]+-[0-9]+$")) and
         (.cluster_name | test("^[a-z][a-z0-9-]{1,38}[a-z0-9]$")) and
         (.ssm_ops_instance_id | test("^i-[0-9a-f]+$"))
       ) | .aws_region
@@ -301,7 +429,9 @@ PY
     [ "$session_region" = "$input_region" ] || { printf '%s\n' 'activation session points to another Region' >&2; exit 65; }
     validator_set="$(jq -er '.validator_set' "$validator_handoff")"
     eks_env=(env PRIVATE_EKS_SESSION=1 AWS_REGION="$session_region" EKS_CLUSTER_NAME="$session_cluster" SSM_OPS_INSTANCE_ID="$session_instance")
-    "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$bundle_root/source/scripts/ops/activate-hoodi-validator-client.sh" --validator-set "$validator_set" --deposit-attestation "$deposit_attestation" --public-deposit-verification "$public_deposit_verification" --private-evidence "$private_evidence" --signer-evidence "$signer_evidence" --confirm-public-key "$confirm_public_key" --confirm-withdrawal-address "$confirm_withdrawal_address"
+    set --
+    if [ "$activation_receipt_count" -eq 4 ]; then set -- --activation-receipt "$activation_receipt" --deployment-name "$deployment_name" --release-revision "$release_revision" --operation-id "$operation_id"; fi
+    "$bundle_root/source/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$bundle_root/source/scripts/ops/activate-hoodi-validator-client.sh" --validator-set "$validator_set" --deposit-attestation "$deposit_attestation" --public-deposit-verification "$public_deposit_verification" --private-evidence "$private_evidence" --signer-evidence "$signer_evidence" --confirm-public-key "$confirm_public_key" --confirm-withdrawal-address "$confirm_withdrawal_address" "$@"
     printf 'PASS: validator activation was submitted through the fixed session and guarded evidence path.\n'
     ;;
   ops-inputs)

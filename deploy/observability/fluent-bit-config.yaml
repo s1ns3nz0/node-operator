@@ -20,6 +20,9 @@ data:
         Tag kube.*
         Mem_Buf_Limit 20MB
         Skip_Long_Lines On
+        # Reassemble CRI fragments and strip their timestamp/stream prefix.
+        # EMF must reach CloudWatch as a JSON object, not a CRI text envelope.
+        multiline.parser cri
         DB /buffers/tail.db
     [FILTER]
         Name kubernetes
@@ -32,17 +35,40 @@ data:
     [FILTER]
         Name grep
         Match kube.*
-        Regex $kubernetes['namespace_name'] ^(node-operator|validator-operations|vault)$
+        Regex $kubernetes['namespace_name'] ^(node-operator|validator-operations|vault|validator-observability)$
     [FILTER]
         Name rewrite_tag
         Match kube.*
         Rule $kubernetes['namespace_name'] ^vault$ vault.security false
+    [FILTER]
+        Name rewrite_tag
+        Match kube.*
+        Rule $kubernetes['namespace_name'] ^validator-observability$ observability false
+    [FILTER]
+        Name rewrite_tag
+        Match observability
+        # Retain the outer metadata record in workload logs as well.
+        Rule $kubernetes['labels']['app.kubernetes.io/component'] ^validator-chain-observer$ validator.metrics true
+    [FILTER]
+        Name grep
+        Match validator.metrics
+        # Status/error lines stay in workload logs, not the EMF route.
+        Regex log ^\{.*"_aws"[ ]*:
     [OUTPUT]
         Name cloudwatch_logs
-        Match kube.*
+        Match_Regex ^(kube[.].*|observability)$
         region ap-northeast-2
         log_group_name /aws/eks/node-operator/validator-workloads
         log_stream_prefix fluent-bit-
+        auto_create_group false
+    [OUTPUT]
+        Name cloudwatch_logs
+        Match validator.metrics
+        region ap-northeast-2
+        log_group_name /aws/eks/node-operator/validator-metrics
+        log_stream_prefix chain-observer-
+        log_key log
+        log_format json/emf
         auto_create_group false
     [OUTPUT]
         Name cloudwatch_logs

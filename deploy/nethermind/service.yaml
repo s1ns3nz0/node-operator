@@ -27,3 +27,7 @@ spec:
       port: 8551
       protocol: TCP
       targetPort: engine-api
+    - name: metrics
+      port: 6060
+      protocol: TCP
+      targetPort: metrics

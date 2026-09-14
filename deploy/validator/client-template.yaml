@@ -9,7 +9,7 @@ metadata:
 spec:
   clusterIP: None
   selector: {app.kubernetes.io/component: validator-client, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}
-  ports: [{name: placeholder, port: 1, targetPort: 1}]
+  ports: [{name: metrics, port: 8081, targetPort: metrics}]
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -32,6 +32,8 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/component: validator-client
+        node-operator.io/deployment-name: REPLACE_WITH_DEPLOYMENT_IDENTITY
+        node-operator.io/release-revision: "REPLACE_WITH_RELEASE_IDENTITY"
         node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET
         node-operator.io/vault-client: "true"
       annotations:
@@ -71,8 +73,11 @@ spec:
             - --validators-external-signer-http-client-cert=/vault/secrets/tls.crt
             - --validators-external-signer-http-client-key=/vault/secrets/tls.key
             - --validators-external-signer-http-ca-cert=/vault/secrets/ca.crt
+            - --monitoring-host=0.0.0.0
+            - --monitoring-port=8081
           env:
             - {name: TMPDIR, value: /tmp}
+          ports: [{name: metrics, containerPort: 8081, protocol: TCP}]
           volumeMounts:
             - {name: vault-auth, mountPath: /var/run/secrets/vault.hashicorp.com/serviceaccount, readOnly: true}
             - {name: tmp, mountPath: /tmp}
@@ -115,3 +120,17 @@ spec:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: validator-operations}}
           podSelector: {matchLabels: {app.kubernetes.io/component: validator-client, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}}
       ports: [{protocol: TCP, port: 3500}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: validator-REPLACE_WITH_VALIDATOR_SET-client-metrics-ingress
+  namespace: validator-operations
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/component: validator-client, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: validator-observability}}
+          podSelector: {matchLabels: {app.kubernetes.io/component: validator-metrics-collector}}
+      ports: [{protocol: TCP, port: 8081}]

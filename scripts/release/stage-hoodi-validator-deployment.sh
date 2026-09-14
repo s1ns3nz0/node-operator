@@ -44,7 +44,7 @@ validator_set="$(jq -er '
 namespace='validator-operations'
 jq -e --arg parent "$parent" --arg runtime "$runtime" --arg client "$client" '
   (.aws_account_id | test("^[0-9]{12}$")) and
-  (.aws_region | test("^ap-northeast-(1|2)$")) and
+  (.aws_region | test("^[a-z]{2}-[a-z0-9-]+-[0-9]+$")) and
   .runtime_manifest == $runtime and .client_manifest == $client and
   .staged_client_replicas == 0 and .staged_fence_replicas == 0 and
   (.next_steps | type == "array" and length > 0)

@@ -57,6 +57,12 @@ case "${1:-} ${2:-}" in
     done
     : > "$kubeconfig"
     ;;
+  'ssm describe-instance-information')
+    # The wrapper must wait for the exact selected ops host before it starts
+    # its tunnel. This fake is intentionally Online rather than bypassing the
+    # readiness check, so the exercised path remains the production one.
+    printf '%s\n' 'Online'
+    ;;
   'ssm start-session')
     test -z "${ANTHROPIC_API_KEY:-}"
     test -z "${OPENAI_API_KEY:-}"

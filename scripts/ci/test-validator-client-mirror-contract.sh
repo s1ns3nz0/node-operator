@@ -24,11 +24,21 @@ grep -Fq 'test "$digest" = "${SOURCE_IMAGE#*@}"' <(workflow_job_source "$workflo
 jq -e '
   .schema_version == 2 and (.images | length == 2) and
   ([.images[] | select(.release_channel == "upstream-mirror" and .mirror_eligible == true and .provenance_status == "upstream-release-mirror")] | length == 1) and
-  ([.images[] | select(.release_channel == "manual-native-mtls" and .mirror_eligible == false and .provenance_status == "manual-reviewed-not-ci-attested" and .stage_approved == true and .activation_approved == true and (.approval_basis | type == "object"))] | length == 1) and
+  ([.images[] | select(
+    .release_channel == "manual-native-mtls" and
+    .mirror_eligible == false and
+    .provenance_status == "manual-reviewed-live-build" and
+    .stage_approved == true and .activation_approved == true and
+    (.approval_basis | type == "object") and
+    (.approval_basis.source_commit | type == "string" and test("^[a-f0-9]{40}$")) and
+    .approval_basis.source_lock == ".ci/prysm-mtls/source.lock.json" and
+    (.approval_basis.mtls_patch_sha256 | type == "string" and test("^[a-f0-9]{64}$")) and
+    (.approval_basis.security_patch_sha256 | type == "string" and test("^[a-f0-9]{64}$"))
+  )] | length == 1) and
   all(.images[]; (.private_image | test("^106760547719\\.dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com/node-operator-baseline-validator-prysm@sha256:[a-f0-9]{64}$")))
 ' "$allowlist" >/dev/null
-if jq -e '[.images[] | select(.mirror_eligible == true and .release_channel == "upstream-mirror")] | any(.provenance_status == "manual-reviewed-not-ci-attested")' "$allowlist" >/dev/null; then
+if jq -e '[.images[] | select(.release_channel == "manual-native-mtls" and .mirror_eligible == true)] | length > 0' "$allowlist" >/dev/null; then
   printf '%s\n' 'manual native record is mirror-eligible' >&2; exit 1
 fi
 if grep -Eq 'ecr:(DeleteRepository|DeleteImage|SetRepositoryPolicy|\*)' "$terraform_file"; then printf '%s\n' 'validator mirror grants destructive ECR permission' >&2; exit 1; fi
-printf '%s\n' 'PASS: Prysm validator mirror is private, immutable, OIDC-bound, and push-only.'
+printf '%s\n' 'PASS: Prysm validator mirror is private, immutable, OIDC-bound, repository-scoped, and non-destructive.'

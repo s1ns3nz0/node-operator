@@ -107,6 +107,25 @@ trap 'exit 129' HUP
 trap 'exit 143' TERM
 
 endpoint="$(aws eks describe-cluster --name "$cluster_name" --region "$region" --query 'cluster.endpoint' --output text | sed 's#https://##')"
+# A newly-created private ops host can be running before the SSM agent has
+# completed registration. Starting a port-forward during that window exits
+# immediately with a misleading "session was not ready" error. Wait for the
+# owned instance to report Online before creating the tunnel.
+ssm_online=0
+for _ in $(seq 1 180); do
+  ping_status="$(aws ssm describe-instance-information --region "$region" \
+    --filters "Key=InstanceIds,Values=$instance_id" \
+    --query 'InstanceInformationList[0].PingStatus' --output text 2>/dev/null || true)"
+  if [ "$ping_status" = Online ]; then
+    ssm_online=1
+    break
+  fi
+  sleep 1
+done
+[ "$ssm_online" -eq 1 ] || {
+  printf 'SSM instance %s did not become Online within 180 seconds\n' "$instance_id" >&2
+  exit 1
+}
 env -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u GITHUB_TOKEN aws ssm start-session \
   --target "$instance_id" \
   --document-name AWS-StartPortForwardingSessionToRemoteHost \

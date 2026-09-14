@@ -58,7 +58,7 @@ spec:
               - {key: "{{ (request.object.spec.volumes || `[]`)[?hostPath].hostPath.path }}", operator: AnyNotIn, value: [/var/log]}
               - {key: "{{ (request.object.spec.volumes || `[]`)[?hostPath].hostPath.type }}", operator: AnyNotIn, value: [Directory]}
               - {key: "{{ (request.object.spec.containers || `[]`)[?name == 'fluent-bit'] | length(@) }}", operator: NotEquals, value: 1}
-              - {key: "{{ (request.object.spec.containers || `[]`)[?name == 'fluent-bit'].image }}", operator: AnyNotIn, value: [106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-fluent-bit@sha256:a5761fa961cb22dd0875883a4d446b1acd99d4935d77358aa9f50ee177e44fe2]}
+              - {key: "{{ (request.object.spec.containers || `[]`)[?name == 'fluent-bit'].image }}", operator: AnyNotIn, value: ["106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-fluent-bit@sha256:a5761fa961cb22dd0875883a4d446b1acd99d4935d77358aa9f50ee177e44fe2"]}
               - {key: "{{ (request.object.spec.containers || `[]`)[?name == 'fluent-bit'].volumeMounts[] | [?name == 'varlog'] | length(@) }}", operator: NotEquals, value: 1}
               - {key: "{{ (request.object.spec.containers || `[]`)[?name == 'fluent-bit'].volumeMounts[] | [?name == 'varlog' && mountPath == '/var/log' && readOnly == `true`] | length(@) }}", operator: NotEquals, value: 1}
               - {key: "{{ (request.object.spec.containers || `[]`)[?name != 'fluent-bit'].volumeMounts[] | [?name == 'varlog'] | length(@) }}", operator: GreaterThan, value: 0}

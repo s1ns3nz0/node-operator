@@ -60,12 +60,15 @@ class Entrypoints(unittest.TestCase):
             self.assertEqual(self.run_script("run-suite.sh", suite).returncode, 64)
         self.assertEqual(self.calls(), [])
 
-    def test_all_terraform_calls_are_pinned_offline_and_read_only(self):
+    def test_all_terraform_suites_dispatch_pinned_offline_calls(self):
         self.mock("docker")
+        self.mock("python3")
         result = self.run_script("run-terraform-ci.sh", "all")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(len(self.calls()), 9)
-        for args in self.calls():
+        docker_calls = [args for args in self.calls() if args[0] == "run"]
+        python_calls = [args for args in self.calls() if args[0] != "run"]
+        self.assertEqual(len(docker_calls), 13)
+        for args in docker_calls:
             self.assertEqual(args[:2], ["run", "--rm"])
             self.assertEqual(args[args.index("--network") + 1], "none")
             self.assertEqual(args[args.index("--platform") + 1], "linux/amd64")
@@ -73,6 +76,21 @@ class Entrypoints(unittest.TestCase):
             image = args[args.index("bash") - 1]
             self.assertRegex(image, r"@sha256:[a-f0-9]{64}$")
             self.assertNotIn("--privileged", args)
+        self.assertEqual(python_calls[-1], [str(ROOT / "scripts/ci/test-validator-monitoring-dashboard-terraform.py")])
+
+    def test_dashboard_selector_forces_the_pinned_container_mode(self):
+        import sys
+        python = self.bin / "python3"
+        python.write_text("#!" + sys.executable + "\n" +
+                          "import json,os,sys\n" +
+                          "with open(os.environ['CALL_LOG'],'a') as f: f.write(json.dumps({'args': sys.argv[1:], 'mode': os.environ.get('VALIDATOR_DASHBOARD_TERRAFORM_MODE'), 'image': os.environ.get('TERRAFORM_IMAGE')})+'\\n')\n")
+        python.chmod(0o700)
+        result = self.run_script("run-terraform-ci.sh", "dashboard")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        call = json.loads(self.log.read_text())
+        self.assertEqual(call["args"], [str(ROOT / "scripts/ci/test-validator-monitoring-dashboard-terraform.py")])
+        self.assertEqual(call["mode"], "container")
+        self.assertRegex(call["image"], r"@sha256:[a-f0-9]{64}$")
 
     def test_terraform_failure_stops_remaining_modules(self):
         self.mock("docker")

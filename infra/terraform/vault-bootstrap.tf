@@ -22,8 +22,8 @@ variable "vault_bootstrap_image" {
   default     = ""
 
   validation {
-    condition     = var.vault_bootstrap_image == "" || can(regex("^[0-9]{12}\\.dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", var.vault_bootstrap_image))
-    error_message = "vault_bootstrap_image must be empty while disabled or a digest-pinned ap-northeast-2 private ECR image."
+    condition     = var.vault_bootstrap_image == "" || can(regex("^[0-9]{12}\\.dkr\\.ecr\\.[a-z]{2}-[a-z0-9-]+-[0-9]+\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", var.vault_bootstrap_image))
+    error_message = "vault_bootstrap_image must be empty while disabled or a same-region digest-pinned private ECR image."
   }
 }
 
@@ -47,6 +47,69 @@ variable "vault_chart_manifest_digest" {
     condition     = var.vault_chart_manifest_digest == "" || can(regex("^sha256:[a-f0-9]{64}$", var.vault_chart_manifest_digest))
     error_message = "vault_chart_manifest_digest must be empty while disabled or an approved OCI sha256 manifest digest."
   }
+}
+
+variable "vault_runtime_images" {
+  description = "Release-bound private Vault server, agent, injector, and audit relay images."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition = length(var.vault_runtime_images) == 0 || (
+      toset(keys(var.vault_runtime_images)) == toset(["server", "agent", "injector", "audit_relay"]) &&
+      alltrue([for image in values(var.vault_runtime_images) : can(regex("^[0-9]{12}\\.dkr\\.ecr\\.[a-z]{2}-[a-z0-9-]+-[0-9]+\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", image))])
+    )
+    error_message = "vault_runtime_images must be empty while disabled or contain exactly digest-pinned server, agent, injector, and audit_relay private images."
+  }
+}
+
+variable "vault_image_values_overlay_base64" {
+  description = "Canonical JSON-as-YAML Vault image overlay rendered from the verified release authority."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.vault_image_values_overlay_base64 == "" || can(jsondecode(base64decode(var.vault_image_values_overlay_base64)))
+    error_message = "vault_image_values_overlay_base64 must be empty while disabled or a base64-encoded JSON Helm values overlay."
+  }
+}
+
+variable "vault_approved_catalog_base64" {
+  description = "The exact reviewed approved-OCI catalog bytes from the selected release bundle."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.vault_approved_catalog_base64 == "" || can(jsondecode(base64decode(var.vault_approved_catalog_base64)))
+    error_message = "vault_approved_catalog_base64 must be empty while disabled or base64-encoded approved catalog JSON."
+  }
+}
+
+locals {
+  vault_approved_catalog   = try(jsondecode(base64decode(var.vault_approved_catalog_base64)), { artifacts = [] })
+  vault_server_catalog     = try(one([for artifact in local.vault_approved_catalog.artifacts : artifact if startswith(try(artifact.source, ""), "docker.io/hashicorp/vault@") && try(artifact.destination, "") == "vault"]), {})
+  vault_injector_catalog   = try(one([for artifact in local.vault_approved_catalog.artifacts : artifact if startswith(try(artifact.source, ""), "docker.io/hashicorp/vault-k8s@") && try(artifact.destination, "") == "vault"]), {})
+  vault_server_digest      = try(trimprefix(local.vault_server_catalog.source, "docker.io/hashicorp/vault@"), "")
+  vault_injector_digest    = try(trimprefix(local.vault_injector_catalog.source, "docker.io/hashicorp/vault-k8s@"), "")
+  vault_private_repository = "${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${local.private_gitops_repositories.vault}"
+  vault_image_overlay_b64 = base64encode(jsonencode({
+    server = {
+      image = {
+        repository = local.vault_private_repository
+        tag        = "${trimprefix(local.vault_server_digest, "sha256:")}@${local.vault_server_digest}"
+      }
+    }
+    injector = {
+      agentImage = {
+        repository = local.vault_private_repository
+        tag        = "${trimprefix(local.vault_server_digest, "sha256:")}@${local.vault_server_digest}"
+      }
+      image = {
+        repository = local.vault_private_repository
+        tag        = "${trimprefix(local.vault_injector_digest, "sha256:")}@${local.vault_injector_digest}"
+      }
+    }
+  }))
 }
 
 resource "aws_security_group" "vault_bootstrap" {
@@ -187,8 +250,20 @@ resource "aws_codebuild_project" "vault_bootstrap" {
       value = aws_kms_key.vault.arn
     }
     environment_variable {
+      name  = "VAULT_EBS_KMS_KEY_ARN"
+      value = aws_kms_key.ebs.arn
+    }
+    environment_variable {
       name  = "VAULT_CHART_MANIFEST_DIGEST"
       value = var.vault_chart_manifest_digest
+    }
+    environment_variable {
+      name  = "VAULT_AUDIT_RELAY_IMAGE"
+      value = try(var.vault_runtime_images.audit_relay, "")
+    }
+    environment_variable {
+      name  = "VAULT_IMAGE_OVERLAY_B64"
+      value = var.vault_image_values_overlay_base64
     }
   }
   vpc_config {
@@ -208,18 +283,25 @@ resource "aws_codebuild_project" "vault_bootstrap" {
             - kubectl get secret vault-tls --namespace vault --ignore-not-found -o name | grep -Fx 'secret/vault-tls'
             - aws ecr get-login-password --region ${var.aws_region} | helm registry login --username AWS --password-stdin ${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com
             - test -n "$VAULT_UNSEAL_KEY_ARN"
+            - test -n "$VAULT_EBS_KMS_KEY_ARN"
             - test -n "$VAULT_CHART_MANIFEST_DIGEST"
+            - test -n "$VAULT_AUDIT_RELAY_IMAGE"
             - test "$(aws ecr describe-images --region ${var.aws_region} --repository-name ${local.private_gitops_repositories.vault_chart} --image-ids imageTag=${var.vault_chart_version} --query 'imageDetails[0].imageDigest' --output text)" = "$VAULT_CHART_MANIFEST_DIGEST"
-            - sed -e "s#node-operator-baseline#${local.name_prefix}#g" -e "s#REPLACE_WITH_VAULT_UNSEAL_KEY_ARN#$VAULT_UNSEAL_KEY_ARN#g" -e "s#REPLACE_WITH_PRIVATE_VAULT_AUDIT_RELAY_DIGEST#${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${local.name_prefix}-vault-audit-relay@sha256:752d066a22abd7bcd617f7a8538f4ced8122a2202a1c3a280d65993ba548ef95#g" -e 's#gp3-encrypted#gp2#g' -e 's#268bb80aa9c6d13d65fcfa05c0c268caca068952240a8087291a6ce0b66e3a10#20ff3ed4a4da750d1be0757c82e0a10accc00c26c157bde3a694f2b227300caf#g' -e 's#8c18ccc87fd72930fd0c3f12ea444e9e57e83f119b93c546ed047aba29a05c5f#6b1a9d949850ba7e2a32a90df28c263291dd7e83a3033d2d280c259ab13db51a#g' -e 's#5d3802fde4b13b1a7a459cc9a1d1bfab48de3ff88a8c23ed8b89ce6fd6b5ef0d#20ff3ed4a4da750d1be0757c82e0a10accc00c26c157bde3a694f2b227300caf#g' -e 's#41496b509345246f4cb29d7c83c4e99e6eeb891ef756e327617adb458b5c4b8d#6b1a9d949850ba7e2a32a90df28c263291dd7e83a3033d2d280c259ab13db51a#g' /opt/node-operator/vault-values.template.yaml > /tmp/vault-values.yaml
+            - test "$(aws ecr describe-images --region ${var.aws_region} --repository-name ${local.private_gitops_repositories.vault} --image-ids imageDigest=${local.vault_server_digest} --query 'imageDetails[0].imageDigest' --output text)" = "${local.vault_server_digest}"
+            - test "$(aws ecr describe-images --region ${var.aws_region} --repository-name ${local.private_gitops_repositories.vault} --image-ids imageDigest=${local.vault_injector_digest} --query 'imageDetails[0].imageDigest' --output text)" = "${local.vault_injector_digest}"
+            - test "$(aws ecr describe-images --region ${var.aws_region} --repository-name ${local.vault_audit_relay_repository_name} --image-ids imageDigest=${replace(try(var.vault_runtime_images.audit_relay, ""), "${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${local.vault_audit_relay_repository_name}@", "")} --query 'imageDetails[0].imageDigest' --output text)" = "${replace(try(var.vault_runtime_images.audit_relay, ""), "${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${local.vault_audit_relay_repository_name}@", "")}"
+            - printf '%s' "$VAULT_IMAGE_OVERLAY_B64" | base64 -d > /tmp/vault-image-overrides.json
+            - /opt/node-operator/ensure-vault-encrypted-storageclass.sh --template /opt/node-operator/vault-gp3-encrypted-storageclass.yaml --kms-key-arn "$VAULT_EBS_KMS_KEY_ARN"
+            - sed -e "s#node-operator-baseline#${local.name_prefix}#g" -e "s#REPLACE_WITH_VAULT_UNSEAL_KEY_ARN#$VAULT_UNSEAL_KEY_ARN#g" -e "s#REPLACE_WITH_VAULT_AWS_REGION#${var.aws_region}#g" -e "s#region = \"ap-northeast-2\"#region = \"${var.aws_region}\"#g" -e "s#REPLACE_WITH_PRIVATE_VAULT_AUDIT_RELAY_DIGEST#$VAULT_AUDIT_RELAY_IMAGE#g" /opt/node-operator/vault-values.template.yaml > /tmp/vault-values.yaml
             - grep -Fq 'REPLACE_WITH_VAULT_UNSEAL_KEY_ARN' /tmp/vault-values.yaml && exit 1 || true
-            - helm upgrade --install vault oci://${aws_ecr_repository.private_gitops["vault_chart"].repository_url}@${var.vault_chart_manifest_digest} --namespace vault --values /tmp/vault-values.yaml --atomic --timeout 15m
-            - kubectl wait --namespace vault --for=condition=Ready pod --selector=app.kubernetes.io/name=vault --timeout=15m
+            - helm upgrade --install vault oci://${aws_ecr_repository.private_gitops["vault_chart"].repository_url}@${var.vault_chart_manifest_digest} --namespace vault --values /tmp/vault-values.yaml --values /tmp/vault-image-overrides.json --timeout 15m
+            - /opt/node-operator/verify-hoodi-vault-readiness.sh --mode sealed-deployment
     YAML
   }
   lifecycle {
     precondition {
-      condition     = var.enable_private_gitops_foundation && var.vault_chart_version != "" && can(regex("^sha256:[a-f0-9]{64}$", var.vault_chart_manifest_digest)) && can(regex("^${var.aws_account_id}\\.dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/${local.private_gitops_repositories.vault}@sha256:[a-f0-9]{64}$", var.vault_bootstrap_image)) && length(var.vault_bootstrap_subnet_ids) > 0 && alltrue([for subnet_id in var.vault_bootstrap_subnet_ids : can(regex("^subnet-[a-z0-9]+$", subnet_id))])
-      error_message = "Enabled Vault bootstrap requires the private GitOps Vault ECR repository, pinned toolchain and chart manifest digests, a pinned chart version, and explicit private subnets. EKS cluster-admin is a separately gated deploy-stage association."
+      condition     = var.enable_private_gitops_foundation && local.vault_audit_relay_repository_enabled && var.vault_chart_version != "" && can(regex("^sha256:[a-f0-9]{64}$", var.vault_chart_manifest_digest)) && can(regex("^${var.aws_account_id}\\.dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/${local.private_gitops_repositories.vault}@sha256:[a-f0-9]{64}$", var.vault_bootstrap_image)) && length(var.vault_bootstrap_subnet_ids) > 0 && alltrue([for subnet_id in var.vault_bootstrap_subnet_ids : can(regex("^subnet-[a-z0-9]+$", subnet_id))]) && try(var.vault_runtime_images.server, "") == "${local.vault_private_repository}@${local.vault_server_digest}" && try(var.vault_runtime_images.agent, "") == "${local.vault_private_repository}@${local.vault_server_digest}" && try(var.vault_runtime_images.injector, "") == "${local.vault_private_repository}@${local.vault_injector_digest}" && can(regex("^${var.aws_account_id}\\.dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/${local.vault_audit_relay_repository_name}@sha256:[a-f0-9]{64}$", try(var.vault_runtime_images.audit_relay, ""))) && var.vault_approved_catalog_base64 != "" && var.vault_image_values_overlay_base64 != "" && try(jsondecode(base64decode(var.vault_image_values_overlay_base64)) == jsondecode(base64decode(local.vault_image_overlay_b64)), false)
+      error_message = "Enabled Vault bootstrap requires the audit relay ECR repository foundation, exact catalog-bound private Vault server, agent, and injector digests, a release-bound private audit relay image, pinned chart and toolchain digests, and explicit private subnets. EKS cluster-admin is separately gated."
     }
   }
   tags       = local.common_tags

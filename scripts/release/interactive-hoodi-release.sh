@@ -32,8 +32,128 @@ prepare="$source_root/scripts/release/prepare-hoodi-zero-release-inputs.sh"
 keystore="$source_root/scripts/ops/generate-hoodi-validator-keystore.sh"
 deposit_validate="$source_root/scripts/ops/validate-hoodi-deposit-data.sh"
 vault_tls="$source_root/scripts/release/prepare-vault-bootstrap-tls.sh"
-for file in "$release" "$prepare" "$keystore" "$deposit_validate" "$vault_tls"; do [ -x "$file" ] || { printf 'missing executable in release bundle: %s\n' "$file" >&2; exit 65; }; done
-for command in aws jq find shasum; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
+resume_helper="$source_root/scripts/release/interactive-hoodi-resume.py"
+artifact_inventory="$source_root/scripts/release/installer_artifact_inventory.py"
+existing_validator_verify="$source_root/scripts/release/verify-existing-hoodi-validator.py"
+collector_apply="$source_root/scripts/release/apply-validator-log-collector.py"
+for file in "$release" "$prepare" "$keystore" "$deposit_validate" "$vault_tls" "$resume_helper" "$existing_validator_verify"; do [ -x "$file" ] || { printf 'missing executable in release bundle: %s\n' "$file" >&2; exit 65; }; done
+[ -f "$artifact_inventory" ] || { printf '%s\n' 'release bundle lacks installer artifact authority inventory' >&2; exit 65; }
+artifact_authority_gate() {
+  local account="$1" region="$2" deployment="$3" revision inventory
+  revision="$(jq -er '.source_revision | select(test("^[0-9a-f]{40}$"))' "$bundle_root/bundle-manifest.json")" || { printf '%s\n' 'release bundle revision is invalid; no resources changed' >&2; return 65; }
+  "$source_root/scripts/release/node-operator-release.sh" verify --bundle-root "$bundle_root" >/dev/null || { printf '%s\n' 'release bundle verification failed; no resources changed' >&2; return 65; }
+  inventory="$(python3 "$artifact_inventory" --bundle-root "$bundle_root" --release-sha "$revision" --aws-account-id "$account" --aws-region "$region" --deployment-name "$deployment" --require-signer-probe)" || { printf '%s\n' 'required installer artifact authority is unresolved; no resources changed' >&2; return 65; }
+  printf '%s\n' "$inventory"
+}
+
+# The inventory is the release-bound authority boundary.  Do not reconstruct
+# destinations from catalog files, mutable tags, or an operator's source
+# region.  A supplied source reference is accepted only when it is the exact
+# approved immutable source for this selected deployment, then normalized to
+# the reviewed private ECR destination.
+artifact_record() {
+  local component="$1"
+  jq -cer --arg component "$component" '
+    select(.schema_version == 1 and .complete == true and (.artifacts | type == "array")) |
+    [.artifacts[] | select(.component == $component and .required == true)] as $matches |
+    if ($matches | length) == 1 then $matches[0] else error("required artifact is absent or ambiguous") end |
+    select((.destination | type == "string") and (.source | type == "string"))
+  ' <<<"$artifact_authority_json"
+}
+canonical_image() {
+  local component="$1" supplied="$2" record destination source
+  record="$(artifact_record "$component")" || { printf 'canonical inventory entry is invalid: %s\n' "$component" >&2; return 65; }
+  destination="$(jq -er '.destination' <<<"$record")"
+  source="$(jq -er '.source' <<<"$record")"
+  [[ "$destination" =~ ^${account}\.dkr\.ecr\.${region//./\.}\.amazonaws\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$ ]] || { printf 'canonical inventory destination is invalid: %s\n' "$component" >&2; return 65; }
+  [[ "$source" =~ ^[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$ && "${destination##*@}" = "${source##*@}" ]] || { printf 'canonical inventory source is invalid: %s\n' "$component" >&2; return 65; }
+  if [ -n "$supplied" ] && [ "$supplied" != "$destination" ] && [ "$supplied" != "$source" ]; then
+    printf 'configured %s image conflicts with canonical artifact authority\n' "$component" >&2
+    return 65
+  fi
+  printf '%s\n' "$destination"
+}
+load_authorized_artifacts() {
+  artifact_authority_json="$(artifact_authority_gate "$account" "$region" "$deployment_name")" || return $?
+  web3signer_image="$(canonical_image web3signer "$DEFAULT_WEB3SIGNER_IMAGE")" || return $?
+  postgres_image="$(canonical_image postgres "$DEFAULT_POSTGRES_IMAGE")" || return $?
+  prysm_image="$(canonical_image prysm-validator "$DEFAULT_PRYSM_IMAGE")" || return $?
+  fence_image="$(canonical_image validator-signing-fence "$DEFAULT_FENCE_IMAGE")" || return $?
+  argocd_bootstrap_image="$(canonical_image argocd-bootstrap "$DEFAULT_ARGOCD_BOOTSTRAP_IMAGE")" || return $?
+  vault_bootstrap_image="$(canonical_image vault-bootstrap "$DEFAULT_VAULT_BOOTSTRAP_IMAGE")" || return $?
+  client_chart_record="$(artifact_record node-operator-client-chart)" || { printf '%s\n' 'canonical inventory entry is invalid: node-operator-client-chart' >&2; return 65; }
+  client_chart_image="$(jq -er '.destination' <<<"$client_chart_record")"
+  client_chart_source="$(jq -er '.source' <<<"$client_chart_record")"
+  client_chart_version="$(jq -er '.destination_tag' <<<"$client_chart_record")"
+  client_chart_digest="${client_chart_image##*@}"
+  [[ "$client_chart_image" =~ ^${account}\.dkr\.ecr\.${region//./\.}\.amazonaws\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$ && "$client_chart_source" =~ ^[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$ && "$client_chart_digest" = "${client_chart_source##*@}" && "$client_chart_version" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { printf '%s\n' 'canonical inventory client chart entry is invalid' >&2; return 65; }
+  if { [ -n "$DEFAULT_CLIENT_CHART_VERSION" ] && [ "$DEFAULT_CLIENT_CHART_VERSION" != "$client_chart_version" ]; } || { [ -n "$DEFAULT_CLIENT_CHART_DIGEST" ] && [ "$DEFAULT_CLIENT_CHART_DIGEST" != "$client_chart_digest" ]; }; then
+    printf '%s\n' 'configured client chart reference conflicts with canonical artifact authority' >&2
+    return 65
+  fi
+}
+verify_private_image() {
+  local image="$1" repository digest found
+  repository="${image#*/}"; repository="${repository%@*}"; digest="${image##*@}"
+  [[ "$image" =~ ^${account}\.dkr\.ecr\.${region//./\.}\.amazonaws\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$ ]] || {
+    printf 'bootstrap image must be a same-account private ECR digest: %s\n' "$image" >&2; return 65;
+  }
+  found="$(aws ecr describe-images --region "$region" --repository-name "$repository" --image-ids imageDigest="$digest" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
+  [ "$found" = "$digest" ] || { printf 'required private ECR image is missing after the pre-EKS mirror: %s\n' "$image" >&2; return 65; }
+}
+
+# This is the only platform invocation path for both a new installation and a
+# selected WORK_DIR recovery. Inputs are reconstructed from immutable release
+# authority, the verified infrastructure receipt, and its fixed output paths.
+run_platform_bootstrap() {
+  local platform_work="$1" platform_inputs="$2" platform_session="$3"
+  local vault_approved_catalog vault_artifact_index vault_mirror_receipt zero_inputs baseline_config
+  local vault_chart_version vault_chart_digest cert_manager_chart_digest receipt_value index_value
+  local client_repository client_found platform_script replay_helper replay_status
+  local -a platform_subnets platform_args
+  verify_private_image "$argocd_bootstrap_image" || return $?
+  verify_private_image "$vault_bootstrap_image" || return $?
+  vault_approved_catalog="$source_root/.ci/gitops/approved-oci-artifacts.json"
+  vault_artifact_index="$bundle_root/rendered/installer-artifact-index.json"
+  vault_mirror_receipt="$platform_work/vault-artifact-mirror-receipt.json"
+  for authority in "$vault_approved_catalog" "$vault_artifact_index" "$vault_mirror_receipt"; do
+    [ -f "$authority" ] && [ ! -L "$authority" ] || { printf '%s\n' 'release-bound Vault mirror authority is missing; platform plans were not requested' >&2; return 65; }
+  done
+  [ "$platform_inputs" = "$(dirname "$platform_work")/inputs/hoodi-zero-release-inputs.json" ] || { printf '%s\n' 'platform inputs are not the fixed sibling infrastructure receipt' >&2; return 65; }
+  zero_inputs="$(dirname "$platform_inputs")/zero-resource/zero-resource-inputs.json"
+  baseline_config="$(dirname "$platform_inputs")/zero-resource/baseline.tfvars.json"
+  [ "$(jq -er '.zero_resource_inputs' "$platform_inputs")" = "$zero_inputs" ] || { printf '%s\n' 'infrastructure receipt does not name the fixed zero-resource inputs' >&2; return 65; }
+  [ -f "$zero_inputs" ] && [ ! -L "$zero_inputs" ] && [ "$(jq -er '.baseline_config' "$zero_inputs")" = "$baseline_config" ] || { printf '%s\n' 'infrastructure receipt does not name the fixed baseline config' >&2; return 65; }
+  [ -f "$baseline_config" ] && [ ! -L "$baseline_config" ] || { printf '%s\n' 'infrastructure receipt lacks a safe fixed baseline config' >&2; return 65; }
+  [ -f "$platform_work/foundation-output.json" ] && [ ! -L "$platform_work/foundation-output.json" ] || { printf '%s\n' 'foundation output is unavailable or unsafe' >&2; return 65; }
+  jq -e '.hoodi_subnet_ids | type == "array" and length > 0 and all(.[]; type == "string" and test("^subnet-[a-z0-9]+$"))' "$platform_work/foundation-output.json" >/dev/null || { printf '%s\n' 'foundation output lacks valid Hoodi private subnets for platform bootstrap' >&2; return 65; }
+  platform_subnets=()
+  while IFS= read -r subnet; do platform_subnets+=("$subnet"); done < <(jq -r '.hoodi_subnet_ids[]' "$platform_work/foundation-output.json")
+  [ "${#platform_subnets[@]}" -gt 0 ] || { printf '%s\n' 'foundation output lacks Hoodi private subnets for platform bootstrap' >&2; return 65; }
+  vault_chart_version="$(jq -er '.components["vault-chart"].version | select(type == "string")' "$vault_artifact_index")" || return 65
+  vault_chart_digest="$(jq -er '.components["vault-chart"].expected_oci_manifest_digest | select(type == "string" and test("^sha256:[a-f0-9]{64}$"))' "$vault_artifact_index")" || return 65
+  cert_manager_chart_digest="$(jq -er '.components["cert-manager-chart"].expected_oci_manifest_digest | select(type == "string" and test("^sha256:[a-f0-9]{64}$"))' "$vault_artifact_index")" || return 65
+  receipt_value="$(jq -er '.artifacts["vault-chart"].version | select(type == "string")' "$vault_mirror_receipt")" || return 65
+  index_value="$(jq -er '.artifacts["vault-chart"].manifest_digest | select(type == "string")' "$vault_mirror_receipt")" || return 65
+  [ "$receipt_value" = "$vault_chart_version" ] && [ "$index_value" = "$vault_chart_digest" ] || { printf '%s\n' 'Vault chart receipt conflicts with the selected bundle index' >&2; return 65; }
+  index_value="$(jq -er '.artifacts["cert-manager-chart"].manifest_digest | select(type == "string")' "$vault_mirror_receipt")" || return 65
+  [ "$index_value" = "$cert_manager_chart_digest" ] || { printf '%s\n' 'cert-manager chart receipt conflicts with the selected bundle index' >&2; return 65; }
+  if { [ -n "$DEFAULT_VAULT_CHART_VERSION" ] && [ "$DEFAULT_VAULT_CHART_VERSION" != "$vault_chart_version" ]; } || { [ -n "$DEFAULT_VAULT_CHART_DIGEST" ] && [ "$DEFAULT_VAULT_CHART_DIGEST" != "$vault_chart_digest" ]; } || { [ -n "$DEFAULT_CERT_MANAGER_CHART_DIGEST" ] && [ "$DEFAULT_CERT_MANAGER_CHART_DIGEST" != "$cert_manager_chart_digest" ]; }; then
+    printf '%s\n' 'configured platform chart reference conflicts with canonical release authority' >&2; return 65
+  fi
+  client_repository="${client_chart_image#*/}"; client_repository="${client_repository%@*}"
+  client_found="$(aws ecr describe-images --region "$region" --repository-name "$client_repository" --image-ids imageTag="$client_chart_version" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
+  [ "$client_found" = "$client_chart_digest" ] || { printf 'client chart %s with digest %s is missing or mismatched in private ECR\n' "$client_chart_version" "$client_chart_digest" >&2; return 65; }
+  platform_script="$source_root/scripts/release/run-platform-bootstrap.sh"
+  replay_helper="$source_root/scripts/release/platform_bootstrap_replay.py"
+  [ -x "$platform_script" ] && [ -x "$replay_helper" ] || { printf '%s\n' 'release bundle lacks the platform bootstrap recovery helper' >&2; return 65; }
+  platform_args=(--baseline-work-dir "$platform_work" --baseline-config "$baseline_config" --account "$account" --region "$region" --argocd-image "$argocd_bootstrap_image" --vault-image "$vault_bootstrap_image" --client-chart-version "$client_chart_version" --client-chart-digest "$client_chart_digest" --vault-chart-version "$vault_chart_version" --vault-chart-digest "$vault_chart_digest" --cert-manager-chart-digest "$cert_manager_chart_digest" --vault-approved-catalog "$vault_approved_catalog" --vault-artifact-index "$vault_artifact_index" --vault-mirror-receipt "$vault_mirror_receipt" --private-eks-session-handoff "$platform_session")
+  for subnet in "${platform_subnets[@]}"; do platform_args+=(--subnet-id "$subnet"); done
+  NODE_OPERATOR_AUTOMATED_CEREMONY="${NODE_OPERATOR_AUTOMATED_CEREMONY:-0}" "$platform_script" "${platform_args[@]}" || return $?
+  replay_status="$(python3 "$replay_helper" phase --work-dir "$platform_work" --phase revoke_complete --action get)" || { printf '%s\n' 'platform bootstrap result has no valid durable replay checkpoint' >&2; return 70; }
+  [ "$replay_status" = complete ] || { printf '%s\n' 'platform bootstrap did not record complete durable cleanup; do not continue to ceremonies' >&2; return 70; }
+}
+for command in aws jq find shasum python3; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 
 # Optional non-secret .env-style overrides. Values are never exported and
 # unknown keys are ignored. This file may contain addresses/digests only.
@@ -45,7 +165,7 @@ if [ -n "$env_file" ]; then
   while IFS='=' read -r key value; do
     key="${key%%[[:space:]]*}"; value="${value##[[:space:]]}"
     case "$key" in ''|'#'*) continue ;; esac
-    case "$key" in REGION) DEFAULT_REGION="$value" ;; DEPLOYMENT_NAME) DEFAULT_DEPLOYMENT_NAME="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; EXISTING_KEYSTORE_DIR) DEFAULT_KEYSTORE_DIR="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; CLIENT_CHART_SOURCE_REGION) DEFAULT_CLIENT_CHART_SOURCE_REGION="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; esac
+    case "$key" in WORK_DIR) WORK_DIR="$value" ;; REGION) DEFAULT_REGION="$value" ;; DEPLOYMENT_NAME) DEFAULT_DEPLOYMENT_NAME="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; EXISTING_KEYSTORE_DIR) DEFAULT_KEYSTORE_DIR="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; CLIENT_CHART_SOURCE_REGION) DEFAULT_CLIENT_CHART_SOURCE_REGION="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; CERT_MANAGER_CHART_DIGEST) DEFAULT_CERT_MANAGER_CHART_DIGEST="$value" ;; DEPOSIT_TX_HASH) DEFAULT_DEPOSIT_TX_HASH="$value" ;; HOODI_PUBLIC_RPC_URL) DEFAULT_HOODI_PUBLIC_RPC_URL="$value" ;; HOODI_PUBLIC_BEACON_URL) DEFAULT_HOODI_PUBLIC_BEACON_URL="$value" ;; esac
   done < "$env_file"
 fi
 DEFAULT_REGION="${DEFAULT_REGION:-ap-northeast-2}"
@@ -67,18 +187,16 @@ DEFAULT_VAULT_BOOTSTRAP_IMAGE="${DEFAULT_VAULT_BOOTSTRAP_IMAGE:-}"
 DEFAULT_CLIENT_CHART_VERSION="${DEFAULT_CLIENT_CHART_VERSION:-}"
 DEFAULT_CLIENT_CHART_DIGEST="${DEFAULT_CLIENT_CHART_DIGEST:-}"
 DEFAULT_CLIENT_CHART_SOURCE_REGION="${DEFAULT_CLIENT_CHART_SOURCE_REGION:-ap-northeast-2}"
-DEFAULT_VAULT_CHART_VERSION="${DEFAULT_VAULT_CHART_VERSION:-0.31.0}"
-DEFAULT_VAULT_CHART_DIGEST="${DEFAULT_VAULT_CHART_DIGEST:-sha256:85cfa6b40396a198a104fbf06c7cccaf75428db7201394f9061c272441bcd0e4}"
+DEFAULT_VAULT_CHART_VERSION="${DEFAULT_VAULT_CHART_VERSION:-}"
+DEFAULT_VAULT_CHART_DIGEST="${DEFAULT_VAULT_CHART_DIGEST:-}"
+DEFAULT_CERT_MANAGER_CHART_DIGEST="${DEFAULT_CERT_MANAGER_CHART_DIGEST:-}"
+DEFAULT_DEPOSIT_TX_HASH="${DEFAULT_DEPOSIT_TX_HASH:-}"
+DEFAULT_HOODI_PUBLIC_RPC_URL="${DEFAULT_HOODI_PUBLIC_RPC_URL:-}"
+DEFAULT_HOODI_PUBLIC_BEACON_URL="${DEFAULT_HOODI_PUBLIC_BEACON_URL:-https://ethereum-hoodi-beacon-api.publicnode.com}"
 
 [ -d "$bundle_root/source" ] && [ -f "$bundle_root/bundle-manifest.json" ] || {
   printf '%s\n' 'a verified v0.1.20 release bundle is required' >&2; exit 65;
 }
-
-[ -t 0 ] && [ -t 1 ] || { printf '%s\n' 'execute mode requires an interactive terminal' >&2; exit 69; }
-printf '%s\n' 'This will apply the v0.1.20 release to the selected AWS account and Region.' >&2
-printf 'Type DEPLOY to continue: ' >&2
-IFS= read -r confirmation
-[ "$confirmation" = 'DEPLOY' ] || { printf '%s\n' 'deployment cancelled' >&2; exit 0; }
 
 prompt() { local label="$1" value; printf '%s: ' "$label" >&2; IFS= read -r value; printf '%s' "$value"; }
 prompt_default() { local label="$1" fallback="$2" value; printf '%s [%s]: ' "$label" "$fallback" >&2; IFS= read -r value; printf '%s' "${value:-$fallback}"; }
@@ -89,9 +207,250 @@ step() { step_number=$((step_number + 1)); printf '\n%s━━━━━━━━�
 display_digest() { case "$1" in *@sha256:????????????????????????????????????????????????????????????????) printf '%s@sha256:%s...%s' "${1%@*}" "${1##*@sha256:}" "${1: -8}" ;; *) printf '%s' "$1" ;; esac; }
 absolute_new_dir() { case "$1" in /*) ;; *) printf '%s\n' 'path must be absolute' >&2; exit 64 ;; esac; [ ! -e "$1" ] && [ ! -L "$1" ] || { printf 'path already exists: %s\n' "$1" >&2; exit 65; }; }
 
+advance_lifecycle() {
+  python3 -I -B "$resume_helper" phase --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json" --phase "$1" || {
+    printf '%s\n' 'lifecycle checkpoint could not be committed; stop and reconcile this WORK_DIR' >&2; return 75;
+  }
+  lifecycle_phase="$1"
+}
+
+run_observation_phase() {
+  if [ "$lifecycle_phase" = activated ]; then advance_lifecycle observing || return $?; fi
+  step 'Observing finalized validator duties and archived signing activity'
+  "${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 \
+    python3 -I -B "$source_root/scripts/release/run-hoodi-validator-observation.py" \
+    --bundle-root "$bundle_root" --work-dir "$output_dir" --public-beacon-url "$DEFAULT_HOODI_PUBLIC_BEACON_URL" || return $?
+  printf '%s\n' 'PASS: three consecutive finalized validator duties and archived signer/fence activity were verified.' >&2
+  printf '%s\n' 'PENDING: required Vault and AWS audit delivery verification remains; deployment is not yet complete.' >&2
+  return 75
+}
+
+run_post_platform() {
+lifecycle_phase="${1:-platform-complete}"
+case "$lifecycle_phase" in
+  activation-started)
+    python3 -I -B "$resume_helper" reconcile-activation --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json" || {
+      printf 'PENDING: activation outcome has no valid bound receipt; activation was not replayed. WORK_DIR=%s\n' "$output_dir" >&2
+      return 75
+    }
+    lifecycle_phase=activated
+    printf '%s\n' 'PENDING: saved activation lower bound was reconciled without reactivation; finalized duty and log evidence remain required.' >&2
+    ;;
+  vault-started)
+    [ -f "$output_dir/vault-recovery/vault-initialization-checkpoint.json" ] && [ ! -L "$output_dir/vault-recovery/vault-initialization-checkpoint.json" ] || {
+      printf 'PENDING: outcome of vault-started must be reconciled; no completed initialization checkpoint is available. WORK_DIR=%s\n' "$output_dir" >&2; return 75;
+    } ;;
+  complete)
+    printf '%s\n' 'PENDING: activation will not be replayed; finalized duty and log evidence must be verified.' >&2
+    return 75 ;;
+  activated|observing) ;;
+  platform-complete|vault-complete|custody-started|custody-complete|runtime-complete|activation-pending) ;;
+  *) printf 'unsupported continuation phase: %s\n' "$lifecycle_phase" >&2; return 65 ;;
+esac
+# Resume must rebind the collector release identity from the verified bundle,
+# rather than inherit an ambient shell value or rely on fresh-flow setup below.
+release_revision="$(jq -er '.source_revision | select(test("^[0-9a-f]{40}$"))' "$bundle_root/bundle-manifest.json")" || return 65
+# Bind every post-platform private tunnel to the same live session accepted by
+# platform bootstrap. Do this before opening either EKS or Vault tunnels, with
+# ambient credential/session selectors removed only at this outer boundary.
+platform_session_verifier="$source_root/scripts/release/verify-platform-private-eks-session.py"
+[ -x "$platform_session_verifier" ] || { printf '%s\n' 'release bundle lacks the private EKS session verifier' >&2; exit 65; }
+selected_profile="${AWS_PROFILE:-default}"
+selected_baseline="$output_dir/inputs/zero-resource/baseline.tfvars.json"
+session_target="$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN \
+  -u AWS_ACCESS_KEY -u AWS_SECRET_KEY -u AWS_DEFAULT_PROFILE -u AWS_WEB_IDENTITY_TOKEN_FILE -u AWS_ROLE_ARN -u AWS_ROLE_SESSION_NAME \
+  -u AWS_CONTAINER_CREDENTIALS_RELATIVE_URI -u AWS_CONTAINER_CREDENTIALS_FULL_URI -u AWS_CONTAINER_AUTHORIZATION_TOKEN -u AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE \
+  -u PRIVATE_EKS_SESSION -u PRIVATE_VAULT_SESSION -u PRIVATE_VAULT_TARGET -u KUBECONFIG -u BASH_ENV -u ENV \
+  -u VAULT_ADDR -u VAULT_CACERT -u VAULT_TLS_SERVER_NAME -u VAULT_SKIP_VERIFY -u VAULT_NAMESPACE -u VAULT_TOKEN \
+  AWS_PROFILE="$selected_profile" AWS_REGION="$region" AWS_DEFAULT_REGION="$region" AWS_EC2_METADATA_DISABLED=true python3 "$platform_session_verifier" --work-dir "$output_dir/deployment-work" --baseline-config "$selected_baseline" --session "$session" --account "$account" --region "$region" --profile "$selected_profile")" || { printf '%s\n' 'post-platform private EKS session verification failed before Vault or runtime mutation' >&2; exit 65; }
+IFS=$'\t' read -r selected_cluster selected_instance <<<"$session_target"
+[ "$selected_cluster" = "$deployment_name" ] && [[ "$selected_instance" =~ ^i-[0-9a-f]+$ ]] || { printf '%s\n' 'post-platform session verifier returned an invalid selected target' >&2; exit 65; }
+selected_tunnel_env=(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN -u AWS_ACCESS_KEY -u AWS_SECRET_KEY -u AWS_DEFAULT_PROFILE -u AWS_WEB_IDENTITY_TOKEN_FILE -u AWS_ROLE_ARN -u AWS_ROLE_SESSION_NAME -u AWS_CONTAINER_CREDENTIALS_RELATIVE_URI -u AWS_CONTAINER_CREDENTIALS_FULL_URI -u AWS_CONTAINER_AUTHORIZATION_TOKEN -u AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE -u PRIVATE_EKS_SESSION -u PRIVATE_VAULT_SESSION -u PRIVATE_VAULT_TARGET -u KUBECONFIG -u BASH_ENV -u ENV -u VAULT_ADDR -u VAULT_CACERT -u VAULT_TLS_SERVER_NAME -u VAULT_SKIP_VERIFY -u VAULT_NAMESPACE -u VAULT_TOKEN AWS_PROFILE="$selected_profile" AWS_REGION="$region" AWS_DEFAULT_REGION="$region" AWS_EC2_METADATA_DISABLED=true EKS_CLUSTER_NAME="$selected_cluster" SSM_OPS_INSTANCE_ID="$selected_instance")
+
+if [ "$lifecycle_phase" = activated ] || [ "$lifecycle_phase" = observing ]; then
+  run_observation_phase
+  return $?
+fi
+
+if [ "$lifecycle_phase" = vault-started ]; then
+  "${selected_tunnel_env[@]}" PRIVATE_VAULT_TARGET=pod/vault-0 "$source_root/scripts/ops/with-private-vault.sh" -- env PRIVATE_VAULT_SESSION=1 "$source_root/scripts/ops/recover-and-bootstrap-hoodi-vault-v2.sh" --validator-set "$validator_set" --recovery-output-dir "$output_dir/vault-recovery" --verify-initialization-completion || {
+    printf '%s\n' 'PENDING: recorded Vault initialization completion could not be verified; no administrator ceremony was replayed.' >&2; return 75;
+  }
+  advance_lifecycle vault-complete || return $?
+fi
+
+if [ "$lifecycle_phase" = platform-complete ]; then
+step 'Running Vault v2 recovery and validator custody'
+printf '%s\n' 'Next ceremony: Vault v2 recovery. Recovery shares will be requested silently by the delegated script.' >&2
+vault_recovery_output="$output_dir/vault-recovery"
+advance_lifecycle vault-started || return $?
+"${selected_tunnel_env[@]}" PRIVATE_VAULT_TARGET=pod/vault-0 "$source_root/scripts/ops/with-private-vault.sh" -- env PRIVATE_VAULT_SESSION=1 NODE_OPERATOR_AUTOMATED_CEREMONY="${NODE_OPERATOR_AUTOMATED_CEREMONY:-0}" "$source_root/scripts/ops/recover-and-bootstrap-hoodi-vault-v2.sh" --validator-set "$validator_set" --recovery-output-dir "$vault_recovery_output"
+advance_lifecycle vault-complete || return $?
+fi
+
+# The sealed first-install gate deliberately accepts Running-but-not-Ready
+# servers. After the operator ceremony, custody may proceed only once the
+# actual server Pods are Ready and their TLS status reports initialized/unsealed.
+"${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$source_root/scripts/ops/verify-hoodi-vault-readiness.sh" --mode post-init-ready
+
+if [ "$lifecycle_phase" = custody-started ]; then
+  # A completed onboarding receipt can recover the narrow crash window after
+  # token cleanup. Missing or mismatched proof never triggers another ceremony.
+  python3 -I -B "$resume_helper" reconcile-custody-complete --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json" || {
+    printf '%s\n' 'PENDING: custody completion is unproven; the existing ceremony was not replayed.' >&2; return 75;
+  }
+  lifecycle_phase=custody-complete
+fi
+
+if [ "$lifecycle_phase" = vault-complete ]; then
+custody_operation="$(python3 -I -B "$resume_helper" prepare-custody --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json" --validator-set "$validator_set")" || return 65
+custody_operation_id="$(jq -er '.operation_id | select(test("^[0-9a-f]{32}$"))' <<<"$custody_operation")" || return 65
+custody_result_output="$(jq -er '.result_output | select(startswith("/"))' <<<"$custody_operation")" || return 65
+advance_lifecycle custody-started || return $?
+"$release" custody apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --keystore-dir "$keystore_dir_for_custody" --ceremony-dir "$output_dir/ceremony" --custody-result-output "$custody_result_output" --custody-operation-id "$custody_operation_id"
+python3 -I -B "$resume_helper" reconcile-custody-complete --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json" || return 75
+lifecycle_phase=custody-complete
+fi
+
+if [ "$lifecycle_phase" = custody-complete ]; then
+step 'Applying verified validator log collector'
+[ -f "$collector_apply" ] && [ ! -L "$collector_apply" ] || { printf '%s\n' 'release bundle lacks the verified validator log collector installer' >&2; return 65; }
+"${selected_tunnel_env[@]}" python3 -I -B "$collector_apply" \
+  --bundle-root "$bundle_root" --state-dir "$output_dir" --work-dir "$output_dir/deployment-work" \
+  --inputs-dir "$output_dir/inputs" --session "$session" --baseline-config "$selected_baseline" \
+  --account "$account" --region "$region" --deployment "$deployment_name" --validator-set "$validator_set" \
+  --profile "$selected_profile" --release-sha "$release_revision" || {
+    printf '%s\n' 'verified validator log collector was not applied; runtime was not applied' >&2; return 65;
+  }
+step 'Applying Vault-backed validator runtime'
+runtime_manifest="$(dirname "$inputs")/validator-deployment/runtime.yaml"
+client_manifest="$(dirname "$inputs")/validator-deployment/client-and-fence.yaml"
+[ -f "$runtime_manifest" ] && [ ! -L "$runtime_manifest" ] && [ -f "$client_manifest" ] && [ ! -L "$client_manifest" ] || {
+  printf '%s\n' 'staged validator runtime manifests are missing' >&2
+  exit 65
+}
+printf '%s\n' 'Synchronizing the public Vault CA trust anchor and applying non-secret manifests.' >&2
+# The custody receipt proves secret onboarding and cleanup, not Kubernetes
+# publication. Reapply this non-secret ConfigMap on every runtime-stage retry.
+known_clients_file="$output_dir/ceremony/known-clients.txt"
+[ -f "$known_clients_file" ] && [ ! -L "$known_clients_file" ] || { printf '%s\n' 'verified public known-clients output is missing; runtime was not applied' >&2; return 65; }
+"${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 kubectl -n validator-operations create configmap "validator-${validator_set}-known-clients" --from-file="known-clients=$known_clients_file" --dry-run=client -o yaml | "${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 kubectl apply -f - >/dev/null
+"${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$source_root/scripts/ops/ensure-vault-agent-ca.sh" --namespace validator-operations --namespace node-operator
+cat "$runtime_manifest" "$client_manifest" | "${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 kubectl apply -f - >/dev/null
+printf '%s\n' 'PASS: Vault-backed runtime is staged; signer, validator client, and fence remain at their guarded replica counts.' >&2
+advance_lifecycle runtime-complete || return $?
+fi
+
+if [ "$lifecycle_phase" = runtime-complete ]; then
+step 'Collecting signer and Beacon evidence'
+[ ! -L "$output_dir/evidence" ] || return 65
+mkdir -p -m 700 "$output_dir/evidence"
+"$release" evidence signer --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --output-dir "$output_dir/evidence/signer"
+"$release" evidence beacon --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --output-dir "$output_dir/evidence/beacon"
+advance_lifecycle activation-pending || return $?
+fi
+
+printf 'Generated and validated deposit attestation: %s\n' "$deposit_attestation" >&2
+printf '%s\n' 'Activation requires independently reviewed public deposit, private Beacon, and signer evidence. Enter paths only; secret material is not accepted.' >&2
+step 'Guarded validator activation'
+if [ "${NODE_OPERATOR_AUTOMATED_CEREMONY:-0}" = 1 ] && [ -n "$DEFAULT_DEPOSIT_TX_HASH" ] && [ -n "$DEFAULT_HOODI_PUBLIC_RPC_URL" ]; then
+  external_dir="$output_dir/evidence/public"; [ ! -L "$external_dir" ] || return 65; mkdir -p -m 700 "$external_dir"
+  withdrawal_credentials="$(jq -er '.withdrawal_credentials' "$deposit_attestation")"
+  "$source_root/scripts/ops/observe-external-hoodi-validator.sh" --validator-set "$validator_set" --validator-public-key "$validator_key" --correlation-id "$(printf '%s' "$validator_set-$deployment_name" | shasum -a 256 | cut -c1-32)" --output-dir "$external_dir" --deposit-tx "$DEFAULT_DEPOSIT_TX_HASH" --withdrawal-credentials "$withdrawal_credentials" --public-rpc-url "$DEFAULT_HOODI_PUBLIC_RPC_URL" >/dev/null
+  public_deposit="$(find "$external_dir" -type f -name '*public-rpc*.json' -print | LC_ALL=C sort | tail -n 1)"
+  private_evidence="$(find "$output_dir/evidence/beacon" -type f -name 'uc-3-private-beacon-*.json' -print | LC_ALL=C sort | tail -n 1)"
+  signer_evidence="$(find "$output_dir/evidence/signer" -type f -name "signer-public-key-${validator_set}-*.json" -print | LC_ALL=C sort | tail -n 1)"
+  confirm_key="$validator_key"; confirm_withdrawal="$withdrawal"
+  [ -n "$public_deposit" ] && [ -n "$private_evidence" ] && [ -n "$signer_evidence" ] || { printf '%s\n' 'automated activation evidence collection was incomplete' >&2; exit 65; }
+  printf '%s\n' 'Automated disposable-run mode: public receipt, Beacon, and signer evidence were collected; activating the existing Hoodi validator.' >&2
+else
+  public_deposit="$(prompt 'Absolute public deposit verification JSON')"
+  private_evidence="$(prompt 'Absolute private Beacon evidence JSON')"
+  signer_evidence="$(prompt 'Absolute signer evidence JSON')"
+  confirm_key="$(prompt 'Confirm validator public key (0x...)')"
+  confirm_withdrawal="$(prompt 'Confirm withdrawal address (0x...)')"
+fi
+activation_context="$(python3 -I -B "$resume_helper" prepare-activation --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json")" || return 75
+activation_operation="$(jq -er '.operation_id | select(test("^[0-9a-f]{32}$"))' <<<"$activation_context")" || return 65
+activation_receipt="$(jq -er '.receipt_output' <<<"$activation_context")" || return 65
+activation_revision="$(jq -er '.release_revision | select(test("^[0-9a-f]{40}$"))' <<<"$activation_context")" || return 65
+[ "$(jq -er '.deployment_name' <<<"$activation_context")" = "$deployment_name" ] || return 65
+advance_lifecycle activation-started || return $?
+"$release" activate apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --deposit-attestation "$deposit_attestation" --public-deposit-verification "$public_deposit" --private-evidence "$private_evidence" --signer-evidence "$signer_evidence" --confirm-public-key "$confirm_key" --confirm-withdrawal-address "$confirm_withdrawal" --activation-receipt "$activation_receipt" --deployment-name "$deployment_name" --release-revision "$activation_revision" --operation-id "$activation_operation"
+python3 -I -B "$resume_helper" reconcile-activation --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json" || {
+  printf '%s\n' 'PENDING: activation returned but its bound receipt could not be committed; do not repeat activation.' >&2
+  return 75
+}
+lifecycle_phase=activated
+run_observation_phase
+return $?
+}
+
+# WORK_DIR is an explicit recovery selector. Legacy infrastructure receipts
+# stop at platform completion; a bound continuation reuses the selected key
+# and durable lifecycle phase without generating a key or depositing again.
+if [ -n "${WORK_DIR:-}" ]; then
+  [ -t 0 ] && [ -t 1 ] || { printf '%s\n' 'infrastructure recovery requires an interactive terminal' >&2; exit 69; }
+  context="$(python3 "$resume_helper" read --work-dir "$WORK_DIR" --manifest "$bundle_root/bundle-manifest.json")" || exit $?
+  account="$(jq -er '.aws_account_id' <<<"$context")"; region="$(jq -er '.aws_region' <<<"$context")"; deployment_name="$(jq -er '.deployment_name' <<<"$context")"; phase="$(jq -er '.phase' <<<"$context")"
+  identity="$(aws sts get-caller-identity --output json)"; observed="$(jq -er '.Account | select(test("^[0-9]{12}$"))' <<<"$identity")" || { printf '%s\n' 'AWS identity did not return an account' >&2; exit 65; }
+  [ "$observed" = "$account" ] || { printf '%s\n' 'saved deployment account differs from current AWS identity' >&2; exit 65; }
+  load_authorized_artifacts || exit $?
+  printf 'Resume verified deployment for account %s, Region %s, deployment %s at phase %s. Type RESUME to continue: ' "$account" "$region" "$deployment_name" "$phase" >&2
+  IFS= read -r confirmation; [ "$confirmation" = RESUME ] || { printf '%s\n' 'infrastructure recovery cancelled' >&2; exit 0; }
+  lock="$WORK_DIR/.interactive-resume.lock"; mkdir "$lock" 2>/dev/null || { printf '%s\n' 'another recovery invocation holds the WORK_DIR lock' >&2; exit 75; }; trap 'rmdir "$lock" 2>/dev/null || true' EXIT
+  context="$(python3 "$resume_helper" read --work-dir "$WORK_DIR" --manifest "$bundle_root/bundle-manifest.json")" || { printf '%s\n' 'recovery context changed while awaiting confirmation; no mutation requested' >&2; exit 65; }
+  [ "$(jq -er '.phase' <<<"$context")" = "$phase" ] || { printf '%s\n' 'recovery phase changed while awaiting confirmation; no mutation requested' >&2; exit 65; }
+  # Re-read the bundle-bound receipt after the explicit confirmation. A stale
+  # or changed authority can never be used to resume an old platform stage.
+  load_authorized_artifacts || exit $?
+  inputs="$WORK_DIR/$(jq -er '.inputs_rel' <<<"$context")"; work="$WORK_DIR/$(jq -er '.work_rel' <<<"$context")"; session="$WORK_DIR/$(jq -er '.session_rel' <<<"$context")"
+  if jq -e '.continuation | type == "object"' <<<"$context" >/dev/null; then
+    output_dir="$WORK_DIR"
+    keystore_dir_for_custody="$(jq -er '.continuation.keystore_dir' <<<"$context")"
+    validator_key="$(jq -er '.continuation.public_key' <<<"$context")"
+    deposit_attestation="$WORK_DIR/$(jq -er '.continuation.deposit_attestation_rel' <<<"$context")"
+    validator_set="$(jq -er '.validator_set' "$inputs")"
+    withdrawal="$(jq -er '.withdrawal_address | select(test("^0x[0-9a-fA-F]{40}$"))' "$deposit_attestation")"
+    python3 -I -B "$source_root/scripts/ops/verify-custody-validator-key.py" --keystore-dir "$keystore_dir_for_custody" --expected-public-key "$validator_key" >/dev/null || exit 65
+    python3 -I -B "$source_root/scripts/release/custody_verifier_runtime.py" verify --work-dir "$WORK_DIR" --bundle-root "$bundle_root" --expected-public-key "$validator_key" >/dev/null || { printf '%s\n' 'saved custody verification runtime is no longer valid; no ceremony resumed' >&2; exit 65; }
+    run_post_platform "$phase"
+    exit $?
+  fi
+  if [ "$phase" = infrastructure ]; then
+    "$release" deploy apply --bundle-root "$bundle_root" --inputs "$inputs" --work-dir "$work" --private-eks-session-handoff "$session" --allow-create
+    python3 "$resume_helper" phase --work-dir "$WORK_DIR" --manifest "$bundle_root/bundle-manifest.json" --phase infrastructure-complete || { printf '%s\n' 'infrastructure apply outcome is uncertain; do not retry automatically' >&2; exit 70; }
+    phase=infrastructure-complete
+  fi
+  if [ "$phase" = platform-complete ]; then
+    printf '%s\n' 'PASS: platform-only recovery was already complete; custody and activation were not replayed.' >&2
+    exit 0
+  fi
+  if [ "$phase" = platform-started ]; then
+    replay_helper="$source_root/scripts/release/platform_bootstrap_replay.py"
+    [ -x "$replay_helper" ] || { printf '%s\n' 'platform-started recovery lacks its durable replay helper; refusing blind restart' >&2; exit 65; }
+    python3 "$replay_helper" phase --work-dir "$work" --phase revoke_complete --action get >/dev/null || { printf '%s\n' 'platform-started receipt has no valid bound replay checkpoint; refusing blind restart' >&2; exit 65; }
+  elif [ "$phase" = infrastructure-complete ]; then
+    python3 "$resume_helper" phase --work-dir "$WORK_DIR" --manifest "$bundle_root/bundle-manifest.json" --phase platform-started || { printf '%s\n' 'platform start checkpoint is uncertain; platform was not invoked' >&2; exit 70; }
+  else
+    printf '%s\n' 'resume phase is not eligible for platform recovery' >&2; exit 65
+  fi
+  run_platform_bootstrap "$work" "$inputs" "$session" || exit $?
+  python3 "$resume_helper" phase --work-dir "$WORK_DIR" --manifest "$bundle_root/bundle-manifest.json" --phase platform-complete || { printf '%s\n' 'platform completion checkpoint is uncertain; do not continue to ceremonies' >&2; exit 70; }
+  printf '%s\n' 'PASS: platform-only recovery completed. Vault initialization, custody, keys, deposit, and activation were not replayed.' >&2
+  exit 0
+fi
+
+[ -t 0 ] && [ -t 1 ] || { printf '%s\n' 'execute mode requires an interactive terminal' >&2; exit 69; }
+printf '%s\n' 'This will apply the v0.1.20 release to the selected AWS account and Region.' >&2
+printf 'Type DEPLOY to continue: ' >&2
+IFS= read -r confirmation
+[ "$confirmation" = 'DEPLOY' ] || { printf '%s\n' 'deployment cancelled' >&2; exit 0; }
+
+
 step 'Collecting deployment settings'
 region="$(prompt_default 'AWS Region' "$DEFAULT_REGION")"
-case "$region" in ap-northeast-1|ap-northeast-2) ;; *) printf '%s\n' 'unsupported Region' >&2; exit 64 ;; esac
+[[ "$region" =~ ^[a-z]{2}-[a-z0-9-]+-[0-9]+$ ]] || { printf '%s\n' 'unsupported AWS Region format' >&2; exit 64; }
 validator_set="$(prompt_default 'Validator set' "$DEFAULT_VALIDATOR_SET")"
 deployment_name="$(prompt_default 'Deployment name' "$DEFAULT_DEPLOYMENT_NAME")"
 [[ "$deployment_name" =~ ^[a-z][a-z0-9-]{1,18}[a-z0-9]$ ]] || { printf '%s\n' 'deployment name must be a DNS-compatible name of 3-20 characters' >&2; exit 64; }
@@ -101,7 +460,14 @@ account="$(jq -er '.Account | select(test("^[0-9]{12}$"))' <<<"$identity")" || {
 printf 'Detected AWS account: %s\nType CONFIRM to continue with this account: ' "$account" >&2
 IFS= read -r account_confirmation
 [ "$account_confirmation" = 'CONFIRM' ] || { printf '%s\n' 'AWS account confirmation cancelled' >&2; exit 0; }
-DEFAULT_BACKEND_PRINCIPAL_ARN="${DEFAULT_BACKEND_PRINCIPAL_ARN:-arn:aws:iam::${account}:role/NodeOperatorTerraformApply}"
+load_authorized_artifacts || exit $?
+printf 'Using canonical release-authorized artifacts:\n  Web3Signer %s\n  PostgreSQL %s\n  Prysm %s\n  Fence %s\n' "$(display_digest "$web3signer_image")" "$(display_digest "$postgres_image")" "$(display_digest "$prysm_image")" "$(display_digest "$fence_image")" >&2
+# A shared default role would tie independent deployments to the lifecycle of
+# whichever deployment first created it. Explicit external role ARNs remain
+# supported, but are never retagged or claimed by this installer.
+backend_role_explicit=false
+[ -z "$DEFAULT_BACKEND_PRINCIPAL_ARN" ] || backend_role_explicit=true
+DEFAULT_BACKEND_PRINCIPAL_ARN="${DEFAULT_BACKEND_PRINCIPAL_ARN:-arn:aws:iam::${account}:role/${deployment_name}-${region}-tfstate}"
 if [ -n "$DEFAULT_BACKEND_PRINCIPAL_ARN" ]; then
   case "$DEFAULT_BACKEND_PRINCIPAL_ARN" in
     "arn:aws:iam::${account}:role/"*) ;;
@@ -109,7 +475,22 @@ if [ -n "$DEFAULT_BACKEND_PRINCIPAL_ARN" ]; then
   esac
   backend_role_name="${DEFAULT_BACKEND_PRINCIPAL_ARN##*/}"
   backend_role_created=false
-  if ! aws iam get-role --role-name "$backend_role_name" --query 'Role.Arn' --output text >/dev/null 2>&1; then
+  backend_role_managed=false
+  if backend_role_lookup="$(aws iam get-role --role-name "$backend_role_name" --query 'Role.Arn' --output text 2>&1)"; then
+    [ "$backend_role_lookup" = "$DEFAULT_BACKEND_PRINCIPAL_ARN" ] || { printf '%s\n' 'existing backend role ARN differs from configured identity' >&2; exit 65; }
+    if [ "$backend_role_explicit" = false ]; then
+      # A coincidentally matching name is not authorization to grant another
+      # deployment's IAM role access to this new state backend.
+      aws iam list-role-tags --role-name "$backend_role_name" --output json |
+        jq -e --arg deployment "$deployment_name" --arg region "$region" '
+          (.Tags | map({key: .Key, value: .Value}) | from_entries) |
+          .Project == "node-operator" and .Deployment == $deployment and
+          .DeploymentRegion == $region and
+          (.ManagedBy == "terraform" or .ManagedBy == "node-operator-installer")
+        ' >/dev/null || { printf '%s\n' 'default backend role name is already owned elsewhere; provide an explicitly reviewed BACKEND_PRINCIPAL_ARN or use a new deployment name' >&2; exit 65; }
+      backend_role_managed=true
+    fi
+  elif [[ "$backend_role_lookup" == *'(NoSuchEntity)'* ]]; then
     printf 'Configured Terraform backend role does not exist: %s\n' "$DEFAULT_BACKEND_PRINCIPAL_ARN" >&2
     printf 'Type CREATE to create this least-privilege bootstrap role (or press Enter to cancel): ' >&2
     IFS= read -r create_role_confirmation
@@ -121,37 +502,15 @@ if [ -n "$DEFAULT_BACKEND_PRINCIPAL_ARN" ]; then
       *) printf '%s\n' 'current AWS identity cannot be used as a backend-role trust principal' >&2; exit 65 ;;
     esac
     trust_document="$(jq -cn --arg principal "$trust_principal" '{Version:"2012-10-17",Statement:[{Sid:"AllowInteractiveBootstrapCaller",Effect:"Allow",Principal:{AWS:$principal},Action:"sts:AssumeRole"}]}')"
-    aws iam create-role --role-name "$backend_role_name" --assume-role-policy-document "$trust_document" --description 'Node Operator Terraform bootstrap state access' >/dev/null
+    aws iam create-role --role-name "$backend_role_name" --assume-role-policy-document "$trust_document" --description 'Node Operator Terraform bootstrap state access' \
+      --tags Key=Project,Value=node-operator "Key=Deployment,Value=$deployment_name" "Key=DeploymentRegion,Value=$region" Key=ManagedBy,Value=node-operator-installer >/dev/null
     backend_role_created=true
+    backend_role_managed=true
     printf 'Created backend role %s with trust restricted to the current AWS identity.\n' "$backend_role_name" >&2
+  else
+    printf '%s\n' 'cannot inspect backend role; discovery failure is not an absent role' >&2
+    exit 69
   fi
-fi
-platform_approval="$source_root/release/platform-artifact-approval.json"
-if [ -f "$platform_approval" ]; then
-  approval_schema="$(jq -er '.schema_version' "$platform_approval" 2>/dev/null || true)"
-  [ "$approval_schema" = 1 ] || { printf '%s\n' 'platform artifact approval is malformed' >&2; exit 65; }
-  if [ -z "$DEFAULT_ARGOCD_BOOTSTRAP_IMAGE" ]; then
-    argo_digest="$(jq -er '.artifacts.argocd_bootstrap.source | split("@")[-1]' "$platform_approval")"
-    DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-gitops-argocd@${argo_digest}"
-  fi
-  if [ -z "$DEFAULT_VAULT_BOOTSTRAP_IMAGE" ]; then
-    vault_digest="$(jq -er '.artifacts.vault_bootstrap.source | split("@")[-1]' "$platform_approval")"
-    DEFAULT_VAULT_BOOTSTRAP_IMAGE="${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-gitops-vault@${vault_digest}"
-  fi
-fi
-runtime_images="$source_root/.ci/validator/approved-runtime-images.json"
-client_images="$source_root/.ci/validator/approved-client-images.json"
-[ -f "$runtime_images" ] && [ -f "$client_images" ] || { printf '%s\n' 'release bundle lacks canonical approved image records' >&2; exit 65; }
-web3signer_image="${DEFAULT_WEB3SIGNER_IMAGE:-$(jq -er '.images.web3signer.source' "$runtime_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-validator-runtime-web3signer#")}"
-postgres_image="${DEFAULT_POSTGRES_IMAGE:-$(jq -er '.images.postgres.source' "$runtime_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-validator-runtime-postgres#")}"
-prysm_image="${DEFAULT_PRYSM_IMAGE:-$(jq -er '([.images[] | select(.component == "prysm-validator" and .activation_approved == true and .release_channel == "manual-native-mtls")] + [.images[] | select(.component == "prysm-validator" and .activation_approved == true)]) | .[0].private_image' "$client_images" | sed "s#^[^@]*#${account}.dkr.ecr.${region}.amazonaws.com/node-operator-baseline-validator-prysm#")}"
-[ "$prysm_image" != null ] && [ -n "$prysm_image" ] || { printf '%s\n' 'approved Prysm activation image is missing' >&2; exit 65; }
-printf 'Using release-approved images:\n  Web3Signer %s\n  PostgreSQL %s\n  Prysm %s\n' "$(display_digest "$web3signer_image")" "$(display_digest "$postgres_image")" "$(display_digest "$prysm_image")" >&2
-if [ -n "$DEFAULT_FENCE_IMAGE" ]; then
-  fence_image="$DEFAULT_FENCE_IMAGE"
-  printf 'Using env-file signing-fence image: %s\n' "$fence_image" >&2
-else
-  fence_image="$(prompt 'Approved signing-fence private ECR image@sha256 digest (v0.1.20 has no canonical default)')"
 fi
 # The signing-fence policy targets the private EKS API endpoint, which does not
 # exist until foundation/EKS creation. A guarded deploy step replaces this
@@ -173,27 +532,6 @@ if [ -n "$protected_repository_root" ]; then
   esac
 fi
 trap 'unset confirmation validator_key expected_key withdrawal web3signer_image postgres_image prysm_image fence_image ecr_auth source_image; rm -f "$output_dir/.interactive-inputs.tmp" 2>/dev/null || true' EXIT
-
-# Collect and verify the immutable platform bootstrap artifacts before creating
-# any foundation resources. A missing mirror must fail closed without leaving a
-# partially-created baseline behind.
-argocd_bootstrap_image="${DEFAULT_ARGOCD_BOOTSTRAP_IMAGE:-$(prompt 'Private ECR Argo bootstrap image@sha256 digest')}"
-vault_bootstrap_image="${DEFAULT_VAULT_BOOTSTRAP_IMAGE:-$(prompt 'Private ECR Vault bootstrap image@sha256 digest')}"
-verify_private_image() {
-  local image="$1" repository digest found
-  repository="${image#*/}"; repository="${repository%@*}"; digest="${image##*@}"
-  [[ "$image" =~ ^${account}\.dkr\.ecr\.${region//./\.}\.amazonaws\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$ ]] || {
-    printf 'bootstrap image must be a same-account private ECR digest: %s\n' "$image" >&2; exit 65;
-  }
-  found="$(aws ecr describe-images --region "$region" --repository-name "$repository" --image-ids imageDigest="$digest" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
-  if [ "$found" != "$digest" ]; then
-    printf 'required private ECR image is missing; it will be mirrored from the release approval: %s\n' "$image" >&2
-    return 1
-  fi
-}
-bootstrap_mirror_images=()
-if ! verify_private_image "$argocd_bootstrap_image"; then bootstrap_mirror_images+=("$argocd_bootstrap_image"); fi
-if ! verify_private_image "$vault_bootstrap_image"; then bootstrap_mirror_images+=("$vault_bootstrap_image"); fi
 
 step 'Preparing and validating validator key'
 printf '%s\n' 'Existing key is reused when configured; otherwise a new Hoodi ceremony runs.' >&2
@@ -233,6 +571,18 @@ if [ -n "$DEFAULT_VALIDATOR_KEY" ]; then
   expected_key="$(printf '%s' "$DEFAULT_VALIDATOR_KEY" | tr '[:upper:]' '[:lower:]')"
   [ "$validator_key" = "$expected_key" ] || { printf '%s\n' 'generated validator public key does not match VALIDATOR_PUBLIC_KEY; refusing to continue' >&2; exit 65; }
 fi
+custody_key_guard="$source_root/scripts/ops/verify-custody-validator-key.py"
+[ -x "$custody_key_guard" ] || { printf '%s\n' 'release bundle lacks the custody validator-key identity guard' >&2; exit 65; }
+python3 "$custody_key_guard" --keystore-dir "$keystore_dir_for_custody" --expected-public-key "$validator_key" >/dev/null || {
+  printf '%s\n' 'validator keystore metadata does not match the validated deposit public key' >&2; exit 65;
+}
+
+step 'Preparing offline custody verification before infrastructure and Vault ceremonies'
+custody_runtime="$source_root/scripts/release/custody_verifier_runtime.py"
+[ -f "$custody_runtime" ] && [ ! -L "$custody_runtime" ] || { printf '%s\n' 'release bundle lacks custody verifier runtime preparation' >&2; exit 65; }
+python3 -I -B "$custody_runtime" prepare --work-dir "$output_dir" --bundle-root "$bundle_root" --expected-public-key "$validator_key" >/dev/null || {
+  printf '%s\n' 'custody verifier preflight failed; infrastructure and Vault ceremonies were not started' >&2; exit 65;
+}
 
 # Hoodi registration is an operator-owned, on-chain action. The installer
 # prepares and validates public deposit data but never handles a wallet,
@@ -243,15 +593,23 @@ registration_timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf '\n%s╭────────────────────────────────────────────────────────────╮%s\n' "$ui_cyan" "$ui_reset" >&2
 printf '%s│ HOODI TESTNET REGISTRATION  %s│%s\n' "$ui_cyan" "$registration_timestamp" "$ui_reset" >&2
 printf '%s╰────────────────────────────────────────────────────────────╯%s\n' "$ui_cyan" "$ui_reset" >&2
-printf '%s1.%s Review the public attestation: %s\n' "$ui_yellow" "$ui_reset" "$deposit_attestation" >&2
-printf '%s2.%s Open the official Hoodi Launchpad and upload the matching deposit_data JSON:\n' "$ui_yellow" "$ui_reset" >&2
-printf '   https://hoodi.launchpad.ethereum.org/\n' >&2
-printf '%s3.%s Confirm network=Hoodi, amount=32 HoodiETH, validator public key, and withdrawal credentials match the attestation.\n' "$ui_yellow" "$ui_reset" >&2
-printf '%s4.%s Connect your own Hoodi wallet and submit exactly one 32 HoodiETH deposit through the Launchpad.\n' "$ui_yellow" "$ui_reset" >&2
-printf '%s5.%s Save the mined transaction hash; it is required for public receipt verification before activation.\n' "$ui_yellow" "$ui_reset" >&2
-printf '%s!%s Do not paste mnemonics, keystore passwords, private keys, or wallet credentials into this shell, Git, CI, or Vault.\n' "$ui_red" "$ui_reset" >&2
-printf '   Deposit data directory: %s\n' "$(dirname "$deposit_data")" >&2
-printf '   Registration is intentionally manual and must be completed with your own Hoodi wallet.\n' >&2
+if [ -n "$existing_keystore_dir" ]; then
+  registration_evidence="$output_dir/custody/existing-hoodi-validator-registration.json"
+  withdrawal_credentials="$(jq -er '.withdrawal_credentials' "$deposit_attestation" | tr '[:upper:]' '[:lower:]')"
+  "$existing_validator_verify" --validator-public-key "$validator_key" --withdrawal-credentials "$withdrawal_credentials" --beacon-url "$DEFAULT_HOODI_PUBLIC_BEACON_URL" --output "$registration_evidence"
+  printf '%s✓%s REGISTRATION_VERIFIED: existing Hoodi validator is finalized public registration evidence only; signing_allowed=false.\n' "$ui_green" "$ui_reset" >&2
+  printf '   Evidence: %s\n' "$registration_evidence" >&2
+  printf '%s\n' 'No deposit is requested for this existing key. Activation still requires the separate public deposit receipt, private Beacon, signer, and slashing-protection gates.' >&2
+else
+  printf '%s1.%s Review the public attestation: %s\n' "$ui_yellow" "$ui_reset" "$deposit_attestation" >&2
+  printf '%s2.%s Open the official Hoodi Launchpad and upload the matching deposit_data JSON:\n' "$ui_yellow" "$ui_reset" >&2
+  printf '   https://hoodi.launchpad.ethereum.org/\n' >&2
+  printf '%s3.%s Confirm network=Hoodi, amount=32 HoodiETH, validator public key, and withdrawal credentials match the attestation.\n' "$ui_yellow" "$ui_reset" >&2
+  printf '%s4.%s Connect your own Hoodi wallet and submit exactly one 32 HoodiETH deposit through the Launchpad.\n' "$ui_yellow" "$ui_reset" >&2
+  printf '%s5.%s Save the mined transaction hash; it is required for public receipt verification before activation.\n' "$ui_yellow" "$ui_reset" >&2
+  printf '%s!%s Do not paste mnemonics, keystore passwords, private keys, or wallet credentials into this shell, Git, CI, or Vault.\n' "$ui_red" "$ui_reset" >&2
+  printf '   Deposit data directory: %s\n' "$(dirname "$deposit_data")" >&2
+  printf '   Registration is intentionally manual and must be completed with your own Hoodi wallet.\n' >&2
 while :; do
   registration_confirmation="$(prompt 'Have you completed and confirmed the 32 HoodiETH deposit? [yes/no]')"
   case "$(printf '%s' "$registration_confirmation" | tr '[:upper:]' '[:lower:]')" in
@@ -268,6 +626,7 @@ while :; do
       ;;
   esac
 done
+fi
 
 zones=()
 while IFS= read -r zone; do
@@ -275,24 +634,44 @@ while IFS= read -r zone; do
 done < <(aws ec2 describe-availability-zones --region "$region" --filters Name=state,Values=available --query 'AvailabilityZones[].ZoneName' --output text | tr '\t' '\n' | sort | sed -n '1,2p')
 [ "${#zones[@]}" -eq 2 ] || { printf '%s\n' 'could not discover two available Availability Zones' >&2; exit 65; }
 # AWS Config permits only one recorder and delivery channel per Region. Reuse
-# an existing account-wide recorder rather than attempting a second one.
-manage_config_recorder=true
-config_recorder_count="$(aws configservice describe-configuration-recorders --region "$region" --query 'length(ConfigurationRecorders)' --output text 2>/dev/null || printf '0')"
-case "$config_recorder_count" in ''|None|0) ;; *) manage_config_recorder=false ;; esac
+# an existing account-wide recorder rather than attempting a second one.  A
+# failed or ambiguous read must not be treated as permission to create one.
+discover_config_recorder_management() {
+  local config_recorder_count
+  if ! config_recorder_count="$(aws configservice describe-configuration-recorders --region "$region" --query 'length(ConfigurationRecorders)' --output text)"; then
+    printf '%s\n' 'could not inspect the regional AWS Config recorder; refusing to assume it is absent' >&2
+    return 69
+  fi
+  case "$config_recorder_count" in
+    0) printf '%s\n' true ;;
+    1) printf '%s\n' false ;;
+    *)
+      printf '%s\n' 'AWS Config recorder inventory was malformed or ambiguous; refusing to manage a recorder' >&2
+      return 65
+      ;;
+  esac
+}
+manage_config_recorder="$(discover_config_recorder_management)" || exit $?
 if [ "$manage_config_recorder" = false ]; then
   printf '%s\n' 'Reusing the existing regional AWS Config recorder; no duplicate recorder will be created.' >&2
 fi
 prepare_args=(--aws-account-id "$account" --aws-region "$region" --name "$deployment_name" --availability-zone "${zones[0]}" --availability-zone "${zones[1]}" --validator-set "$validator_set" --validator-public-key "$validator_key" --withdrawal-address "$withdrawal" --web3signer-image "$web3signer_image" --postgres-image "$postgres_image" --prysm-validator-image "$prysm_image" --signing-fence-image "$fence_image" --kubernetes-api-cidr "$api_cidr" --output-dir "$output_dir/inputs")
 prepare_args+=(--manage-config-recorder "$manage_config_recorder")
+# Bind workload log labels to this verified bundle, never a caller environment
+# override or the unrelated HEAD of a local development checkout.
+release_revision="$(jq -er '.source_revision | select(test("^[0-9a-f]{40}$"))' "$bundle_root/bundle-manifest.json")" || exit 65
+prepare_args+=(--release-revision "$release_revision")
 [ -n "$DEFAULT_BACKEND_PRINCIPAL_ARN" ] && prepare_args+=(--backend-principal-arn "$DEFAULT_BACKEND_PRINCIPAL_ARN")
 "$prepare" "${prepare_args[@]}"
 inputs="$output_dir/inputs/hoodi-zero-release-inputs.json"
 session="$output_dir/private-eks-session.json"
+python3 "$resume_helper" record --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json" --account "$account" --region "$region" --deployment "$deployment_name" --inputs "$inputs" --work "$output_dir/deployment-work" --session "$session" || { printf '%s\n' 'could not record safe infrastructure recovery context' >&2; exit 65; }
 
 step 'Applying zero-resource foundation and private EKS'
 "$release" deploy apply --bundle-root "$bundle_root" --inputs "$inputs" --work-dir "$output_dir/deployment-work" --private-eks-session-handoff "$session" --allow-create
+python3 "$resume_helper" phase --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json" --phase infrastructure-complete || { printf '%s\n' 'infrastructure completion checkpoint is uncertain; stop and reconcile this WORK_DIR' >&2; exit 70; }
 
-if [ "${backend_role_created:-false}" = true ]; then
+if [ "${backend_role_managed:-false}" = true ]; then
   bootstrap_output="$output_dir/deployment-work/bootstrap-output.json"
   [ -f "$bootstrap_output" ] || { printf '%s\n' 'bootstrap did not emit state outputs for backend-role policy binding' >&2; exit 65; }
   backend_policy_file="$output_dir/backend-role-policy.json"
@@ -309,108 +688,15 @@ if [ "${backend_role_created:-false}" = true ]; then
     ]}' > "$backend_policy_file"
   aws iam put-role-policy --role-name "$backend_role_name" --policy-name NodeOperatorBootstrapStateAccess --policy-document "file://$backend_policy_file"
   rm -f "$backend_policy_file"
-  printf '%s\n' 'Bound least-privilege state access to the newly created backend role.' >&2
-fi
-
-# A fresh account has empty private mirrors. Copy only the exact, release-
-# approved source digest after Terraform has created the destination ECR
-# repositories, then read the destination digest back before proceeding.
-if [ "${#bootstrap_mirror_images[@]}" -gt 0 ]; then
-  [ -f "$platform_approval" ] || { printf '%s\n' 'release bundle lacks platform artifact approval for automatic mirroring' >&2; exit 65; }
-  command -v docker >/dev/null 2>&1 || { printf '%s\n' 'docker is required to mirror missing approved bootstrap artifacts' >&2; exit 69; }
-  registry="${account}.dkr.ecr.${region}.amazonaws.com"
-  docker_config="$(mktemp -d "$output_dir/.docker-config.XXXXXX")"
-  chmod 700 "$docker_config"
-  trap 'unset confirmation validator_key expected_key withdrawal web3signer_image postgres_image prysm_image fence_image ecr_auth source_image; rm -f "$output_dir/.interactive-inputs.tmp" 2>/dev/null || true; rm -rf "$docker_config" 2>/dev/null || true' EXIT
-  ecr_auth="$(aws ecr get-login-password --region "$region")"
-  printf '%s' "$ecr_auth" | DOCKER_CONFIG="$docker_config" docker login --username AWS --password-stdin "$registry" >/dev/null
-  for destination in "${bootstrap_mirror_images[@]}"; do
-    case "$destination" in
-      *node-operator-baseline-gitops-argocd@*) key=argocd_bootstrap ;;
-      *node-operator-baseline-gitops-vault@*) key=vault_bootstrap ;;
-      *) printf 'unrecognized bootstrap destination: %s\n' "$destination" >&2; exit 65 ;;
-    esac
-    source_image="$(jq -er --arg key "$key" '.artifacts[$key].source' "$platform_approval")"
-    digest="${destination##*@}"; repository="${destination#*/}"; repository="${repository%@*}"
-    aws ecr describe-repositories --region "$region" --repository-names "$repository" >/dev/null 2>&1 || \
-      aws ecr create-repository --region "$region" --repository-name "$repository" >/dev/null
-    DOCKER_CONFIG="$docker_config" docker pull "$source_image" >/dev/null
-    DOCKER_CONFIG="$docker_config" docker tag "$source_image" "$registry/$repository:${digest#sha256:}"
-    DOCKER_CONFIG="$docker_config" docker push "$registry/$repository:${digest#sha256:}" >/dev/null
-    mirrored="$(aws ecr describe-images --region "$region" --repository-name "$repository" --image-ids imageTag="${digest#sha256:}" --query 'imageDetails[0].imageDigest' --output text)"
-    [ "$mirrored" = "$digest" ] || { printf 'mirrored bootstrap digest mismatch: expected %s got %s\n' "$digest" "$mirrored" >&2; exit 65; }
-  done
+  printf '%s\n' 'Bound least-privilege state access to the installer-owned backend role.' >&2
 fi
 
 step 'Publishing platform artifacts and bootstrapping GitOps/Vault'
-platform_script="$source_root/scripts/release/run-platform-bootstrap.sh"
-[ -x "$platform_script" ] || { printf '%s\n' 'release bundle lacks the unified platform bootstrap helper' >&2; exit 65; }
-client_chart_version="$DEFAULT_CLIENT_CHART_VERSION"
-client_chart_digest="$DEFAULT_CLIENT_CHART_DIGEST"
-if [ -z "$client_chart_version" ] || [ -z "$client_chart_digest" ]; then
-  source_chart_digest="$(aws ecr describe-images --region "$DEFAULT_CLIENT_CHART_SOURCE_REGION" --repository-name node-operator-baseline-gitops-client/node-operator-client --image-ids imageTag=0.1.37 --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
-  if [[ "$source_chart_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
-    client_chart_version="${client_chart_version:-0.1.37}"
-    client_chart_digest="${client_chart_digest:-$source_chart_digest}"
-    printf 'Using verified chart from %s: %s@%s\n' "$DEFAULT_CLIENT_CHART_SOURCE_REGION" "$client_chart_version" "$client_chart_digest" >&2
-  fi
-fi
-client_chart_version="${client_chart_version:-$(prompt 'Published node-operator-client chart version (0.1.N)')}"
-client_chart_digest="${client_chart_digest:-$(prompt 'Published node-operator-client chart manifest digest (sha256:...)')}"
-zero_inputs="$(jq -er '.zero_resource_inputs' "$inputs")"
-baseline_config="$(jq -er '.baseline_config' "$zero_inputs")"
-platform_subnets=()
-while IFS= read -r subnet; do [ -n "$subnet" ] && platform_subnets+=("$subnet"); done < <(jq -er '.hoodi_subnet_ids[]' "$output_dir/deployment-work/foundation-output.json")
-[ "${#platform_subnets[@]}" -gt 0 ] || { printf '%s\n' 'foundation output lacks Hoodi private subnets for platform bootstrap' >&2; exit 65; }
-platform_args=(--baseline-work-dir "$output_dir/deployment-work" --baseline-config "$baseline_config" --account "$account" --region "$region" --argocd-image "$argocd_bootstrap_image" --vault-image "$vault_bootstrap_image" --client-chart-version "$client_chart_version" --client-chart-digest "$client_chart_digest" --vault-chart-version "$DEFAULT_VAULT_CHART_VERSION" --vault-chart-digest "$DEFAULT_VAULT_CHART_DIGEST")
-for subnet in "${platform_subnets[@]}"; do platform_args+=(--subnet-id "$subnet"); done
-client_repository="$(terraform -chdir="$output_dir/deployment-work/baseline" output -raw gitops_client_ecr_repository_url 2>/dev/null || true)"
-case "$client_repository" in
-  "${account}.dkr.ecr.${region}.amazonaws.com/"*) ;;
-  *) printf '%s\n' 'baseline did not expose the private client-chart ECR repository' >&2; exit 65 ;;
-esac
-client_repository="${client_repository#*/}"
-client_found="$(aws ecr describe-images --region "$region" --repository-name "$client_repository" --image-ids imageTag="$client_chart_version" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
-[ "$client_found" = "$client_chart_digest" ] || { printf 'client chart %s with digest %s is missing from private ECR\n' "$client_chart_version" "$client_chart_digest" >&2; printf '%s\n' 'Publish or mirror the reviewed immutable client chart, then rerun the single installer.' >&2; exit 65; }
-"$platform_script" "${platform_args[@]}"
+python3 "$resume_helper" phase --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json" --phase platform-started || { printf '%s\n' 'platform start checkpoint is uncertain; platform was not invoked' >&2; exit 70; }
+run_platform_bootstrap "$output_dir/deployment-work" "$inputs" "$session" || exit $?
+python3 "$resume_helper" phase --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json" --phase platform-complete || { printf '%s\n' 'platform completion checkpoint is uncertain; do not continue to ceremonies' >&2; exit 70; }
 
-step 'Configuring private Vault TLS'
-printf '%s\n' 'Preparing cert-manager-managed Vault TLS through the private EKS session.' >&2
-eks_env=(env PRIVATE_EKS_SESSION=1 AWS_REGION="$region" EKS_CLUSTER_NAME="$(jq -er '.cluster_name' "$session")" SSM_OPS_INSTANCE_ID="$(jq -er '.ssm_ops_instance_id' "$session")")
-tls_manifest="$source_root/docs/gitops/vault-tls-internal-ca.example.yaml"
-[ -f "$tls_manifest" ] && [ ! -L "$tls_manifest" ] || { printf '%s\n' 'release bundle lacks the reviewed Vault TLS manifest' >&2; exit 65; }
-"$source_root/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$vault_tls" --manifest "$tls_manifest"
-
-step 'Running Vault v2 recovery and validator custody'
-printf '%s\n' 'Next ceremony: Vault v2 recovery. Recovery shares will be requested silently by the delegated script.' >&2
-"$bundle_root/source/scripts/ops/recover-and-bootstrap-hoodi-vault-v2.sh" --validator-set "$validator_set"
-
-"$release" custody apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --keystore-dir "$keystore_dir_for_custody" --ceremony-dir "$output_dir/ceremony"
-
-step 'Applying Vault-backed validator runtime'
-runtime_manifest="$inputs/validator-deployment/runtime.yaml"
-client_manifest="$inputs/validator-deployment/client-and-fence.yaml"
-[ -f "$runtime_manifest" ] && [ ! -L "$runtime_manifest" ] && [ -f "$client_manifest" ] && [ ! -L "$client_manifest" ] || {
-  printf '%s\n' 'staged validator runtime manifests are missing' >&2
-  exit 65
+python3 -I -B "$resume_helper" bind-continuation --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json" --keystore-dir "$keystore_dir_for_custody" --public-key "$validator_key" --deposit-attestation "$deposit_attestation" || {
+  printf '%s\n' 'could not bind custody continuation to this deployment; no Vault ceremony started' >&2; exit 65;
 }
-printf '%s\n' 'Synchronizing the public Vault CA trust anchor and applying non-secret manifests.' >&2
-"$source_root/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" "$source_root/scripts/ops/ensure-vault-agent-ca.sh" --namespace validator-operations --namespace node-operator
-cat "$runtime_manifest" "$client_manifest" | "$source_root/scripts/ops/with-private-eks.sh" -- "${eks_env[@]}" kubectl apply -f - >/dev/null
-printf '%s\n' 'PASS: Vault-backed runtime is staged; signer, validator client, and fence remain at their guarded replica counts.' >&2
-
-step 'Collecting signer and Beacon evidence'
-mkdir -m 700 "$output_dir/evidence"
-"$release" evidence signer --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --output-dir "$output_dir/evidence/signer"
-"$release" evidence beacon --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --output-dir "$output_dir/evidence/beacon"
-
-printf 'Generated and validated deposit attestation: %s\n' "$deposit_attestation" >&2
-printf '%s\n' 'Activation requires independently reviewed public deposit, private Beacon, and signer evidence. Enter paths only; secret material is not accepted.' >&2
-step 'Guarded validator activation'
-public_deposit="$(prompt 'Absolute public deposit verification JSON')"
-private_evidence="$(prompt 'Absolute private Beacon evidence JSON')"
-signer_evidence="$(prompt 'Absolute signer evidence JSON')"
-confirm_key="$(prompt 'Confirm validator public key (0x...)')"
-confirm_withdrawal="$(prompt 'Confirm withdrawal address (0x...)')"
-"$release" activate apply --bundle-root "$bundle_root" --inputs "$inputs" --private-eks-session-handoff "$session" --deposit-attestation "$deposit_attestation" --public-deposit-verification "$public_deposit" --private-evidence "$private_evidence" --signer-evidence "$signer_evidence" --confirm-public-key "$confirm_key" --confirm-withdrawal-address "$confirm_withdrawal"
-printf 'PASS: v0.1.20 interactive Hoodi release completed. Non-secret handoffs and evidence are under %s.\n' "$output_dir"
+run_post_platform

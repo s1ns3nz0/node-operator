@@ -24,3 +24,7 @@ spec:
       port: 3500
       protocol: TCP
       targetPort: 3500
+    - name: metrics
+      port: 8080
+      protocol: TCP
+      targetPort: metrics

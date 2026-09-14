@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Check objective: Verify installer recovery, artifact-first ordering and validator preparation without live cloud calls.
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
+python3 scripts/ci/test-interactive-hoodi-resume.py
+python3 scripts/ci/test-zero-input-zone-discovery.py
+python3 scripts/ci/test-interactive-artifact-authority-gate.py
+python3 scripts/ci/test-interactive-authorized-artifacts.py
+# Check canonical finalized inclusion, real log-envelope parsing and
+# clone-only recovery rendering using synthetic local evidence.
+python3 scripts/ci/test-observe-hoodi-finalized-attestations.py
+python3 scripts/ci/test-collect-hoodi-finalized-attestation-evidence.py
+python3 scripts/ci/test-validator-audit-pod-transport.py
+python3 scripts/ci/test-validator-audit-reader-pod.py
+python3 scripts/ci/test-validator-observation-context.py
+python3 scripts/ci/test-run-hoodi-validator-observation.py
+python3 scripts/ci/test-operational-log-delivery.py
+python3 scripts/ci/test-operational-log-delivery-terraform.py
+bash scripts/ci/test-slashing-db-rehearsal.sh
+# Check release custody tooling and fail-closed runtime preparation without live Vault access.
+python3 scripts/ci/test-custody-release-bundle-inputs.py
+python3 scripts/ci/test-custody-verifier-runtime.py
+python3 scripts/ci/test-prepare-custody-verifier-test-env.py
+python3 scripts/ci/test-render-authorized-validator-client.py
+python3 scripts/ci/test-release-infrastructure-resume.py
+bash scripts/ci/test-release-infrastructure-resume.sh
+bash scripts/ci/test-zero-resource-release-contract.sh
+python3 scripts/ci/test-bootstrap-local-state.py
+python3 scripts/ci/test-backend-role-retry.py
+bash scripts/ci/test-zero-prepare-artifacts.sh
+python3 scripts/ci/test-installer-artifact-prerequisites.py
+python3 scripts/ci/test-mirror-installer-vault-artifacts.py
+python3 scripts/ci/test-installer-artifact-mirror.py
+python3 scripts/ci/test-installer-artifact-inventory.py
+python3 scripts/ci/test-installer-full-artifact-mirror.py
+python3 scripts/ci/test-hoodi-artifact-first.py
+bash scripts/ci/test-interactive-hoodi-config-recorder-contract.sh
+python3 scripts/ci/test-verify-existing-hoodi-validator.py
