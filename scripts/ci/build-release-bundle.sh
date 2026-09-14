@@ -88,6 +88,10 @@ mkdir -p "$stage_directory/source" "$stage_directory/rendered"
 
 path_is_in_release_boundary() {
   case "$1" in
+    # Bind the reviewed, non-secret Prysm advisory and expiry policy in bundles.
+    .ci/prysm-mtls-applicability.json|.ci/prysm-mtls-applicability/GO-2026-5932.json)
+      return 0
+      ;;
     # Package only the reviewed non-secret observability inputs, not local
     # telemetry, evidence, credentials, or arbitrary files in this directory.
     deploy/observability/kustomization.yaml|deploy/observability/namespace.yaml|deploy/observability/service-accounts.yaml|deploy/observability/rbac.yaml|deploy/observability/network-policies.yaml|deploy/observability/fluent-bit-config.yaml|deploy/observability/fluent-bit-daemonset.template.yaml|deploy/observability/evidence-envelope.schema.json)
