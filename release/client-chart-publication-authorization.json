@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "source_revision": "c8c2b724d4ab80fbecb6ab40ce3d047f6baae925",
+  "publication": {
+    "repository": "s1ns3nz0/node-operator-gitops",
+    "workflow": "publish-oci.yml",
+    "run_id": "34804914772",
+    "artifact_id": "10332119296",
+    "artifact_name": "gitops-chart-evidence-34804914772",
+    "run_number": "41"
+  },
+  "target": {
+    "image_ref": "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-op-2609140157-baseline-gitops-client/node-operator-client@sha256:ff0122a76257aa042e89d3597fe14694e49f6230b4c85186e55d266dba99fdcb",
+    "manifest_digest": "sha256:ff0122a76257aa042e89d3597fe14694e49f6230b4c85186e55d266dba99fdcb",
+    "chart_archive_digest": "sha256:a8bc5d74b6ac1567d98dd531963c8cfabf63d3bbe05f7f9fb7146cfddca173c4",
+    "chart_version": "0.1.41"
+  },
+  "evidence_sha256": {
+    "gitops-chart-subject.json": "b269c27d8086e768f15384c372ca98465d90e54450121f494e52d08ec95eb150",
+    "gitops-chart-sbom.json": "8c7e0dc856fc67755c10d792f2dceb1d1cadc58b060c24920a3002cabf1a4ee4",
+    "gitops-chart-grype.json": "97a224d73154cf229ce6f6b41230ca70f584d14f9280ee59959871322bd28fe6",
+    "gitops-chart-provenance-predicate.json": "5f066968a232022610a08486fa568a82fbe83f61d976b8526293f5ed938311e9",
+    "gitops-chart-provenance-verified.json": "9761eb60ee1b204f3da589e7fb640eb0fa603415a0c3a305cc17fd7d7c29814d"
+  },
+  "approvals": {
+    "stage_approved": true,
+    "activation_approved": false
+  }
+}

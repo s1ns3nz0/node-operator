@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "candidate_revision": "1384080853362b0da9618eaa1aaa905ff9284a0c",
+  "record_sha256": "f09a2d9f8adf87ab372c5d72b5da12835997264da1e144b95107aa8c863b3055",
+  "publication": {
+    "repository": "s1ns3nz0/node-operator",
+    "workflow": "image-publish.yml",
+    "run_id": "34809117895",
+    "artifact_id": "10334266880"
+  },
+  "target": {
+    "image_ref": "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-op-2609140157-baseline-validator-fence@sha256:951312f79c693eae0a9b3e54961701944e0e1339d997f0f3315a25112dcb7fb8",
+    "manifest_digest": "sha256:951312f79c693eae0a9b3e54961701944e0e1339d997f0f3315a25112dcb7fb8",
+    "input_sha256": "49afa97ce413566cb8aca889d38be0f3f3fdcaa5bc8a2db496d5e1c7bfe102bb"
+  },
+  "approvals": {
+    "stage_approved": true,
+    "activation_approved": false
+  }
+}

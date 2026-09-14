@@ -14,6 +14,7 @@ class T(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory(); self.base=Path(self.tmp.name).resolve(); self.repo=self.base/'repo'
   subprocess.run(['git','clone','--quiet','--no-local',str(ROOT),str(self.repo)],check=True)
+  subprocess.run(["python3", str(ROOT / "scripts/ci/reset-release-authorization-fixture.py"), str(self.repo)], check=True)
   subprocess.run(['git','-C',str(self.repo),'config','user.email','test@example.invalid'],check=True);subprocess.run(['git','-C',str(self.repo),'config','user.name','test'],check=True)
   for p in ('scripts/ci/build-release-bundle.sh','scripts/ci/test-build-release-bundle.sh','scripts/release/client_chart_release_authorization.py'):
    target=self.repo/p;target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(ROOT/p,target)

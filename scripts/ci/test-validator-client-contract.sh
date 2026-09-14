@@ -2,8 +2,15 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-renderer="$root/scripts/ops/render-hoodi-validator-client.sh"
-tmp="$(mktemp -d /private/tmp/node-operator-client-render.XXXXXX)"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/node-operator-client-render.XXXXXX")"
+# Legacy catalog rendering must not inherit the checkout's release authorization.
+# Bundle authorization is exercised by test-render-authorized-validator-client.py.
+fixture="$tmp/source"
+mkdir -p "$fixture/scripts/ops" "$fixture/deploy/validator" "$fixture/.ci/validator"
+cp "$root/scripts/ops/render-hoodi-validator-client.sh" "$fixture/scripts/ops/"
+cp "$root/deploy/validator/client-template.yaml" "$root/deploy/validator/client-lease-fence-template.yaml" "$fixture/deploy/validator/"
+cp "$root/.ci/validator/approved-client-images.json" "$fixture/.ci/validator/"
+renderer="$fixture/scripts/ops/render-hoodi-validator-client.sh"
 image='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-prysm@sha256:7fe554adf0efd27c0e5c5a3f80a3bbbec3d3872626208cf0a003b0dee7761f89'
 native_image='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-prysm@sha256:f35410bedf15c5a7b710769e1c67c5f77e74f75544fd51084f12d47082c457e3'
 fence_image='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-fence@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
