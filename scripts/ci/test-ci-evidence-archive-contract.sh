@@ -47,9 +47,29 @@ grep -Fq 'default_retention' "$iac"
 grep -Fq 'sse_algorithm     = "aws:kms"' "$iac"
 grep -Fq 'ci-evidence-archive' "$iac"
 grep -Fq 'sts:AssumeRoleWithWebIdentity' "$iac"
+python3 - "$iac" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+text = Path(sys.argv[1]).read_text()
+key = text.split('data "aws_iam_policy_document" "ci_evidence_archive_key" {', 1)[1].split('\ndata ', 1)[0]
+context = re.search(r'variable\s*=\s*"kms:EncryptionContext:aws:s3:arn"\s*.*?values\s*=\s*\[(.*?)\n\s*\]', key, re.S)
+assert context, 'archive KMS encryption context must be bounded'
+values = re.sub(r'\s+', '', context.group(1))
+assert values == 'aws_s3_bucket.ci_evidence_archive[0].arn,"${aws_s3_bucket.ci_evidence_archive[0].arn}/ci/*",', 'permit only the exact bucket key context and legacy ci/ object context'
+assert 'variable = "kms:ViaService"' in key
+assert 'values   = ["s3.${var.aws_region}.amazonaws.com"]' in key
+assert 'bucket_key_enabled = true' in text
+role = text.split('data "aws_iam_policy_document" "github_ci_evidence_archive" {', 1)[1].split('\nresource ', 1)[0]
+assert '"s3:HeadObject"' not in role, 'HeadObject is authorized by s3:GetObject'
+assert 'actions   = ["s3:GetObject"]' in role
+assert 'resources = ["${aws_s3_bucket.ci_evidence_archive[0].arn}/ci/*"]' in role
+PY
 if grep -Eq 'secrets/|VAULT_TOKEN|recovery.key|private_key' "$archive"; then
   printf 'archive script contains a forbidden secret path or token reference\n' >&2
   exit 1
 fi
 bash -n "$archive" "$assume"
+python3 "$root/scripts/ci/test-ci-evidence-archive-runtime.py"
 printf 'PASS: CI evidence archive is Cosign-signed, verified, redacted, and OIDC-scoped.\n'

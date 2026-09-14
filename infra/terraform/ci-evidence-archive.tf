@@ -132,7 +132,12 @@ data "aws_iam_policy_document" "ci_evidence_archive_key" {
     condition {
       test     = "StringLike"
       variable = "kms:EncryptionContext:aws:s3:arn"
-      values   = ["${aws_s3_bucket.ci_evidence_archive[0].arn}/*"]
+      # Bucket Keys use the bucket ARN; older per-object encryption uses its key ARN.
+      # Object access remains restricted to ci/* by the role's S3 permissions.
+      values = [
+        aws_s3_bucket.ci_evidence_archive[0].arn,
+        "${aws_s3_bucket.ci_evidence_archive[0].arn}/ci/*",
+      ]
     }
   }
 }
@@ -189,8 +194,9 @@ data "aws_iam_policy_document" "github_ci_evidence_archive" {
     }
   }
   statement {
-    sid       = "VerifyAfterWrite"
-    actions   = ["s3:GetObject", "s3:HeadObject"]
+    sid = "VerifyAfterWrite"
+    # HeadObject is an API operation authorized by s3:GetObject, not an IAM action.
+    actions   = ["s3:GetObject"]
     resources = ["${aws_s3_bucket.ci_evidence_archive[0].arn}/ci/*"]
   }
 }

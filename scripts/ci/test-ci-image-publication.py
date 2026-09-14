@@ -79,7 +79,15 @@ elif sys.argv[1] not in ('load','tag','push'):
             (bin_dir / "cosign").write_text("#!/bin/sh\nexit 99\n")
             (bin_dir / "cosign").chmod(0o755)
             helper = root / "scripts/release/sign-ci-image-evidence.sh"
-            helper.write_text('printf \'["signing-helper"]\\n\' >> "$TRACE"\nexit "$SIGNING_EXIT"\n')
+            helper.write_text(
+                'case "$5" in\n'
+                '  */toolchain-signing-evidence/*)\n'
+                '    test -d "$(dirname "$5")" && test ! -e "$5" || exit 98\n'
+                '    ;;\n'
+                'esac\n'
+                'printf \'["signing-helper"]\\n\' >> "$TRACE"\n'
+                'exit "$SIGNING_EXIT"\n'
+            )
             trace = root / "trace.jsonl"
             env = {key: value for key, value in os.environ.items() if not key.startswith(("GITHUB_", "ACTIONS_", "AWS_"))}
             env.update(PATH=str(bin_dir) + os.pathsep + os.environ["PATH"], TRACE=str(trace), CONFIG=CONFIG,

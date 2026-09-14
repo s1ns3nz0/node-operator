@@ -34,6 +34,7 @@ opa eval --fail --format pretty --data policy/image_sbom.rego \
 echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
 docker tag "$build_image" "$IMAGE:${GITHUB_SHA}"
 docker push "$IMAGE:${GITHUB_SHA}"
+mkdir -m 0700 -p "${RUNNER_TEMP:?}/toolchain-signing-evidence"
 bash scripts/release/sign-ci-image-evidence.sh "$IMAGE" "$local_config_digest" \
   "$staged_dir/toolchain-sbom/sbom.cyclonedx.json" "$staged_dir/toolchain-sbom/receipt.json" \
   "${RUNNER_TEMP:?}/toolchain-signing-evidence/$IMAGE_NAME"
