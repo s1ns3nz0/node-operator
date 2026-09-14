@@ -90,6 +90,15 @@ class Selection(unittest.TestCase):
         with self.assertRaises(ValueError):
             M.select(target="$(unsafe)")
 
+    def test_installer_prerequisites_select_only_required_publications(self):
+        result = M.select(target="installer-prerequisites")
+        self.assertEqual(
+            [item["image"] for item in result["toolchain_matrix"]["include"]],
+            ["gitops-oci-mirror", "vault-bootstrap"],
+        )
+        self.assertTrue(result["toolchains"] and result["relay"])
+        self.assertFalse(any(result[key] for key in ("scanner", "fence", "prysm_mtls", "signer_probe")))
+
     def test_baseline_and_event_guards(self):
         sha = "a" * 40
         with patch.object(M, "git", return_value=(sha + "\n").encode()):

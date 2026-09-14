@@ -37,7 +37,7 @@ SIGNING = {
 def select(paths=(), target=None, all_inputs=False):
     paths = set(paths)
     all_inputs = all_inputs or bool(paths & SHARED) or target == "all"
-    allowed = {"all", "scanner", "toolchains", "fence", "relay", "prysm-mtls", "signer-probe"} | {item["image"] for item in TOOLCHAINS}
+    allowed = {"all", "installer-prerequisites", "scanner", "toolchains", "fence", "relay", "prysm-mtls", "signer-probe"} | {item["image"] for item in TOOLCHAINS}
     if target is not None and target not in allowed:
         raise ValueError("unknown image release target")
     scanner = all_inputs or target == "scanner" or bool(paths & IMAGE_SBOM_INPUTS) or any(
@@ -50,7 +50,9 @@ def select(paths=(), target=None, all_inputs=False):
         "scripts/release/build-toolchain-image.sh", "scripts/release/publish-toolchain-image.sh",
         ".ci/toolchains/release-toolchain-image.sh",
     })
+    installer_prerequisites = target == "installer-prerequisites"
     selected = [item for item in TOOLCHAINS if toolchain_all or target == item["image"] or
+                (installer_prerequisites and item["image"] in {"vault-bootstrap", "gitops-oci-mirror"}) or
                 item["dockerfile"] in paths or any(path in paths for path in item["input_file"].split(",") if path)]
     common_go = bool(paths & {"go.mod", "go.sum"})
     fence = all_inputs or target == "fence" or common_go or bool(paths & SIGNING) or any(
@@ -60,7 +62,7 @@ def select(paths=(), target=None, all_inputs=False):
             "scripts/release/fence_build_inputs.py", "scripts/ci/install-fence-security-tools.sh",
             "scripts/ci/collect-validator-signing-fence-release-evidence.sh",
         } for path in paths)
-    relay = all_inputs or target == "relay" or common_go or bool(paths & SIGNING) or any(
+    relay = installer_prerequisites or all_inputs or target == "relay" or common_go or bool(paths & SIGNING) or any(
         path.startswith(("cmd/vault-audit-relay/", ".ci/vault-audit-relay/")) or
         path == "scripts/release/publish-vault-audit-relay.sh" for path in paths)
     prysm_mtls = all_inputs or target == "prysm-mtls" or bool(paths & SIGNING) or any(

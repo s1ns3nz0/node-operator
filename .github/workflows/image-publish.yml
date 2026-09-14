@@ -10,7 +10,7 @@ on:
         required: true
         default: all
         type: choice
-        options: [all, scanner, toolchains, fence, relay, prysm-mtls, signer-probe, terraform-validation, release-build, vault-release-signer, gitops-oci-mirror, argocd-bootstrap, vault-bootstrap]
+        options: [all, installer-prerequisites, scanner, toolchains, fence, relay, prysm-mtls, signer-probe, terraform-validation, release-build, vault-release-signer, gitops-oci-mirror, argocd-bootstrap, vault-bootstrap]
 
 permissions:
   contents: read
