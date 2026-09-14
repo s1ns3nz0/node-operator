@@ -31,6 +31,7 @@ bash scripts/ci/test-zero-prepare-artifacts.sh
 python3 scripts/ci/test-installer-artifact-prerequisites.py
 python3 scripts/ci/test-mirror-installer-vault-artifacts.py
 python3 scripts/ci/test-installer-artifact-mirror.py
+python3 scripts/ci/test-installer-registry-auth.py
 python3 scripts/ci/test-installer-artifact-inventory.py
 python3 scripts/ci/test-installer-full-artifact-mirror.py
 python3 scripts/ci/test-hoodi-artifact-first.py

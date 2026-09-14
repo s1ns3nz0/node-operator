@@ -20,6 +20,7 @@ from installer_artifact_inventory import InventoryError, build_inventory
 from installer_artifact_mirror import MirrorError, _mirror_env, verify_pre_eks_vault_mirror
 from installer_artifact_prerequisites import PrerequisiteError, load_projection
 from installer_artifact_receipt import NAMES as VAULT_NAMES
+from installer_registry_auth import RegistryAuthError, write_ecr_auth
 
 SHA = re.compile(r"^[0-9a-f]{40}$")
 DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
@@ -193,12 +194,14 @@ def mirror(state_dir: Path, bundle_root: Path, discovery: dict[str, str], profil
         _run(["docker", "pull", tool], env, runner)
         authenticated: set[str] = set()
         def login(login_region: str, login_registry: str) -> None:
-            # Keep every source and destination credential in one private,
-            # short-lived Docker auth directory without changing process env.
+            # Keep portable auths-only credentials in one private, short-lived
+            # file: Docker credential helpers are unavailable in mirror containers.
             if login_registry in authenticated: return
             password = _run(["aws", "ecr", "get-login-password", "--region", login_region], env, runner).stdout
-            _run(["docker", "login", "--username", "AWS", "--password-stdin", login_registry], {**env, "DOCKER_CONFIG": str(auth)}, runner, input=password)
-            authenticated.add(login_registry)
+            try:
+                write_ecr_auth(auth, login_registry, password, authenticated)
+            except RegistryAuthError as error:
+                raise FullMirrorError("could not create portable registry auth") from error
         verified: list[dict[str, str]] = []
         for item in plan:
             exists = _describe(account, region, item["repository"], item["tag"], item["digest"], env, runner, absent_ok=True)

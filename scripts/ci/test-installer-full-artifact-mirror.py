@@ -2,7 +2,7 @@
 # Check objective: Validate the non-Vault pre-EKS artifact copier.
 """Offline contract tests for the non-Vault pre-EKS artifact copier."""
 from __future__ import annotations
-import importlib.util, json, os, subprocess, sys, tempfile, unittest
+import base64, importlib.util, json, os, subprocess, sys, tempfile, unittest
 from unittest import mock
 from pathlib import Path
 
@@ -161,7 +161,7 @@ class FullMirrorTests(unittest.TestCase):
     if command[:3]==["aws","sts","get-caller-identity"]:return subprocess.CompletedProcess(command,0,ACCOUNT,"")
     if command[:3]==["aws","ecr","describe-images"]:return subprocess.CompletedProcess(command,255,"","ImageNotFoundException")
     if failure=='password' and command[:3]==["aws","ecr","get-login-password"] and command[-1]=='ap-southeast-1':raise subprocess.CalledProcessError(1,command)
-    if failure=='login' and command[:2]==["docker","login"] and command[-1].startswith("999999999999."):raise subprocess.CalledProcessError(1,command)
+    if failure=='login' and command[:3]==["aws","ecr","get-login-password"] and command[-1]=='ap-southeast-1':return subprocess.CompletedProcess(command,0,"","")
     return subprocess.CompletedProcess(command,0,"password","")
    with self.subTest(failure=failure):
     with self.assertRaises(full.FullMirrorError):full.mirror(self.state,self.bundle,self.discovery,"fixture",SHA,work_dir=self.work,inputs_dir=self.inputs,runner=run)
@@ -169,6 +169,7 @@ class FullMirrorTests(unittest.TestCase):
     (self.state/"full-artifact-mirror-uncertain.json").unlink()
  def test_private_ecr_login_deduplicates_and_public_source_uses_destination_only(self):
   source_registry="999999999999.dkr.ecr.ap-southeast-1.amazonaws.com"; second=self.repo+"-two";full.load_projection=lambda *a,**k:{"repositories":{self.repo:{"url":self.registry+'/'+self.repo},second:{"url":self.registry+'/'+second}}};inv=self.inventory(two=True);inv["artifacts"][1]["source"]=source_registry+"/private/one@"+DIGEST;inv["artifacts"][2]["source"]=source_registry+"/private/two@"+DIGEST;full.build_inventory=lambda *a,**k:inv;calls=[];present=set()
+  auth_snapshots=[]
   def run(command,**kw):
    calls.append((command,kw))
    if command[:3]==["aws","sts","get-caller-identity"]:return subprocess.CompletedProcess(command,0,ACCOUNT,"")
@@ -176,12 +177,16 @@ class FullMirrorTests(unittest.TestCase):
     tag=command[command.index("--image-ids")+1].split('=',1)[1];repo=command[command.index("--repository-name")+1]
     if tag not in present:return subprocess.CompletedProcess(command,255,"","ImageNotFoundException")
     return subprocess.CompletedProcess(command,0,json.dumps({"imageDetails":[{"registryId":ACCOUNT,"repositoryName":repo,"imageDigest":DIGEST,"imageTags":[tag]}]}),"")
-   if command[:2]==["docker","run"]:present.add(command[-1].rsplit(':',1)[1])
+   if command[:2]==["docker","run"]:
+    volume=command[command.index("--volume")+1]; auth_path=Path(volume.split(":",1)[0])/"config.json"; auth_snapshots.append((json.loads(auth_path.read_text()),auth_path.stat().st_mode & 0o777,auth_path.parent.stat().st_mode & 0o777,auth_path.parent));present.add(command[-1].rsplit(':',1)[1])
    return subprocess.CompletedProcess(command,0,"password","")
   sent={'GITHUB_TOKEN':'sentinel','AWS_ACCESS_KEY_ID':'a','AWS_SECRET_ACCESS_KEY':'b','AWS_SESSION_TOKEN':'c','AWS_SECURITY_TOKEN':'d'}
   with mock.patch.dict(os.environ,sent,clear=False):
    full.mirror(self.state,self.bundle,self.discovery,"fixture",SHA,work_dir=self.work,inputs_dir=self.inputs,runner=run);self.assertEqual(os.environ.get('GITHUB_TOKEN'),'sentinel')
-  logins=[(x,k) for x,k in calls if x[:2]==['docker','login']];self.assertEqual([x[-1] for x,_ in logins],[source_registry,self.registry]);self.assertTrue(all(k['env']['AWS_PROFILE']=='fixture' and all(name not in k['env'] for name in sent if name.startswith('AWS_')) and k['env'].get('GITHUB_TOKEN')=='sentinel' and 'DOCKER_CONFIG' in k['env'] for _,k in logins));self.assertEqual(len({k['env']['DOCKER_CONFIG'] for _,k in logins}),1);self.assertEqual(len([x for x,_ in calls if x[:2]==['docker','run']]),2)
+  self.assertFalse(any(x[:2]==['docker','login'] for x,_ in calls));self.assertEqual(len([x for x,_ in calls if x[:2]==['docker','run']]),2)
+  fixture_auth=base64.b64encode(b"AWS:" + b"password").decode("ascii")
+  expected={source_registry:{"auth":fixture_auth},self.registry:{"auth":fixture_auth}}
+  self.assertTrue(all(snapshot[0]=={"auths":expected} and snapshot[1:3]==(0o600,0o700) for snapshot in auth_snapshots));self.assertTrue(all(not snapshot[3].exists() for snapshot in auth_snapshots))
  def test_same_registry_and_public_source_login_behavior(self):
   for source,expected in ((self.registry+'/private/image@'+DIGEST,1),('ghcr.io/example/public@'+DIGEST,1)):
    inv=self.inventory();inv['artifacts'][1]['source']=source;full.build_inventory=lambda *a,**k:inv;calls=[];seen=[False]
@@ -192,7 +197,7 @@ class FullMirrorTests(unittest.TestCase):
      if not seen[0]:seen[0]=True;return subprocess.CompletedProcess(command,255,'','ImageNotFoundException')
      repo=command[command.index('--repository-name')+1];tag=command[command.index('--image-ids')+1].split('=',1)[1];return subprocess.CompletedProcess(command,0,json.dumps({'imageDetails':[{'registryId':ACCOUNT,'repositoryName':repo,'imageDigest':DIGEST,'imageTags':[tag]}]}),'')
     return subprocess.CompletedProcess(command,0,'password','')
-   full.mirror(self.state,self.bundle,self.discovery,'fixture',SHA,work_dir=self.work,inputs_dir=self.inputs,runner=run);self.assertEqual(len([x for x in calls if x[:2]==['docker','login']]),expected)
+   full.mirror(self.state,self.bundle,self.discovery,'fixture',SHA,work_dir=self.work,inputs_dir=self.inputs,runner=run);self.assertEqual(len([x for x in calls if x[:3]==['aws','ecr','get-login-password']]),expected)
    (self.state/'full-artifact-mirror-receipt.json').unlink()
 
 if __name__=="__main__": unittest.main()

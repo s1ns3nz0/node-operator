@@ -1,6 +1,6 @@
 """Mirror the release-bound Vault prerequisites into existing private ECR repositories."""
 from __future__ import annotations
-import hashlib, json, os, re, stat, subprocess, tempfile, shutil
+import base64, hashlib, json, os, re, stat, subprocess, tempfile, shutil
 from pathlib import Path
 
 SHA = re.compile(r"^[0-9a-f]{40}$"); DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
@@ -8,6 +8,9 @@ class MirrorError(RuntimeError): pass
 NAMES = {"vault-bootstrap","vault-audit-relay","gitops-oci-mirror","vault-server","vault-injector","cert-manager-controller","cert-manager-webhook","cert-manager-cainjector","cert-manager-startupapicheck","vault-chart","cert-manager-chart"}
 AWS_TIMEOUT=30
 DOCKER_TIMEOUT=900
+OCI_MANIFEST_MEDIA_TYPE="application/vnd.oci.image.manifest.v1+json"
+HELM_CONFIG_MEDIA_TYPE="application/vnd.cncf.helm.config.v1+json"
+HELM_LAYER_MEDIA_TYPE="application/vnd.cncf.helm.chart.content.v1.tar+gzip"
 
 def _read(path: Path):
     if not path.is_file() or path.is_symlink() or path.stat().st_size > 4*1024*1024: raise MirrorError("artifact input is unsafe")
@@ -30,6 +33,68 @@ def _write(path: Path, value: dict):
             os.close(fd)
         try: os.unlink(tmp)
         except FileNotFoundError: pass
+
+def _chart_fixture(name: str, item: dict) -> tuple[bytes, bytes, list[dict]]:
+    """Return payload bytes, not a new approval authority.
+
+    The selected release index supplies the approved manifest/archive hashes.
+    Source fixtures merely recover those exact bytes; changing them cannot
+    authorize another digest. Updates must recover the original config and
+    manifest or pass a separate catalog approval, never accept a fresh push's
+    timestamp. The bound manifest also fixes whether provenance is required.
+    """
+    # ``__file__`` is under ``source/scripts/release`` in a candidate bundle,
+    # so this binds to the candidate's included fixture without mutating the
+    # separately verified bundle root.
+    fixture_name=name.removesuffix("-chart")+".json"
+    fixture=_read(Path(__file__).resolve().parents[2]/".ci/gitops/helm-oci"/fixture_name)
+    if not isinstance(fixture,dict) or set(fixture)!={"schema_version","manifest_base64","config_base64"} or fixture.get("schema_version")!=1 or any(not isinstance(fixture.get(key),str) for key in ("manifest_base64","config_base64")):
+        raise MirrorError("approved chart OCI fixture is invalid")
+    try:
+        manifest=base64.b64decode(fixture["manifest_base64"],validate=True); config=base64.b64decode(fixture["config_base64"],validate=True)
+        value=json.loads(manifest)
+    except (ValueError, json.JSONDecodeError) as error:
+        raise MirrorError("approved chart OCI fixture is invalid") from error
+    expected=item.get("expected_oci_manifest_digest")
+    if not isinstance(expected,str) or hashlib.sha256(manifest).hexdigest() != expected.removeprefix("sha256:") or not isinstance(value,dict) or value.get("schemaVersion")!=2 or value.get("mediaType") not in (None,OCI_MANIFEST_MEDIA_TYPE):
+        raise MirrorError("approved chart OCI manifest digest differs from authority")
+    config_descriptor=value.get("config"); layers=value.get("layers")
+    if not isinstance(config_descriptor,dict) or set(config_descriptor)!={"mediaType","digest","size"} or config_descriptor.get("mediaType")!=HELM_CONFIG_MEDIA_TYPE or config_descriptor.get("digest")!="sha256:"+hashlib.sha256(config).hexdigest() or config_descriptor.get("size")!=len(config) or not isinstance(layers,list) or not 1 <= len(layers) <= 2:
+        raise MirrorError("approved chart OCI config descriptor is invalid")
+    expected_types=[HELM_LAYER_MEDIA_TYPE]+(["application/vnd.cncf.helm.chart.provenance.v1.prov"] if len(layers)==2 else [])
+    for position,(layer,media_type) in enumerate(zip(layers,expected_types)):
+        if not isinstance(layer,dict) or set(layer)!={"mediaType","digest","size"} or layer.get("mediaType")!=media_type or not DIGEST.fullmatch(layer.get("digest", "")) or not isinstance(layer.get("size"),int) or layer["size"] < 1 or (position==0 and layer["digest"]!="sha256:"+item["archive_sha256"]):
+            raise MirrorError("approved chart OCI layer descriptor is invalid")
+    return manifest,config,layers
+
+def _chart_layout(work: Path, name: str, manifest: bytes, config: bytes, layers: list[dict], archives: list[Path]) -> tuple[Path, str]:
+    try:
+        if len(layers)!=len(archives): raise MirrorError("approved chart OCI layers are incomplete")
+        for layer,archive in zip(layers,archives):
+            info=archive.lstat()
+            if archive.is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_size != layer["size"] or hashlib.sha256(archive.read_bytes()).hexdigest() != layer["digest"].removeprefix("sha256:"):
+                raise MirrorError("downloaded chart archive differs from approved OCI layer")
+        layout=work/"oci"/name; blobs=layout/"blobs/sha256"; blobs.mkdir(parents=True,mode=0o700)
+        stage="mirror-"+hashlib.sha256(manifest).hexdigest()
+        descriptor={"mediaType":OCI_MANIFEST_MEDIA_TYPE,"digest":"sha256:"+hashlib.sha256(manifest).hexdigest(),"size":len(manifest),"annotations":{"org.opencontainers.image.ref.name":stage}}
+        for path,raw in ((layout/"oci-layout",b'{"imageLayoutVersion":"1.0.0"}'),(layout/"index.json",json.dumps({"schemaVersion":2,"manifests":[descriptor]},sort_keys=True,separators=(",",":")).encode()),(blobs/hashlib.sha256(manifest).hexdigest(),manifest),(blobs/hashlib.sha256(config).hexdigest(),config)):
+            path.write_bytes(raw); os.chmod(path,0o600)
+        for layer,archive in zip(layers,archives):
+            destination=blobs/layer["digest"].removeprefix("sha256:"); shutil.copyfile(archive,destination); os.chmod(destination,0o600)
+        return layout,stage
+    except OSError as error:
+        raise MirrorError("could not materialize approved chart OCI layout") from error
+
+def _staged_chart_manifest(account: str, region: str, repository: str, stage: str, expected: bytes, env: dict) -> None:
+    command=["aws","ecr","batch-get-image","--registry-id",account,"--region",region,"--repository-name",repository,"--image-ids","imageTag="+stage,"--accepted-media-types",OCI_MANIFEST_MEDIA_TYPE,"--output","json"]
+    result=subprocess.run(command,check=True,capture_output=True,text=True,env=env,timeout=AWS_TIMEOUT)
+    try:
+        value=json.loads(result.stdout); images=value.get("images") if isinstance(value,dict) else None
+        raw=images[0].get("imageManifest") if isinstance(images,list) and len(images)==1 and isinstance(images[0],dict) else None
+    except json.JSONDecodeError as error:
+        raise MirrorError("staged chart manifest response is invalid") from error
+    if not isinstance(raw,str) or raw.encode()!=expected or hashlib.sha256(raw.encode()).hexdigest()!=hashlib.sha256(expected).hexdigest():
+        raise MirrorError("staged chart manifest differs from approved bytes")
 
 def _mirror_env(profile: str, region: str) -> dict:
     env=dict(os.environ)
@@ -156,6 +221,7 @@ def mirror(state_dir: Path, bundle_root: Path, discovery: dict, profile: str, re
         item=index["components"][component]
         if not isinstance(item,dict) or not isinstance(item.get("image_ref"),str) or not DIGEST.fullmatch(item.get("manifest_digest","")) or not item["image_ref"].endswith("@"+item["manifest_digest"]):
             raise MirrorError("artifact index image component schema is invalid")
+    chart_oci={}
     for component in ("vault-chart","cert-manager-chart"):
         item=index["components"][component]
         if not isinstance(item,dict) or not isinstance(item.get("approved_url"),str) or not item["approved_url"].startswith("https://") or not re.fullmatch(r"[a-f0-9]{64}",item.get("archive_sha256","")) or not DIGEST.fullmatch(item.get("expected_oci_manifest_digest","")) or not re.fullmatch(r"[A-Za-z0-9._-]+",item.get("tag","")):
@@ -165,6 +231,7 @@ def mirror(state_dir: Path, bundle_root: Path, discovery: dict, profile: str, re
             validate_chart_version(component, item.get("version"))
         except ReceiptError as error:
             raise MirrorError("artifact index chart component schema is invalid") from error
+        chart_oci[component]=_chart_fixture(component,item)
     image_dest={"vault-bootstrap":repos["vault"],"vault-server":repos["vault"],"vault-injector":repos["vault"],"cert-manager-controller":repos["cert_manager"],"cert-manager-webhook":repos["cert_manager"],"cert-manager-cainjector":repos["cert_manager"],"cert-manager-startupapicheck":repos["cert_manager"],"vault-audit-relay":relay}
     image_plan={}
     for name,destination in image_dest.items():
@@ -217,7 +284,11 @@ def mirror(state_dir: Path, bundle_root: Path, discovery: dict, profile: str, re
     registry=f"{account}.dkr.ecr.{region}.amazonaws.com"
     try:
         password=subprocess.run(["aws","ecr","get-login-password","--region",region],check=True,capture_output=True,text=True,env=env,timeout=AWS_TIMEOUT).stdout
-        subprocess.run(["docker","login","--username","AWS","--password-stdin",registry],check=True,input=password,text=True,env={**env,"DOCKER_CONFIG":str(auth)},timeout=AWS_TIMEOUT)
+        from installer_registry_auth import RegistryAuthError, write_ecr_auth
+        try:
+            write_ecr_auth(auth, registry, password, set())
+        except RegistryAuthError as error:
+            raise MirrorError("could not create portable registry auth") from error
         # Every payload, destination and tool was checked before this point.
         if not marker.exists(): _write(marker, marker_value or {"schema_version":1,"status":"started","release_revision":index["release_revision"],"index_sha256":hashlib.sha256(index_path.read_bytes()).hexdigest()})
         verified={}
@@ -231,11 +302,24 @@ def mirror(state_dir: Path, bundle_root: Path, discovery: dict, profile: str, re
         for name,key in (("vault-chart","vault_chart"),("cert-manager-chart","cert_manager_chart")):
             item=index["components"][name]; url=item.get("approved_url"); sha=item.get("archive_sha256"); digest=item.get("expected_oci_manifest_digest"); tag=item.get("tag")
             if not isinstance(url,str) or not url.startswith("https://") or not re.fullmatch(r"[a-f0-9]{64}",sha or "") or not DIGEST.fullmatch(digest or ""): raise MirrorError("chart authority is invalid")
-            archive=f"/work/{name}.tgz"; target="oci://"+repos[key].rsplit('/',1)[0]
-            command='set -eu; curl --fail --location --silent --show-error --output "$1" "$2"; printf "%s  %s\\n" "$3" "$1" | sha256sum --check --status; helm push "$1" "$4"'
+            chart_manifest_bytes,config,layers=chart_oci[name]; archive=work/(name+".tgz"); archives=[archive]
+            command='set -eu; curl --fail --location --silent --show-error --output "$1" "$2"; printf "%s  %s\\n" "$3" "$1" | sha256sum --check --status'
             got=_describe_digest(account,region,repos[key].split('/',1)[1],tag,digest,env,absent_ok=True) if pre_eks else None
             if got is None:
-                subprocess.run(["docker","run","--rm","--env","HELM_REGISTRY_CONFIG=/auth/config.json","--volume",f"{auth}:/auth:ro","--volume",f"{work}:/work","--entrypoint","sh",chart_tool,"-c",command,"--",archive,url,sha,target],check=True,env=env,timeout=DOCKER_TIMEOUT)
+                subprocess.run(["docker","run","--rm","--volume",f"{work}:/work","--entrypoint","sh",chart_tool,"-c",command,"--","/work/"+archive.name,url,sha],check=True,env=env,timeout=DOCKER_TIMEOUT)
+                if len(layers)==2:
+                    provenance=work/(name+".tgz.prov"); provenance_sha=layers[1]["digest"].removeprefix("sha256:")
+                    subprocess.run(["docker","run","--rm","--volume",f"{work}:/work","--entrypoint","sh",chart_tool,"-c",command,"--","/work/"+provenance.name,url+".prov",provenance_sha],check=True,env=env,timeout=DOCKER_TIMEOUT)
+                    archives.append(provenance)
+                layout,stage=_chart_layout(work,name,chart_manifest_bytes,config,layers,archives)
+                repository=repos[key].split('/',1)[1]
+                subprocess.run(["docker","run","--rm","--env","REGISTRY_AUTH_FILE=/auth/config.json","--volume",f"{auth}:/auth:ro","--volume",f"{work}:/work","--entrypoint","skopeo",tool,"copy","--all","--preserve-digests","oci:/work/oci/"+name+":"+stage,"docker://"+repos[key]+":"+stage],check=True,env=env,timeout=DOCKER_TIMEOUT)
+                _staged_chart_manifest(account,region,repository,stage,chart_manifest_bytes,env)
+                # Pinned skopeo has uploaded every hash-checked blob to this
+                # same repository. ECR put-image attaches the final tag to the
+                # exact manifest; it does not rebuild or repackage any layer.
+                manifest_path=layout/"blobs/sha256"/hashlib.sha256(chart_manifest_bytes).hexdigest()
+                subprocess.run(["aws","ecr","put-image","--registry-id",account,"--region",region,"--repository-name",repository,"--image-tag",tag,"--image-manifest","file://"+str(manifest_path),"--image-manifest-media-type",OCI_MANIFEST_MEDIA_TYPE,"--output","json"],check=True,capture_output=True,text=True,env=env,timeout=AWS_TIMEOUT)
                 got=_describe_digest(account,region,repos[key].split('/',1)[1],tag,digest,env)
             verified[name]={"image_ref":repos[key]+"@"+got,"manifest_digest":got,"version":item["version"]}
         binding={"schema_version":1,"aws_account_id":account,"aws_region":region,"deployment_name":discovery["deployment_name"],"release_revision":index["release_revision"],"index_sha256":hashlib.sha256(index_path.read_bytes()).hexdigest(),"artifacts":verified}
