@@ -27,6 +27,25 @@ class Tests(unittest.TestCase):
  def write(self,p,v): p.parent.mkdir(parents=True,exist_ok=True); p.write_text(json.dumps(v)); os.chmod(p,0o600)
  def test_valid_idempotent(self):
   result=vault.prepare_vault_inputs(self.state,D,self.art); values=json.loads(result.read_text()); self.assertEqual(result.stat().st_mode&0o777,0o600); self.assertEqual(values["vault_runtime_images"], {"server":self.repo+"@"+self.server_digest,"agent":self.repo+"@"+self.server_digest,"injector":self.repo+"@"+self.injector_digest,"audit_relay":self.relay_repo+"@"+self.relay_digest}); overlay=json.loads(base64.b64decode(values["vault_image_values_overlay_base64"])); self.assertEqual(overlay["server"]["image"]["tag"],self.server_digest[7:]+"@"+self.server_digest); self.assertEqual(values["cert_manager_runtime_images"], {key:self.cert_repo+"@"+self.digest for key in ("controller","webhook","cainjector","startupapicheck")}); self.assertEqual((values["cert_manager_chart_version"],values["cert_manager_chart_manifest_digest"]),("1.21.1",self.digest)); self.assertTrue(vault.prepare_vault_inputs(self.state,D,self.art).exists())
+ def test_cert_manager_v_prefix_is_preserved_and_invalid_versions_are_rejected(self):
+  receipt_path=self.state/"vault-artifact-mirror-receipt.json"; index_path=self.state/"release/rendered/installer-artifact-index.json"
+  receipt=json.loads(receipt_path.read_text()); index=json.loads(index_path.read_text())
+  for version, accepted in (("v1.21.1",True),("vv1.21.1",False),("1.21",False),("v1.21.1/other",False),("latest",False),("v1.21.1\n",False)):
+   with self.subTest(version=version):
+    candidate_receipt=json.loads(json.dumps(receipt)); candidate_index=json.loads(json.dumps(index)); candidate_index["components"]["cert-manager-chart"]["version"]=version; candidate_receipt["artifacts"]["cert-manager-chart"]["version"]=version
+    raw=json.dumps(candidate_index).encode(); candidate_receipt["index_sha256"]=hashlib.sha256(raw).hexdigest(); self.write(index_path,candidate_index); self.write(receipt_path,candidate_receipt)
+    if accepted:
+     result=vault.prepare_vault_inputs(self.state,D,self.art); self.assertEqual(json.loads(result.read_text())["cert_manager_chart_version"],version); shutil.rmtree(self.state/"vault-bootstrap-inputs")
+    else:
+     with self.assertRaises(vault.VaultInputsError): vault.prepare_vault_inputs(self.state,D,self.art)
+    self.write(index_path,index); self.write(receipt_path,receipt)
+ def test_cert_manager_receipt_version_does_not_normalize_away_v_prefix(self):
+  receipt_path=self.state/"vault-artifact-mirror-receipt.json"; index_path=self.state/"release/rendered/installer-artifact-index.json"; receipt=json.loads(receipt_path.read_text()); index=json.loads(index_path.read_text())
+  index["components"]["cert-manager-chart"]["version"]="v1.21.1"; receipt["artifacts"]["cert-manager-chart"]["version"]="1.21.1"; raw=json.dumps(index).encode(); receipt["index_sha256"]=hashlib.sha256(raw).hexdigest(); self.write(index_path,index); self.write(receipt_path,receipt)
+  with self.assertRaises(vault.VaultInputsError): vault.prepare_vault_inputs(self.state,D,self.art)
+ def test_vault_chart_version_remains_numeric_only(self):
+  artifact=json.loads(self.art.read_text()); artifact["chart"]["version"]="v0.31.0"; self.write(self.art,artifact)
+  with self.assertRaises(vault.VaultInputsError): vault.prepare_vault_inputs(self.state,D,self.art)
  def test_foreign_and_unexpected_rejected(self):
   data=json.loads(self.art.read_text()); data["images"]["server"]="999999999999.dkr.ecr.ap-northeast-1.amazonaws.com/x@sha256:"+"a"*64; self.write(self.art,data)
   with self.assertRaises(vault.VaultInputsError): vault.prepare_vault_inputs(self.state,D,self.art)

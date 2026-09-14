@@ -12,6 +12,7 @@ import stat
 import tempfile
 
 from installer_files import publish_directory
+from installer_artifact_receipt import ReceiptError, validate_chart_version
 from installer_infrastructure import InfrastructureError, _read_object, _validate_tree, expected_inputs
 from installer_ops_execution import _private, _safe_state
 
@@ -134,7 +135,11 @@ def _expected(destination: Path, baseline: dict, artifact: dict, digest: str, di
     receipt_version = chart_record.get("version") if isinstance(chart_record, dict) else None
     chart_index = index["components"].get("cert-manager-chart", {})
     chart_version = chart_index.get("version") if isinstance(chart_index, dict) else None
-    if not isinstance(chart_digest, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", chart_digest) or not isinstance(chart_ref, str) or chart_ref != repositories["cert_manager_chart"] + "@" + chart_digest or not isinstance(chart_version, str) or receipt_version != chart_version or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", chart_version) or chart_digest != chart_index.get("expected_oci_manifest_digest"):
+    try:
+        validate_chart_version("cert-manager-chart", chart_version)
+    except ReceiptError as error:
+        raise VaultInputsError("Verified mirror receipt has invalid cert-manager chart binding.") from error
+    if not isinstance(chart_digest, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", chart_digest) or not isinstance(chart_ref, str) or chart_ref != repositories["cert_manager_chart"] + "@" + chart_digest or receipt_version != chart_version or chart_digest != chart_index.get("expected_oci_manifest_digest"):
         raise VaultInputsError("Verified mirror receipt has invalid cert-manager chart binding.")
     runtime_images = {key: artifact["images"][key] for key in ("server", "agent", "injector", "audit_relay")}
     tfvars = {"enable_vault_bootstrap_runner": True, "enable_vault_bootstrap_cluster_admin": False,

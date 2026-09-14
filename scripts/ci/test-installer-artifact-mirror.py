@@ -84,6 +84,33 @@ class Mirror(unittest.TestCase):
     mirror(state,bundle,{"aws_account_id":"123456789012","aws_region":"ap-northeast-1","deployment_name":"node"},"profile","c"*40)
    self.assertFalse((state/"vault-artifact-mirror-uncertain.json").exists())
    self.assertFalse(any(call[:3]==["docker","run","--rm"] for call in calls))
+ def test_cert_manager_v_prefix_reaches_mocked_external_boundary_and_invalid_versions_stop_before_it(self):
+  with tempfile.TemporaryDirectory() as t:
+   state,bundle,_=self.fixture(Path(t)); index_path=bundle/"rendered/installer-artifact-index.json"; index=json.loads(index_path.read_text())
+   chart=index["components"]["cert-manager-chart"]; chart.update(version="v1.21.1",tag="v1.21.1",approved_url="https://charts.jetstack.io/charts/cert-manager-v1.21.1.tgz")
+   index_path.write_text(json.dumps(index)); calls=[]
+   def run(args,**kwargs):
+    calls.append(args); raise RuntimeError("mocked external boundary")
+   with patch("installer_artifact_mirror.subprocess.run",side_effect=run), self.assertRaisesRegex(RuntimeError,"mocked external boundary"):
+    mirror(state,bundle,{"aws_account_id":"123456789012","aws_region":"ap-northeast-1","deployment_name":"node"},"profile","c"*40)
+   self.assertEqual(calls[0][:3],["aws","sts","get-caller-identity"])
+  for version in ("vv1.21.1","1.21","v1.21.1/other","latest","v1.21.1\n"):
+   with self.subTest(version=version), tempfile.TemporaryDirectory() as t:
+    state,bundle,_=self.fixture(Path(t)); index_path=bundle/"rendered/installer-artifact-index.json"; index=json.loads(index_path.read_text()); index["components"]["cert-manager-chart"]["version"]=version; index_path.write_text(json.dumps(index)); calls=[]
+    with patch("installer_artifact_mirror.subprocess.run",side_effect=lambda args,**kwargs: calls.append(args)), self.assertRaises(MirrorError):
+     mirror(state,bundle,{"aws_account_id":"123456789012","aws_region":"ap-northeast-1","deployment_name":"node"},"profile","c"*40)
+    self.assertEqual(calls,[])
+ def test_pre_eks_cert_manager_v_prefix_passes_shared_and_local_validation_before_aws(self):
+  with tempfile.TemporaryDirectory() as t:
+   root=Path(t); state=root/"state"; work=state/"terraform-work"; bundle=root/"bundle"; work.mkdir(parents=True); (bundle/"rendered").mkdir(parents=True); os.chmod(state,0o700); os.chmod(work,0o700)
+   index=strict_index("c"*40); index["components"]["cert-manager-chart"].update(version="v1.21.1",tag="v1.21.1",approved_url="https://charts.jetstack.io/charts/cert-manager-v1.21.1.tgz"); (bundle/"rendered/installer-artifact-index.json").write_text(json.dumps(index)); projection_path=work/"artifact-prerequisites.json"; projection_path.write_text("{}")
+   account="123456789012"; region="ap-northeast-1"; prefix="node-baseline-"; names=[prefix+"gitops-vault",prefix+"gitops-vault/vault",prefix+"gitops-cert-manager",prefix+"gitops-cert-manager/cert-manager",prefix+"vault-audit-relay"]
+   loaded={"aws_account_id":account,"aws_region":region,"deployment_name":"node","input_fingerprint":"f"*64,"repositories":{name:{"url":f"{account}.dkr.ecr.{region}.amazonaws.com/{name}"} for name in names}}; calls=[]
+   def run(args,**kwargs):
+    calls.append(args); raise RuntimeError("mocked external boundary")
+   with patch("installer_artifact_prerequisites.load_projection",return_value=loaded),patch("installer_artifact_mirror.subprocess.run",side_effect=run),self.assertRaisesRegex(RuntimeError,"mocked external boundary"):
+    mirror(state,bundle,{"aws_account_id":account,"aws_region":region,"deployment_name":"node"},"profile","c"*40,prerequisites_path=projection_path,work_dir=work)
+   self.assertEqual(calls[0][:3],["aws","sts","get-caller-identity"])
  def test_structured_ecr_identity_rejects_wrong_registry_or_repository(self):
   account="123456789012"; region="ap-northeast-1"; repository="private/vault"; digest="sha256:"+"a"*64
   for field, wrong in (("registryId","210987654321"),("repositoryName","private/foreign")):
