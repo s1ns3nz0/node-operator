@@ -2,7 +2,7 @@
 # Check objective: Validate Prysm mTLS publishing with fake commands.
 """Offline fake-command behaviour test for the Prysm mTLS publisher."""
 from __future__ import annotations
-import copy, importlib.util, json, os, pathlib, shutil, subprocess, tempfile, unittest
+import base64, copy, importlib.util, json, os, pathlib, shutil, subprocess, tempfile, unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
 
@@ -10,6 +10,26 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SHA = "a" * 40
 
 class TestPublisher(unittest.TestCase):
+    def test_large_sbom_comparison_uses_files_and_rejects_tampering(self):
+        # Execute the production comparison, with evidence larger than Linux's
+        # per-argument limit; do not replace jq with a fake command.
+        lines = (ROOT / "scripts/release/publish-prysm-mtls-image.sh").read_text().splitlines()
+        command = next(line for line in lines if line.startswith("jq ") and '"$evidence/sbom-verified.json"' in line)
+        self.assertIn('--slurpfile expected', command)
+        evidence = self.tmp / "large-sbom"; evidence.mkdir()
+        expected = {"bomFormat": "CycloneDX", "components": [{"name": "x" * 1024}] * 2048}
+        raw = json.dumps(expected)
+        (evidence / "sbom.json").write_text(raw)
+        statement = {"subject": [{"digest": {"sha256": "b" * 64}}], "predicateType": "https://cyclonedx.org/bom", "predicate": expected}
+        payload = base64.b64encode(json.dumps(statement).encode()).decode()
+        (evidence / "sbom-verified.json").write_text(json.dumps({"payload": payload}))
+        def run():
+            return subprocess.run(["bash", "-eu", "-c", command], env=dict(os.environ, evidence=str(evidence), digest="sha256:" + "b" * 64), capture_output=True).returncode
+        self.assertEqual(run(), 0)
+        for invalid in (json.dumps({"bomFormat": "tampered"}), raw + "\n{}", "[]", ""):
+            (evidence / "sbom.json").write_text(invalid)
+            self.assertNotEqual(run(), 0)
+
     def setUp(self):
         self.tmp = pathlib.Path(tempfile.mkdtemp()); self.bin = self.tmp / "bin"; self.bin.mkdir(); self.tools = self.tmp / "tools"; self.tools.mkdir()
         self.release = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
