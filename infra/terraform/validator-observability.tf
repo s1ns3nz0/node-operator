@@ -4,7 +4,7 @@
 resource "aws_s3_bucket" "validator_audit" {
   # bucket_prefix leaves room for Terraform's random suffix (S3 permits at
   # most 37 prefix characters).
-  bucket_prefix       = "${local.name_prefix}-va-"
+  bucket_prefix       = "${substr(local.name_prefix, 0, 20)}-va-"
   force_destroy       = false
   object_lock_enabled = true
 

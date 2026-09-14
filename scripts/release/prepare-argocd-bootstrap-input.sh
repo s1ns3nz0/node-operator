@@ -6,7 +6,7 @@ promotion=''; image=''; output=''; subnets=()
 while [ "$#" -gt 0 ]; do case "$1" in --promotion-handoff) promotion="${2:-}"; shift 2;; --argocd-image) image="${2:-}"; shift 2;; --subnet-id) subnets+=("${2:-}"); shift 2;; --output) output="${2:-}"; shift 2;; *) usage;; esac; done
 case "$promotion:$output" in /*:/*) ;; *) usage;; esac
 [ -f "$promotion" ] && [ ! -L "$promotion" ] && [ ! -e "$output" ] && [ ! -L "$output" ] || { printf '%s\n' 'promotion input/output path is unsafe' >&2; exit 65; }
-[[ "$image" =~ ^[0-9]{12}\.dkr\.ecr\.ap-northeast-2\.amazonaws\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$ ]] || usage
+[[ "$image" =~ ^[0-9]{12}\.dkr\.ecr\.[a-z]{2}-[a-z0-9-]+-[0-9]+\.amazonaws\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$ ]] || usage
 [ "${#subnets[@]}" -gt 0 ] || usage
 for subnet in "${subnets[@]}"; do [[ "$subnet" =~ ^subnet-[a-z0-9]+$ ]] || usage; done
 command -v jq >/dev/null 2>&1 || { printf '%s\n' 'missing command: jq' >&2; exit 127; }

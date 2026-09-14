@@ -6,7 +6,7 @@ umask 077
 # This is intentionally a preparation command: it never runs Terraform or
 # contacts a cluster, registry, Vault, or custody system.
 usage() {
-  printf '%s\n' "usage: ${0##*/} --aws-account-id <12-digit-id> --output-dir <new-absolute-dir> [--aws-region <ap-northeast-1|ap-northeast-2>] [--availability-zone <zone> --availability-zone <zone>] [--name <dns-name>] [--backend-principal-arn <same-account-role-arn>] [--manage-config-recorder true|false]" >&2
+  printf '%s\n' "usage: ${0##*/} --aws-account-id <12-digit-id> --output-dir <new-absolute-dir> [--aws-region <aws-region>] [--availability-zone <zone> --availability-zone <zone>] [--name <dns-name>] [--backend-principal-arn <same-account-role-arn>] [--manage-config-recorder true|false]" >&2
   exit 64
 }
 
@@ -25,16 +25,14 @@ while [ "$#" -gt 0 ]; do
 done
 case "$manage_config_recorder" in true|false) ;; *) usage ;; esac
 case "$account" in [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;; *) usage ;; esac
-case "$aws_region" in ap-northeast-1|ap-northeast-2) ;; *) usage ;; esac
+[[ "$aws_region" =~ ^[a-z]{2}-[a-z0-9-]+-[0-9]+$ ]] || usage
 case "$name" in [a-z][a-z0-9-][a-z0-9-]*[a-z0-9]) [ "${#name}" -le 20 ] ;; *) usage ;; esac
 case "$output_dir" in /*) ;; *) usage ;; esac
 [ ! -e "$output_dir" ] && [ ! -L "$output_dir" ] || { printf '%s\n' 'output directory already exists or is a symlink' >&2; exit 65; }
 command -v jq >/dev/null 2>&1 || { printf '%s\n' 'missing command: jq' >&2; exit 69; }
 if [ "${#availability_zones[@]}" -eq 0 ]; then
-  case "$aws_region" in
-    ap-northeast-1) availability_zones=(ap-northeast-1a ap-northeast-1c) ;;
-    ap-northeast-2) availability_zones=(ap-northeast-2a ap-northeast-2c) ;;
-  esac
+  command -v aws >/dev/null 2>&1 || { printf '%s\n' 'missing command: aws; provide two --availability-zone values' >&2; exit 69; }
+  mapfile -t availability_zones < <(aws ec2 describe-availability-zones --region "$aws_region" --filters Name=state,Values=available --query 'AvailabilityZones[].ZoneName' --output text | tr '\t' '\n' | sort | sed -n '1,2p')
 fi
 [ "${#availability_zones[@]}" -eq 2 ] && [ "${availability_zones[0]}" != "${availability_zones[1]}" ] || usage
 for zone in "${availability_zones[@]}"; do [[ "$zone" == "$aws_region"? ]] || usage; done
@@ -70,7 +68,7 @@ jq -n --arg account "$account" --arg name "$name" --arg region "$aws_region" --a
 jq -n --arg name "$name" --arg region "$aws_region" --argjson zones "$(printf '%s\n' "${availability_zones[@]}" | jq -R . | jq -s .)" '{aws_region:$region,name:$name,network_mode:"fresh",availability_zones:$zones}' > "$foundation"
 audit_replica_region='ap-northeast-1'; [ "$aws_region" = 'ap-northeast-1' ] && audit_replica_region='ap-northeast-2'
 jq -n --arg account "$account" --arg name "$name" --arg region "$aws_region" --arg apply_role "${principals[0]}" --arg audit_replica_region "$audit_replica_region" --argjson zones "$(printf '%s\n' "${availability_zones[@]}" | jq -R . | jq -s .)" --argjson manage_config_recorder "$manage_config_recorder" '
-  {aws_account_id:$account,aws_region:$region,terraform_apply_role_arn:$apply_role,audit_replica_region:$audit_replica_region,availability_zones:$zones,name:$name,enable_gitops_client_ecr_publisher:true,
+  {aws_account_id:$account,aws_region:$region,terraform_apply_role_arn:$apply_role,audit_replica_region:$audit_replica_region,availability_zones:$zones,name:$name,enable_gitops_client_ecr_publisher:true,enable_validator_runtime_ecr_mirror:true,enable_validator_client_ecr_mirror:true,
    manage_config_recorder:$manage_config_recorder,
    enable_temporary_ssm_ops_host:false,temporary_ssm_ops_host_termination_at:"",
    enable_argocd_bootstrap_runner:false,enable_argocd_bootstrap_cluster_admin:false,

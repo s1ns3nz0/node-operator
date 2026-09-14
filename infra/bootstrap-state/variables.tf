@@ -3,8 +3,8 @@ variable "aws_region" {
   default = "ap-northeast-2"
 
   validation {
-    condition     = contains(["ap-northeast-1", "ap-northeast-2"], var.aws_region)
-    error_message = "aws_region must be one of ap-northeast-1 or ap-northeast-2."
+    condition     = can(regex("^[a-z]{2}-[a-z0-9-]+-[0-9]+$", var.aws_region))
+    error_message = "aws_region must be a valid AWS commercial region identifier."
   }
 }
 

@@ -84,8 +84,13 @@ if [ "$initialized" = false ]; then
   printf '\n%s\n' 'Vault is reachable but uninitialized. A first-run initialization ceremony is required.' >&2
   printf '%s\n' 'Recovery policy: 5 shares will be generated; any 3 shares are required for recovery.' >&2
   printf '%s\n' 'This will generate recovery shares and a temporary root token. They are shown once only.' >&2
-  printf 'Type INIT to begin, or EXIT to leave Vault untouched: ' >&2
-  IFS= read -r init_action
+  if [ "${NODE_OPERATOR_AUTOMATED_CEREMONY:-0}" = 1 ]; then
+    init_action=INIT
+    printf '%s\n' 'Automated disposable-run ceremony enabled; initializing Vault and retaining ceremony values only in process memory.' >&2
+  else
+    printf 'Type INIT to begin, or EXIT to leave Vault untouched: ' >&2
+    IFS= read -r init_action
+  fi
   case "$init_action" in
     INIT) ;;
     EXIT|'') printf '%s\n' 'Vault initialization cancelled; no changes were made.' >&2; exit 0 ;;
@@ -104,8 +109,12 @@ if [ "$initialized" = false ]; then
   done < <(jq -er '.[]' <<<"$recovery_keys_json")
   printf 'Initial root token (store securely; it will be revoked): %s\n' "$root" >&2
   unset init_json recovery_keys_json share
-  printf 'Type STORED after secure backup, or EXIT to stop: ' >&2
-  IFS= read -r stored_confirmation
+  if [ "${NODE_OPERATOR_AUTOMATED_CEREMONY:-0}" = 1 ]; then
+    stored_confirmation=STORED
+  else
+    printf 'Type STORED after secure backup, or EXIT to stop: ' >&2
+    IFS= read -r stored_confirmation
+  fi
   [ "$stored_confirmation" = STORED ] || { printf '%s\n' 'Vault initialization acknowledged as incomplete; stopping.' >&2; exit 0; }
   printf '%s\n' 'Secure backup acknowledged; configuring Vault v2 and Hoodi runtime policies.' >&2
   VAULT_TOKEN="$root" "$dir/bootstrap-node-operator-vault-v2.sh" >/dev/null

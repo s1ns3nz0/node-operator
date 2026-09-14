@@ -22,8 +22,8 @@ variable "argocd_bootstrap_image" {
   default     = ""
 
   validation {
-    condition     = var.argocd_bootstrap_image == "" || can(regex("^[0-9]{12}\\.dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", var.argocd_bootstrap_image))
-    error_message = "argocd_bootstrap_image must be empty while disabled or an ap-northeast-2 private ECR image pinned by a sha256 digest."
+    condition     = var.argocd_bootstrap_image == "" || can(regex("^[0-9]{12}\\.dkr\\.ecr\\.[a-z]{2}-[a-z0-9-]+-[0-9]+\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", var.argocd_bootstrap_image))
+    error_message = "argocd_bootstrap_image must be empty while disabled or a same-region private ECR image pinned by a sha256 digest."
   }
 }
 
@@ -49,10 +49,20 @@ variable "gitops_client_chart_oci_digest" {
   }
 }
 
+variable "cert_manager_chart_manifest_digest" {
+  description = "OCI manifest digest for the reviewed cert-manager chart mirrored into the private ECR repository."
+  type        = string
+  default     = "sha256:62c4745561eccfd723678c6547500750ebef5a880d81ff670d33124ab335f877"
+
+  validation {
+    condition     = can(regex("^sha256:[a-f0-9]{64}$", var.cert_manager_chart_manifest_digest))
+    error_message = "cert_manager_chart_manifest_digest must be an OCI sha256 manifest digest."
+  }
+}
+
 locals {
-  argocd_chart_version               = "10.4.0"
-  cert_manager_chart_version         = "v1.21.1"
-  cert_manager_chart_manifest_digest = "sha256:62c4745561eccfd723678c6547500750ebef5a880d81ff670d33124ab335f877"
+  argocd_chart_version       = "10.4.0"
+  cert_manager_chart_version = "v1.21.1"
 }
 
 resource "aws_security_group" "argocd_bootstrap" {
@@ -249,14 +259,36 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
             - set -eu
             - aws eks update-kubeconfig --region ${var.aws_region} --name ${aws_eks_cluster.private.name}
             - aws ecr get-login-password --region ${var.aws_region} | helm registry login --username AWS --password-stdin ${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com
+            # Older approved bootstrap images may contain only the Argo CD
+            # values file.  Rehydrate the reviewed, non-secret inputs from the
+            # Terraform release bundle so the immutable image remains usable
+            # without depending on a mutable repository or public network.
+            - test -f /opt/node-operator/argocd-private-values.yaml || (echo '${base64encode(try(file("${path.module}/argocd-private-values.example.yaml"), file("${path.module}/../../docs/gitops/argocd-private-values.example.yaml")))}' | base64 -d > /opt/node-operator/argocd-private-values.yaml)
+            - test -f /opt/node-operator/cert-manager-values.yaml || (echo '${base64encode(try(file("${path.module}/cert-manager-values.example.yaml"), file("${path.module}/../../docs/gitops/cert-manager-values.example.yaml")))}' | base64 -d > /opt/node-operator/cert-manager-values.yaml)
+            - test -f /opt/node-operator/vault-tls-internal-ca.yaml || (echo '${base64encode(try(file("${path.module}/vault-tls-internal-ca.example.yaml"), file("${path.module}/../../docs/gitops/vault-tls-internal-ca.example.yaml")))}' | base64 -d > /opt/node-operator/vault-tls-internal-ca.yaml)
             # The release image embeds reviewed values, while repository names
             # are deployment-scoped. Rewrite only the non-secret ECR prefix at
             # runtime so a zero-resource account never pulls another stack's
             # images.
-            - sed -i 's#node-operator-baseline#${local.name_prefix}#g' /opt/node-operator/argocd-private-values.yaml /opt/node-operator/cert-manager-values.yaml
+            # The reviewed values files carry the Seoul source registry as
+            # provenance metadata.  Rewrite both the deployment prefix and
+            # registry region before the private-cluster install; otherwise
+            # nodes in a new region try to pull over a non-existent cross-
+            # region ECR endpoint and remain in ImagePullBackOff.
+            - sed -i -e 's#node-operator-baseline#${local.name_prefix}#g' -e 's#ap-northeast-2#${var.aws_region}#g' /opt/node-operator/argocd-private-values.yaml /opt/node-operator/cert-manager-values.yaml
+            # ECR recalculates image manifest digests when a multi-architecture
+            # image is mirrored. Resolve the destination digest by immutable
+            # release tag before Helm renders workloads; retaining the source
+            # digest here would produce ImagePullBackOff in a fresh region.
+            - |
+              for image_tag in 416a2d76870d996460e62bd7f521bf14fa017be9e3e904aab92163a331fcb61a d8b3961b51c8c7320633f8208dc46bf88aa13804d0f7cbe48a096b2c523cee42 ccf6b919ec0500745a47a910118f834f9636d0aac1ff221245cd2557ed8c7c98 d8ab6416e6e7303a86fa0a8daa82c94a8001f21c9d78eb2e7db20534e5d07ae8; do
+                destination_digest="$(aws ecr describe-images --region ${var.aws_region} --repository-name ${aws_ecr_repository.private_gitops["cert_manager"].name} --image-ids imageTag="$$image_tag" --query 'imageDetails[0].imageDigest' --output text)"
+                test "$$destination_digest" != None
+                sed -i "s#sha256:$$image_tag#$$destination_digest#g" /opt/node-operator/cert-manager-values.yaml
+              done
             - helm upgrade --install argocd oci://${aws_ecr_repository.private_gitops["argocd_chart"].repository_url} --version ${local.argocd_chart_version} --namespace argocd --create-namespace --values /opt/node-operator/argocd-private-values.yaml --atomic --timeout 10m
             - kubectl wait --namespace argocd --for=condition=Available deployment/argocd-server --timeout=10m
-            - helm upgrade --install cert-manager oci://${aws_ecr_repository.private_gitops["cert_manager_chart"].repository_url}@${local.cert_manager_chart_manifest_digest} --version ${local.cert_manager_chart_version} --namespace cert-manager --create-namespace --values /opt/node-operator/cert-manager-values.yaml --atomic --timeout 10m
+            - helm upgrade --install cert-manager oci://${aws_ecr_repository.private_gitops["cert_manager_chart"].repository_url}@${var.cert_manager_chart_manifest_digest} --version ${local.cert_manager_chart_version} --namespace cert-manager --create-namespace --values /opt/node-operator/cert-manager-values.yaml --atomic --timeout 10m
             - kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager --timeout=10m
             - kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager-webhook --timeout=10m
             - kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager-cainjector --timeout=10m

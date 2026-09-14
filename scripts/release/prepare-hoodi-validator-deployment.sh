@@ -4,7 +4,7 @@ set -euo pipefail
 # Render only non-secret, initially fenced workload manifests. Vault recovery
 # material, keystore files, mnemonic, and wallet access remain outside this command.
 usage() {
-  printf '%s\n' "Usage: ${0##*/} --validator-set <hoodi-id> --validator-public-key <0x-key> --withdrawal-address <0x-address> --aws-account-id <12-digit-id> [--aws-region <ap-northeast-1|ap-northeast-2>] --web3signer-image <private-ecr@sha256> --postgres-image <private-ecr@sha256> --prysm-validator-image <private-ecr@sha256> --signing-fence-image <private-ecr@sha256> --kubernetes-api-cidr <ipv4/32> --output-dir <new-absolute-dir>" >&2
+  printf '%s\n' "Usage: ${0##*/} --validator-set <hoodi-id> --validator-public-key <0x-key> --withdrawal-address <0x-address> --aws-account-id <12-digit-id> [--aws-region <aws-region>] --web3signer-image <private-ecr@sha256> --postgres-image <private-ecr@sha256> --prysm-validator-image <private-ecr@sha256> --signing-fence-image <private-ecr@sha256> --kubernetes-api-cidr <ipv4/32> --output-dir <new-absolute-dir>" >&2
   exit 64
 }
 
@@ -30,7 +30,7 @@ case "$validator_set" in hoodi-[a-z0-9][a-z0-9-]*) ;; *) usage ;; esac
 case "$validator_public_key" in 0x????????????????????????????????????????????????????????????????????????????????????????????????) ;; *) usage ;; esac
 case "$withdrawal_address" in 0x????????????????????????????????????????) ;; *) usage ;; esac
 case "$aws_account_id" in [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;; *) usage ;; esac
-case "$aws_region" in ap-northeast-1|ap-northeast-2) ;; *) usage ;; esac
+[[ "$aws_region" =~ ^[a-z]{2}-[a-z0-9-]+-[0-9]+$ ]] || usage
 case "$output_dir" in /*) ;; *) usage ;; esac
 for command in jq mkdir mktemp mv chmod dirname rm tr; do
   command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }

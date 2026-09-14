@@ -171,7 +171,7 @@ zero_apply() {
     expected_baseline="$input_parent/baseline.tfvars.json"
     jq -e --arg bootstrap "$expected_bootstrap" --arg foundation "$expected_foundation" --arg baseline "$expected_baseline" '
       .schema_version == 1 and (.aws_account_id | test("^[0-9]{12}$")) and
-      (.aws_region | test("^ap-northeast-(1|2)$")) and
+      (.aws_region | test("^[a-z]{2}-[a-z0-9-]+-[0-9]+$")) and
       .bootstrap_config == $bootstrap and .foundation_config == $foundation and .baseline_config == $baseline
     ' "$inputs" >/dev/null || fail "--inputs is not a bounded zero-resource input contract"
     bootstrap_config="$expected_bootstrap"; foundation_config="$expected_foundation"; baseline_config="$expected_baseline"
@@ -246,6 +246,15 @@ zero_apply() {
   chmod 600 "$foundation_input"
 
   copy_module infra/terraform "$baseline_module"
+  # The Argo bootstrap buildspec may need reviewed non-secret values that are
+  # not Terraform resources. Copy them beside the module so Terraform's
+  # file() calls remain valid after the release bundle is staged in a clean
+  # temporary work directory.
+  for gitops_input in argocd-private-values.example.yaml cert-manager-values.example.yaml vault-tls-internal-ca.example.yaml; do
+    [ -f "$bundle_root/source/docs/gitops/$gitops_input" ] || fail "release bundle is missing docs/gitops/$gitops_input"
+    cp "$bundle_root/source/docs/gitops/$gitops_input" "$baseline_module/$gitops_input"
+    chmod 600 "$baseline_module/$gitops_input"
+  done
   cp "$foundation_input" "$baseline_module/foundation-network.auto.tfvars.json"
   write_backend_config "$bootstrap_output" "node-operator/baseline/terraform.tfstate" "$baseline_backend"
   apply_phase "$baseline_module" "$baseline_config" "$baseline_backend" "$work_dir/baseline.tfplan"
