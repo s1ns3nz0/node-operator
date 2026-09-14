@@ -10,7 +10,7 @@ on:
         required: true
         default: all
         type: choice
-        options: [all, installer-prerequisites, scanner, toolchains, fence, relay, prysm-mtls, signer-probe, terraform-validation, release-build, vault-release-signer, gitops-oci-mirror, argocd-bootstrap, vault-bootstrap]
+        options: [all, installer-prerequisites, scanner, toolchains, fence, relay, prysm-mtls, signer-probe, kyverno-cli, terraform-validation, release-build, vault-release-signer, gitops-oci-mirror, argocd-bootstrap, vault-bootstrap]
 
 permissions:
   contents: read
@@ -27,6 +27,7 @@ jobs:
       relay: ${{ steps.select.outputs.relay }}
       prysm_mtls: ${{ steps.select.outputs.prysm_mtls }}
       signer_probe: ${{ steps.select.outputs.signer_probe }}
+      kyverno_cli: ${{ steps.select.outputs.kyverno_cli }}
       toolchain_matrix: ${{ steps.select.outputs.toolchain_matrix }}
     steps:
       # Role: Retrieve the configured source revision without persisting checkout credentials.
@@ -324,6 +325,42 @@ jobs:
         with:
           name: signer-probe-publication-record-${{ github.sha }}
           path: ${{ runner.temp }}/signer-probe-publication-records/signer-identity-probe-publication-record.json
+          if-no-files-found: error
+          retention-days: 30
+
+  # Role: Publish the reviewed Kyverno CLI only to the canonical GitOps node repository.
+  kyverno-cli-publish:
+    name: Kyverno CLI Publication
+    needs: [select]
+    if: github.ref == 'refs/heads/main' && needs.select.outputs.kyverno_cli == 'true'
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: gitops-oci-mirror
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - name: Reviewed Kyverno CLI image
+        env:
+          AWS_REGION: ap-northeast-2
+          ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          AWS_ROLE_ARN: ${{ vars.GITOPS_OCI_MIRROR_ROLE_ARN }}
+          DEPLOYMENT_NAME: node-operator
+        run: bash scripts/release/publish-kyverno-cli-image.sh
+      - name: Kyverno CLI publication record
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: kyverno-cli-publication-record-${{ github.sha }}
+          path: ${{ runner.temp }}/kyverno-cli-publication-records/kyverno-cli-publication-record.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Kyverno CLI review evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: kyverno-cli-review-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/kyverno-cli-publication-records/evidence/
           if-no-files-found: error
           retention-days: 30
 

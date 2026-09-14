@@ -175,10 +175,12 @@ class ApplyCollector(unittest.TestCase):
 
     def test_public_installer_places_collector_before_audit_custody_and_runtime_apply(self):
         source = (ROOT / "scripts/release/interactive-hoodi-release.sh").read_text()
+        kyverno = source.index('Installing verified private Kyverno')
         collector = source.index('Applying verified validator log collector')
         audit = source.index('Configuring Vault audit devices before custody', collector)
         custody = source.index('if [ "$lifecycle_phase" = audit-complete ]; then', audit)
         runtime = source.index('Applying Vault-backed validator runtime', custody)
+        self.assertLess(kyverno, collector)
         self.assertLess(collector, runtime)
         self.assertLess(collector, audit)
         self.assertLess(audit, custody)

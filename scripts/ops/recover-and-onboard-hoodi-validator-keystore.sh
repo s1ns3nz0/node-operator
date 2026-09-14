@@ -196,20 +196,27 @@ if [ "$refresh_auth_only" = true ]; then
   exit 0
 fi
 base="node-operator-runtime/validators/hoodi/$set_id/runtime"
+physical_base="${base%%/*}/data/${base#*/}"
 records=(keystore password slashing-db-password signer-tls client-tls)
 
 # Read each record once as data, treating only Vault's documented missing-value
 # response as absence. Authorization, transport and decoding failures are never
 # permission to generate a replacement.
 read_record() {
-  local record="$1" path="$base/$record" error="$tmp/$record.read-error"
+  local record="$1"
+  local path="$base/$record"
+  local physical_path="$physical_base/$record"
+  local error="$tmp/$record.read-error"
+  local status
   [ ! -e "$tmp/$record.json" ] && [ ! -L "$tmp/$record.json" ] || unlink "$tmp/$record.json" || { printf 'private custody scratch cleanup could not be confirmed\n' >&2; exit 70; }
   if VAULT_TOKEN="$root" vault kv get -format=json "$path" > "$tmp/$record.raw" 2>"$error"; then
     jq -e '.data.data | select(type == "object")' "$tmp/$record.raw" > "$tmp/$record.json" || { printf 'stored custody record is malformed: %s\n' "$record" >&2; exit 65; }
     eval "present_${record//-/_}=true"
     return 0
+  else
+    status=$?
   fi
-  [ "$(<"$error")" = "No value found at $path" ] || { printf 'stored custody record could not be read: %s\n' "$record" >&2; exit 69; }
+  [ "$status" -eq 2 ] && [ "$(<"$error")" = "No value found at $physical_path" ] || { printf 'stored custody record could not be read: %s\n' "$record" >&2; exit 69; }
   eval "present_${record//-/_}=false"
 }
 read_all_records() { for record in "${records[@]}"; do read_record "$record"; done; }

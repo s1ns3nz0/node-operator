@@ -35,7 +35,10 @@ audit:list) printf '{}' ;;
 audit:enable) : ;;
 write:-format=json) printf '{"data":{"hash":"hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"request_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}' ;;
 token:revoke) : ;;
-token:lookup) case "${LOOKUP_MODE:-invalid}" in invalid) printf 'Error making API request.\\n\\nCode: 403. Errors:\\n\\n* invalid token\\n' >&2 ;; network) printf 'connection refused' >&2 ;; *) exit 64;; esac; exit 2 ;;
+token:lookup)
+  # Match the real CLI: lookup defaults to self and rejects the revoke-only flag.
+  [ "$*" = 'token lookup -format=json' ] || { printf 'flag provided but not defined or unexpected arguments' >&2; exit 1; }
+  case "${LOOKUP_MODE:-invalid}" in invalid) printf 'Error making API request.\\n\\nCode: 403. Errors:\\n\\n* invalid token\\n' >&2 ;; network) printf 'connection refused' >&2 ;; active) printf '{"data":{"id":"synthetic"}}'; exit 0 ;; denied) printf 'Code: 403. Errors: permission denied' >&2 ;; *) exit 64;; esac; exit 2 ;;
 *) exit 64;; esac
 '''
         self._command("vault", vault)
@@ -74,6 +77,15 @@ token:lookup) case "${LOOKUP_MODE:-invalid}" in invalid) printf 'Error making AP
         self.assertIn("not explicitly confirmed as HTTP 403 invalid token", result.stderr)
         self.assertNotIn("revocation was verified", result.stdout)
         self.assertFalse(receipt.exists())
+
+    def test_active_token_or_generic_denial_never_confirms_revocation(self):
+        for mode in ("active", "denied"):
+            with self.subTest(mode=mode):
+                receipt = self.base / "audit-challenge.json"
+                result = self.invoke(mode, **self.receipt_args(receipt))
+                self.assertEqual(result.returncode, 75, result.stderr)
+                self.assertFalse(receipt.exists())
+                self.assertNotIn("revocation was verified", result.stdout)
 
     def test_receipt_mode_binds_exact_operation_after_revocation(self):
         audit = self.base / "audit"; audit.mkdir(mode=0o700)

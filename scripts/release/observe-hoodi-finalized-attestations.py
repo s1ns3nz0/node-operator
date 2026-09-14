@@ -476,7 +476,7 @@ def observed_proof(private: Beacon, public: Beacon, identity: dict[str, str], ep
 def observe(directory: Path, identity: dict[str, str], private_url: str, public_url: str,
             workload_path: Path, log_path: Path, timeout: float, fetch: Callable[[str, float], Any] | None = None,
             required_count: int = 3) -> tuple[int, dict[str, Any]]:
-    if type(required_count) is not int or required_count not in (2, 3):
+    if type(required_count) is not int or required_count not in (1, 2, 3):
         raise ObservationError()
     workload, logs, workload_hash, log_hash = proof_inputs(workload_path, log_path, identity)
     checkpoint_identity = identity | {"private_beacon_url": private_url, "public_beacon_url": public_url,
@@ -549,7 +549,7 @@ def main() -> int:
     parser.add_argument("--workload-proof", required=True)
     parser.add_argument("--log-delivery-proof", required=True)
     parser.add_argument("--timeout-seconds", type=float, default=10.0)
-    parser.add_argument("--required-finalized-epochs", type=int, choices=(2, 3), default=3)
+    parser.add_argument("--required-finalized-epochs", type=int, choices=(1, 2, 3), default=3)
     args = parser.parse_args()
     try:
         if not 1 <= args.timeout_seconds <= 30:

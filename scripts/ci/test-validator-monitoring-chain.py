@@ -34,6 +34,11 @@ class ChainEmf(unittest.TestCase):
             value = result(("10",)); mutate(value)
             with self.assertRaises(chain.ChainMonitoringError): chain.render(CONTEXT, value, True, 1)
 
+    def test_single_epoch_threshold_is_accepted_with_a_complete_single_proof(self):
+        value = result(("10",)); value["required_finalized_epochs"] = 1; value["complete"] = True
+        event = chain.render(CONTEXT, value, True, 1)
+        self.assertEqual(event["VerifiedFinalizedEpochCount"], 1)
+
     def test_context_and_epoch_strings_are_canonical_and_activation_epoch_is_allowed(self):
         for context in ({"aws_region":"ap-northeast-2"}, CONTEXT | {"extra":"ignored"}):
             if "identity" not in context:

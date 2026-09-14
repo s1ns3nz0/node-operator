@@ -3,7 +3,7 @@
 
 Internal entrypoint: the release caller verifies its bundle and live private
 EKS session before invoking this program inside the selected tunnel. A zero
-exit proves three finalized duties, configured AWS delivery metadata, and the
+exit proves the requested finalized-duty threshold, configured AWS delivery metadata, and the
 resume-bound Vault audit challenge correlation; deployment completion remains
 the caller's lifecycle decision.
 """
@@ -275,7 +275,7 @@ def main():
     parser.add_argument("--private-beacon-port", type=int, default=19501)
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--continuous", action="store_true")
-    parser.add_argument("--required-finalized-epochs", type=int, choices=(2, 3), default=3)
+    parser.add_argument("--required-finalized-epochs", type=int, choices=(1, 2, 3), default=3)
     parser.add_argument("--emit-emf", action="store_true", help="print local EMF JSON; does not ingest CloudWatch")
     args = parser.parse_args()
     def interrupted(signum, frame):
