@@ -68,6 +68,8 @@ metadata:
   namespace: validator-operations
   labels: {app.kubernetes.io/component: validator-signing-fence, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}
 spec:
+  # Staging only: activate-hoodi-validator-client.sh starts exactly one fence
+  # together with the identity-bound validator client. Do not bypass the gate.
   replicas: 0
   strategy: {type: Recreate}
   selector:

@@ -268,15 +268,15 @@ valid_instance_type(group) if {
 
 valid_scaling(group, scaling) if {
   pool_role(group) == "system"
-  object.get(scaling, "min_size", null) == 1
-  object.get(scaling, "desired_size", null) == 1
+  object.get(scaling, "min_size", null) == 3
+  object.get(scaling, "desired_size", null) == 3
   object.get(scaling, "max_size", null) == 3
 }
 
 valid_scaling(group, scaling) if {
   pool_role(group) in {"consensus", "execution"}
   object.get(scaling, "min_size", null) == 0
-  object.get(scaling, "desired_size", null) == 0
+  object.get(scaling, "desired_size", null) in {0, 1}
   object.get(scaling, "max_size", null) == 1
 }
 

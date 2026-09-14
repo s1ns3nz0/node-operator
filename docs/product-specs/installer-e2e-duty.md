@@ -22,6 +22,14 @@ T01 must map the approved release's existing clients, schemas, topology, ownersh
 
 ## Interactive and recovery behavior
 
+Initial capacity (user-approved 2026-09-14): create three system nodes for the
+three anti-affine Vault replicas, one consensus node and one execution node.
+Do not require an extra manual scale-up to schedule the initial deployment.
+Prysm Beacon, Nethermind and PostgreSQL each target one replica. Signer, validator
+client and fence remain at zero only during safe staging; their existing guarded
+startup paths target exactly one after custody/readiness/activation checks.
+Explicit stop, recovery and fencing operations may still scale to zero.
+
 - Read non-secret defaults from the supported env file; confirm the actual AWS account, Region and deployment identity. Never overwrite GITHUB_TOKEN.
 - Apply the [preflight and resume contract](installer-preflight-resume.md): validate sources and permissions, bind state ownership, prepare minimal ECR prerequisites and verify destination digests before VPC/EKS creation. Keep SSM access resources in their separate phase/state.
 - Report numbered stages and failures. Preserve state and work directory on failure; refresh and regenerate plans for resume. Do not automatically delete/recreate the deployment or repeat Vault initialization, deposit or signing activation.

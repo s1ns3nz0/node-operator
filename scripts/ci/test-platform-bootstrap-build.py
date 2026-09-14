@@ -47,6 +47,50 @@ class T(unittest.TestCase):
   with patch.object(build,"_aws",pending):
    with self.assertRaises(build.BuildError): self.invoke(0)
   self.assertEqual(json.loads((self.w/'platform-bootstrap-builds/argocd.json').read_text())["state"],"running")
+ def test_retry_terminal_archives_verified_failure_and_starts_once(self):
+  root=self.w/'platform-bootstrap-builds';root.mkdir(mode=0o700);old={"schema_version":1,"account":A,"region":R,"project":P,"phase":"argocd","state":"FAILED","build_id":ID};(root/'argocd.json').write_text(json.dumps(old));(root/'argocd.json').chmod(0o600);calls=[]
+  def aws(profile,region,args):
+   calls.append(args)
+   if args[0]=='sts': return A
+   if args[1]=='start-build': return item('IN_PROGRESS')
+   return [item('FAILED')] if sum(x[1]=='batch-get-builds' for x in calls)==1 else [item('SUCCEEDED')]
+  with patch.object(build,'_aws',aws): build.run(self.w,'argocd',A,R,P,'chosen',0,True)
+  archived=list(root.glob('argocd.failed-*.json'));self.assertEqual(len(archived),1);self.assertEqual(json.loads(archived[0].read_text()),old);self.assertEqual(sum(x[1]=='start-build' for x in calls),1);self.assertEqual(json.loads((root/'argocd.json').read_text())['state'],'SUCCEEDED')
+ def test_retry_terminal_refuses_unverified_states_without_start(self):
+  for status in ('IN_PROGRESS','SUCCEEDED'):
+   with self.subTest(status=status):
+    work=self.d/status;work.mkdir(mode=0o700);root=work/'platform-bootstrap-builds';root.mkdir(mode=0o700);value={"schema_version":1,"account":A,"region":R,"project":P,"phase":"argocd","state":status,"build_id":ID};(root/'argocd.json').write_text(json.dumps(value));(root/'argocd.json').chmod(0o600);calls=[]
+    def aws(profile,region,args): calls.append(args);return [item(status)] if args[0]=='codebuild' else A
+    with patch.object(build,'_aws',aws),self.assertRaises(build.BuildError):build.run(work,'argocd',A,R,P,'chosen',0,True)
+    self.assertFalse(any(x[1]=='start-build' for x in calls));self.assertEqual(json.loads((root/'argocd.json').read_text()),value)
+ def test_retry_terminal_refuses_missing_intent_and_transient_without_start(self):
+  for case in ('missing','intent','transient'):
+   with self.subTest(case=case):
+    work=self.d/('retry-'+case);work.mkdir(mode=0o700);root=work/'platform-bootstrap-builds';root.mkdir(mode=0o700);checkpoint=root/'argocd.json';calls=[]
+    if case == 'intent': value={"schema_version":1,"account":A,"region":R,"project":P,"phase":"argocd","state":"start-intent"}
+    elif case == 'transient': value={"schema_version":1,"account":A,"region":R,"project":P,"phase":"argocd","state":"FAILED","build_id":ID}
+    else: value=None
+    if value is not None: checkpoint.write_text(json.dumps(value));checkpoint.chmod(0o600)
+    def aws(profile,region,args):
+     calls.append(args)
+     if case == 'transient': raise build.BuildError('transient')
+     raise AssertionError('retry should reject before AWS')
+    with patch.object(build,'_aws',aws),self.assertRaises(build.BuildError):build.run(work,'argocd',A,R,P,'chosen',0,True)
+    self.assertFalse(any(len(x)>1 and x[1]=='start-build' for x in calls));self.assertEqual(checkpoint.exists(),value is not None)
+    if value is not None:self.assertEqual(json.loads(checkpoint.read_text()),value)
+ def test_ambiguous_retry_start_retains_intent_and_never_duplicates(self):
+  root=self.w/'platform-bootstrap-builds';root.mkdir(mode=0o700);old={"schema_version":1,"account":A,"region":R,"project":P,"phase":"argocd","state":"FAILED","build_id":ID};checkpoint=root/'argocd.json';checkpoint.write_text(json.dumps(old));checkpoint.chmod(0o600);calls=[]
+  def uncertain(profile,region,args):
+   calls.append(args)
+   if args[0]=='sts': return A
+   if args[1]=='batch-get-builds': return [item('FAILED')]
+   raise build.BuildError('ambiguous start')
+  with patch.object(build,'_aws',uncertain):
+   with self.assertRaises(build.BuildError): build.run(self.w,'argocd',A,R,P,'chosen',0,True)
+   self.assertEqual(json.loads(checkpoint.read_text())['state'],'start-intent')
+   with self.assertRaises(build.BuildError): build.run(self.w,'argocd',A,R,P,'chosen',0)
+   with self.assertRaises(build.BuildError): build.run(self.w,'argocd',A,R,P,'chosen',0,True)
+  self.assertEqual(sum(len(x)>1 and x[1]=='start-build' for x in calls),1)
  def test_unsafe_checkpoint_and_lock_reject_without_aws(self):
   root=self.w/'platform-bootstrap-builds';root.mkdir(mode=0o700);(root/'argocd.json').write_text(json.dumps({"schema_version":1,"account":"999999999999","region":R,"project":P,"phase":"argocd","state":"running","build_id":ID}));(root/'argocd.json').chmod(0o600)
   with patch.object(build,"_aws") as aws:

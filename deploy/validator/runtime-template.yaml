@@ -125,6 +125,8 @@ metadata:
   name: validator-REPLACE_WITH_VALIDATOR_SET-remote-signer
   namespace: validator-operations
 spec:
+  # Start exactly one signer through start-hoodi-validator-signer.sh after
+  # custody, TLS, database and exclusive-signing checks. Never start from GitOps.
   replicas: 0
   strategy: {type: Recreate}
   selector:

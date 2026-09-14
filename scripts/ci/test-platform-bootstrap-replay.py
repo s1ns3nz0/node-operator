@@ -35,6 +35,10 @@ class Replay(unittest.TestCase):
   self.initialize();path=self.work/'platform-bootstrap-replay/checkpoint.json'
   value=json.loads(path.read_text());value['phases']={'unreviewed_phase':'complete'};path.write_text(json.dumps(value));path.chmod(0o600)
   self.assertEqual(self.call('phase','--work-dir',str(self.work),'--phase','argocd_apply','--action','get',ok=False).returncode,65)
+ def test_outside_runtime_baseline_rejects_before_checkpoint_publication(self):
+  outside=Path(tempfile.mkdtemp()).resolve()/'baseline.json';outside.write_text('{}');outside.chmod(0o600);self.addCleanup(shutil.rmtree,outside.parent,True)
+  result=self.call('initialize','--work-dir',str(self.work),'--account','123456789012','--region','ap-northeast-2','--deployment','test-node','--baseline-config',str(outside),'--session',str(self.session),'--argocd-input',str(self.inputs/'argocd.tfvars.json'),'--vault-input',str(self.inputs/'vault.tfvars.json'),'--vault-overlay',str(self.inputs/'vault-image-overrides.json'),ok=False)
+  self.assertEqual(result.returncode,65);self.assertFalse((self.work/'platform-bootstrap-replay/checkpoint.json').exists())
  def test_killed_supervisor_leaves_lock_with_child(self):
   ready=self.temp/'child-ready';release=self.temp/'child-release'
   child='from pathlib import Path\nimport sys, time\nready, release = map(Path, sys.argv[1:])\nready.write_text("ready")\ndeadline = time.monotonic() + 30\nwhile not release.exists() and time.monotonic() < deadline: time.sleep(.01)'

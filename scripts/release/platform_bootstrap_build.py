@@ -6,7 +6,7 @@ after an ambiguous start.  It is not a claim that CodeBuild completed.
 """
 from __future__ import annotations
 
-import argparse, fcntl, json, os, re, signal, stat, subprocess, sys, tempfile, time
+import argparse, fcntl, hashlib, json, os, re, signal, stat, subprocess, sys, tempfile, time
 from pathlib import Path
 
 ACCOUNT = re.compile(r"[0-9]{12}\Z")
@@ -119,7 +119,7 @@ def _check_build(value: object, account: str, region: str, project: str, build_i
         raise BuildError("CodeBuild metadata does not bind the selected account, Region, project, and build.")
     return status
 
-def run(work: Path, phase: str, account: str, region: str, project: str, profile: str, timeout: int=1800) -> None:
+def run(work: Path, phase: str, account: str, region: str, project: str, profile: str, timeout: int=1800, retry_terminal: bool=False) -> None:
     if not (ACCOUNT.fullmatch(account) and REGION.fullmatch(region) and PROJECT.fullmatch(project) and re.fullmatch(r"[a-z][a-z0-9-]{1,32}",phase) and re.fullmatch(r"[A-Za-z0-9_.-]{1,128}",profile) and timeout >= 0): raise BuildError("Platform build arguments are invalid.")
     root=_safe_work(work); checkpoint=root/(phase+".json"); lock=root/("."+phase+".lock")
     try:
@@ -138,16 +138,27 @@ def run(work: Path, phase: str, account: str, region: str, project: str, profile
         if existed: value=_read(checkpoint)
         else: value={**expected,"state":"start-intent"}
         if any(value.get(k)!=v for k,v in expected.items()): raise BuildError("Platform build checkpoint does not bind this selected phase.")
-        state=value.get("state")
+        state=value.get("state"); intentional_new_start=False
         keys=set(value)
         if keys != set(expected)|{"state"} and keys != set(expected)|{"state","build_id"}:
             raise BuildError("Platform build checkpoint is malformed.")
+        if retry_terminal:
+            if state not in TERMINAL or state == "SUCCEEDED" or not isinstance(value.get("build_id"),str): raise BuildError("Terminal retry requires a recorded failed terminal build.")
+            build_id=value["build_id"]
+            status=_check_build(_aws(profile,region,["codebuild","batch-get-builds","--ids",build_id,"--query","builds[].{id:id,arn:arn,projectName:projectName,buildStatus:buildStatus,buildComplete:buildComplete}"]),account,region,project,build_id)
+            if status not in {"FAILED","FAULT","STOPPED","TIMED_OUT"}: raise BuildError("Terminal retry requires an authoritative failed terminal build.")
+            if _aws(profile,region,["sts","get-caller-identity","--query","Account"]) != account: raise BuildError("Current AWS identity does not match the selected account; no CodeBuild start was requested.")
+            archived=root/(phase+".failed-"+hashlib.sha256(build_id.encode()).hexdigest()+".json")
+            if archived.exists() or archived.is_symlink():
+                if _read(archived) != value: raise BuildError("Terminal retry archive differs from the recorded failed build.")
+            else: _write_new(archived,value)
+            value={**expected,"state":"start-intent"}; _replace(checkpoint,value); state="start-intent"; intentional_new_start=True; existed=True
         if state=="start-intent":
             if "build_id" in value: raise BuildError("Platform build checkpoint is malformed.")
-            if existed: raise BuildError("CodeBuild start outcome is uncertain; reconcile the durable intent before retrying.")
+            if existed and not intentional_new_start: raise BuildError("CodeBuild start outcome is uncertain; reconcile the durable intent before retrying.")
             identity=_aws(profile,region,["sts","get-caller-identity","--query","Account"])
             if identity != account: raise BuildError("Current AWS identity does not match the selected account; no CodeBuild start was requested.")
-            _write_new(checkpoint,value)
+            if not intentional_new_start: _write_new(checkpoint,value)
             result=_aws(profile,region,["codebuild","start-build","--project-name",project,"--query","build.{id:id,arn:arn,projectName:projectName,buildStatus:buildStatus,buildComplete:buildComplete}"])
             build_id=result.get("id") if isinstance(result,dict) else None
             if not (isinstance(build_id,str) and BUILD.fullmatch(build_id)):
@@ -178,8 +189,8 @@ def run(work: Path, phase: str, account: str, region: str, project: str, profile
         except OSError: pass
 
 def main() -> int:
-    p=argparse.ArgumentParser(); p.add_argument("--work-dir",type=Path,required=True); p.add_argument("--phase",required=True); p.add_argument("--account",required=True); p.add_argument("--region",required=True); p.add_argument("--project",required=True); p.add_argument("--profile",required=True); p.add_argument("--timeout-seconds",type=int,default=1800); a=p.parse_args()
-    try: run(a.work_dir,a.phase,a.account,a.region,a.project,a.profile,a.timeout_seconds)
+    p=argparse.ArgumentParser(); p.add_argument("--work-dir",type=Path,required=True); p.add_argument("--phase",required=True); p.add_argument("--account",required=True); p.add_argument("--region",required=True); p.add_argument("--project",required=True); p.add_argument("--profile",required=True); p.add_argument("--timeout-seconds",type=int,default=1800); p.add_argument("--retry-terminal",action="store_true"); a=p.parse_args()
+    try: run(a.work_dir,a.phase,a.account,a.region,a.project,a.profile,a.timeout_seconds,a.retry_terminal)
     except BuildError as e: print(str(e),file=sys.stderr); return 70
     return 0
 if __name__=="__main__": raise SystemExit(main())
