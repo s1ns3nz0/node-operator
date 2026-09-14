@@ -102,7 +102,9 @@ jobs:
         run: bash scripts/ci/run-suite.sh operator-auth
       # Role: Run the Vault v2 secret ownership and migration regression suite.
       - name: Vault v2 runtime secret boundary
-        run: bash scripts/ci/run-suite.sh vault-v2
+        run: |
+          bash scripts/ci/run-suite.sh vault-v2
+          python3 scripts/ci/test-vault-v2-initialization-boundary.py
       # Role: Contract test: Enforce pinned scanner-image dependencies and its restricted release workflow contract.
       - name: Scanner image release deduplication
         run: scripts/ci/test-scanner-image-release.sh
@@ -124,6 +126,12 @@ jobs:
       # Role: Contract test: Enforce the restricted Vault audit-relay publisher IAM source contract.
       - name: Audit relay publisher repository scope
         run: python3 scripts/ci/test-vault-relay-publisher-policy.py
+      # Role: Keep the validator-client publisher's registry layer-read scope limited to reviewed Prysm and Fence repositories.
+      - name: Validator client publisher repository scope
+        run: python3 scripts/ci/test-validator-client-ecr-publisher-policy.py
+      # Role: Verify selected-release Vault image authority reaches both installer and legacy platform inputs without cloud calls.
+      - name: Vault artifact authority handoff (offline)
+        run: bash scripts/ci/workflows/check-release-artifact-authority.sh
       # Role: Run offline Vault verification, applicability and signing boundary tests.
       - name: Frozen Vault runtime verification boundary
         run: bash scripts/ci/run-suite.sh vault-runtime
@@ -132,12 +140,9 @@ jobs:
         run: |
           scripts/ci/install-validator-signing-fence-release-tools.sh "$RUNNER_TEMP/vault-blob-test-tools"
           COSIGN_BIN="$RUNNER_TEMP/vault-blob-test-tools/cosign" bash scripts/ci/test-vault-runtime-blob-roundtrip.sh
-      # Role: Test Fence release binding and scan-attestation rejection rules with fixtures.
+      # Role: Test Fence/probe input binding, offline publication gates and scan-attestation rejection.
       - name: Release scan attestation content contract
-        run: |
-          bash scripts/ci/test-validator-signing-fence-image-contract.sh
-          bash scripts/ci/test-release-scan-attestation.sh
-          bash scripts/ci/test-validator-signing-fence-release-evidence.sh
+        run: bash scripts/ci/workflows/check-release-scan-attestations.sh
       # Role: Ensure the external posture and provenance controls remain pinned and bounded.
       - name: Repository posture and SLSA contracts
         run: bash scripts/ci/test-repository-posture-contract.sh
@@ -192,6 +197,14 @@ jobs:
       # Role: Contract test: Enforce the baseline infrastructure contract without external replacement resources.
       - name: Zero-resource foundation contract
         run: scripts/ci/test-zero-resource-contract.sh
+      # Role: Verify deletion scope and dependency ordering without making real AWS calls.
+      - name: Tagged deployment cleanup
+        run: |
+          python3 scripts/ci/test-tagged-cleanup.py
+          bash scripts/ci/test-bootstrap-state-reconciliation-mocks.sh
+      # Role: Verify approved artifact selection, zero-replica rendering, recovery and artifact-first ordering without live AWS calls.
+      - name: Interactive infrastructure recovery boundary
+        run: bash scripts/ci/workflows/check-installer-recovery-boundaries.sh
       # Role: Contract test: Reject Terraform plans that weaken reviewed SSM access-log retention.
       - name: Retained SSM plan boundary
         run: scripts/ci/test-ops-access-ssm-retention.sh
@@ -265,6 +278,13 @@ jobs:
           echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
           docker pull "$TERRAFORM_IMAGE"
           bash scripts/ci/run-terraform-ci.sh root
+      # Role: Run the whole-root dashboard and IAM plan contract with Terraform isolated in the pinned offline container.
+      - name: Validator dashboard Terraform plan contract
+        run: bash scripts/ci/run-terraform-ci.sh dashboard
+      # Role: Validate private validator metrics contracts after the offline Terraform toolchain is available.
+      - name: Validator CloudWatch monitoring contracts
+        shell: bash
+        run: bash scripts/ci/workflows/check-validator-monitoring.sh
       # Role: Validate enabled runtime configurations using isolated Terraform fixtures.
       - name: Enabled validator runtime mirror boundary
         run: bash scripts/ci/run-terraform-ci.sh runtime

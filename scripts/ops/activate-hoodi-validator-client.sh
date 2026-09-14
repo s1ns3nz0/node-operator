@@ -4,8 +4,9 @@ set -euo pipefail
 # This is the only client scale-up path. It is intentionally interactive in
 # the sense that the caller must repeat public key and withdrawal address; it
 # neither reaches a wallet nor accepts any secret value.
-usage() { printf '%s\n' "Usage: ${0##*/} --validator-set <hoodi-id> --deposit-attestation <absolute-json> --public-deposit-verification <absolute-json> --private-evidence <absolute-json> --signer-evidence <absolute-json> --confirm-public-key <0x-key> --confirm-withdrawal-address <0x-address> [--dry-run]" >&2; exit 64; }
+usage() { printf '%s\n' "Usage: ${0##*/} --validator-set <hoodi-id> --deposit-attestation <absolute-json> --public-deposit-verification <absolute-json> --private-evidence <absolute-json> --signer-evidence <absolute-json> --confirm-public-key <0x-key> --confirm-withdrawal-address <0x-address> [--activation-receipt <absolute-new-json> --deployment-name <name> --release-revision <40-hex> --operation-id <32-hex>] [--dry-run]" >&2; exit 64; }
 validator_set=''; deposit_attestation=''; public_deposit_verification=''; private_evidence=''; signer_evidence=''; public_key=''; withdrawal_address=''; dry_run=false
+activation_receipt=''; deployment_name=''; release_revision=''; operation_id=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --validator-set) validator_set="${2:-}"; shift 2 ;;
@@ -15,6 +16,10 @@ while [ "$#" -gt 0 ]; do
     --signer-evidence) signer_evidence="${2:-}"; shift 2 ;;
     --confirm-public-key) public_key="${2:-}"; shift 2 ;;
     --confirm-withdrawal-address) withdrawal_address="${2:-}"; shift 2 ;;
+    --activation-receipt) activation_receipt="${2:-}"; shift 2 ;;
+    --deployment-name) deployment_name="${2:-}"; shift 2 ;;
+    --release-revision) release_revision="${2:-}"; shift 2 ;;
+    --operation-id) operation_id="${2:-}"; shift 2 ;;
     --dry-run) dry_run=true; shift ;;
     *) usage ;;
   esac
@@ -26,6 +31,15 @@ case "$deposit_attestation" in /*) ;; *) usage ;; esac
 case "$public_deposit_verification" in /*) ;; *) usage ;; esac
 case "$private_evidence" in /*) ;; *) usage ;; esac
 case "$signer_evidence" in /*) ;; *) usage ;; esac
+receipt_arg_count=0
+for value in "$activation_receipt" "$deployment_name" "$release_revision" "$operation_id"; do [ -z "$value" ] || receipt_arg_count=$((receipt_arg_count + 1)); done
+if [ "$receipt_arg_count" -ne 0 ]; then
+  [ "$receipt_arg_count" -eq 4 ] && [ "$dry_run" = false ] || usage
+  case "$activation_receipt" in /*) ;; *) usage ;; esac
+  [[ "$deployment_name" =~ ^[a-z][a-z0-9-]{1,38}[a-z0-9]$ ]] || usage
+  [[ "$release_revision" =~ ^[a-f0-9]{40}$ ]] || usage
+  [[ "$operation_id" =~ ^[a-f0-9]{32}$ ]] || usage
+fi
 for command in jq kubectl date tr; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 [ -r "$deposit_attestation" ] && [ -r "$public_deposit_verification" ] && [ -r "$private_evidence" ] && [ -r "$signer_evidence" ] || { printf '%s\n' 'activation evidence is not readable' >&2; exit 66; }
 
@@ -77,6 +91,18 @@ jq -e --arg key "$public_key" --arg set "$validator_set" --argjson now "$now_epo
 ' "$signer_evidence" >/dev/null || { printf '%s\n' 'fresh TLS-verified signer identity evidence is missing or mismatched' >&2; exit 65; }
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+receipt_enabled=false; receipt_parent=''
+if [ "$receipt_arg_count" -eq 4 ]; then
+  receipt_parent="$(dirname "$activation_receipt")"
+  [ -d "$receipt_parent" ] && [ ! -L "$receipt_parent" ] || { printf '%s\n' 'activation receipt parent must be a real directory' >&2; exit 65; }
+  [ "$(stat -f '%Lp' "$receipt_parent" 2>/dev/null || stat -c '%a' "$receipt_parent")" = 700 ] || { printf '%s\n' 'activation receipt parent must have mode 0700' >&2; exit 65; }
+  receipt_parent="$(cd "$receipt_parent" && pwd -P)"
+  activation_receipt="$receipt_parent/$(basename "$activation_receipt")"
+  [ ! -e "$activation_receipt" ] && [ ! -L "$activation_receipt" ] || { printf '%s\n' 'activation receipt target already exists' >&2; exit 65; }
+  [ -f "$root/scripts/ops/lib/uc5-beacon-reader.py" ] && [ ! -L "$root/scripts/ops/lib/uc5-beacon-reader.py" ] || { printf '%s\n' 'private Beacon readiness reader is unavailable' >&2; exit 65; }
+  command -v python3 >/dev/null 2>&1 || { printf '%s\n' 'missing command: python3' >&2; exit 69; }
+  receipt_enabled=true
+fi
 allowlist="$root/.ci/validator/approved-client-images.json"
 client="validator-${validator_set}-client"
 client_pod="${client}-0"
@@ -122,6 +148,24 @@ marker="$(kubectl -n validator-operations get configmap uc5-hoodi-001-maintenanc
 [ -z "$marker" ] || { printf '%s\n' 'UC5 maintenance marker remains; activation refused' >&2; exit 65; }
 if [ "$dry_run" = true ]; then printf '%s\n' 'PASS: activation preflight passed; client and signing fence remain at zero because --dry-run was set.'; exit 0; fi
 
+# The evidence and controller checks above are intentionally read-only.  A
+# separate, literal confirmation on the controlling terminal is required
+# before this process can issue its first scale patch.  Do not read stdin:
+# wrappers may pipe it, but they must never be able to auto-accept activation.
+if ! exec 9<>/dev/tty; then
+  printf '%s\n' 'interactive controlling terminal is required to activate' >&2
+  exit 65
+fi
+printf 'Activation request: validator set=%s public key=%s withdrawal address=%s\n' "$validator_set" "$public_key" "$confirmed_withdrawal" >&9
+printf '%s' 'Type exactly ACTIVATE to scale the validator client and signing fence: ' >&9
+if ! IFS= read -r activation_confirmation <&9; then
+  exec 9>&-
+  printf '%s\n' 'activation confirmation was not provided' >&2
+  exit 65
+fi
+exec 9>&-
+[ "$activation_confirmation" = ACTIVATE ] || { printf '%s\n' 'activation confirmation did not match ACTIVATE' >&2; exit 65; }
+
 cas_scale() {
   local kind="$1" name="$2" expected_uid="$3" replicas="$4" current uid rv old patch
   marker="$(kubectl -n validator-operations get configmap uc5-hoodi-001-maintenance --ignore-not-found -o json)" || return 1
@@ -157,6 +201,77 @@ trap rollback EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
+
+read_private_beacon_bound() {
+  python3 -I -B - "$root/scripts/ops/lib/uc5-beacon-reader.py" "$public_key" <<'PY'
+import importlib.util
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("node_operator_uc5_beacon_reader", path)
+if spec is None or spec.loader is None:
+    raise SystemExit("private Beacon readiness reader is unavailable")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+print(json.dumps(module.read_ready(sys.argv[2]), sort_keys=True, separators=(",", ":")))
+PY
+}
+
+publish_activation_receipt() {
+  local beacon_json="$1" client_after fence_after client_pod_after fence_pod_after lease_after client_pod_uid_after fence_pod_uid_after lease_uid_after holder_after temporary
+  client_after="$(kubectl -n validator-operations get statefulset "$client" -o json)" || return 1
+  fence_after="$(kubectl -n validator-operations get deployment "$fence" -o json)" || return 1
+  client_pod_after="$(kubectl -n validator-operations get pod "$client_pod" -o json)" || return 1
+  fence_pod_after="$(kubectl -n validator-operations get pods -l "app.kubernetes.io/component=validator-signing-fence,node-operator.io/validator-set=${validator_set}" -o json)" || return 1
+  lease_after="$(kubectl -n validator-operations get lease "$lease" -o json)" || return 1
+  client_pod_uid_after="$(jq -er --arg set "$validator_set" --arg name "$client_pod" --arg deployment "$deployment_name" --arg revision "$release_revision" '
+    . as $pod | ($pod.metadata.name == $name and ($pod.metadata.uid | type == "string" and length > 0) and
+    $pod.metadata.labels["node-operator.io/validator-set"] == $set and $pod.metadata.labels["app.kubernetes.io/component"] == "validator-client" and
+    $pod.metadata.labels["node-operator.io/deployment-name"] == $deployment and $pod.metadata.labels["node-operator.io/release-revision"] == $revision and
+    $pod.status.phase == "Running" and any($pod.status.conditions[]?; .type == "Ready" and .status == "True")) |
+    if . then $pod.metadata.uid else error end
+  ' <<<"$client_pod_after")" || return 1
+  fence_pod_uid_after="$(jq -er --arg set "$validator_set" --arg deployment "$deployment_name" --arg revision "$release_revision" '
+    .items | if type == "array" and length == 1 then .[0] else error end | . as $pod |
+    (($pod.metadata.uid | type == "string" and length > 0) and $pod.metadata.labels["node-operator.io/validator-set"] == $set and
+    $pod.metadata.labels["app.kubernetes.io/component"] == "validator-signing-fence" and $pod.metadata.labels["node-operator.io/deployment-name"] == $deployment and
+    $pod.metadata.labels["node-operator.io/release-revision"] == $revision and $pod.status.phase == "Running" and
+    any($pod.status.conditions[]?; .type == "Ready" and .status == "True")) |
+    if . then $pod.metadata.uid else error end
+  ' <<<"$fence_pod_after")" || return 1
+  jq -e --arg client_uid "$client_uid" --arg fence_uid "$fence_controller_uid" '
+    .metadata.uid == $client_uid and .spec.replicas == 1
+  ' <<<"$client_after" >/dev/null || return 1
+  jq -e --arg fence_uid "$fence_controller_uid" '
+    .metadata.uid == $fence_uid and .spec.replicas == 1
+  ' <<<"$fence_after" >/dev/null || return 1
+  lease_uid_after="$(jq -er --arg holder "$fence_pod_uid_after" --argjson now "$(date -u +%s)" '
+    def rfc3339_epoch:
+      if type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$")
+      then sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601 else error end;
+    . as $lease | ($lease.metadata.uid | strings | select(length > 0)) as $uid |
+    ($lease.spec.renewTime | rfc3339_epoch) as $renewed |
+    ($lease.spec.holderIdentity == $holder and ($lease.spec.leaseDurationSeconds | type == "number" and . > 0) and
+    $renewed <= ($now + 30) and (($now - $renewed) <= $lease.spec.leaseDurationSeconds)) |
+    if . then $uid else error end
+  ' <<<"$lease_after")" || return 1
+  holder_after="$(jq -er '.spec.holderIdentity' <<<"$lease_after")" || return 1
+  jq -e --arg key "$public_key" '
+    .result == "PASS_PRIVATE_BEACON_READY" and .scope == "private Beacon readiness only; not duty evidence" and
+    .validator_public_key == $key and (.validator_index | tostring | test("^[0-9]+$")) and
+    (.pod_uid | type == "string" and length > 0) and (.head_slot | type == "number" and . >= 0 and floor == .)
+  ' <<<"$beacon_json" >/dev/null || return 1
+  temporary="$(mktemp "$receipt_parent/.activation-receipt.XXXXXX")" || return 1
+  chmod 600 "$temporary" || { rm -f "$temporary"; return 1; }
+  if ! jq -n --arg set "$validator_set" --arg key "$public_key" --arg deployment "$deployment_name" --arg revision "$release_revision" --arg operation "$operation_id" --arg client_controller "$client_uid" --arg fence_controller "$fence_controller_uid" --arg client_pod "$client_pod_uid_after" --arg fence_pod "$fence_pod_uid_after" --arg lease_uid "$lease_uid_after" --arg holder "$holder_after" --argjson beacon "$beacon_json" \
+    '{schema_version:1,result:"activation-post-ready-head-bound",scope:"post-Ready private Beacon head lower bound only; not duty, finalization, signature, or end-to-end proof",validator_set:$set,validator_public_key:$key,deployment_name:$deployment,release_revision:$revision,operation_id:$operation,controllers:{client_statefulset_uid:$client_controller,fence_deployment_uid:$fence_controller},pods:{client_uid:$client_pod,fence_uid:$fence_pod},lease:{uid:$lease_uid,holder_identity:$holder},private_beacon:{pod_uid:$beacon.pod_uid,validator_index:($beacon.validator_index|tostring),head_slot:$beacon.head_slot}}' > "$temporary"; then
+    rm -f "$temporary"; return 1
+  fi
+  ln "$temporary" "$activation_receipt" && rm -f "$temporary" || { rm -f "$temporary"; return 1; }
+}
+
 # The public signer Service has no endpoints while the fence is zero, and
 # direct signer ingress accepts only the fence. Starting the fixed-name client
 # first therefore cannot sign; it only establishes the Pod UID/IP to bind.
@@ -185,6 +300,10 @@ jq -e --arg holder "$fence_uid" --argjson now "$(date -u +%s)" '
    (.spec.leaseDurationSeconds | type == "number" and . > 0) and
    ($renewed <= ($now + 30)) and (($now - $renewed) <= .spec.leaseDurationSeconds))
 ' <<<"$lease_json" >/dev/null || { printf '%s\n' 'signer fence lease is absent, malformed, or expired' >&2; exit 65; }
+if [ "$receipt_enabled" = true ]; then
+  beacon_bound="$(read_private_beacon_bound)" || { printf '%s\n' 'post-Ready private Beacon head could not be read; activation will be rolled back' >&2; exit 65; }
+  publish_activation_receipt "$beacon_bound" || { printf '%s\n' 'activation receipt could not be bound to the post-Ready cluster state; activation will be rolled back' >&2; exit 65; }
+fi
 activation_complete=true
 trap - EXIT INT TERM HUP
 printf '%s\n' 'PASS: one fixed-identity client and its signing fence are Ready. Immediately collect private duty, signer audit, and Kubernetes evidence; never start a second client.'

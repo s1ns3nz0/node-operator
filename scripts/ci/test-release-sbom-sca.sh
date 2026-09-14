@@ -30,7 +30,7 @@ printf '%s\n' '{"descriptor":{"name":"grype","version":"0.118.0","db":{"status":
 GRYPE_FIXTURE="$temporary_directory/blocked.json" PATH="$temporary_directory/bin:$PATH" \
   "$script_dir/scan-release-sbom.sh" "$temporary_directory/sbom.json" "$temporary_directory/fail.json"
 jq -e '.status == "blocked" and .findings.high == 1 and .findings.critical == 1' "$temporary_directory/fail.json" >/dev/null
-if rg -n 'DO_NOT_PERSIST_|CVE-DO-NOT-PERSIST' "$temporary_directory/fail.json" >/dev/null; then
+if grep -E -n -- 'DO_NOT_PERSIST_|CVE-DO-NOT-PERSIST' "$temporary_directory/fail.json" >/dev/null; then
   printf 'raw vulnerability details escaped into retained summary\n' >&2
   exit 1
 fi

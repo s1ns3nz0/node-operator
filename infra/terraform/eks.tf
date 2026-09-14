@@ -302,6 +302,9 @@ resource "aws_eks_addon" "vpc_cni" {
   # add-on update cannot silently turn the boundary into documentation.
   configuration_values = jsonencode({
     enableNetworkPolicy = "true"
+    env = {
+      ADDITIONAL_ENI_TAGS = jsonencode(local.common_tags)
+    }
   })
 
   depends_on = [aws_eks_cluster.private]
@@ -332,6 +335,15 @@ resource "aws_eks_addon" "ebs_csi" {
   addon_name                  = "aws-ebs-csi-driver"
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
+
+  # Provider defaults do not reach dynamically provisioned PVC volumes.
+  # controller.extraVolumeTags is supported by the managed add-on schema
+  # (verified against v1.66.0-eksbuild.1), not just the upstream Helm chart.
+  configuration_values = jsonencode({
+    controller = {
+      extraVolumeTags = local.common_tags
+    }
+  })
 
   # Pod Identity is independent of the ServiceAccount's existence.  Creating
   # it first lets the EBS CSI controller receive AWS credentials on its first

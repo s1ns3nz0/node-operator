@@ -19,6 +19,15 @@ fi
 mkdir -p "$workspace"
 cp -a "$module_directory/." "$workspace"
 rm -f "$workspace/backend.tf"
+# The root validation suite stages only the Terraform module into a temporary
+# workspace. Preserve the reviewed, non-secret GitOps inputs that the module
+# references so validation exercises the same source boundary as release
+# staging (where node-operator-release.sh places these files beside the module).
+for example in argocd-private-values.example.yaml cert-manager-values.example.yaml vault-tls-internal-ca.example.yaml; do
+  if [ ! -f "$workspace/$example" ] && [ -f "$module_directory/../../docs/gitops/$example" ]; then
+    cp "$module_directory/../../docs/gitops/$example" "$workspace/$example"
+  fi
+done
 test -f "$workspace/$tfvars_path" || { echo "tfvars file does not exist in module: $tfvars_path" >&2; exit 66; }
 
 export TF_DATA_DIR="$output_directory/terraform-data"

@@ -63,8 +63,8 @@ case "$*" in
   '-n validator-operations get statefulset validator-hoodi-001-client -o json')
     replacement="${MOCK_REPLACE_CLIENT:-client-controller}"
     if [ "${MOCK_REPLACE_ON_ROLLBACK:-false}" = true ] && [ -f "${MOCK_TRACE}.rollback" ]; then replacement=replaced; fi
-    jq --arg uid "$replacement" '.items[0].metadata.uid=$uid | .items[0]' "$MOCK_STATEFULSETS" ;;
-  '-n validator-operations get deployment validator-hoodi-001-signing-fence -o json') jq '.items[0]' "$MOCK_FENCES" ;;
+    jq --arg uid "$replacement" --argjson replicas "$(grep -q 'patch statefulset validator-hoodi-001-client' "$MOCK_TRACE" && printf 1 || printf 0)" '.items[0].metadata.uid=$uid | .items[0].spec.replicas=$replicas | .items[0]' "$MOCK_STATEFULSETS" ;;
+  '-n validator-operations get deployment validator-hoodi-001-signing-fence -o json') jq --argjson replicas "$(grep -q 'patch deployment validator-hoodi-001-signing-fence' "$MOCK_TRACE" && printf 1 || printf 0)" '.items[0].spec.replicas=$replicas | .items[0]' "$MOCK_FENCES" ;;
   *' patch statefulset validator-hoodi-001-client --type=json -p '*|*' patch deployment validator-hoodi-001-signing-fence --type=json -p '*) printf '%s\n' "scale $*" >> "$MOCK_TRACE" ;;
   '-n validator-operations scale statefulset validator-hoodi-001-client --replicas=1'|'-n validator-operations scale deployment validator-hoodi-001-signing-fence --replicas=1') printf '%s\n' "scale $*" >> "$MOCK_TRACE" ;;
   '-n validator-operations scale statefulset validator-hoodi-001-client --replicas=0'|'-n validator-operations scale deployment validator-hoodi-001-signing-fence --replicas=0') printf '%s\n' "rollback $*" >> "$MOCK_TRACE" ;;
@@ -82,17 +82,97 @@ chmod +x "$scratch/bin/kubectl"
 
 run_gate() {
   PATH="$scratch/bin:$PATH" MOCK_DEPLOYMENTS="$scratch/deployments.json" MOCK_PODS="$scratch/pods.json" MOCK_STATEFULSETS="$scratch/statefulsets.json" MOCK_FENCES="$scratch/fences.json" MOCK_PUBLIC_SERVICE="$scratch/public-service.json" MOCK_DIRECT_SERVICE="$scratch/direct-service.json" MOCK_LEASE="$scratch/lease.json" MOCK_CLIENT_POD="$scratch/client-pod.json" MOCK_FENCE_PODS="$scratch/fence-pods.json" MOCK_TRACE="$scratch/trace" \
-    bash "$activation_script" --validator-set "$validator_set" --deposit-attestation "$scratch/deposit.json" --public-deposit-verification "$scratch/public.json" --private-evidence "$scratch/private.json" --signer-evidence "$scratch/signer.json" --confirm-public-key "$public_key" --confirm-withdrawal-address "$withdrawal_address" --dry-run
+    bash "$activation_script" --validator-set "$validator_set" --deposit-attestation "$scratch/deposit.json" --public-deposit-verification "$scratch/public.json" --private-evidence "$scratch/private.json" --signer-evidence "$scratch/signer.json" --confirm-public-key "$public_key" --confirm-withdrawal-address "$withdrawal_address" --dry-run "$@"
 }
 run_gate_actual() {
+  run_gate_actual_tty ACTIVATE
+}
+run_gate_actual_tty() {
+  local response="$1"; shift
   PATH="$scratch/bin:$PATH" MOCK_DEPLOYMENTS="$scratch/deployments.json" MOCK_PODS="$scratch/pods.json" MOCK_STATEFULSETS="$scratch/statefulsets.json" MOCK_FENCES="$scratch/fences.json" MOCK_PUBLIC_SERVICE="$scratch/public-service.json" MOCK_DIRECT_SERVICE="$scratch/direct-service.json" MOCK_LEASE="$scratch/lease.json" MOCK_CLIENT_POD="$scratch/client-pod.json" MOCK_FENCE_PODS="$scratch/fence-pods.json" MOCK_TRACE="$scratch/trace" \
-    bash "$activation_script" --validator-set "$validator_set" --deposit-attestation "$scratch/deposit.json" --public-deposit-verification "$scratch/public.json" --private-evidence "$scratch/private.json" --signer-evidence "$scratch/signer.json" --confirm-public-key "$public_key" --confirm-withdrawal-address "$withdrawal_address"
+    ACTIVATION_SCRIPT="$activation_script" ACTIVATION_RESPONSE="$response" ACTIVATION_SET="$validator_set" ACTIVATION_DEPOSIT="$scratch/deposit.json" ACTIVATION_PUBLIC="$scratch/public.json" ACTIVATION_PRIVATE="$scratch/private.json" ACTIVATION_SIGNER="$scratch/signer.json" ACTIVATION_KEY="$public_key" ACTIVATION_WITHDRAWAL="$withdrawal_address" ACTIVATION_EXTRA="$*" MOCK_READER_LOG="$scratch/reader.log" \
+    python3 - <<'PY'
+import os
+import pty
+import select
+import subprocess
+import sys
+import time
+import fcntl
+import termios
+
+command = ["bash", os.environ["ACTIVATION_SCRIPT"], "--validator-set", os.environ["ACTIVATION_SET"],
+           "--deposit-attestation", os.environ["ACTIVATION_DEPOSIT"],
+           "--public-deposit-verification", os.environ["ACTIVATION_PUBLIC"],
+           "--private-evidence", os.environ["ACTIVATION_PRIVATE"], "--signer-evidence", os.environ["ACTIVATION_SIGNER"],
+           "--confirm-public-key", os.environ["ACTIVATION_KEY"], "--confirm-withdrawal-address", os.environ["ACTIVATION_WITHDRAWAL"]]
+command += os.environ.get("ACTIVATION_EXTRA", "").split()
+response = os.environ["ACTIVATION_RESPONSE"]
+if response == "NONTTY":
+    result = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            start_new_session=True, check=False)
+    sys.stdout.buffer.write(result.stdout)
+    raise SystemExit(result.returncode)
+
+master, slave = pty.openpty()
+def make_controlling_terminal():
+    os.setsid()
+    fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+process = subprocess.Popen(command, stdin=slave, stdout=slave, stderr=slave, close_fds=True,
+                           preexec_fn=make_controlling_terminal)
+os.close(slave)
+output = b""
+deadline = time.monotonic() + 15
+prompt = b"Type exactly ACTIVATE to scale the validator client and signing fence: "
+while prompt not in output and process.poll() is None and time.monotonic() < deadline:
+    ready, _, _ = select.select([master], [], [], 0.2)
+    if ready:
+        try:
+            output += os.read(master, 65536)
+        except OSError:
+            break
+if prompt not in output:
+    process.terminate()
+    process.wait(timeout=5)
+    sys.stdout.buffer.write(output)
+    raise SystemExit("activation confirmation prompt was not reached")
+if response == "EOF":
+    os.write(master, b"\x04")
+else:
+    os.write(master, response.encode("ascii") + b"\n")
+while process.poll() is None:
+    ready, _, _ = select.select([master], [], [], 0.2)
+    if ready:
+        try:
+            output += os.read(master, 65536)
+        except OSError:
+            break
+process.wait(timeout=5)
+while True:
+    ready, _, _ = select.select([master], [], [], 0)
+    if not ready:
+        break
+    try:
+        chunk = os.read(master, 65536)
+    except OSError:
+        break
+    if not chunk:
+        break
+    output += chunk
+os.close(master)
+sys.stdout.buffer.write(output)
+raise SystemExit(process.returncode)
+PY
 }
 reset_fixture() {
   local observed; observed="$(timestamp "$now_epoch")"; write_valid_evidence "$observed"; write_valid_inventory
   jq -n --arg set "$validator_set" '{metadata:{name:"validator-hoodi-001-client-0",uid:"client-uid",labels:{"node-operator.io/validator-set":$set,"app.kubernetes.io/component":"validator-client"}},status:{podIP:"10.0.0.10",phase:"Running",conditions:[{type:"Ready",status:"True"}]}}' > "$scratch/client-pod.json"
-  jq -n '{items:[{metadata:{uid:"fence-uid"}}]}' > "$scratch/fence-pods.json"
-  jq -n --arg observed "$observed" '{spec:{holderIdentity:"fence-uid",leaseDurationSeconds:60,renewTime:$observed}}' > "$scratch/lease.json"
+  jq -n --arg set "$validator_set" '{items:[{metadata:{name:"validator-hoodi-001-signing-fence-pod",uid:"fence-uid",labels:{"node-operator.io/validator-set":$set,"app.kubernetes.io/component":"validator-signing-fence"}},status:{phase:"Running",conditions:[{type:"Ready",status:"True"}]}}]}' > "$scratch/fence-pods.json"
+  jq -n --arg observed "$observed" '{metadata:{uid:"lease-uid"},spec:{holderIdentity:"fence-uid",leaseDurationSeconds:60,renewTime:$observed}}' > "$scratch/lease.json"
+  jq '.metadata.labels["node-operator.io/deployment-name"] = "node-op-auth" | .metadata.labels["node-operator.io/release-revision"] = ("a" * 40)' "$scratch/client-pod.json" > "$scratch/client-pod.next"
+  mv "$scratch/client-pod.next" "$scratch/client-pod.json"
+  jq '.items[0].metadata.labels["node-operator.io/deployment-name"] = "node-op-auth" | .items[0].metadata.labels["node-operator.io/release-revision"] = ("a" * 40)' "$scratch/fence-pods.json" > "$scratch/fence-pods.next"
+  mv "$scratch/fence-pods.next" "$scratch/fence-pods.json"
   : > "$scratch/trace"
   rm -f "$scratch/trace.rollback"
 }
@@ -104,14 +184,82 @@ expect_rejected() {
 }
 
 reset_fixture
-run_gate | grep -Fq 'PASS: activation preflight passed; client and signing fence remain at zero because --dry-run was set.' || fail 'valid fractional-second evidence did not pass dry-run gate'
+dry_run_output="$(run_gate)"
+grep -Fq 'PASS: activation preflight passed; client and signing fence remain at zero because --dry-run was set.' <<<"$dry_run_output" || fail 'valid fractional-second evidence did not pass dry-run gate'
+if grep -Fq 'Type exactly ACTIVATE' <<<"$dry_run_output"; then fail 'dry-run prompted for activation confirmation'; fi
 test ! -s "$scratch/trace" || fail 'happy dry-run reached a scale request'
 
 reset_fixture
-run_gate_actual | grep -Fq 'PASS: one fixed-identity client and its signing fence are Ready.' || fail 'valid actual activation sequence did not complete'
+if run_gate_actual_tty CANCEL >/dev/null 2>&1; then fail 'cancelled activation unexpectedly passed'; else status=$?; fi
+test "$status" -eq 65 || fail "cancelled activation exited $status instead of 65"
+test ! -s "$scratch/trace" || fail 'cancelled activation reached a scale request'
+
+reset_fixture
+if run_gate_actual_tty EOF >/dev/null 2>&1; then fail 'EOF activation confirmation unexpectedly passed'; else status=$?; fi
+test "$status" -eq 65 || fail "EOF activation confirmation exited $status instead of 65"
+test ! -s "$scratch/trace" || fail 'EOF activation confirmation reached a scale request'
+
+reset_fixture
+if run_gate_actual_tty NONTTY >/dev/null 2>&1; then fail 'non-interactive activation unexpectedly passed'; else status=$?; fi
+test "$status" -eq 65 || fail "non-interactive activation exited $status instead of 65"
+test ! -s "$scratch/trace" || fail 'non-interactive activation reached a scale request'
+
+reset_fixture
+run_gate_actual | grep -Fq "Activation request: validator set=$validator_set public key=$public_key withdrawal address=$withdrawal_address" || fail 'literal activation confirmation did not display normalized identity'
 test "$(grep -c '^scale ' "$scratch/trace")" -eq 2 || fail 'actual activation did not perform exactly two identity-pinned patches'
 grep -Fq 'patch statefulset validator-hoodi-001-client --type=json' "$scratch/trace" || fail 'client UID/resourceVersion patch was not used'
 grep -Fq 'patch deployment validator-hoodi-001-signing-fence --type=json' "$scratch/trace" || fail 'fence UID/resourceVersion patch was not used'
+
+receipt_root="$scratch/receipt-root"
+mkdir -p "$receipt_root/scripts/ops/lib" "$receipt_root/.ci/validator"
+cp "$script" "$receipt_root/scripts/ops/activate-hoodi-validator-client.sh"
+cp "$root/.ci/validator/approved-client-images.json" "$receipt_root/.ci/validator/approved-client-images.json"
+cat > "$receipt_root/scripts/ops/lib/uc5-beacon-reader.py" <<'PY'
+import json, os
+def read_ready(public_key):
+    if os.environ.get("MOCK_READER_FAIL") == "true": raise RuntimeError("synthetic reader failure")
+    with open(os.environ["MOCK_READER_LOG"], "a", encoding="utf-8") as log: log.write(public_key + "\n")
+    return {"result":"PASS_PRIVATE_BEACON_READY","scope":"private Beacon readiness only; not duty evidence","pod_uid":"beacon-pod-uid","validator_public_key":public_key,"validator_index":"1559065","head_slot":json.loads(os.environ.get("MOCK_READER_HEAD", "123456"))}
+PY
+chmod +x "$receipt_root/scripts/ops/activate-hoodi-validator-client.sh"
+activation_script="$receipt_root/scripts/ops/activate-hoodi-validator-client.sh"
+receipt_dir="$scratch/activation-receipt"; mkdir -m 700 "$receipt_dir"
+receipt="$receipt_dir/activation.json"
+reset_fixture
+run_gate_actual_tty ACTIVATE --activation-receipt "$receipt" --deployment-name node-op-auth --release-revision aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --operation-id bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb >/dev/null || fail 'receipt-bound activation failed'
+test "$(stat -f '%Lp' "$receipt" 2>/dev/null || stat -c '%a' "$receipt")" = 600 || fail 'activation receipt is not mode 0600'
+jq -e --arg key "$public_key" '.schema_version == 1 and .result == "activation-post-ready-head-bound" and .validator_public_key == $key and .deployment_name == "node-op-auth" and .release_revision == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and .operation_id == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" and .controllers == {client_statefulset_uid:"client-controller",fence_deployment_uid:"fence-controller"} and .pods == {client_uid:"client-uid",fence_uid:"fence-uid"} and .lease == {uid:"lease-uid",holder_identity:"fence-uid"} and .private_beacon == {pod_uid:"beacon-pod-uid",validator_index:"1559065",head_slot:123456} and (.scope | contains("lower bound only"))' "$receipt" >/dev/null || fail 'activation receipt is not exact post-Ready evidence'
+test "$(cat "$scratch/reader.log")" = "$public_key" || fail 'activation did not invoke the fixed read_ready collector'
+
+reset_fixture
+if run_gate_actual_tty ACTIVATE --activation-receipt "$receipt" --deployment-name node-op-auth --release-revision aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --operation-id bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb >/dev/null 2>&1; then fail 'existing activation receipt was overwritten'; fi
+test ! -s "$scratch/trace" || fail 'existing activation receipt reached a scale request'
+
+reset_fixture
+if run_gate --activation-receipt "$receipt_dir/dry.json" >/dev/null 2>&1; then fail 'dry-run accepted activation receipt arguments'; fi
+test ! -s "$scratch/trace" || fail 'invalid dry-run receipt group reached a scale request'
+if run_gate_actual_tty ACTIVATE --activation-receipt "$receipt_dir/partial.json" --deployment-name node-op-auth >/dev/null 2>&1; then fail 'partial activation receipt group was accepted'; fi
+test ! -s "$scratch/trace" || fail 'partial receipt group reached a scale request'
+
+reset_fixture
+failed_receipt="$receipt_dir/reader-failed.json"
+if MOCK_READER_FAIL=true run_gate_actual_tty ACTIVATE --activation-receipt "$failed_receipt" --deployment-name node-op-auth --release-revision aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --operation-id cccccccccccccccccccccccccccccccc >/dev/null 2>&1; then fail 'failed post-Ready reader reported activation success'; fi
+test ! -e "$failed_receipt" || fail 'failed post-Ready reader wrote an activation receipt'
+test "$(grep -c '^scale ' "$scratch/trace")" -eq 4 || fail 'failed post-Ready reader did not perform checked rollback'
+
+reset_fixture
+jq '.metadata.labels["node-operator.io/release-revision"] = ("f" * 40)' "$scratch/client-pod.json" > "$scratch/client-pod.next"; mv "$scratch/client-pod.next" "$scratch/client-pod.json"
+label_failed_receipt="$receipt_dir/label-failed.json"
+if run_gate_actual_tty ACTIVATE --activation-receipt "$label_failed_receipt" --deployment-name node-op-auth --release-revision aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --operation-id dddddddddddddddddddddddddddddddd >/dev/null 2>&1; then fail 'mismatched post-Ready release label reported activation success'; fi
+test ! -e "$label_failed_receipt" || fail 'mismatched post-Ready labels wrote an activation receipt'
+test "$(grep -c '^scale ' "$scratch/trace")" -eq 4 || fail 'mismatched post-Ready labels did not perform checked rollback'
+
+reset_fixture
+fractional_receipt="$receipt_dir/fractional-head.json"
+if MOCK_READER_HEAD=12.5 run_gate_actual_tty ACTIVATE --activation-receipt "$fractional_receipt" --deployment-name node-op-auth --release-revision aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --operation-id eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee >/dev/null 2>&1; then fail 'fractional private Beacon head reported activation success'; fi
+test ! -e "$fractional_receipt" || fail 'fractional private Beacon head wrote an activation receipt'
+test "$(grep -c '^scale ' "$scratch/trace")" -eq 4 || fail 'fractional private Beacon head did not perform checked rollback'
+activation_script="$script"
 
 reset_fixture
 if MOCK_REPLACE_CLIENT=replaced run_gate_actual >/dev/null 2>&1; then fail 'replacement client activated'; fi

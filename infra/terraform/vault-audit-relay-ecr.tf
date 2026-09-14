@@ -4,12 +4,21 @@ variable "enable_vault_audit_relay_ecr_publisher" {
   default     = false
 }
 
+variable "enable_vault_audit_relay_repository" {
+  description = "Create the private immutable ECR destination for the Vault audit relay without granting GitHub publishing authority."
+  type        = bool
+  default     = false
+}
+
 locals {
   vault_audit_relay_repository_name = "${local.name_prefix}-vault-audit-relay"
+  vault_audit_relay_repository_enabled = (
+    var.enable_vault_audit_relay_repository || var.enable_vault_audit_relay_ecr_publisher
+  )
 }
 
 data "aws_iam_policy_document" "vault_audit_relay_ecr_key" {
-  count                   = var.enable_vault_audit_relay_ecr_publisher ? 1 : 0
+  count                   = local.vault_audit_relay_repository_enabled ? 1 : 0
   source_policy_documents = [data.aws_iam_policy_document.kms_key_administrator.json]
   statement {
     principals {
@@ -32,7 +41,7 @@ data "aws_iam_policy_document" "vault_audit_relay_ecr_key" {
 }
 
 resource "aws_kms_key" "vault_audit_relay_ecr" {
-  count                   = var.enable_vault_audit_relay_ecr_publisher ? 1 : 0
+  count                   = local.vault_audit_relay_repository_enabled ? 1 : 0
   description             = "Vault audit relay ECR image encryption key"
   deletion_window_in_days = 30
   enable_key_rotation     = true
@@ -41,7 +50,7 @@ resource "aws_kms_key" "vault_audit_relay_ecr" {
 }
 
 resource "aws_ecr_repository" "vault_audit_relay" {
-  count                = var.enable_vault_audit_relay_ecr_publisher ? 1 : 0
+  count                = local.vault_audit_relay_repository_enabled ? 1 : 0
   name                 = local.vault_audit_relay_repository_name
   image_tag_mutability = "IMMUTABLE"
   encryption_configuration {

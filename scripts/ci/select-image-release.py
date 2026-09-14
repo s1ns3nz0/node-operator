@@ -16,7 +16,7 @@ TOOLCHAINS = [
         ("terraform-validation", ""), ("release-build", ""), ("vault-release-signer", ""),
         ("gitops-oci-mirror", ""),
         ("argocd-bootstrap", "docs/gitops/argocd-private-values.example.yaml"),
-        ("vault-bootstrap", "docs/gitops/vault-values.example.yaml"),
+        ("vault-bootstrap", "docs/gitops/vault-values.example.yaml,scripts/ops/verify-hoodi-vault-readiness.sh,docs/gitops/vault-gp3-encrypted-storageclass.yaml,scripts/ops/ensure-vault-encrypted-storageclass.sh"),
     )
 ]
 SHARED = {".github/workflows/image-publish.yml", "scripts/ci/select-image-release.py"}
@@ -37,7 +37,7 @@ SIGNING = {
 def select(paths=(), target=None, all_inputs=False):
     paths = set(paths)
     all_inputs = all_inputs or bool(paths & SHARED) or target == "all"
-    allowed = {"all", "scanner", "toolchains", "fence", "relay"} | {item["image"] for item in TOOLCHAINS}
+    allowed = {"all", "scanner", "toolchains", "fence", "relay", "prysm-mtls", "signer-probe"} | {item["image"] for item in TOOLCHAINS}
     if target is not None and target not in allowed:
         raise ValueError("unknown image release target")
     scanner = all_inputs or target == "scanner" or bool(paths & IMAGE_SBOM_INPUTS) or any(
@@ -51,18 +51,33 @@ def select(paths=(), target=None, all_inputs=False):
         ".ci/toolchains/release-toolchain-image.sh",
     })
     selected = [item for item in TOOLCHAINS if toolchain_all or target == item["image"] or
-                item["dockerfile"] in paths or (item["input_file"] and item["input_file"] in paths)]
+                item["dockerfile"] in paths or any(path in paths for path in item["input_file"].split(",") if path)]
     common_go = bool(paths & {"go.mod", "go.sum"})
     fence = all_inputs or target == "fence" or common_go or bool(paths & SIGNING) or any(
         path.startswith(("cmd/validator-signing-fence/", ".ci/validator-signing-fence/", ".ci/fence-security/")) or
         path.startswith(("scripts/ci/run-fence-security-", "scripts/ci/test-fence-security-")) or path in {
             ".github/workflows/fence-security.yml", "scripts/release/publish-fence-image.sh",
-            "scripts/ci/install-fence-security-tools.sh", "scripts/ci/collect-validator-signing-fence-release-evidence.sh",
+            "scripts/release/fence_build_inputs.py", "scripts/ci/install-fence-security-tools.sh",
+            "scripts/ci/collect-validator-signing-fence-release-evidence.sh",
         } for path in paths)
     relay = all_inputs or target == "relay" or common_go or bool(paths & SIGNING) or any(
         path.startswith(("cmd/vault-audit-relay/", ".ci/vault-audit-relay/")) or
         path == "scripts/release/publish-vault-audit-relay.sh" for path in paths)
+    prysm_mtls = all_inputs or target == "prysm-mtls" or bool(paths & SIGNING) or any(
+        path.startswith(".ci/prysm-mtls/") or path in {
+            "scripts/release/publish-prysm-mtls-image.sh",
+            "scripts/release/prysm_publication_record.py",
+            "scripts/ci/verify-prysm-mtls-source-build.sh",
+        } for path in paths)
+    signer_probe = all_inputs or target == "signer-probe" or "go.mod" in paths or bool(paths & SIGNING) or any(
+        path.startswith((".ci/validator-signer-identity-probe/", "cmd/validator-signer-identity-probe/")) or path in {
+            "scripts/release/signer_probe_build_inputs.py",
+            "scripts/release/signer_probe_publication_record.py",
+            "scripts/release/publish-signer-identity-probe.sh",
+            "scripts/release/fence_build_inputs.py",
+        } for path in paths)
     return {"scanner": bool(scanner), "toolchains": bool(selected), "fence": bool(fence), "relay": bool(relay),
+            "prysm_mtls": bool(prysm_mtls), "signer_probe": bool(signer_probe),
             "toolchain_matrix": {"include": selected}}
 
 

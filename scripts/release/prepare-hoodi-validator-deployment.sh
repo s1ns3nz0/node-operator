@@ -4,11 +4,12 @@ set -euo pipefail
 # Render only non-secret, initially fenced workload manifests. Vault recovery
 # material, keystore files, mnemonic, and wallet access remain outside this command.
 usage() {
-  printf '%s\n' "Usage: ${0##*/} --validator-set <hoodi-id> --validator-public-key <0x-key> --withdrawal-address <0x-address> --aws-account-id <12-digit-id> [--aws-region <ap-northeast-1|ap-northeast-2>] --web3signer-image <private-ecr@sha256> --postgres-image <private-ecr@sha256> --prysm-validator-image <private-ecr@sha256> --signing-fence-image <private-ecr@sha256> --kubernetes-api-cidr <ipv4/32> --output-dir <new-absolute-dir>" >&2
+  printf '%s\n' "Usage: ${0##*/} --validator-set <hoodi-id> --validator-public-key <0x-key> --withdrawal-address <0x-address> --aws-account-id <12-digit-id> [--aws-region <aws-region>] --web3signer-image <private-ecr@sha256> --postgres-image <private-ecr@sha256> --prysm-validator-image <private-ecr@sha256> --signing-fence-image <private-ecr@sha256> --kubernetes-api-cidr <ipv4/32> --output-dir <new-absolute-dir>" >&2
   exit 64
 }
 
 validator_set=''; validator_public_key=''; withdrawal_address=''; aws_account_id=''; aws_region='ap-northeast-2'; web3signer_image=''; postgres_image=''; prysm_image=''; fence_image=''; kubernetes_api_cidr=''; output_dir=''
+deployment_identity=''; release_identity=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --validator-set) validator_set="${2:-}"; shift 2 ;;
@@ -22,6 +23,8 @@ while [ "$#" -gt 0 ]; do
     --signing-fence-image) fence_image="${2:-}"; shift 2 ;;
     --kubernetes-api-cidr) kubernetes_api_cidr="${2:-}"; shift 2 ;;
     --output-dir) output_dir="${2:-}"; shift 2 ;;
+    --deployment-name) deployment_identity="${2:-}"; shift 2 ;;
+    --release-revision) release_identity="${2:-}"; shift 2 ;;
     *) usage ;;
   esac
 done
@@ -30,8 +33,13 @@ case "$validator_set" in hoodi-[a-z0-9][a-z0-9-]*) ;; *) usage ;; esac
 case "$validator_public_key" in 0x????????????????????????????????????????????????????????????????????????????????????????????????) ;; *) usage ;; esac
 case "$withdrawal_address" in 0x????????????????????????????????????????) ;; *) usage ;; esac
 case "$aws_account_id" in [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;; *) usage ;; esac
-case "$aws_region" in ap-northeast-1|ap-northeast-2) ;; *) usage ;; esac
+[[ "$aws_region" =~ ^[a-z]{2}-[a-z0-9-]+-[0-9]+$ ]] || usage
 case "$output_dir" in /*) ;; *) usage ;; esac
+set --
+if [ -n "$deployment_identity$release_identity" ]; then
+  [[ "$deployment_identity" =~ ^[a-z][a-z0-9-]{1,38}[a-z0-9]$ ]] && [[ "$release_identity" =~ ^[0-9a-f]{40}$ ]] || usage
+  set -- --deployment-name "$deployment_identity" --release-revision "$release_identity"
+fi
 for command in jq mkdir mktemp mv chmod dirname rm tr; do
   command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }
 done
@@ -48,8 +56,8 @@ temporary=''
 cleanup() { set +e; [ -z "$temporary" ] || [ ! -e "$temporary" ] || rm -f "$temporary"; }
 trap cleanup EXIT INT TERM
 
-"$root/scripts/ops/render-hoodi-validator-runtime.sh" --validator-set "$validator_set" --aws-account-id "$aws_account_id" --aws-region "$aws_region" --web3signer-image "$web3signer_image" --postgres-image "$postgres_image" --output "$runtime"
-"$root/scripts/ops/render-hoodi-validator-client.sh" --validator-set "$validator_set" --validator-public-key "$validator_public_key" --aws-account-id "$aws_account_id" --aws-region "$aws_region" --prysm-validator-image "$prysm_image" --signing-fence-image "$fence_image" --kubernetes-api-cidr "$kubernetes_api_cidr" --output "$client"
+"$root/scripts/ops/render-hoodi-validator-runtime.sh" --validator-set "$validator_set" --aws-account-id "$aws_account_id" --aws-region "$aws_region" --web3signer-image "$web3signer_image" --postgres-image "$postgres_image" --output "$runtime" "$@"
+"$root/scripts/ops/render-hoodi-validator-client.sh" --validator-set "$validator_set" --validator-public-key "$validator_public_key" --aws-account-id "$aws_account_id" --aws-region "$aws_region" --prysm-validator-image "$prysm_image" --signing-fence-image "$fence_image" --kubernetes-api-cidr "$kubernetes_api_cidr" --output "$client" "$@"
 
 temporary="$(mktemp "$output_dir/.handoff.XXXXXX")"
 jq -n \

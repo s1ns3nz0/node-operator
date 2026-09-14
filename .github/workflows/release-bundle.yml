@@ -46,6 +46,7 @@ jobs:
           (github.event_name == 'workflow_dispatch' && inputs.mode == 'verify-only')) }}
     permissions:
       contents: read
+      actions: read
       packages: read
       id-token: write
       attestations: write
@@ -59,15 +60,56 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Role: Obtain one independently validated, exact-revision image-publication record set before building release evidence.
+      - name: Prepare publication records
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/prepare-release-publication-records.sh
       # Role: Build the bundle with the pinned toolchain and compare repeat builds for deterministic output.
       - name: Reproducible Release Bundle
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
-        run: |
-          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
-          docker pull "$RELEASE_BUILD_IMAGE"
-          docker run --rm --user "$(id -u):$(id -g)" --volume "$GITHUB_WORKSPACE:/workspace:ro" --volume "$RUNNER_TEMP:/output" --workdir /workspace "$RELEASE_BUILD_IMAGE" bash scripts/ci/test-build-release-bundle.sh /output/current
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/workflows/check-reproducible-release.sh
+      # Role: Freeze the independently verified source records for same-release publication consumption.
+      - name: Freeze publication records
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: release-publication-records-${{ github.sha }}
+          path: ${{ runner.temp }}/release-publication-records
+          if-no-files-found: error
+          retention-days: 90
+      - name: Freeze Prysm publication record
+        if: hashFiles('release/prysm-publication-authorization.json') != ''
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: prysm-publication-record-${{ github.sha }}
+          path: ${{ runner.temp }}/prysm-publication-record/prysm-mtls-publication-record.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Freeze Fence publication record
+        if: hashFiles('release/fence-publication-authorization.json') != ''
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: fence-publication-record-${{ github.sha }}
+          path: ${{ runner.temp }}/fence-publication-record/fence-release-verification.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Freeze client chart publication records
+        if: hashFiles('release/client-chart-publication-authorization.json') != ''
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: client-chart-publication-records-${{ github.sha }}
+          path: ${{ runner.temp }}/client-chart-publication-records
+      - name: Freeze signer-probe publication record
+        if: hashFiles('release/signer-probe-publication-authorization.json') != ''
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: signer-probe-publication-record-${{ github.sha }}
+          path: ${{ runner.temp }}/signer-probe-publication-record/signer-identity-probe-publication-record.json
+          if-no-files-found: error
+          retention-days: 90
       # Role: Install the pinned SCA tool and scan the SBOM belonging to this bundle.
       - name: Exact release SBOM
         run: |
@@ -134,6 +176,8 @@ jobs:
     environment: release
     permissions:
       contents: write
+      actions: read
+      packages: read
       id-token: write
     env:
       RELEASE_BUILD_IMAGE: ghcr.io/s1ns3nz0/node-operator/release-build@sha256:f6b2550a3bf8a5b2e8bbdbb301120136d01bc38963d1a70d0d7ff3008acb70be
@@ -142,12 +186,47 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Role: Consume only the frozen record set produced by this release workflow run.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5.0.0
+        with:
+          name: release-publication-records-${{ github.sha }}
+          path: ${{ runner.temp }}/release-publication-records
+      - name: Download frozen Prysm publication record
+        if: hashFiles('release/prysm-publication-authorization.json') != ''
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5.0.0
+        with:
+          name: prysm-publication-record-${{ github.sha }}
+          path: ${{ runner.temp }}/prysm-publication-record
+      - name: Download frozen Fence publication record
+        if: hashFiles('release/fence-publication-authorization.json') != ''
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5.0.0
+        with:
+          name: fence-publication-record-${{ github.sha }}
+          path: ${{ runner.temp }}/fence-publication-record
+      - name: Download frozen client chart publication records
+        if: hashFiles('release/client-chart-publication-authorization.json') != ''
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5.0.0
+        with:
+          name: client-chart-publication-records-${{ github.sha }}
+          path: ${{ runner.temp }}/client-chart-publication-records
+      - name: Download frozen signer-probe publication record
+        if: hashFiles('release/signer-probe-publication-authorization.json') != ''
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5.0.0
+        with:
+          name: signer-probe-publication-record-${{ github.sha }}
+          path: ${{ runner.temp }}/signer-probe-publication-record
       # Role: Rebuild the release and verify it matches the approved bundle and SBOM digest.
       - name: Release Bundle
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
           APPROVED_ARTIFACT_DIGEST: ${{ needs.reproducibility.outputs.artifact_digest }}
+          PUBLICATION_RECORDS_DIR: ${{ runner.temp }}/release-publication-records
+          GH_TOKEN: ${{ github.token }}
+          PRYSM_PUBLICATION_RECORD: ${{ runner.temp }}/prysm-publication-record/prysm-mtls-publication-record.json
+          FENCE_PUBLICATION_RECORD: ${{ hashFiles('release/fence-publication-authorization.json') != '' && format('{0}/fence-publication-record/fence-release-verification.json', runner.temp) || '' }}
+          CLIENT_CHART_PUBLICATION_RECORDS: ${{ hashFiles('release/client-chart-publication-authorization.json') != '' && format('{0}/client-chart-publication-records', runner.temp) || '' }}
+          SIGNER_PROBE_PUBLICATION_RECORD: ${{ hashFiles('release/signer-probe-publication-authorization.json') != '' && format('{0}/signer-probe-publication-record/signer-identity-probe-publication-record.json', runner.temp) || '' }}
         run: scripts/release/build-release-bundle.sh
       # Role: Stage inputs for the private signing path and obtain signed release outputs.
       - name: Release Signing Handoff

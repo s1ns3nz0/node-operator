@@ -42,13 +42,14 @@ def output(values,key):
  return x["value"]
 def artifacts(index_path,mirror_path,baseline,d):
  index,mirror=read(index_path),read(mirror_path)
+ from installer_artifact_receipt import validate,ReceiptError
+ try: verified,index_hash=validate(index,mirror,baseline,d,index_path.read_bytes())
+ except ReceiptError as e: raise PlatformError(str(e)) from e
  boot=index.get("components",{}).get("vault-bootstrap") if isinstance(index.get("components"),dict) else None
  image=boot.get("image_ref") if isinstance(boot,dict) else None; manifest=boot.get("manifest_digest") if isinstance(boot,dict) else None
  if set(index)!={"schema_version","release_revision","components"} or index.get("schema_version")!=1 or set(index.get("components",{}))!=NAMES or not isinstance(image,str) or not re.fullmatch(r"[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}",image) or not isinstance(manifest,str) or not re.fullmatch(r"sha256:[a-f0-9]{64}",manifest):raise PlatformError("invalid artifact index")
- context(mirror,d); mirrored=mirror.get("artifacts",{}).get("vault-bootstrap") if isinstance(mirror.get("artifacts"),dict) else None
- repos=output(baseline,"private_gitops_ecr_repository_urls");private=mirrored.get("image_ref") if isinstance(mirrored,dict) else None
- if mirror.get("status")!="verified" or mirror.get("release_revision")!=index["release_revision"] or mirror.get("index_sha256")!=digest(index_path) or not isinstance(repos,dict) or not isinstance(repos.get("vault"),str) or not isinstance(private,str) or private!=repos["vault"]+"@"+manifest or mirrored.get("manifest_digest")!=manifest:raise PlatformError("invalid mirror receipt")
- return private,digest(index_path)
+ private=verified["vault-bootstrap"]["image_ref"]
+ return private,index_hash
 def project_check(contract,image,d,env):
  name,role=contract["name"],contract["service_role_arn"]
  projects=aws(["aws","codebuild","batch-get-projects","--names",name,"--region",d["aws_region"]],env).get("projects")

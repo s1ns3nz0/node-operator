@@ -99,3 +99,26 @@ spec:
       ports:
         - protocol: TCP
           port: 8200
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-nethermind-metrics-ingress
+  namespace: node-operator
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: nethermind
+      app.kubernetes.io/component: execution-client
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: validator-observability
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: validator-metrics-collector
+      ports:
+        - protocol: TCP
+          port: 6060

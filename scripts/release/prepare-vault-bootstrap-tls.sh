@@ -40,14 +40,14 @@ fi
 
 if [ -z "$namespace" ]; then
   kubectl create namespace vault
-  kubectl label namespace vault \
-    pod-security.kubernetes.io/enforce=restricted \
-    pod-security.kubernetes.io/enforce-version=latest \
-    pod-security.kubernetes.io/audit=restricted \
-    pod-security.kubernetes.io/audit-version=latest \
-    pod-security.kubernetes.io/warn=restricted \
-    pod-security.kubernetes.io/warn-version=latest
 fi
+kubectl label namespace vault --overwrite \
+  pod-security.kubernetes.io/enforce=restricted \
+  pod-security.kubernetes.io/enforce-version=latest \
+  pod-security.kubernetes.io/audit=restricted \
+  pod-security.kubernetes.io/audit-version=latest \
+  pod-security.kubernetes.io/warn=restricted \
+  pod-security.kubernetes.io/warn-version=latest
 
 kubectl apply -f "$manifest"
 for certificate in vault-internal-ca vault-server-tls; do

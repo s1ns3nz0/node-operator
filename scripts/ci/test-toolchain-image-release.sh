@@ -17,6 +17,7 @@ for dockerfile in "$root/.ci/toolchains/terraform-validation.Dockerfile" "$root/
   fi
 done
 grep -Fq 'ripgrep' "$root/.ci/toolchains/release-build.Dockerfile"
+grep -Fq 'python3' "$root/.ci/toolchains/release-build.Dockerfile"
 workflow="$root/.github/workflows/image-publish.yml"
 if ! ruby -ryaml -e '
   jobs = YAML.load_file(ARGV[0]).fetch("jobs")
@@ -46,7 +47,8 @@ for required in \
   'ca-certificates=${CA_CERTIFICATES_VERSION}' \
   'curl=${CURL_VERSION}' \
   'tar=${TAR_VERSION}' \
-  'unzip=${UNZIP_VERSION}'; do
+  'unzip=${UNZIP_VERSION}' \
+  'jq=${JQ_VERSION}'; do
   grep -Fq "$required" "$root/.ci/toolchains/vault-bootstrap.Dockerfile"
 done
 
@@ -67,6 +69,6 @@ expected_bootstrap_input_sha="$({ sha256sum "$root/.ci/toolchains/argocd-bootstr
 output="$(cd "$root" && EXPECTED_INPUT_SHA="$expected_bootstrap_input_sha" GITHUB_REPOSITORY=s1ns3nz0/node-operator GITHUB_SHA=fixture PATH="$temporary_directory/bin:$PATH" .ci/toolchains/release-toolchain-image.sh argocd-bootstrap .ci/toolchains/argocd-bootstrap.Dockerfile docs/gitops/argocd-private-values.example.yaml docs/gitops/cert-manager-values.example.yaml docs/gitops/vault-tls-internal-ca.example.yaml)"
 test "$output" = 'argocd-bootstrap image inputs are unchanged; skipping build and push'
 
-expected_vault_bootstrap_input_sha="$({ sha256sum "$root/.ci/toolchains/vault-bootstrap.Dockerfile" "$root/docs/gitops/vault-values.example.yaml"; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
-output="$(cd "$root" && EXPECTED_INPUT_SHA="$expected_vault_bootstrap_input_sha" GITHUB_REPOSITORY=s1ns3nz0/node-operator GITHUB_SHA=fixture PATH="$temporary_directory/bin:$PATH" .ci/toolchains/release-toolchain-image.sh vault-bootstrap .ci/toolchains/vault-bootstrap.Dockerfile docs/gitops/vault-values.example.yaml)"
+expected_vault_bootstrap_input_sha="$({ sha256sum "$root/.ci/toolchains/vault-bootstrap.Dockerfile" "$root/docs/gitops/vault-values.example.yaml" "$root/scripts/ops/verify-hoodi-vault-readiness.sh" "$root/docs/gitops/vault-gp3-encrypted-storageclass.yaml" "$root/scripts/ops/ensure-vault-encrypted-storageclass.sh"; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
+output="$(cd "$root" && EXPECTED_INPUT_SHA="$expected_vault_bootstrap_input_sha" GITHUB_REPOSITORY=s1ns3nz0/node-operator GITHUB_SHA=fixture PATH="$temporary_directory/bin:$PATH" .ci/toolchains/release-toolchain-image.sh vault-bootstrap .ci/toolchains/vault-bootstrap.Dockerfile docs/gitops/vault-values.example.yaml scripts/ops/verify-hoodi-vault-readiness.sh docs/gitops/vault-gp3-encrypted-storageclass.yaml scripts/ops/ensure-vault-encrypted-storageclass.sh)"
 test "$output" = 'vault-bootstrap image inputs are unchanged; skipping build and push'

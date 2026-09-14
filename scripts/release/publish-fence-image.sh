@@ -6,11 +6,15 @@
 # Side effects: Calls GitHub OIDC/AWS STS, pushes to private ECR, and writes Cosign signatures and attestations.
 set -euo pipefail
 
-test "$GITHUB_REF" = refs/heads/main
+die() { printf '%s\n' "$1" >&2; exit 65; }
+test "${GITHUB_REF:-}" = refs/heads/main || die 'publication is restricted to main'
+DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-node-operator}"
+[[ "$DEPLOYMENT_NAME" =~ ^[a-z][a-z0-9-]{1,18}[a-z0-9]$ ]] || die 'deployment name is invalid'
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 scripts/ci/install-validator-signing-fence-release-tools.sh "$RUNNER_TEMP/fence-tools"
 export PATH="$RUNNER_TEMP/fence-tools:$PATH"
 bash scripts/ci/test-release-scan-cosign-roundtrip.sh
-input_sha="$({ sha256sum go.mod .ci/validator-signing-fence/Dockerfile cmd/validator-signing-fence/main.go cmd/validator-signing-fence/main_test.go scripts/ci/collect-validator-signing-fence-release-evidence.sh .github/workflows/fence-security.yml .ci/fence-security/Dockerfile .ci/fence-security/blackbox.go .ci/fence-security/tools.env .ci/fence-security/zap-report.jq scripts/ci/install-fence-security-tools.sh scripts/ci/run-fence-security-sast.sh scripts/ci/run-fence-security-dast.sh; } | awk '{print $1}' | sha256sum | awk '{print $1}')"
+input_sha="$(python3 "$root/scripts/release/fence_build_inputs.py" --root "$root")"
 token="$(curl --fail --silent -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -er .value)"
 token_file="$RUNNER_TEMP/aws-web-identity-token"
 (umask 077; printf '%s' "$token" > "$token_file")
@@ -23,7 +27,7 @@ session_token="$(jq -er .Credentials.SessionToken "$RUNNER_TEMP/creds.json")"
 printf '::add-mask::%s\n' "$access_key" "$secret_key" "$session_token"
 export AWS_ACCESS_KEY_ID="$access_key" AWS_SECRET_ACCESS_KEY="$secret_key" AWS_SESSION_TOKEN="$session_token"
 registry="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-repository=node-operator-baseline-validator-fence
+repository="${DEPLOYMENT_NAME}-baseline-validator-fence"
 tag="fence-${GITHUB_SHA}-${GITHUB_RUN_ID}"
 destination="$registry/$repository:$tag"
 aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$registry"

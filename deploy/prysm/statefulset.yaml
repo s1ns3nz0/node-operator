@@ -87,7 +87,7 @@ spec:
             - --p2p-max-peers=50
             - --http-host=0.0.0.0
             - --http-port=3500
-            - --monitoring-host=127.0.0.1
+            - --monitoring-host=0.0.0.0
             - --monitoring-port=8080
             - --execution-endpoint=http://nethermind-execution.node-operator.svc:8551
             - --jwt-secret=/vault/secrets/engine.jwt
@@ -109,6 +109,9 @@ spec:
               protocol: UDP
             - name: beacon-api
               containerPort: 3500
+              protocol: TCP
+            - name: metrics
+              containerPort: 8080
               protocol: TCP
           startupProbe:
             tcpSocket:

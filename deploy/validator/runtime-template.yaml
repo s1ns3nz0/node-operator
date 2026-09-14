@@ -34,6 +34,8 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/component: validator-slashing-db
+        node-operator.io/deployment-name: REPLACE_WITH_DEPLOYMENT_IDENTITY
+        node-operator.io/release-revision: "REPLACE_WITH_RELEASE_IDENTITY"
         node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET
         node-operator.io/vault-client: "true"
       annotations:
@@ -133,6 +135,8 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/component: validator-remote-signer
+        node-operator.io/deployment-name: REPLACE_WITH_DEPLOYMENT_IDENTITY
+        node-operator.io/release-revision: "REPLACE_WITH_RELEASE_IDENTITY"
         node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET
         node-operator.io/vault-client: "true"
       annotations:

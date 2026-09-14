@@ -16,6 +16,7 @@ terraform {
 provider "aws" {
   region              = var.aws_region
   allowed_account_ids = [var.aws_account_id]
+  default_tags { tags = local.tags }
 }
 
 data "aws_ami" "ecs_al2023" {
@@ -55,11 +56,13 @@ data "aws_prefix_list" "s3" {
 locals {
   name_prefix = "${var.name}-vault-recovery"
   tags = {
-    ManagedBy      = "terraform"
-    Project        = "node-operator"
-    Purpose        = "vault-isolated-recovery"
-    RecoveryExpiry = var.recovery_expiry
-    Isolation      = "dedicated-vpc-no-internet-or-peering"
+    ManagedBy        = "terraform"
+    Project          = "node-operator"
+    Deployment       = var.name
+    DeploymentRegion = var.aws_region
+    Purpose          = "vault-isolated-recovery"
+    RecoveryExpiry   = var.recovery_expiry
+    Isolation        = "dedicated-vpc-no-internet-or-peering"
   }
   repository_arns = [
     "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/node-operator-baseline-gitops-vault",

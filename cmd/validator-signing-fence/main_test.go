@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -489,6 +490,121 @@ func TestOnlyOneDownstreamSourceIPIsAdmitted(t *testing.T) {
 	}
 	if p.admitSource(second) {
 		t.Fatal("a second downstream source IP was admitted")
+	}
+}
+
+func waitForFenceReceipts(t *testing.T, output *bytes.Buffer, count int) []string {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		lines := strings.FieldsFunc(strings.TrimSpace(output.String()), func(r rune) bool { return r == '\n' })
+		if len(lines) >= count {
+			return lines
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("expected %d fence connection receipts, got %q", count, output.String())
+	return nil
+}
+
+func receiptFields(t *testing.T, line string) map[string]string {
+	t.Helper()
+	parts := strings.Fields(line)
+	if len(parts) != 10 || parts[0] != "fence_connection" {
+		t.Fatalf("unexpected fence receipt: %q", line)
+	}
+	fields := make(map[string]string, len(parts)-1)
+	for _, part := range parts[1:] {
+		pair := strings.SplitN(part, "=", 2)
+		if len(pair) != 2 || pair[0] == "" || pair[1] == "" {
+			t.Fatalf("malformed fence receipt token %q", part)
+		}
+		if _, exists := fields[pair[0]]; exists {
+			t.Fatalf("duplicate fence receipt token %q", pair[0])
+		}
+		fields[pair[0]] = pair[1]
+	}
+	return fields
+}
+
+func TestFenceConnectionReceiptCapturesOnlySuccessfulUpstreamInterval(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	fake := &fakeLeaseAPI{lease: testLease("pod-uid-1", now), pod: testClientPod("client-pod-uid", "127.0.0.1")}
+	server := httptest.NewServer(http.HandlerFunc(fake.serveHTTP))
+	defer server.Close()
+	output := &bytes.Buffer{}
+	upstream := echoUpstream(t)
+	lease := newTestClient(server, now)
+	proxy := newFenceProxy(lease, "127.0.0.1:0", upstream.Addr().String(), time.Second, 50*time.Millisecond)
+	proxy.audit = newConnectionAudit(output, time.Now)
+	if err := proxy.start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer proxy.close()
+	client := openProvenStream(t, proxy.address())
+	_ = client.Close()
+	fields := receiptFields(t, waitForFenceReceipts(t, output, 1)[0])
+	if fields["validator_set"] != "hoodi-001" || fields["holder"] != "pod-uid-1" || fields["lease"] != "validator-hoodi-001-primary" || fields["result"] != "closed" {
+		t.Fatalf("receipt omitted accepted lease identity or upstream success: %#v", fields)
+	}
+	if fields["connection_id"] == "" || strings.Contains(output.String(), "127.0.0.1") || strings.Contains(output.String(), "payload=") || strings.Contains(output.String(), "certificate=") {
+		t.Fatalf("receipt leaked connection metadata or omitted connection identity: %q", output.String())
+	}
+	opened, openErr := time.Parse(time.RFC3339Nano, fields["opened_at_utc"])
+	closed, closeErr := time.Parse(time.RFC3339Nano, fields["closed_at_utc"])
+	if openErr != nil || closeErr != nil || closed.Before(opened) || fields["opened_at_ms"] == "" || fields["closed_at_ms"] == "" {
+		t.Fatalf("receipt interval is not valid UTC timing: %#v", fields)
+	}
+}
+
+func TestFenceConnectionReceiptMarksDialFailureWithoutClaimingClosure(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	fake := &fakeLeaseAPI{lease: testLease("pod-uid-1", now), pod: testClientPod("client-pod-uid", "127.0.0.1")}
+	server := httptest.NewServer(http.HandlerFunc(fake.serveHTTP))
+	defer server.Close()
+	output := &bytes.Buffer{}
+	lease := newTestClient(server, now)
+	proxy := newFenceProxy(lease, "127.0.0.1:0", "127.0.0.1:1", time.Second, 50*time.Millisecond)
+	proxy.audit = newConnectionAudit(output, time.Now)
+	if err := proxy.start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer proxy.close()
+	client, err := net.DialTimeout("tcp", proxy.address(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	fields := receiptFields(t, waitForFenceReceipts(t, output, 1)[0])
+	if fields["result"] != "upstream-dial-failed" {
+		t.Fatalf("failed upstream dial was falsely usable for temporal correlation: %#v", fields)
+	}
+}
+
+func TestFenceConnectionReceiptWritesAreConcurrentAndLineAtomic(t *testing.T) {
+	output := &bytes.Buffer{}
+	audit := newConnectionAudit(output, time.Now)
+	const connections = 32
+	var group sync.WaitGroup
+	group.Add(connections)
+	for range connections {
+		go func() {
+			defer group.Done()
+			audit.begin("hoodi-001", "pod-uid-1", "validator-hoodi-001-primary").close("closed")
+		}()
+	}
+	group.Wait()
+	lines := waitForFenceReceipts(t, output, connections)
+	if len(lines) != connections {
+		t.Fatalf("interleaved or missing concurrent receipts: %q", output.String())
+	}
+	ids := map[string]bool{}
+	for _, line := range lines {
+		fields := receiptFields(t, line)
+		if fields["result"] != "closed" || ids[fields["connection_id"]] {
+			t.Fatalf("concurrent receipt lost result or identity uniqueness: %#v", fields)
+		}
+		ids[fields["connection_id"]] = true
 	}
 }
 

@@ -48,6 +48,9 @@ class BootstrapCleanup(unittest.TestCase):
                 path = root / name
                 path.write_text('#!/bin/bash\nexit "$BOOTSTRAP_RC"\n')
                 path.chmod(0o700)
+            auth_helper = root / "configure-hoodi-vault-kubernetes-auth.sh"
+            auth_helper.write_text('#!/bin/bash\nexit "$BOOTSTRAP_RC"\n')
+            auth_helper.chmod(0o700)
             vault = root / "vault"
             for name in ("copy-hoodi-custody-to-runtime-v2.sh",
                          "prepare-hoodi-vault-v2-transport.sh"):

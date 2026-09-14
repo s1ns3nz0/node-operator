@@ -20,6 +20,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -54,6 +55,57 @@ type leaseAuthority struct {
 	// timestamp sent in the successful CAS patch. It is never extended merely
 	// because a connection was accepted later.
 	deadline time.Time
+}
+
+// connectionAudit writes a deliberately small, line-oriented connection
+// interval receipt to the container log.  It is not a TLS or per-request
+// audit: the fence cannot inspect either without terminating passthrough TLS.
+// A result of "closed" means only that the upstream TCP dial succeeded and
+// the resulting tunnel later closed.
+type connectionAudit struct {
+	writer io.Writer
+	now    func() time.Time
+	mu     sync.Mutex
+	nextID atomic.Uint64
+}
+
+type connectionInterval struct {
+	audit        *connectionAudit
+	validatorSet string
+	holder       string
+	lease        string
+	id           string
+	opened       time.Time
+}
+
+func newConnectionAudit(writer io.Writer, now func() time.Time) *connectionAudit {
+	return &connectionAudit{writer: writer, now: now}
+}
+
+func (a *connectionAudit) begin(validatorSet, holder, lease string) *connectionInterval {
+	if a == nil || a.writer == nil || a.now == nil {
+		return nil
+	}
+	return &connectionInterval{
+		audit: a, validatorSet: validatorSet, holder: holder, lease: lease,
+		id: fmt.Sprintf("%016x", a.nextID.Add(1)), opened: a.now().UTC(),
+	}
+}
+
+func (i *connectionInterval) close(result string) {
+	if i == nil {
+		return
+	}
+	closed := i.audit.now().UTC()
+	// Keep each receipt as one CRI log line even while several passthrough
+	// goroutines finish concurrently. Values originate from validated startup
+	// configuration or this process's counter; no connection metadata is logged.
+	i.audit.mu.Lock()
+	_, _ = fmt.Fprintf(i.audit.writer, "fence_connection validator_set=%s holder=%s lease=%s connection_id=%s opened_at_utc=%s closed_at_utc=%s opened_at_ms=%d closed_at_ms=%d result=%s\n",
+		i.validatorSet, i.holder, i.lease, i.id,
+		i.opened.Format(time.RFC3339Nano), closed.Format(time.RFC3339Nano),
+		i.opened.UnixMilli(), closed.UnixMilli(), result)
+	i.audit.mu.Unlock()
 }
 
 type leaseClient struct {
@@ -308,10 +360,11 @@ type fenceProxy struct {
 	fenced            bool
 	done              chan struct{}
 	doneOnce          sync.Once
+	audit             *connectionAudit
 }
 
 func newFenceProxy(lease *leaseClient, listenAddress, upstreamAddress string, maxConnectionAge, dialTimeout time.Duration) *fenceProxy {
-	return &fenceProxy{lease: lease, listenAddress: listenAddress, upstreamAddress: upstreamAddress, maxConnectionAge: maxConnectionAge, dialTimeout: dialTimeout, connections: make(map[net.Conn]struct{}), done: make(chan struct{})}
+	return &fenceProxy{lease: lease, listenAddress: listenAddress, upstreamAddress: upstreamAddress, maxConnectionAge: maxConnectionAge, dialTimeout: dialTimeout, connections: make(map[net.Conn]struct{}), done: make(chan struct{}), audit: newConnectionAudit(os.Stdout, time.Now)}
 }
 
 func (p *fenceProxy) start(ctx context.Context) error {
@@ -447,6 +500,12 @@ func (p *fenceProxy) proxy(client net.Conn) {
 		p.mu.Unlock()
 		_ = client.Close()
 	}()
+	var interval *connectionInterval
+	if p.lease != nil {
+		interval = p.audit.begin(p.lease.validatorSet, p.lease.holder, p.lease.name)
+	}
+	result := "authority-expired"
+	defer func() { interval.close(result) }()
 	deadline, valid := p.connectionDeadline(time.Now())
 	if !valid {
 		return
@@ -454,8 +513,10 @@ func (p *fenceProxy) proxy(client net.Conn) {
 	_ = client.SetDeadline(deadline)
 	upstream, err := (&net.Dialer{Timeout: p.dialTimeout}).Dial("tcp", p.upstreamAddress)
 	if err != nil {
+		result = "upstream-dial-failed"
 		return
 	}
+	result = "closed"
 	defer upstream.Close()
 	_ = upstream.SetDeadline(deadline)
 	copyDone := make(chan struct{}, 2)
@@ -544,6 +605,18 @@ func kubeHTTPClient(caPath string) (*http.Client, error) {
 	return &http.Client{Transport: transport}, nil
 }
 
+func validAuditField(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, character := range value {
+		if !(character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' || character >= '0' && character <= '9' || character == '-' || character == '_' || character == '.' || character == ':') {
+			return false
+		}
+	}
+	return true
+}
+
 func main() {
 	listen := flag.String("listen", ":9001", "TCP listen address for TLS passthrough")
 	healthListen := flag.String("health-listen", ":9002", "HTTP health listen address")
@@ -562,7 +635,7 @@ func main() {
 	maxAge := flag.Duration("max-connection-age", 15*time.Second, "maximum accepted TCP connection lifetime")
 	flag.Parse()
 	expectedClientPodName := "validator-" + *validatorSet + "-client-0"
-	if *leaseName == "" || *holder == "" || *validatorSet == "" || *clientPodName != expectedClientPodName || *poll <= 0 || *timeout <= 0 || *safety <= 0 || *maxAge <= 0 {
+	if *leaseName == "" || *holder == "" || *validatorSet == "" || !validAuditField(*leaseName) || !validAuditField(*holder) || !validAuditField(*validatorSet) || *clientPodName != expectedClientPodName || *poll <= 0 || *timeout <= 0 || *safety <= 0 || *maxAge <= 0 {
 		fatal(errors.New("lease name, Pod UID, validator set, exact client Pod name, and positive time bounds are required"))
 	}
 	if !strings.HasPrefix(*api, "https://") {

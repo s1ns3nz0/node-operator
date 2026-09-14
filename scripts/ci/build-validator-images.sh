@@ -21,9 +21,13 @@ build_one() {
     nethermind) dockerfile=.ci/nethermind-runtime/Dockerfile; tag=node-operator-nethermind:runtime-10.0.11 ;;
   esac
   if [ "$component" = fence ]; then
-    input_sha="$(cd "$root"; shasum -a 256 go.mod .ci/validator-signing-fence/Dockerfile cmd/validator-signing-fence/main.go cmd/validator-signing-fence/main_test.go scripts/ci/collect-validator-signing-fence-release-evidence.sh | awk '{print $1}' | shasum -a 256 | awk '{print $1}')"
+    input_sha="$(python3 "$root/scripts/release/fence_build_inputs.py" --root "$root")"
     [[ "$input_sha" =~ ^[a-f0-9]{64}$ ]] || exit 65
     build_args=(--build-arg "FENCE_INPUT_SHA=$input_sha")
+  elif [ "$component" = identity-probe ]; then
+    input_sha="$(python3 "$root/scripts/release/signer_probe_build_inputs.py" --root "$root")"
+    [[ "$input_sha" =~ ^[a-f0-9]{64}$ ]] || exit 65
+    build_args=(--build-arg "SIGNER_PROBE_INPUT_SHA=$input_sha")
   elif [ "$component" = audit-relay ]; then
     input_sha="$(cd "$root"; shasum -a 256 .ci/vault-audit-relay/Dockerfile go.mod cmd/vault-audit-relay/main.go cmd/vault-audit-relay/main_test.go | awk '{print $1}' | shasum -a 256 | awk '{print $1}')"
     [[ "$input_sha" =~ ^[a-f0-9]{64}$ ]] || exit 65

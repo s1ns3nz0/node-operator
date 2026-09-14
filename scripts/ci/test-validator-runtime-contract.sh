@@ -7,6 +7,11 @@ tmp="$(mktemp -d /private/tmp/node-operator-runtime-render.XXXXXX)"
 web3signer='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-runtime-web3signer@sha256:9a20e02a5821ad72fd318fa2a3ec0158a9a5acd9db80aa9214e9cc991ad4dbc3'
 postgres='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-runtime-postgres@sha256:030da09481c3876b71a7e49738a932e1c18c398201a1e4ccfdbff1e5a541215b'
 "$renderer" --validator-set hoodi-test-001 --aws-account-id 106760547719 --web3signer-image "$web3signer" --postgres-image "$postgres" --output "$tmp/runtime.yaml" >/dev/null
+"$renderer" --validator-set hoodi-test-001 --aws-account-id 106760547719 --web3signer-image "$web3signer" --postgres-image "$postgres" --deployment-name node-operator --release-revision 1111111111111111111111111111111111111111 --output "$tmp/identified.yaml" >/dev/null
+ruby -ryaml -e 'old=YAML.load_stream(File.read(ARGV[0])); identified=YAML.load_stream(File.read(ARGV[1])); count=0; identified.each{|d| next unless d.is_a?(Hash) && ["Deployment","StatefulSet"].include?(d["kind"]); labels=d.dig("spec","template","metadata","labels"); abort "deployment label mismatch" unless labels.delete("node-operator.io/deployment-name")=="node-operator"; abort "release label mismatch" unless labels.delete("node-operator.io/release-revision")=="1"*40; count+=1}; abort "labels changed more than Pod metadata" unless count==2 && identified==old' "$tmp/runtime.yaml" "$tmp/identified.yaml"
+if "$renderer" --validator-set hoodi-test-001 --aws-account-id 106760547719 --web3signer-image "$web3signer" --postgres-image "$postgres" --release-revision invalid --output "$tmp/invalid-identity.yaml" >/dev/null 2>&1; then
+  printf '%s\n' 'runtime accepted unpaired or invalid release identity' >&2; exit 1
+fi
 if "$renderer" --validator-set hoodi-test-001 --aws-account-id 999999999999 --web3signer-image "$web3signer" --postgres-image "$postgres" --output "$tmp/wrong-account.yaml" >/dev/null 2>&1; then
   printf '%s\n' 'runtime renderer accepted images from another AWS account' >&2
   exit 1

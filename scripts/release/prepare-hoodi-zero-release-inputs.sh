@@ -12,6 +12,7 @@ usage() {
 }
 
 account=''; validator_set=''; validator_public_key=''; withdrawal_address=''
+release_identity=''
 web3signer_image=''; postgres_image=''; prysm_image=''; fence_image=''; kubernetes_api_cidr=''; output_dir=''; name='node-operator'; aws_region='ap-northeast-2'; availability_zones=(); principals=(); manage_config_recorder=true
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -28,6 +29,7 @@ while [ "$#" -gt 0 ]; do
     --aws-region) aws_region="${2:-}"; shift 2 ;;
     --availability-zone) availability_zones+=("${2:-}"); shift 2 ;;
     --name) name="${2:-}"; shift 2 ;;
+    --release-revision) release_identity="${2:-}"; shift 2 ;;
     --backend-principal-arn) principals+=("${2:-}"); shift 2 ;;
     --manage-config-recorder) manage_config_recorder="${2:-}"; shift 2 ;;
     *) usage ;;
@@ -37,8 +39,13 @@ done
 case "$account" in [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;; *) usage ;; esac
 case "$validator_set" in hoodi-[a-z0-9][a-z0-9-]*) ;; *) usage ;; esac
 case "$output_dir" in /*) ;; *) usage ;; esac
+set --
+if [ -n "$release_identity" ]; then
+  [[ "$release_identity" =~ ^[0-9a-f]{40}$ ]] || usage
+  set -- --deployment-name "$name" --release-revision "$release_identity"
+fi
 [ ! -e "$output_dir" ] && [ ! -L "$output_dir" ] || { printf '%s\n' 'output directory already exists or is a symlink' >&2; exit 65; }
-for command in jq mkdir chmod rm; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
+for command in jq python3 mkdir chmod rm mv; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 zero_dir="$output_dir/zero-resource"
@@ -69,7 +76,18 @@ done
   --prysm-validator-image "$prysm_image" \
   --signing-fence-image "$fence_image" \
   --kubernetes-api-cidr "$kubernetes_api_cidr" \
-  --output-dir "$validator_dir"
+  --output-dir "$validator_dir" "$@"
+
+# Bind the real dashboard body into the baseline Terraform input. This creates
+# no resources and does not assert that metrics ingestion has been deployed.
+python3 -I -B "$script_dir/validator_monitoring_dashboard.py" \
+  --deployment "$name" --region "$aws_region" \
+  --validator-set "$validator_set" --public-key "$validator_public_key" \
+  > "$zero_dir/validator-dashboard.json"
+jq --rawfile dashboard "$zero_dir/validator-dashboard.json" \
+  '.validator_monitoring_dashboard_body = $dashboard' \
+  "$zero_dir/baseline.tfvars.json" > "$zero_dir/baseline.tfvars.json.tmp"
+mv "$zero_dir/baseline.tfvars.json.tmp" "$zero_dir/baseline.tfvars.json"
 
 jq -n \
   --arg account "$account" \

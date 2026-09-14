@@ -6,27 +6,79 @@ set -euo pipefail
 # its entries have fixed ownership, permissions, and modification time.
 #
 # The bundle deliberately contains only deployable/rendered manifests and
-# policy/IaC source needed to review them.  Fixtures, raw scanner evidence,
-# credentials, and release-tool reports are outside this boundary.
+# policy/IaC source needed to review them, plus the fixed reviewed Fence
+# build/test inputs and, only when committed authorization selects them, the
+# exact five non-secret client-chart evidence files. Other raw scanner evidence,
+# credentials, and broad release-tool reports are outside this boundary.
 
-if [ "$#" -ne 1 ]; then
-  printf 'usage: %s OUTPUT_DIRECTORY\n' "$0" >&2
-  exit 64
-fi
+publication_records_directory=''
+prysm_publication_record=''
+fence_publication_record=''
+client_chart_publication_records=''
+signer_probe_publication_record=''
+while [ "$#" -gt 1 ]; do
+  case "$1" in
+    --publication-records-dir) publication_records_directory="${2:-}"; shift 2 ;;
+    --prysm-publication-record) prysm_publication_record="${2:-}"; shift 2 ;;
+    --fence-publication-record) fence_publication_record="${2:-}"; shift 2 ;;
+    --client-chart-publication-records) client_chart_publication_records="${2:-}"; shift 2 ;;
+    --signer-probe-publication-record) signer_probe_publication_record="${2:-}"; shift 2 ;;
+    *) printf 'usage: %s [--publication-records-dir ABSOLUTE_DIRECTORY] [--prysm-publication-record ABSOLUTE_FILE] [--fence-publication-record ABSOLUTE_FILE] [--client-chart-publication-records ABSOLUTE_DIRECTORY] [--signer-probe-publication-record ABSOLUTE_FILE] OUTPUT_DIRECTORY\n' "$0" >&2; exit 64 ;;
+  esac
+done
+[ "$#" -eq 1 ] || { printf 'usage: %s [--publication-records-dir ABSOLUTE_DIRECTORY] [--prysm-publication-record ABSOLUTE_FILE] [--fence-publication-record ABSOLUTE_FILE] [--client-chart-publication-records ABSOLUTE_DIRECTORY] [--signer-probe-publication-record ABSOLUTE_FILE] OUTPUT_DIRECTORY\n' "$0" >&2; exit 64; }
+output_directory="$1"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/lib/common.sh"
 
-output_directory="$1"
 root="$(repo_root)"
 require_command kubectl
 require_command node
 require_command shasum
 require_command syft
 require_command jq
+require_command python3
 
 source_revision="$(git -C "$root" rev-parse HEAD)"
 [[ "$source_revision" =~ ^[0-9a-f]{40}$ ]] || { printf 'unable to determine source revision\n' >&2; exit 1; }
+
+if [ -n "$publication_records_directory" ]; then
+  case "$publication_records_directory" in /*) ;; *) printf '%s\n' 'publication records directory must be absolute' >&2; exit 64 ;; esac
+  [ -d "$publication_records_directory" ] && [ ! -L "$publication_records_directory" ] || { printf '%s\n' 'publication records directory must be a regular directory' >&2; exit 65; }
+  expected_record_count=3
+  actual_record_count="$(find "$publication_records_directory" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d '[:space:]')"
+  [ "$actual_record_count" = "$expected_record_count" ] || { printf '%s\n' 'publication records directory must contain exactly the three required component records' >&2; exit 65; }
+  for record in vault-bootstrap vault-audit-relay gitops-oci-mirror; do
+    path="$publication_records_directory/$record-publication-record.json"
+    [ -f "$path" ] && [ ! -L "$path" ] || { printf 'missing regular publication record: %s\n' "$record" >&2; exit 65; }
+  done
+fi
+
+if [ -n "$prysm_publication_record" ]; then
+  case "$prysm_publication_record" in /*) ;; *) printf '%s\n' 'Prysm publication record must be an absolute regular file' >&2; exit 64 ;; esac
+  [ -f "$prysm_publication_record" ] && [ ! -L "$prysm_publication_record" ] || { printf '%s\n' 'Prysm publication record must be an absolute regular file' >&2; exit 65; }
+fi
+
+if [ -n "$fence_publication_record" ]; then
+  case "$fence_publication_record" in /*) ;; *) printf '%s\n' 'Fence publication record must be an absolute regular file' >&2; exit 64 ;; esac
+  [ -f "$fence_publication_record" ] && [ ! -L "$fence_publication_record" ] || { printf '%s\n' 'Fence publication record must be an absolute regular file' >&2; exit 65; }
+fi
+
+if [ -n "$signer_probe_publication_record" ]; then
+  case "$signer_probe_publication_record" in /*) ;; *) printf '%s\n' 'signer-probe publication record must be an absolute regular file' >&2; exit 64 ;; esac
+  [ -f "$signer_probe_publication_record" ] && [ ! -L "$signer_probe_publication_record" ] || { printf '%s\n' 'signer-probe publication record must be an absolute regular file' >&2; exit 65; }
+fi
+
+if [ -n "$client_chart_publication_records" ]; then
+  case "$client_chart_publication_records" in /*) ;; *) printf '%s\n' 'client chart publication records directory must be absolute' >&2; exit 64 ;; esac
+  [ -d "$client_chart_publication_records" ] && [ ! -L "$client_chart_publication_records" ] || { printf '%s\n' 'client chart publication records directory must be a regular directory' >&2; exit 65; }
+  client_chart_count="$(find "$client_chart_publication_records" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d '[:space:]')"
+  [ "$client_chart_count" = 5 ] || { printf '%s\n' 'client chart publication records directory must contain exactly five records' >&2; exit 65; }
+  for client_chart_record in gitops-chart-subject.json gitops-chart-sbom.json gitops-chart-grype.json gitops-chart-provenance-predicate.json gitops-chart-provenance-verified.json; do
+    [ -f "$client_chart_publication_records/$client_chart_record" ] && [ ! -L "$client_chart_publication_records/$client_chart_record" ] || { printf 'missing regular client chart publication record: %s\n' "$client_chart_record" >&2; exit 65; }
+  done
+fi
 
 umask 077
 temporary_directory="$(mktemp -d)"
@@ -36,10 +88,15 @@ mkdir -p "$stage_directory/source" "$stage_directory/rendered"
 
 path_is_in_release_boundary() {
   case "$1" in
+    # Package only the reviewed non-secret observability inputs, not local
+    # telemetry, evidence, credentials, or arbitrary files in this directory.
+    deploy/observability/kustomization.yaml|deploy/observability/namespace.yaml|deploy/observability/service-accounts.yaml|deploy/observability/rbac.yaml|deploy/observability/network-policies.yaml|deploy/observability/fluent-bit-config.yaml|deploy/observability/fluent-bit-daemonset.template.yaml|deploy/observability/evidence-envelope.schema.json)
+      return 0
+      ;;
     deploy/kyverno/kustomization.yaml|deploy/kyverno/policies/*.yaml)
       return 0
       ;;
-    deploy/base/*.yaml|deploy/prysm/*.yaml|deploy/nethermind/*.yaml|deploy/vault/*.hcl|deploy/vault/*.json|deploy/argocd/node-operator-client-application.yaml|deploy/validator/*.yaml|docs/gitops/vault-tls-internal-ca.example.yaml|infra/terraform/*.tf|infra/terraform/*.json|infra/terraform/terraform.tfvars.example|infra/bootstrap-state/*.tf|infra/bootstrap-state/*.example|infra/foundation-network/*.tf|infra/foundation-network/*.example|infra/ops-access/*.tf|infra/ops-access/*.example|infra/ops-access/.terraform.lock.hcl|infra/baseline/*.tf|policy/data/*.rego|policy/data/*.json|policy/runtime/*.rego|policy/terraform/*.rego|policy/prysm/*.rego|policy/nethermind/hardening.rego|policy/schemas/*.json|policy/*.rego|release/*.json|release/*.example|.ci/validator/approved-client-images.json|.ci/validator/approved-runtime-images.json|scripts/ci/check-ops-access-ssm-retention-plan.sh|scripts/release/*.sh|scripts/release/*.py|scripts/ops/*.sh)
+    deploy/base/*.yaml|deploy/prysm/*.yaml|deploy/nethermind/*.yaml|deploy/vault/*.hcl|deploy/vault/*.json|deploy/validator/vault/onboarding-write.hcl|deploy/validator/vault/runtime-read.hcl|deploy/validator/vault/slashing-db-read.hcl|deploy/validator/vault/client-tls-read.hcl|deploy/validator/vault/runtime-kubernetes-auth-role.json|deploy/validator/vault/slashing-db-kubernetes-auth-role.json|deploy/validator/vault/client-tls-kubernetes-auth-role.json|deploy/argocd/node-operator-client-application.yaml|deploy/validator/*.yaml|docs/gitops/argocd-private-values.example.yaml|docs/gitops/cert-manager-values.example.yaml|docs/gitops/vault-tls-internal-ca.example.yaml|infra/terraform/*.tf|infra/terraform/*.json|infra/terraform/terraform.tfvars.example|infra/bootstrap-state/*.tf|infra/bootstrap-state/*.example|infra/foundation-network/*.tf|infra/foundation-network/*.example|infra/ops-access/*.tf|infra/ops-access/*.example|infra/ops-access/.terraform.lock.hcl|infra/baseline/*.tf|policy/data/*.rego|policy/data/*.json|policy/runtime/*.rego|policy/terraform/*.rego|policy/prysm/*.rego|policy/nethermind/hardening.rego|policy/schemas/*.json|policy/*.rego|release/*.json|release/*.example|.ci/gitops/approved-oci-artifacts.json|.ci/validator/approved-client-images.json|.ci/validator/approved-runtime-images.json|.ci/custody-verifier/source-lock.json|.ci/prysm-mtls/source.lock.json|.ci/prysm-mtls/Dockerfile|.ci/prysm-mtls/Dockerfile.dockerignore|.ci/prysm-mtls/patches/0001-web3signer-http-mtls.patch|.ci/prysm-mtls/patches/0002-security-dependencies.patch|scripts/ci/check-ops-access-ssm-retention-plan.sh|scripts/release/*.sh|scripts/release/*.py|scripts/ops/*.sh|scripts/ops/verify-custody-validator-key.py|scripts/ops/verify-custody-keystore-secret.py)
       return 0
       ;;
     *)
@@ -57,12 +114,138 @@ materialize_source_file() {
   esac
 }
 
+# Fence release evidence is assessed against this deliberately small reviewed
+# input set.  It is materialized directly from the selected revision, never
+# from the builder's working tree and never by copying a broad CI directory.
+materialize_fence_build_input() {
+  case "$1" in
+    go.mod|.ci/validator-signing-fence/Dockerfile|cmd/validator-signing-fence/main.go|cmd/validator-signing-fence/main_test.go|scripts/ci/collect-validator-signing-fence-release-evidence.sh|.github/workflows/fence-security.yml|.ci/fence-security/Dockerfile|.ci/fence-security/blackbox.go|.ci/fence-security/tools.env|.ci/fence-security/zap-report.jq|scripts/ci/install-fence-security-tools.sh|scripts/ci/run-fence-security-sast.sh|scripts/ci/run-fence-security-dast.sh)
+      materialize_source_file "$1"
+      ;;
+    *)
+      printf 'unsafe Fence build input path: %s\n' "$1" >&2
+      exit 65
+      ;;
+  esac
+}
+
+materialize_signer_probe_build_input() {
+  case "$1" in
+    go.mod|.ci/validator-signer-identity-probe/Dockerfile|.ci/validator-signer-identity-probe/Dockerfile.dockerignore|cmd/validator-signer-identity-probe/main.go|cmd/validator-signer-identity-probe/main_test.go)
+      materialize_source_file "$1" ;;
+    *) printf 'unsafe signer-probe build input path: %s\n' "$1" >&2; exit 65 ;;
+  esac
+}
+
 while IFS= read -r relative_path; do
   path_is_in_release_boundary "$relative_path" && materialize_source_file "$relative_path"
 done < <(git -C "$root" ls-tree -r --name-only "$source_revision" | LC_ALL=C sort)
 
+for fence_build_input in \
+  go.mod \
+  .ci/validator-signing-fence/Dockerfile \
+  cmd/validator-signing-fence/main.go \
+  cmd/validator-signing-fence/main_test.go \
+  scripts/ci/collect-validator-signing-fence-release-evidence.sh \
+  .github/workflows/fence-security.yml \
+  .ci/fence-security/Dockerfile \
+  .ci/fence-security/blackbox.go \
+  .ci/fence-security/tools.env \
+  .ci/fence-security/zap-report.jq \
+  scripts/ci/install-fence-security-tools.sh \
+  scripts/ci/run-fence-security-sast.sh \
+  scripts/ci/run-fence-security-dast.sh; do
+  materialize_fence_build_input "$fence_build_input"
+done
+
+for signer_probe_build_input in \
+  go.mod \
+  .ci/validator-signer-identity-probe/Dockerfile \
+  .ci/validator-signer-identity-probe/Dockerfile.dockerignore \
+  cmd/validator-signer-identity-probe/main.go \
+  cmd/validator-signer-identity-probe/main_test.go; do
+  materialize_signer_probe_build_input "$signer_probe_build_input"
+done
+
 kubectl kustomize "$stage_directory/source/deploy/prysm" > "$stage_directory/rendered/prysm.yaml"
 kubectl kustomize "$stage_directory/source/deploy/nethermind" > "$stage_directory/rendered/nethermind.yaml"
+
+# The committed authorization is the explicit decision to bind a prior
+# candidate publication to this release.  The record itself is supplied only
+# by the caller, copied byte-for-byte, and never inferred from a local path.
+prysm_authorization="$stage_directory/source/release/prysm-publication-authorization.json"
+staged_prysm_record="$stage_directory/rendered/prysm-mtls-publication-record.json"
+if [ -f "$prysm_authorization" ] && [ ! -L "$prysm_authorization" ]; then
+  [ -n "$prysm_publication_record" ] || { printf '%s\n' 'selected release authorizes Prysm publication evidence but no record was supplied' >&2; exit 65; }
+  cp "$prysm_publication_record" "$staged_prysm_record"
+  chmod 600 "$staged_prysm_record"
+elif [ -e "$prysm_authorization" ] || [ -L "$prysm_authorization" ]; then
+  printf '%s\n' 'selected release Prysm authorization is unsafe' >&2
+  exit 65
+elif [ -n "$prysm_publication_record" ]; then
+  printf '%s\n' 'Prysm publication record was supplied without a selected release authorization' >&2
+  exit 65
+fi
+
+signer_probe_authorization="$stage_directory/source/release/signer-probe-publication-authorization.json"
+staged_signer_probe_record="$stage_directory/rendered/signer-probe-publication-record.json"
+if [ -f "$signer_probe_authorization" ] && [ ! -L "$signer_probe_authorization" ]; then
+  [ -n "$signer_probe_publication_record" ] || { printf '%s\n' 'selected release authorizes signer-probe publication evidence but no record was supplied' >&2; exit 65; }
+  cp "$signer_probe_publication_record" "$staged_signer_probe_record"
+  chmod 600 "$staged_signer_probe_record"
+elif [ -e "$signer_probe_authorization" ] || [ -L "$signer_probe_authorization" ]; then
+  printf '%s\n' 'selected release signer-probe authorization is unsafe' >&2; exit 65
+elif [ -n "$signer_probe_publication_record" ]; then
+  printf '%s\n' 'signer-probe publication record was supplied without a selected release authorization' >&2; exit 65
+fi
+
+# Like Prysm, Fence evidence is caller-supplied only when the selected release
+# carries a committed authorization.  The raw collector output is copied as
+# bytes so the authorization validator can bind that exact record and the
+# manifest can bind both files.
+fence_authorization="$stage_directory/source/release/fence-publication-authorization.json"
+staged_fence_record="$stage_directory/rendered/fence-release-verification.json"
+if [ -f "$fence_authorization" ] && [ ! -L "$fence_authorization" ]; then
+  [ -n "$fence_publication_record" ] || { printf '%s\n' 'selected release authorizes Fence publication evidence but no record was supplied' >&2; exit 65; }
+  cp "$fence_publication_record" "$staged_fence_record"
+  chmod 600 "$staged_fence_record"
+elif [ -e "$fence_authorization" ] || [ -L "$fence_authorization" ]; then
+  printf '%s\n' 'selected release Fence authorization is unsafe' >&2
+  exit 65
+elif [ -n "$fence_publication_record" ]; then
+  printf '%s\n' 'Fence publication record was supplied without a selected release authorization' >&2
+  exit 65
+fi
+
+client_chart_authorization="$stage_directory/source/release/client-chart-publication-authorization.json"
+client_chart_stage="$stage_directory/rendered/client-chart-publication-records"
+if [ -f "$client_chart_authorization" ] && [ ! -L "$client_chart_authorization" ]; then
+  [ -n "$client_chart_publication_records" ] || { printf '%s\n' 'selected release authorizes client chart publication evidence but no records were supplied' >&2; exit 65; }
+  mkdir -p "$client_chart_stage"
+  for client_chart_record in gitops-chart-subject.json gitops-chart-sbom.json gitops-chart-grype.json gitops-chart-provenance-predicate.json gitops-chart-provenance-verified.json; do
+    cp "$client_chart_publication_records/$client_chart_record" "$client_chart_stage/$client_chart_record"
+    chmod 600 "$client_chart_stage/$client_chart_record"
+  done
+elif [ -e "$client_chart_authorization" ] || [ -L "$client_chart_authorization" ]; then
+  printf '%s\n' 'selected release client chart authorization is unsafe' >&2; exit 65
+elif [ -n "$client_chart_publication_records" ]; then
+  printf '%s\n' 'client chart publication records were supplied without a selected release authorization' >&2; exit 65
+fi
+
+# Publication evidence is optional while legacy release callers remain
+# index-less and therefore not deploy-ready for Vault artifact authority.
+# When explicitly supplied, rebuild the index from the selected revision's
+# staged catalog and helper; never accept a prebuilt index from the caller or
+# a dirty working-tree helper.
+if [ -n "$publication_records_directory" ]; then
+  PYTHONDONTWRITEBYTECODE=1 python3 -B "$stage_directory/source/scripts/release/create-installer-artifact-index.py" \
+    --release-sha "$source_revision" \
+    --approved-catalog "$stage_directory/source/.ci/gitops/approved-oci-artifacts.json" \
+    --vault-bootstrap-record "$publication_records_directory/vault-bootstrap-publication-record.json" \
+    --audit-relay-record "$publication_records_directory/vault-audit-relay-publication-record.json" \
+    --gitops-oci-mirror-record "$publication_records_directory/gitops-oci-mirror-publication-record.json" \
+    --output "$stage_directory/rendered/installer-artifact-index.json"
+fi
 
 # Kubernetes Secret objects and common private-key encodings do not belong in
 # a distributable release bundle.  This is a boundary check, not a substitute
@@ -109,6 +292,46 @@ const manifest = {
 };
 fs.writeFileSync(path.join(stage, 'bundle-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 NODE
+
+if [ -f "$prysm_authorization" ]; then
+  PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$stage_directory/source/scripts/release" python3 -B - "$stage_directory" "$source_revision" <<'PY'
+from pathlib import Path
+import sys
+from prysm_release_authorization import validate_release_authorization
+
+validate_release_authorization(Path(sys.argv[1]), sys.argv[2], "stage")
+PY
+fi
+
+if [ -f "$fence_authorization" ]; then
+  PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$stage_directory/source/scripts/release" python3 -B - "$stage_directory" "$source_revision" <<'PY'
+from pathlib import Path
+import sys
+from fence_release_authorization import validate_release_authorization
+
+validate_release_authorization(Path(sys.argv[1]), sys.argv[2], "stage")
+PY
+fi
+
+if [ -f "$signer_probe_authorization" ]; then
+  PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$stage_directory/source/scripts/release" python3 -B - "$stage_directory" "$source_revision" <<'PY'
+from pathlib import Path
+import sys
+from signer_probe_release_authorization import validate_release_authorization
+
+validate_release_authorization(Path(sys.argv[1]), sys.argv[2], "stage")
+PY
+fi
+
+if [ -f "$client_chart_authorization" ]; then
+  PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$stage_directory/source/scripts/release" python3 -B - "$stage_directory" "$source_revision" <<'PY'
+from pathlib import Path
+import sys
+from client_chart_release_authorization import validate_release_authorization
+
+validate_release_authorization(Path(sys.argv[1]), sys.argv[2], "stage")
+PY
+fi
 
 mkdir -p "$output_directory"
 artifact_path="$output_directory/node-operator-release-bundle.tar"

@@ -4,9 +4,11 @@ locals {
   state_bucket_arn       = "arn:aws:s3:::${local.state_bucket}"
   lock_table             = "${var.name}-terraform-lock"
   tags = {
-    ManagedBy = "terraform"
-    Project   = "node-operator"
-    Purpose   = "terraform-state-bootstrap"
+    ManagedBy        = "terraform"
+    Project          = "node-operator"
+    Deployment       = var.name
+    DeploymentRegion = var.aws_region
+    Purpose          = "terraform-state-bootstrap"
   }
 }
 
@@ -86,6 +88,11 @@ resource "aws_kms_key" "state" {
   })
   tags = local.tags
   lifecycle { prevent_destroy = true }
+}
+
+resource "aws_kms_alias" "state" {
+  name          = "alias/node-operator-${var.name}-bootstrap-state"
+  target_key_id = aws_kms_key.state.key_id
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "state" {
@@ -240,5 +247,11 @@ resource "aws_dynamodb_table" "lock" {
     enabled = true
   }
   tags = local.tags
-  lifecycle { prevent_destroy = true }
+  lifecycle {
+    prevent_destroy = true
+    # Existing bootstrap tables may already be encrypted with an AWS-managed
+    # key. Do not block a fresh-region import on a long-running SSE migration;
+    # newly created tables still use the customer-managed key above.
+    ignore_changes = [server_side_encryption]
+  }
 }

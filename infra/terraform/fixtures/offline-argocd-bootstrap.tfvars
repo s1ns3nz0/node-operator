@@ -1,11 +1,14 @@
 # Synthetic, non-secret input that exercises the dedicated Argo CD bootstrap
 # executor. These values must never be used for a live apply.
-aws_account_id                   = "123456789012"
-name                             = "node-operator"
-availability_zones               = ["ap-northeast-2a", "ap-northeast-2c"]
-private_subnet_cidrs             = ["10.80.0.0/20", "10.80.16.0/20"]
-offline_validation               = true
-enable_private_gitops_foundation = true
+aws_account_id                     = "123456789012"
+name                               = "node-operator"
+availability_zones                 = ["ap-northeast-2a", "ap-northeast-2c"]
+private_subnet_cidrs               = ["10.80.0.0/20", "10.80.16.0/20"]
+offline_validation                 = true
+enable_private_gitops_foundation   = true
+enable_gitops_client_ecr_publisher = true
+gitops_client_chart_version        = "0.1.20"
+gitops_client_chart_oci_digest     = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 enable_argocd_bootstrap_runner        = true
 enable_argocd_bootstrap_cluster_admin = true
