@@ -158,8 +158,13 @@ def mirror(state_dir: Path, bundle_root: Path, discovery: dict, profile: str, re
             raise MirrorError("artifact index image component schema is invalid")
     for component in ("vault-chart","cert-manager-chart"):
         item=index["components"][component]
-        if not isinstance(item,dict) or not isinstance(item.get("approved_url"),str) or not item["approved_url"].startswith("https://") or not re.fullmatch(r"[a-f0-9]{64}",item.get("archive_sha256","")) or not DIGEST.fullmatch(item.get("expected_oci_manifest_digest","")) or not re.fullmatch(r"[A-Za-z0-9._-]+",item.get("tag","")) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+",item.get("version","")):
+        if not isinstance(item,dict) or not isinstance(item.get("approved_url"),str) or not item["approved_url"].startswith("https://") or not re.fullmatch(r"[a-f0-9]{64}",item.get("archive_sha256","")) or not DIGEST.fullmatch(item.get("expected_oci_manifest_digest","")) or not re.fullmatch(r"[A-Za-z0-9._-]+",item.get("tag","")):
             raise MirrorError("artifact index chart component schema is invalid")
+        from installer_artifact_receipt import ReceiptError, validate_chart_version
+        try:
+            validate_chart_version(component, item.get("version"))
+        except ReceiptError as error:
+            raise MirrorError("artifact index chart component schema is invalid") from error
     image_dest={"vault-bootstrap":repos["vault"],"vault-server":repos["vault"],"vault-injector":repos["vault"],"cert-manager-controller":repos["cert_manager"],"cert-manager-webhook":repos["cert_manager"],"cert-manager-cainjector":repos["cert_manager"],"cert-manager-startupapicheck":repos["cert_manager"],"vault-audit-relay":relay}
     image_plan={}
     for name,destination in image_dest.items():

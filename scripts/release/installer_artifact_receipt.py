@@ -31,6 +31,12 @@ class ReceiptError(ValueError):
     """A release index, mirror receipt, or destination binding is invalid."""
 
 
+def validate_chart_version(name: str, version: Any) -> str:
+    """Return an exact approved chart version without rewriting publisher syntax."""
+    pattern = CERT_MANAGER_VERSION if name == "cert-manager-chart" else VERSION
+    return _text(version, f"{name} version", pattern)
+
+
 def _duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     value: dict[str, Any] = {}
     for key, item in pairs:
@@ -115,8 +121,7 @@ def _validate_index(index: Any) -> dict[str, Any]:
         _text(item["expected_oci_manifest_digest"], f"{name} manifest digest", DIGEST)
         # Preserve the publisher's exact chart version, including Jetstack's
         # leading v. Never rewrite the catalog value or broaden Vault versions.
-        version_pattern = CERT_MANAGER_VERSION if name == "cert-manager-chart" else VERSION
-        _text(item["version"], f"{name} version", version_pattern)
+        validate_chart_version(name, item["version"])
         _text(item["destination"], f"{name} catalog destination")
         _text(item["tag"], f"{name} catalog tag", TAG)
     return components
