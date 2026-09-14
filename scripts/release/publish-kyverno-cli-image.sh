@@ -23,7 +23,7 @@ cleanup(){ unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN DOCKE
 evidence="$scratch/evidence"; mkdir -m 700 "$evidence"; docker_config="$scratch/docker-config"; mkdir -m 700 "$docker_config"; export DOCKER_CONFIG="$docker_config"
 token_file="$scratch/oidc-token"; credentials="$scratch/aws.json"; curl_config="$scratch/curl.conf"; oidc_response="$scratch/oidc.json"
 repository=node-operator-baseline-gitops-nodes; registry="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"; tag="kyverno-cli-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"; destination="$registry/$repository:$tag"; local_image="$repository:local-$GITHUB_SHA-$GITHUB_RUN_ID"
-docker build --pull=false --platform linux/amd64 -f .ci/kyverno-cli/Dockerfile -t "$local_image" .
+docker build --pull=false --platform linux/amd64 -f .ci/kyverno-cli/Dockerfile -t "$local_image" .ci/kyverno-cli
 [ "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$local_image")" = linux/amd64 ] || die 'CLI image is not linux/amd64'
 printf 'header = "Authorization: bearer %s"\n' "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" > "$curl_config"; curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --config "$curl_config" --output "$oidc_response" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com"; jq -er .value "$oidc_response" > "$token_file"
 aws sts assume-role-with-web-identity --role-arn "$AWS_ROLE_ARN" --role-session-name "kyverno-cli-$GITHUB_RUN_ID" --web-identity-token "file://$token_file" --duration-seconds 900 --cli-connect-timeout 10 --cli-read-timeout 20 > "$credentials"

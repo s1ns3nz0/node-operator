@@ -28,6 +28,15 @@ class Tests(unittest.TestCase):
   self.assertIn("source_commit=",publisher)
   self.assertIn('git+https://github.com/kyverno/kyverno",digest:{gitCommit:$source_commit}',publisher)
   self.assertIn('git+https://github.com/s1ns3nz0/node-operator",digest:{gitCommit:$revision}',publisher)
+ def test_publisher_build_context_resolves_dockerfile_copy_sources(self):
+  publisher=(ROOT/"scripts/release/publish-kyverno-cli-image.sh").read_text()
+  build=next(line for line in publisher.splitlines() if line.startswith("docker build "))
+  context=ROOT/build.split()[-1]
+  dockerfile=ROOT/".ci/kyverno-cli/Dockerfile"
+  for line in dockerfile.read_text().splitlines():
+   if line.startswith("COPY ") and "--from=" not in line:
+    source=line.split()[1]
+    self.assertTrue((context/source).is_file(),f"COPY source {source} is absent from build context {context}")
  def test_source_lock_must_match_dockerfile_defaults(self):
   with tempfile.TemporaryDirectory() as temporary:
    root=Path(temporary); directory=root/".ci/kyverno-cli"; directory.mkdir(parents=True)
