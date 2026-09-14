@@ -1,9 +1,10 @@
 # Check objective: Reject unsafe installer artifact mirror inputs before any registry copy.
-import hashlib, importlib.util, json, os, tempfile, unittest
+import base64, hashlib, importlib.util, json, os, tempfile, unittest
 from pathlib import Path
 import sys
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/"release"))
+import installer_artifact_mirror as mirror_module
 from installer_artifact_mirror import MirrorError, _describe_digest, mirror, verify_pre_eks_vault_mirror, NAMES, AWS_TIMEOUT, DOCKER_TIMEOUT
 from installer_artifact_prerequisites import projection, _projection_fingerprint
 from installer_vault_platform import artifacts as platform_artifacts
@@ -23,12 +24,34 @@ def strict_index(revision):
 def described(args,digest):
  tag=args[args.index("--image-ids")+1].split("imageTag=",1)[1].split(",",1)[0]
  return json.dumps({"imageDetails":[{"registryId":args[args.index("--registry-id")+1],"repositoryName":args[args.index("--repository-name")+1],"imageDigest":digest,"imageTags":[tag]}]})
+CHARTS={}
+def chart_fixture(bundle, name, version):
+ archive=("chart-"+name).encode(); config=("config-"+name).encode()
+ config_digest=hashlib.sha256(config).hexdigest(); archive_digest=hashlib.sha256(archive).hexdigest()
+ manifest=json.dumps({"schemaVersion":2,"config":{"mediaType":"application/vnd.cncf.helm.config.v1+json","digest":"sha256:"+config_digest,"size":len(config)},"layers":[{"mediaType":"application/vnd.cncf.helm.chart.content.v1.tar+gzip","digest":"sha256:"+archive_digest,"size":len(archive)}]},separators=(",",":")).encode()
+ path=bundle/"source/.ci/gitops/helm-oci";path.mkdir(parents=True,exist_ok=True);(path/(name+".json")).write_text(json.dumps({"schema_version":1,"manifest_base64":base64.b64encode(manifest).decode(),"config_base64":base64.b64encode(config).decode()}))
+ digest="sha256:"+hashlib.sha256(manifest).hexdigest(); CHARTS[digest]=(manifest,config,[{"mediaType":"application/vnd.cncf.helm.chart.content.v1.tar+gzip","digest":"sha256:"+archive_digest,"size":len(archive)}]); return archive, digest, archive_digest
+
+def mock_chart_fixture(name, item):
+ value=CHARTS.get(item.get("expected_oci_manifest_digest"))
+ if value is None:
+  raw=json.dumps({"schemaVersion":2,"config":{},"layers":[]},separators=(",",":")).encode(); value=(raw,b"",[]); CHARTS[item.get("expected_oci_manifest_digest")]=value
+ return value
+
+def mock_chart_layout(work, name, manifest, config, layers, archives):
+ path=work/"oci"/name/"blobs/sha256";path.mkdir(parents=True,exist_ok=True);(path/hashlib.sha256(manifest).hexdigest()).write_bytes(manifest)
+ return path.parents[2],"mirror-"+hashlib.sha256(manifest).hexdigest()
 class Mirror(unittest.TestCase):
+ def setUp(self):
+  self.chart_patcher=patch.object(mirror_module,"_chart_fixture",side_effect=mock_chart_fixture);self.layout_patcher=patch.object(mirror_module,"_chart_layout",side_effect=mock_chart_layout);self.chart_patcher.start();self.layout_patcher.start()
+  self.stage_patcher=patch.object(mirror_module,"_staged_chart_manifest");self.stage_patcher.start()
+ def tearDown(self): self.chart_patcher.stop();self.layout_patcher.stop();self.stage_patcher.stop()
  def fixture(self, root):
   bundle=root/"bundle"; (bundle/"rendered").mkdir(parents=True)
   digest="sha256:"+"a"*64; image=lambda n:{"image_ref":f"ghcr.io/s1ns3nz0/node-operator/{n}@{digest}","manifest_digest":digest}
   components={n:image(n) for n in NAMES if n not in {"vault-chart","cert-manager-chart"}}
-  for n in ("vault-chart","cert-manager-chart"): components[n]={"approved_url":"https://vendor.invalid/"+n+".tgz","archive_sha256":"b"*64,"expected_oci_manifest_digest":digest,"tag":"v1","version":"1.2.3"}
+  for n in ("vault-chart","cert-manager-chart"):
+   archive,manifest_digest,archive_digest=chart_fixture(bundle,n,"1.2.3"); components[n]={"approved_url":"https://vendor.invalid/"+n+".tgz","archive_sha256":archive_digest,"expected_oci_manifest_digest":manifest_digest,"tag":"v1","version":"1.2.3"}
   (bundle/"rendered/installer-artifact-index.json").write_text(json.dumps({"schema_version":1,"release_revision":"c"*40,"components":components}))
   state=root/"state"; state.mkdir(mode=0o700); (state/"terraform-work").mkdir()
   repos={k:"123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/private/"+v for k,v in {"vault":"vault","vault_chart":"vault/vault","cert_manager":"cert","cert_manager_chart":"cert/cert-manager"}.items()}
@@ -47,13 +70,25 @@ class Mirror(unittest.TestCase):
    with self.subTest(partial=partial), tempfile.TemporaryDirectory() as t:
     state,bundle,digest=self.fixture(Path(t))
     calls=[]
+    auth_snapshots=[]
     class R:
      def __init__(self,s=""): self.stdout=s
     def run(args,**kwargs):
      calls.append((args,kwargs))
+     if args[:2]==["docker","run"] and any(item.endswith(":/auth:ro") for item in args):
+      volume=args[args.index("--volume")+1]; auth_path=Path(volume.split(":",1)[0])/"config.json"
+      auth_snapshots.append((json.loads(auth_path.read_text()), auth_path.stat().st_mode & 0o777, auth_path.parent.stat().st_mode & 0o777, auth_path.parent))
+     if args[:2]==["docker","run"] and any("curl --fail" in str(value) for value in args):
+      work=Path(args[args.index("--volume")+1].split(":",1)[0]); filename=Path(args[-3]).name; (work/filename).write_bytes(("chart-"+filename.removesuffix(".tgz")).encode())
      if args[:3]==["aws","sts","get-caller-identity"]: return R("123456789012\n")
      if args[:3]==["aws","ecr","get-login-password"]: return R("token")
-     if args[:3]==["aws","ecr","describe-images"]: return R(described(args,"sha256:"+"b"*64 if partial and len([x for x,_ in calls if x[:3]==["aws","ecr","describe-images"]])==1 else digest))
+     if args[:3]==["aws","ecr","batch-get-image"]:
+      stage=args[args.index("--image-ids")+1].split("=",1)[1]; raw=next(raw for raw,_,_ in CHARTS.values() if stage.endswith(hashlib.sha256(raw).hexdigest())); return R(json.dumps({"images":[{"imageManifest":raw.decode()}]}))
+     if args[:3]==["aws","ecr","describe-images"]:
+      expected="sha256:"+"b"*64 if partial and len([x for x,_ in calls if x[:3]==["aws","ecr","describe-images"]])==1 else digest
+      if args[args.index("--image-ids")+1]=="imageTag=v1":
+       component="vault-chart" if args[args.index("--repository-name")+1].endswith("/vault") else "cert-manager-chart"; expected=json.loads((bundle/"rendered/installer-artifact-index.json").read_text())["components"][component]["expected_oci_manifest_digest"]
+      return R(described(args,expected))
      return R()
     discovery={"aws_account_id":"123456789012","aws_region":"ap-northeast-1","deployment_name":"node"}
     with patch("installer_artifact_mirror.subprocess.run",side_effect=run):
@@ -64,12 +99,14 @@ class Mirror(unittest.TestCase):
      else:
       output=mirror(state,bundle,discovery,"profile","c"*40); self.assertTrue(output.exists()); self.assertTrue((state/"vault-artifact-mirror-receipt.json").exists())
       manifest=json.loads(output.read_text()); self.assertEqual(set(manifest),{"schema_version","aws_account_id","aws_region","deployment_name","images","chart"}); self.assertEqual(set(manifest["images"]),{"bootstrap","server","agent","injector","audit_relay"}); self.assertEqual(manifest["images"]["server"],manifest["images"]["agent"])
-      copies=[x for x,_ in calls if x[:3]==["docker","run","--rm"]]; self.assertEqual(len(copies),10)
-      charts=[x for x in copies if "--entrypoint" in x]; self.assertEqual(len(charts),2)
+      copies=[x for x,_ in calls if x[:3]==["docker","run","--rm"]]; self.assertEqual(len(copies),12)
+      charts=[x for x in copies if "skopeo" in x]; self.assertEqual(len(charts),2)
       images=[x for x in copies if "--entrypoint" not in x]; self.assertEqual(len(images),8)
       self.assertTrue(all(any(part.startswith("docker://123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/private/") for part in call) for call in images))
-      self.assertEqual({call[-1] for call in charts},{"oci://123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/private/vault","oci://123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/private/cert"})
-      self.assertTrue(all("HELM_REGISTRY_CONFIG=/auth/config.json" in call for call in charts))
+      self.assertTrue(all("--preserve-digests" in call and "REGISTRY_AUTH_FILE=/auth/config.json" in call for call in charts))
+      self.assertTrue(auth_snapshots)
+      self.assertTrue(all(snapshot[0] == {"auths":{"123456789012.dkr.ecr.ap-northeast-1.amazonaws.com":{"auth":"QVdTOnRva2Vu"}}} and snapshot[1:3] == (0o600,0o700) for snapshot in auth_snapshots))
+      self.assertTrue(all(not snapshot[3].exists() for snapshot in auth_snapshots))
       describe_calls=[x for x,_ in calls if x[:3]==["aws","ecr","describe-images"]]; self.assertEqual(len(describe_calls),10)
       self.assertIn("private/vault/vault", describe_calls[8])
       self.assertIn("private/cert/cert-manager", describe_calls[9])
@@ -143,7 +180,10 @@ class Mirror(unittest.TestCase):
     calls.append(args)
     if args[:3]==["aws","sts","get-caller-identity"]: return type("R",(),{"stdout":account+"\n"})()
     if args[:3]==["aws","ecr","get-login-password"]: return type("R",(),{"stdout":"token"})()
-    if args[:3]==["aws","ecr","describe-images"]: return type("R",(),{"stdout":described(args,digest)})()
+    if args[:3]==["aws","ecr","describe-images"]:
+     actual=digest
+     if args[args.index("--image-ids")+1]=="imageTag=v1": actual=json.loads((bundle/"rendered/installer-artifact-index.json").read_text())["components"]["vault-chart" if args[args.index("--repository-name")+1].endswith("/vault") else "cert-manager-chart"]["expected_oci_manifest_digest"]
+     return type("R",(),{"stdout":described(args,actual)})()
     return type("R",(),{"stdout":""})()
    with patch("installer_artifact_prerequisites.load_projection",return_value=loaded), patch("installer_artifact_mirror._strict_pre_eks_index"), patch("installer_artifact_mirror.subprocess.run",side_effect=run):
     output=mirror(state,bundle,{"aws_account_id":account,"aws_region":region,"deployment_name":"node"},"profile","c"*40,prerequisites_path=projection,work_dir=state/"terraform-work")
@@ -169,7 +209,10 @@ class Mirror(unittest.TestCase):
     calls.append((args,kwargs))
     if args[:3]==["aws","sts","get-caller-identity"]: return type("R",(),{"stdout":account+"\n","returncode":0})()
     if args[:3]==["aws","ecr","get-login-password"]: return type("R",(),{"stdout":"token","returncode":0})()
-    if args[:3]==["aws","ecr","describe-images"]: return type("R",(),{"stdout":described(args,digest),"returncode":0})()
+    if args[:3]==["aws","ecr","describe-images"]:
+     actual=digest
+     if args[args.index("--image-ids")+1]=="imageTag=v1": actual=json.loads((bundle/"rendered/installer-artifact-index.json").read_text())["components"]["vault-chart" if args[args.index("--repository-name")+1].endswith("/vault") else "cert-manager-chart"]["expected_oci_manifest_digest"]
+     return type("R",(),{"stdout":described(args,actual),"returncode":0})()
     return type("R",(),{"stdout":"","returncode":0})()
    import installer_artifact_mirror as mod
    original=mod._write; writes=[0]
@@ -202,6 +245,7 @@ class Mirror(unittest.TestCase):
    def run(args,**kwargs):
     calls.append(args)
     if args[:3]==["aws","sts","get-caller-identity"]: return type("R",(),{"stdout":account,"returncode":0})()
+    if args[:3]==["aws","ecr","get-login-password"]: return type("R",(),{"stdout":"token\n","returncode":0})()
     if args[:3]==["aws","ecr","describe-images"]: return type("R",(),{"stdout":described(args,"sha256:"+"b"*64),"returncode":0})()
     return type("R",(),{"stdout":"","returncode":0})()
    with patch("installer_artifact_prerequisites.load_projection",return_value=loaded),patch("installer_artifact_mirror._strict_pre_eks_index"),patch("installer_artifact_mirror.subprocess.run",side_effect=run),self.assertRaises(MirrorError):
