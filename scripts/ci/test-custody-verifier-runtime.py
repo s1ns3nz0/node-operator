@@ -16,6 +16,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = ROOT / "scripts/release/custody_verifier_runtime.py"
 KEY = "0x" + "a" * 96
+CANONICAL_CLONE_SOURCE = "https://github.com/ethstaker/ethstaker-deposit-cli.git"
 PINNED_SOURCE_VALUE = os.environ.get("CUSTODY_VERIFIER_UPSTREAM_ROOT")
 PINNED_SOURCE = Path(PINNED_SOURCE_VALUE) if PINNED_SOURCE_VALUE else Path(os.devnull)
 
@@ -74,7 +75,10 @@ class CustodyVerifierRuntimeTests(unittest.TestCase):
             self.assertEqual(prepared["python"], str(self.python))
             self.assertEqual(prepared["upstream_root"], str(self.upstream))
             self.assertTrue((self.work / runtime.RUNTIME / "receipt.json").is_file())
-            self.assertTrue(any(call[:2] == ["git", "clone"] for call in self.calls))
+            clones = [call for call in self.calls if call[:2] == ["git", "clone"]]
+            self.assertEqual(runtime.UPSTREAM, CANONICAL_CLONE_SOURCE)
+            self.assertEqual(len(clones), 1)
+            self.assertEqual(clones[0][-2], CANONICAL_CLONE_SOURCE)
             self.assertTrue(any(call[:5] == [str(self.python), "-I", "-m", "pip", "install"] and "--require-hashes" in call for call in self.calls))
             before = list(self.calls)
             verified = runtime._verify(self.work, self.bundle, KEY)

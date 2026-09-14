@@ -15,7 +15,7 @@ import tempfile
 from typing import Any
 
 COMMIT = "d8016bc8ca25d7f85e143828b6d99160f55a640f"
-UPSTREAM = "https://github.com/ethstaker/ethstaker-deposit.git"
+UPSTREAM = "https://github.com/ethstaker/ethstaker-deposit-cli.git"
 PUBLIC_KEY = re.compile(r"0x[0-9a-f]{96}\Z")
 RUNTIME = "custody-verifier-runtime"
 
