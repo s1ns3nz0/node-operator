@@ -45,7 +45,9 @@ def assess(evidence, *, root=ROOT, now=None):
     if now.tzinfo is None: bad("timezone-aware clock required")
     manifest=load(root/".ci/prysm-mtls-applicability.json"); pin=root/".ci/prysm-mtls-applicability"/(ADVISORY+".json")
     pinned=load(pin); current_path=evidence/"advisory-current.json"; current=load(current_path); exact_advisory(manifest,pinned,current,now.astimezone(timezone.utc))
-    if current_path.read_bytes() != pin.read_bytes(): bad("current advisory bytes differ")
+    # Git text files may end with one newline; the official JSON endpoint does
+    # not. All other bytes and all parsed advisory fields must still match.
+    if current_path.read_bytes().removesuffix(b"\n") != pin.read_bytes().removesuffix(b"\n"): bad("current advisory bytes differ")
     required=("sbom.json","grype.json","runtime-identity.json","binary.sha256","dependencies.txt","advisory-current.json")
     if any(not (evidence/x).is_file() or (evidence/x).is_symlink() for x in required): bad("required evidence missing")
     sbom_path=evidence/"sbom.json"; raw_path=evidence/"grype.json"; sbom=sbom_path.read_bytes(); raw=load(raw_path)

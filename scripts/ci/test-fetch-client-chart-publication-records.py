@@ -89,6 +89,19 @@ sys.stdout.buffer.write((base/name).read_bytes())
         self._write(self._evidence(sibling), image=sibling); self.assert_fail()
         self._write(self._evidence(), image=scoped); self.assert_fail()
         self._write(self._evidence(scoped, "sha256:" + "f" * 64), image=scoped); self.assert_fail()
+
+    def test_current_nine_file_layout_and_unknown_extras(self) -> None:
+        extras = ("gitops-chart-signature-verified.json", "gitops-chart-sbom-verified.json", "gitops-chart-release-predicate.json", "gitops-chart-release-verified.json")
+        with zipfile.ZipFile(self.fixtures / "artifact.zip", "a") as archive:
+            for name in extras:
+                archive.writestr(name, b"{}")
+        result = self.invoke()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual({path.name for path in self.output.iterdir()}, set(authz.NAMES))
+        self.output.rename(self.root / "accepted-current-layout")
+        with zipfile.ZipFile(self.fixtures / "artifact.zip", "a") as archive:
+            archive.writestr("unexpected.json", b"{}")
+        self.assert_fail()
         for image in (
             f"999999999999.dkr.ecr.ap-northeast-2.amazonaws.com/node-op-2609140157-baseline-gitops-client/node-operator-client@{MANIFEST}",
             f"106760547719.dkr.ecr.us-east-1.amazonaws.com/node-op-2609140157-baseline-gitops-client/node-operator-client@{MANIFEST}",

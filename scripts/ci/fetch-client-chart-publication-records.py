@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "release"))
 import client_chart_release_authorization as authorization
 
 NAMES = authorization.NAMES
+REVIEW_FILES = frozenset(("gitops-chart-signature-verified.json", "gitops-chart-sbom-verified.json", "gitops-chart-release-predicate.json", "gitops-chart-release-verified.json"))
 MAX_MEMBER = 4 * 1024 * 1024
 ARTIFACT_NAME = re.compile(r"^gitops-chart-evidence-[a-z0-9-]+$")
 
@@ -118,19 +119,23 @@ def extract_evidence(archive_path: Path, stage: Path) -> dict[str, bytes]:
     try:
         with zipfile.ZipFile(archive_path) as archive:
             infos = archive.infolist()
-            if len(infos) != len(NAMES) or len({info.filename for info in infos}) != len(infos) or sum(info.file_size for info in infos) > generic().MAX_ARCHIVE:
-                fail("client-chart artifact ZIP must contain exactly five files")
+            names = {info.filename for info in infos}
+            if names not in (set(NAMES), set(NAMES) | REVIEW_FILES) or len(names) != len(infos) or sum(info.file_size for info in infos) > generic().MAX_ARCHIVE:
+                fail("client-chart artifact ZIP does not match a reviewed five- or nine-file layout")
             evidence: dict[str, bytes] = {}
             for info in infos:
                 path = PurePosixPath(info.filename)
                 kind = (info.external_attr >> 16) & 0o170000
-                if (info.filename not in NAMES or info.is_dir() or path.is_absolute() or ".." in path.parts or len(path.parts) != 1 or
+                if (info.is_dir() or path.is_absolute() or ".." in path.parts or len(path.parts) != 1 or
                         kind not in {0, stat.S_IFREG} or info.file_size > MAX_MEMBER or info.compress_size > generic().MAX_ARCHIVE):
                     fail("client-chart artifact ZIP contains an unsafe member")
                 raw = archive.read(info)
                 if len(raw) > MAX_MEMBER:
                     fail("client-chart evidence exceeds limit")
-                evidence[info.filename] = raw
+                # Auxiliary review artifacts are bounded and ignored, not treated
+                # as verified authority. Only the five authorized hashes are used.
+                if info.filename in NAMES:
+                    evidence[info.filename] = raw
     except (OSError, RuntimeError, zipfile.BadZipFile) as error:
         raise FetchClientChartError("client-chart artifact ZIP is invalid") from error
     if set(evidence) != set(NAMES):

@@ -21,6 +21,20 @@ class Tests(unittest.TestCase):
   t,r,e=self.fixture()
   with t:
    x=self.assess(r,e); self.assertEqual(x["raw_scan_status"],"blocked"); self.assertEqual(x["applicability"],"not_affected"); self.assertFalse(x["deployment_authorized"])
+ def test_official_complete_pin_and_terminal_newline(self):
+  pin=SCRIPT.parents[2]/".ci/prysm-mtls-applicability/GO-2026-5932.json"
+  official=json.loads(pin.read_text())
+  self.assertTrue(official["details"].startswith("The golang.org/x/crypto/openpgp package"))
+  self.assertIn({"type":"REPORT","url":"https://go.dev/issue/44226"},official["references"])
+  t,r,e=self.fixture()
+  with t:
+   target=r/".ci/prysm-mtls-applicability"/(a.ADVISORY+".json")
+   target.write_bytes(pin.read_bytes())
+   (e/"advisory-current.json").write_bytes(pin.read_bytes().removesuffix(b"\n"))
+   self.assess(r,e)
+   tampered=dict(official); tampered.pop("details")
+   (e/"advisory-current.json").write_text(json.dumps(tampered))
+   with self.assertRaises(ValueError): self.assess(r,e)
  def test_negative_cases_fail_closed(self):
   cases={
    "critical":lambda e,r: self.raw(e,lambda x:x["matches"].append({"vulnerability":{"severity":"High"}})),
