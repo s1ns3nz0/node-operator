@@ -54,18 +54,33 @@ def table(region, name):
 
 
 def kms_keys_with_tags(region, expected, account_id):
-    keys = aws(region, "kms", "list-keys").get("Keys", [])
+    # Discover only deployment-owned candidates. Account-wide DescribeKey
+    # requires access to unrelated keys, including keys with explicit denies.
+    # AWS CLI auto-pagination remains enabled; never treat a read error as empty.
+    discovery = aws(region, "resourcegroupstaggingapi", "get-resources",
+                    "--resource-type-filters", "kms:key", "--tag-filters",
+                    json.dumps([{"Key": key, "Values": [value]}
+                                for key, value in sorted(expected.items())]))
+    keys = discovery.get("ResourceTagMappingList")
+    if not isinstance(keys, list) or discovery.get("PaginationToken"):
+        raise AwsError("bootstrap KMS discovery returned incomplete or invalid results")
     matches = []
     for key in keys:
-        key_id = key["KeyId"]
+        key_id = key.get("ResourceARN", "")
+        if not key_id.startswith("arn:aws:kms:%s:%s:key/" % (region, account_id)):
+            raise AwsError("bootstrap KMS discovery returned an out-of-scope key")
         metadata = aws(region, "kms", "describe-key", "--key-id", key_id).get("KeyMetadata", {})
         arn = metadata.get("Arn", "")
+        if arn != key_id:
+            raise AwsError("bootstrap KMS metadata does not match discovered key")
         if (metadata.get("KeyState") != "Enabled" or metadata.get("KeyManager") != "CUSTOMER" or
                 not arn.startswith("arn:aws:kms:%s:%s:key/" % (region, account_id))):
             continue
         tags = aws(region, "kms", "list-resource-tags", "--key-id", key_id).get("Tags", [])
         if owns({tag["TagKey"]: tag["TagValue"] for tag in tags}, expected):
-            matches.append({"arn": arn, "id": metadata.get("KeyId", key_id)})
+            matches.append({"arn": arn, "id": metadata.get("KeyId", arn.rsplit("/", 1)[-1])})
+        else:
+            raise AwsError("bootstrap KMS candidate no longer has required ownership tags")
     return matches
 
 

@@ -18,7 +18,7 @@ elif a[:2]==['dynamodb','describe-table']:
  if run=='one': print('ResourceNotFoundException',file=sys.stderr);sys.exit(255)
  out({'Table':{'TableArn':'arn:aws:dynamodb:us-east-1:111111111111:table/node-operator-terraform-lock'}})
 elif a[:2]==['dynamodb','list-tags-of-resource']: out({'Tags':[{'Key':'Project','Value':'node-operator'},{'Key':'Deployment','Value':'node-operator'},{'Key':'DeploymentRegion','Value':'us-east-1'},{'Key':'ManagedBy','Value':'terraform'},{'Key':'Purpose','Value':'terraform-state-bootstrap'}]})
-elif a[:2]==['kms','list-keys']: out({'Keys':([] if run=='one' else [{'KeyId':'abc'}])})
+elif a[:2]==['resourcegroupstaggingapi','get-resources']: out({'ResourceTagMappingList':([] if run=='one' else [{'ResourceARN':'arn:aws:kms:us-east-1:111111111111:key/abc'}])})
 elif a[:2]==['kms','describe-key']: out({'KeyMetadata':{'KeyId':'abc','Arn':'arn:aws:kms:us-east-1:111111111111:key/abc','KeyState':'Enabled','KeyManager':'CUSTOMER'}})
 elif a[:2]==['kms','list-resource-tags']: out({'Tags':[{'TagKey':'Project','TagValue':'node-operator'},{'TagKey':'Deployment','TagValue':'node-operator'},{'TagKey':'DeploymentRegion','TagValue':'us-east-1'},{'TagKey':'ManagedBy','TagValue':'terraform'},{'TagKey':'Purpose','TagValue':'terraform-state-bootstrap'}]})
 elif a[:2]==['kms','list-aliases']: out({'Aliases':[{'AliasName':'alias/node-operator-node-operator-bootstrap-state','TargetKeyId':'abc'}]})
