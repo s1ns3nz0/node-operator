@@ -17,6 +17,7 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
 IMAGE = re.compile(r"^[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$")
 VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+CERT_MANAGER_VERSION = re.compile(r"^v?[0-9]+\.[0-9]+\.[0-9]+$")
 TAG = re.compile(r"^[A-Za-z0-9._-]+$")
 REPOSITORY = re.compile(r"^[a-z0-9]+(?:[._/-][a-z0-9]+)*$")
 IMAGE_COMPONENTS = {"vault-bootstrap", "vault-audit-relay", "gitops-oci-mirror", "vault-server", "vault-injector", "cert-manager-controller", "cert-manager-webhook", "cert-manager-cainjector", "cert-manager-startupapicheck"}
@@ -112,7 +113,10 @@ def _validate_index(index: Any) -> dict[str, Any]:
             raise ReceiptError(f"{name} chart authority is invalid")
         _text(item["archive_sha256"], f"{name} archive digest", re.compile(r"^[a-f0-9]{64}$"))
         _text(item["expected_oci_manifest_digest"], f"{name} manifest digest", DIGEST)
-        _text(item["version"], f"{name} version", VERSION)
+        # Preserve the publisher's exact chart version, including Jetstack's
+        # leading v. Never rewrite the catalog value or broaden Vault versions.
+        version_pattern = CERT_MANAGER_VERSION if name == "cert-manager-chart" else VERSION
+        _text(item["version"], f"{name} version", version_pattern)
         _text(item["destination"], f"{name} catalog destination")
         _text(item["tag"], f"{name} catalog tag", TAG)
     return components

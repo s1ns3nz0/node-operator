@@ -49,6 +49,30 @@ def authority():
 
 
 class ReceiptTests(unittest.TestCase):
+    def test_cert_manager_v_prefix_is_preserved_and_bound(self):
+        index, mirror, baseline, _ = authority()
+        index["components"]["cert-manager-chart"].update(version="v1.21.1", tag="v1.21.1")
+        mirror["artifacts"]["cert-manager-chart"]["version"] = "v1.21.1"
+        raw = json.dumps(index, sort_keys=True).encode()
+        mirror["index_sha256"] = hashlib.sha256(raw).hexdigest()
+        artifacts, _ = receipt.validate(index, mirror, baseline, DISCOVERY, raw)
+        self.assertEqual(artifacts["cert-manager-chart"]["version"], "v1.21.1")
+        mirror["artifacts"]["cert-manager-chart"]["version"] = "1.21.1"
+        with self.assertRaises(receipt.ReceiptError):
+            receipt.validate(index, mirror, baseline, DISCOVERY, raw)
+
+    def test_chart_version_acceptance_remains_bounded(self):
+        for component, versions in (
+            ("cert-manager-chart", ("vv1.2.3", "1.2", "v1.2.3/other", "latest", "v1.2.3\n")),
+            ("vault-chart", ("v1.2.3", "latest")),
+        ):
+            for version in versions:
+                with self.subTest(component=component, version=version):
+                    index, _, _, _ = authority()
+                    index["components"][component]["version"] = version
+                    with self.assertRaises(receipt.ReceiptError):
+                        receipt._validate_index(index)
+
     def test_full_real_shape_is_accepted(self):
         index, mirror, baseline, raw = authority()
         artifacts, digest = receipt.validate(index, mirror, baseline, DISCOVERY, raw)
