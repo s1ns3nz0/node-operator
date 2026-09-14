@@ -52,7 +52,16 @@ authorization="release/client-chart-publication-authorization.json"
 if [ -f "$authorization" ] && [ ! -L "$authorization" ]; then
   client_chart_output="${RUNNER_TEMP}/client-chart-publication-records"
   [ ! -e "$client_chart_output" ] && [ ! -L "$client_chart_output" ] || { printf '%s\n' 'client chart publication records output already exists' >&2; exit 65; }
-  python3 scripts/ci/fetch-client-chart-publication-records.py --authorization-path "$PWD/$authorization" --output-dir "$client_chart_output"
+  # Do not overwrite the caller's GITHUB_TOKEN or use the cross-repository
+  # token for Node Operator evidence. Scope it to this one child process.
+  if [ -n "${GITOPS_EVIDENCE_TOKEN:-}" ]; then
+    GH_TOKEN="$GITOPS_EVIDENCE_TOKEN" python3 scripts/ci/fetch-client-chart-publication-records.py --authorization-path "$PWD/$authorization" --output-dir "$client_chart_output"
+  elif [ "${GITHUB_ACTIONS:-false}" = true ]; then
+    printf '%s\n' 'GitOps evidence reader App token is required in Actions; configure gitops-evidence-reader.' >&2
+    exit 65
+  else
+    python3 scripts/ci/fetch-client-chart-publication-records.py --authorization-path "$PWD/$authorization" --output-dir "$client_chart_output"
+  fi
 elif [ -e "$authorization" ] || [ -L "$authorization" ]; then
   printf '%s\n' 'client chart publication authorization is unsafe' >&2; exit 65
 fi

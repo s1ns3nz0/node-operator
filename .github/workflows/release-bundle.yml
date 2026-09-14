@@ -40,6 +40,7 @@ jobs:
   # Role: Build reproducibility evidence, scan the exact SBOM and export the approved artifact digest; no publication authority.
   reproducibility:
     name: Release Integrity
+    environment: gitops-evidence-reader
     needs: eligibility
     if: >-
       ${{ !cancelled() && (needs.eligibility.result == 'success' ||
@@ -60,10 +61,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Role: Mint an automatically revoked token for one private repository's Actions evidence only.
+      - name: GitOps evidence reader token
+        id: gitops-reader
+        if: hashFiles('release/client-chart-publication-authorization.json') != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.GITOPS_EVIDENCE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GITOPS_EVIDENCE_APP_PRIVATE_KEY }}
+          owner: s1ns3nz0
+          repositories: node-operator-gitops
+          permission-actions: read
+          skip-token-revoke: false
       # Role: Obtain one independently validated, exact-revision image-publication record set before building release evidence.
       - name: Prepare publication records
         env:
           GH_TOKEN: ${{ github.token }}
+          GITOPS_EVIDENCE_TOKEN: ${{ steps.gitops-reader.outputs.token }}
         run: bash scripts/ci/prepare-release-publication-records.sh
       # Role: Build the bundle with the pinned toolchain and compare repeat builds for deterministic output.
       - name: Reproducible Release Bundle

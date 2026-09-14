@@ -20,7 +20,7 @@ chmod +x "$workspace/bin/gh" "$workspace/bin/python3"
 
 invoke() {
   local source_root="${SOURCE_ROOT:-$workspace/legacy-source}"
-  (cd "$source_root" && PATH="$workspace/bin:$PATH" FAKE_LOG="$log" GITHUB_SHA="$sha" GITHUB_REPOSITORY=owner/repository RUNNER_TEMP="$workspace/runner" bash "$helper")
+  (cd "$source_root" && PATH="$workspace/bin:$PATH" FAKE_LOG="$log" GITHUB_ACTIONS="${TEST_GITHUB_ACTIONS:-false}" GITHUB_SHA="$sha" GITHUB_REPOSITORY=owner/repository RUNNER_TEMP="${TEST_RUNNER:-$workspace/runner}" bash "$helper")
 }
 
 : > "$log"
@@ -70,5 +70,20 @@ chart_source="$workspace/chart-source"; mkdir -p "$chart_source/release"; printf
 : > "$log"; SOURCE_ROOT="$chart_source" invoke
 grep -F -- "python scripts/ci/fetch-client-chart-publication-records.py --authorization-path $chart_source/release/client-chart-publication-authorization.json --output-dir $workspace/runner/client-chart-publication-records" "$log" >/dev/null || fail 'authorized client chart retrieval does not use absolute authorization and dedicated output'
 [ -f "$workspace/runner/client-chart-publication-records/gitops-chart-subject.json" ] || fail 'authorized client chart retriever did not populate frozen input path'
+
+# Synthetic credentials only: ensure cross-repository scope does not escape
+# the chart child and the caller's GITHUB_TOKEN remains unchanged.
+cp "$workspace/bin/python3" "$workspace/bin/python3-base"
+# shellcheck disable=SC2016
+printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' \
+  '[ "${GITHUB_TOKEN:-}" = original-github-token ] || exit 96' \
+  'case "$1" in *fetch-client-chart-publication-records.py) [ "${GH_TOKEN:-}" = synthetic-reader-token ] || exit 97 ;; *) [ "${GH_TOKEN:-}" = original-gh-token ] || exit 98 ;; esac' \
+  'exec "$(dirname "$0")/python3-base" "$@"' > "$workspace/bin/python3"
+chmod +x "$workspace/bin/python3"
+SOURCE_ROOT="$chart_source" TEST_RUNNER="$workspace/scoped-runner" TEST_GITHUB_ACTIONS=true GH_TOKEN=original-gh-token GITHUB_TOKEN=original-github-token GITOPS_EVIDENCE_TOKEN=synthetic-reader-token invoke
+if SOURCE_ROOT="$chart_source" TEST_RUNNER="$workspace/no-reader-runner" TEST_GITHUB_ACTIONS=true GH_TOKEN=original-gh-token GITHUB_TOKEN=original-github-token GITOPS_EVIDENCE_TOKEN='' invoke > "$workspace/missing-reader.log" 2>&1; then
+  fail 'Actions accepted a missing cross-repository reader token'
+fi
+grep -F 'GitOps evidence reader App token is required' "$workspace/missing-reader.log" >/dev/null || fail 'missing reader was not diagnosed'
 
 printf 'PASS release publication record preparation is bounded and retrieval-owned.\n'

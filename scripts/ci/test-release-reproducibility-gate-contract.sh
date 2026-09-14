@@ -8,6 +8,15 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/workflow-contract.sh"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 release="$root/.github/workflows/release-bundle.yml"
 reproducibility="$(workflow_job_source "$release" reproducibility)"
+grep -Fq 'environment: gitops-evidence-reader' <<<"$reproducibility"
+grep -Fq 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1' <<<"$reproducibility"
+grep -Fq 'client-id: ${{ vars.GITOPS_EVIDENCE_APP_CLIENT_ID }}' <<<"$reproducibility"
+grep -Fq 'private-key: ${{ secrets.GITOPS_EVIDENCE_APP_PRIVATE_KEY }}' <<<"$reproducibility"
+grep -Fq 'owner: s1ns3nz0' <<<"$reproducibility"
+grep -Fq 'repositories: node-operator-gitops' <<<"$reproducibility"
+grep -Fq 'permission-actions: read' <<<"$reproducibility"
+grep -Fq 'skip-token-revoke: false' <<<"$reproducibility"
+grep -Fq 'GITOPS_EVIDENCE_TOKEN: ${{ steps.gitops-reader.outputs.token }}' <<<"$reproducibility"
 if grep -Fq 'uses: ./.github/workflows/ci-release-integrity.yml' "$release"; then
   printf 'release reproducibility must be inlined rather than call the retired reusable workflow\n' >&2
   exit 1
