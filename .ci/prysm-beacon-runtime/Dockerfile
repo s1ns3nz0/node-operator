@@ -10,7 +10,7 @@ COPY .ci/prysm-mtls/patches/0001-web3signer-http-mtls.patch /tmp/mtls.patch
 RUN echo '05fd3fa777abc99d5f0f66c192dfcca64922f1f1b0b2c35aa337dcb0c60970be  /tmp/mtls.patch' | sha256sum -c - && \
     git apply --check /tmp/mtls.patch && git apply /tmp/mtls.patch && git diff --check
 COPY .ci/prysm-mtls/patches/0002-security-dependencies.patch /tmp/security.patch
-RUN echo '6b3b1a3a904ab4ccd6b0a13a859e07b2c0c3b859dcfd4368d31b30408c45f3b8  /tmp/security.patch' | sha256sum -c - && \
+RUN echo 'ff4f2db3b57b8d5d2756bfdf03e4d16ee12b62f218beb12a56e6c60f342a4b91  /tmp/security.patch' | sha256sum -c - && \
     git apply --check /tmp/security.patch && git apply /tmp/security.patch && git diff --check
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     go mod download && go mod verify && \
@@ -27,7 +27,7 @@ FROM alpine:3.23@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc
 RUN apk upgrade --no-cache libcrypto3 libssl3 && apk add --no-cache libstdc++ ca-certificates
 LABEL org.opencontainers.image.source="https://github.com/OffchainLabs/prysm" \
       org.opencontainers.image.revision="51b5a75ebbadf05af22bd2601b5baf7a9e99b66d" \
-      io.node-operator.prysm-security-patch-sha256="6b3b1a3a904ab4ccd6b0a13a859e07b2c0c3b859dcfd4368d31b30408c45f3b8"
+      io.node-operator.prysm-security-patch-sha256="ff4f2db3b57b8d5d2756bfdf03e4d16ee12b62f218beb12a56e6c60f342a4b91"
 COPY --from=build /out/beacon-chain /beacon-chain
 COPY --from=build /out/beacon-chain-dependencies.txt /usr/share/beacon-chain-dependencies.txt
 COPY --from=build /out/beacon-chain-go-modules.json /usr/share/beacon-chain-go-modules.json

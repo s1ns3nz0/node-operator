@@ -24,7 +24,12 @@ cmd=sys.argv[1]; args=sys.argv[2:]; mode=os.environ['FAKE_MODE']; subject=args[-
 if cmd in ('sign','attest','version'): raise SystemExit(0)
 for flag, value in (('--certificate-identity','https://github.com/s1ns3nz0/node-operator/.github/workflows/image-publish.yml@refs/heads/main'),('--certificate-oidc-issuer','https://token.actions.githubusercontent.com'),('--certificate-github-workflow-sha',os.environ['GITHUB_SHA'])):
  if flag not in args or args[args.index(flag)+1] != value: raise SystemExit(92)
-if cmd=='verify': print(json.dumps([{'critical':{'image':{'docker-manifest-digest':'sha256:'+digest},'identity':{'docker-reference':subject.rsplit('@',1)[0]}}}])); raise SystemExit(0)
+if cmd=='verify':
+ reference = subject
+ signature_digest = digest
+ if mode == 'bad-signature-reference': reference = 'other.example/not-the-subject@sha256:' + digest
+ if mode == 'bad-signature-digest': signature_digest = 'c' * 64
+ print(json.dumps([{'critical':{'image':{'docker-manifest-digest':'sha256:'+signature_digest},'identity':{'docker-reference':reference}}}])); raise SystemExit(0)
 typ=args[args.index('--type')+1]; evidence=next(pathlib.Path(os.environ['RUNNER_TEMP']).glob('.signer-probe-release.*/evidence'))
 path={'slsaprovenance1':'provenance.json','cyclonedx':'sbom.json'}.get(typ,'scan.json'); predicate=json.loads((evidence/path).read_text()); ptype={'slsaprovenance1':'https://slsa.dev/provenance/v1','cyclonedx':'https://cyclonedx.org/bom'}.get(typ,'https://github.com/s1ns3nz0/node-operator/attestations/scan-summary/v1')
 if mode=='bad-provenance' and typ=='slsaprovenance1': predicate={}
@@ -42,7 +47,7 @@ print(json.dumps({'payload':base64.b64encode(json.dumps({'_type':'https://in-tot
   return subprocess.run(["bash",str(self.fixture/"scripts/release/publish-signer-identity-probe.sh")],cwd=self.fixture,env=env|overrides,text=True,capture_output=True,timeout=30),run
  def test_publisher_and_fail_closed_paths(self):
   result,run=self.invoke("ok"); self.assertEqual(result.returncode,0,result.stderr); self.assertTrue((run/"signer-probe-publication-records/signer-identity-probe-publication-record.json").is_file()); self.assertFalse(list(run.glob(".signer-probe-release.*")))
-  for mode in ("dirty","bad-digest","bad-pushed","scan-fail","bad-provenance","bad-subject","signal","collision"):
+  for mode in ("dirty","bad-digest","bad-pushed","scan-fail","bad-provenance","bad-subject","bad-signature-reference","bad-signature-digest","signal","collision"):
    result,run=self.invoke(mode); self.assertNotEqual(result.returncode,0,(mode,result.stderr)); self.assertFalse((run/"signer-probe-publication-records/signer-identity-probe-publication-record.json").exists()); self.assertFalse(list(run.glob(".signer-probe-release.*")))
    if mode in ("dirty", "collision"): self.assertFalse((run/"audit").exists())
    if mode=="signal": self.assertEqual(result.returncode, 130, result.stderr)
