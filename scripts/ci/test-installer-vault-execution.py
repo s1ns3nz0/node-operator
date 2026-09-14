@@ -22,7 +22,7 @@ class T(unittest.TestCase):
   work=self.state/"terraform-work";work.mkdir(mode=0o700);self.orig=work/"baseline";self.orig.mkdir(mode=0o700)
   (self.orig/".terraform").mkdir();self.write(self.orig/".terraform/terraform.tfstate",{},0o600)
   self.baseline=work/"baseline-output.json";self.write(self.baseline,{"fixture":{"value":"original"}},0o600)
-  foundation={"vpc_id":"vpc-1","vpc_cidr":"10.0.0.0/16","system_subnet_ids":["subnet-1"],"hoodi_subnet_ids":["subnet-2"],"system_route_table_id":"rtb-1","hoodi_route_table_id":"rtb-2","hoodi_nat_gateway_id":"nat-1"}
+  foundation={"vpc_id":"vpc-1","vpc_cidr":"10.0.0.0/16","system_subnet_ids":["subnet-1"],"hoodi_subnet_ids":["subnet-2"],"system_route_table_id":"rtb-1","hoodi_route_table_id":"rtb-2","hoodi_nat_gateway_id":"nat-1","hoodi_nat_public_ip":"198.51.100.42"}
   self.write(work/"foundation-output.json",foundation,0o600)
   self.write(work/"bootstrap-output.json",{"bucket":"b","dynamodb_table":"t","region":D["aws_region"],"kms_key_id":"arn:aws:kms:ap-northeast-1:123456789012:key/key"},0o600)
   derived={"network_source":"foundation","foundation_network":foundation}

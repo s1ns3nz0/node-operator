@@ -11,6 +11,11 @@ fail() { printf 'FAIL Argo CD bootstrap enabled plan: %s\n' "$*" >&2; exit 1; }
 
 "$script_dir/validate-terraform-offline.sh" \
   "$root/infra/terraform" \
+  "$temporary_directory/disabled" \
+  fixtures/offline-baseline.tfvars
+
+"$script_dir/validate-terraform-offline.sh" \
+  "$root/infra/terraform" \
   "$temporary_directory" \
   fixtures/offline-argocd-bootstrap.tfvars
 
@@ -35,5 +40,42 @@ jq -e '
   and
   ([.resource_changes[]? | select(.change.actions | index("create")) | select(.change.after.public_access == true)] | length == 0)
 ' "$plan" >/dev/null || fail 'enabled plan crosses the private infrastructure boundary'
+
+# A changed chart NAT value must fail the same plan-time precondition that
+# accepts the fixture's explicit offline authoritative NAT mock.
+negative_module="$temporary_directory/negative-module"
+cp -a "$root/infra/terraform" "$negative_module"
+negative_fixture="$negative_module/fixtures/offline-argocd-bootstrap.tfvars"
+sed -i.bak 's/prysmP2PHostIp  = "198\.51\.100\.42"/prysmP2PHostIp  = "198.51.100.43"/' "$negative_fixture"
+rm -f "$negative_fixture.bak"
+grep -Fq 'prysmP2PHostIp  = "198.51.100.43"' "$negative_fixture" || fail 'negative fixture did not change the deployment NAT input'
+negative_log="$temporary_directory/negative-plan.log"
+if "$script_dir/validate-terraform-offline.sh" \
+  "$negative_module" "$temporary_directory/negative" \
+  fixtures/offline-argocd-bootstrap.tfvars >"$negative_log" 2>&1; then
+  fail 'changed deployment NAT input passed the authoritative NAT binding'
+fi
+if ! grep -Fq 'Argo NAT binding precondition failed.' "$negative_log"; then
+  tail -n 40 "$negative_log" >&2
+  fail 'changed deployment NAT input did not reach the NAT binding precondition'
+fi
+
+# Null is permitted only while the optional bootstrap is disabled. A supplied
+# object must still satisfy the complete deployment-profile validation.
+invalid_module="$temporary_directory/invalid-values-module"
+cp -a "$root/infra/terraform" "$invalid_module"
+invalid_fixture="$invalid_module/fixtures/offline-argocd-bootstrap.tfvars"
+sed -i.bak 's/dast = { enabled = false }/dast = { enabled = true }/' "$invalid_fixture"
+rm -f "$invalid_fixture.bak"
+invalid_log="$temporary_directory/invalid-values.log"
+if "$script_dir/validate-terraform-offline.sh" \
+  "$invalid_module" "$temporary_directory/invalid-values" \
+  fixtures/offline-argocd-bootstrap.tfvars >"$invalid_log" 2>&1; then
+  fail 'invalid non-null deployment values passed validation'
+fi
+if ! grep -Fq 'gitops_client_chart_values must be the complete deployment profile' "$invalid_log"; then
+  tail -n 40 "$invalid_log" >&2
+  fail 'invalid non-null deployment values did not fail their variable validation'
+fi
 
 printf 'PASS Argo CD bootstrap enabled offline plan is private-boundary compliant.\n'

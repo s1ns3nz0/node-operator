@@ -38,6 +38,13 @@ existing_validator_verify="$source_root/scripts/release/verify-existing-hoodi-va
 collector_apply="$source_root/scripts/release/apply-validator-log-collector.py"
 for file in "$release" "$prepare" "$keystore" "$deposit_validate" "$vault_tls" "$resume_helper" "$existing_validator_verify"; do [ -x "$file" ] || { printf 'missing executable in release bundle: %s\n' "$file" >&2; exit 65; }; done
 [ -f "$artifact_inventory" ] || { printf '%s\n' 'release bundle lacks installer artifact authority inventory' >&2; exit 65; }
+# Bind the release identity before either the fresh or resume path can invoke
+# platform bootstrap.  The values producer must never inherit this from an
+# ambient shell, and resume reaches bootstrap before run_post_platform.
+release_revision="$(jq -er '.source_revision | select(test("^[0-9a-f]{40}$"))' "$bundle_root/bundle-manifest.json")" || {
+  printf '%s\n' 'release bundle revision is invalid; platform bootstrap was not requested' >&2
+  exit 65
+}
 artifact_authority_gate() {
   local account="$1" region="$2" deployment="$3" revision inventory
   revision="$(jq -er '.source_revision | select(test("^[0-9a-f]{40}$"))' "$bundle_root/bundle-manifest.json")" || { printf '%s\n' 'release bundle revision is invalid; no resources changed' >&2; return 65; }
@@ -109,7 +116,7 @@ run_platform_bootstrap() {
   local platform_work="$1" platform_inputs="$2" platform_session="$3"
   local vault_approved_catalog vault_artifact_index vault_mirror_receipt zero_inputs baseline_config
   local vault_chart_version vault_chart_digest cert_manager_chart_digest receipt_value index_value
-  local client_repository client_found platform_script replay_helper replay_status
+  local client_repository client_found platform_script replay_helper replay_status client_values values_builder values_tmp
   local -a platform_subnets platform_args
   verify_private_image "$argocd_bootstrap_image" || return $?
   verify_private_image "$vault_bootstrap_image" || return $?
@@ -146,14 +153,24 @@ run_platform_bootstrap() {
   [ "$client_found" = "$client_chart_digest" ] || { printf 'client chart %s with digest %s is missing or mismatched in private ECR\n' "$client_chart_version" "$client_chart_digest" >&2; return 65; }
   platform_script="$source_root/scripts/release/run-platform-bootstrap.sh"
   replay_helper="$source_root/scripts/release/platform_bootstrap_replay.py"
-  [ -x "$platform_script" ] && [ -x "$replay_helper" ] || { printf '%s\n' 'release bundle lacks the platform bootstrap recovery helper' >&2; return 65; }
-  platform_args=(--baseline-work-dir "$platform_work" --baseline-config "$baseline_config" --account "$account" --region "$region" --argocd-image "$argocd_bootstrap_image" --vault-image "$vault_bootstrap_image" --client-chart-version "$client_chart_version" --client-chart-digest "$client_chart_digest" --vault-chart-version "$vault_chart_version" --vault-chart-digest "$vault_chart_digest" --cert-manager-chart-digest "$cert_manager_chart_digest" --vault-approved-catalog "$vault_approved_catalog" --vault-artifact-index "$vault_artifact_index" --vault-mirror-receipt "$vault_mirror_receipt" --private-eks-session-handoff "$platform_session")
+  values_builder="$source_root/scripts/release/build-deployment-bound-chart-values-input.py"; client_values="$(dirname "$platform_inputs")/argocd-client-values.json"
+  [ -x "$platform_script" ] && [ -x "$replay_helper" ] && [ -f "$values_builder" ] && [ ! -L "$values_builder" ] || { printf '%s\n' 'release bundle lacks a required platform bootstrap helper' >&2; return 65; }
+  values_tmp="$(mktemp -d "$(dirname "$platform_inputs")/.client-values.XXXXXX")" || return 65
+  trap 'rm -rf "$values_tmp"' RETURN
+  python3 -B "$values_builder" --bundle "$bundle_root" --state "$platform_work" --work "$platform_work" --inputs "$(dirname "$zero_inputs")" --profile "${AWS_PROFILE:-default}" --release "$release_revision" --account "$account" --region "$region" --deployment "$deployment_name" --foundation "$platform_work/foundation-output.json" --baseline "$platform_work/baseline-output.json" --output "$values_tmp/candidate.json" || return 65
+  if [ -e "$client_values" ] || [ -L "$client_values" ]; then cmp -s "$values_tmp/candidate.json" "$client_values" || { printf '%s\n' 'deployment-bound client values differ from the verified candidate' >&2; return 65; }; else ln "$values_tmp/candidate.json" "$client_values" || return 65; fi
+  python3 - "$client_values" <<'PY' || { printf '%s\n' 'deployment-bound client values are unsafe' >&2; return 65; }
+import os, stat, sys
+info = os.lstat(sys.argv[1])
+raise SystemExit(not (stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o600 and info.st_uid == os.geteuid()))
+PY
+  platform_args=(--baseline-work-dir "$platform_work" --baseline-config "$baseline_config" --account "$account" --region "$region" --argocd-image "$argocd_bootstrap_image" --vault-image "$vault_bootstrap_image" --client-chart-version "$client_chart_version" --client-chart-digest "$client_chart_digest" --client-values "$client_values" --vault-chart-version "$vault_chart_version" --vault-chart-digest "$vault_chart_digest" --cert-manager-chart-digest "$cert_manager_chart_digest" --vault-approved-catalog "$vault_approved_catalog" --vault-artifact-index "$vault_artifact_index" --vault-mirror-receipt "$vault_mirror_receipt" --private-eks-session-handoff "$platform_session")
   for subnet in "${platform_subnets[@]}"; do platform_args+=(--subnet-id "$subnet"); done
   NODE_OPERATOR_AUTOMATED_CEREMONY="${NODE_OPERATOR_AUTOMATED_CEREMONY:-0}" "$platform_script" "${platform_args[@]}" || return $?
   replay_status="$(python3 "$replay_helper" phase --work-dir "$platform_work" --phase revoke_complete --action get)" || { printf '%s\n' 'platform bootstrap result has no valid durable replay checkpoint' >&2; return 70; }
   [ "$replay_status" = complete ] || { printf '%s\n' 'platform bootstrap did not record complete durable cleanup; do not continue to ceremonies' >&2; return 70; }
 }
-for command in aws jq find shasum python3; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
+for command in aws jq find shasum python3 helm ruby; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 
 # Optional non-secret .env-style overrides. Values are never exported and
 # unknown keys are ignored. This file may contain addresses/digests only.
@@ -215,14 +232,22 @@ advance_lifecycle() {
 }
 
 run_observation_phase() {
+  observation_complete=false
+  if [ "$lifecycle_phase" = complete ]; then
+    python3 -I -B "$resume_helper" read --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json" >/dev/null || return 75
+    observation_complete=true
+  fi
   if [ "$lifecycle_phase" = activated ]; then advance_lifecycle observing || return $?; fi
   step 'Observing finalized validator duties and archived signing activity'
-  "${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 \
+  if ! "${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 \
     python3 -I -B "$source_root/scripts/release/run-hoodi-validator-observation.py" \
-    --bundle-root "$bundle_root" --work-dir "$output_dir" --public-beacon-url "$DEFAULT_HOODI_PUBLIC_BEACON_URL" || return $?
-  printf '%s\n' 'PASS: three consecutive finalized validator duties and archived signer/fence activity were verified.' >&2
-  printf '%s\n' 'PENDING: required Vault and AWS audit delivery verification remains; deployment is not yet complete.' >&2
-  return 75
+    --bundle-root "$bundle_root" --work-dir "$output_dir" --public-beacon-url "$DEFAULT_HOODI_PUBLIC_BEACON_URL"; then
+    printf '%s\n' 'PENDING: finalized-duty, archive, Vault challenge, or delivery-metadata gate did not pass; lifecycle remains unchanged.' >&2
+    return 75
+  fi
+  if [ "$observation_complete" = false ]; then advance_lifecycle complete || return $?; fi
+  printf '%s\n' 'PASS: finalized-duty, archived signer/fence, Vault challenge, and delivery-metadata gates currently pass.' >&2
+  return 0
 }
 
 run_post_platform() {
@@ -240,16 +265,10 @@ case "$lifecycle_phase" in
     [ -f "$output_dir/vault-recovery/vault-initialization-checkpoint.json" ] && [ ! -L "$output_dir/vault-recovery/vault-initialization-checkpoint.json" ] || {
       printf 'PENDING: outcome of vault-started must be reconciled; no completed initialization checkpoint is available. WORK_DIR=%s\n' "$output_dir" >&2; return 75;
     } ;;
-  complete)
-    printf '%s\n' 'PENDING: activation will not be replayed; finalized duty and log evidence must be verified.' >&2
-    return 75 ;;
-  activated|observing) ;;
-  platform-complete|vault-complete|custody-started|custody-complete|runtime-complete|activation-pending) ;;
+  complete|activated|observing) ;;
+  platform-complete|vault-complete|collector-complete|audit-started|audit-complete|custody-started|custody-complete|runtime-complete|activation-pending) ;;
   *) printf 'unsupported continuation phase: %s\n' "$lifecycle_phase" >&2; return 65 ;;
 esac
-# Resume must rebind the collector release identity from the verified bundle,
-# rather than inherit an ambient shell value or rely on fresh-flow setup below.
-release_revision="$(jq -er '.source_revision | select(test("^[0-9a-f]{40}$"))' "$bundle_root/bundle-manifest.json")" || return 65
 # Bind every post-platform private tunnel to the same live session accepted by
 # platform bootstrap. Do this before opening either EKS or Vault tunnels, with
 # ambient credential/session selectors removed only at this outer boundary.
@@ -267,7 +286,7 @@ IFS=$'\t' read -r selected_cluster selected_instance <<<"$session_target"
 [ "$selected_cluster" = "$deployment_name" ] && [[ "$selected_instance" =~ ^i-[0-9a-f]+$ ]] || { printf '%s\n' 'post-platform session verifier returned an invalid selected target' >&2; exit 65; }
 selected_tunnel_env=(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN -u AWS_ACCESS_KEY -u AWS_SECRET_KEY -u AWS_DEFAULT_PROFILE -u AWS_WEB_IDENTITY_TOKEN_FILE -u AWS_ROLE_ARN -u AWS_ROLE_SESSION_NAME -u AWS_CONTAINER_CREDENTIALS_RELATIVE_URI -u AWS_CONTAINER_CREDENTIALS_FULL_URI -u AWS_CONTAINER_AUTHORIZATION_TOKEN -u AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE -u PRIVATE_EKS_SESSION -u PRIVATE_VAULT_SESSION -u PRIVATE_VAULT_TARGET -u KUBECONFIG -u BASH_ENV -u ENV -u VAULT_ADDR -u VAULT_CACERT -u VAULT_TLS_SERVER_NAME -u VAULT_SKIP_VERIFY -u VAULT_NAMESPACE -u VAULT_TOKEN AWS_PROFILE="$selected_profile" AWS_REGION="$region" AWS_DEFAULT_REGION="$region" AWS_EC2_METADATA_DISABLED=true EKS_CLUSTER_NAME="$selected_cluster" SSM_OPS_INSTANCE_ID="$selected_instance")
 
-if [ "$lifecycle_phase" = activated ] || [ "$lifecycle_phase" = observing ]; then
+if [ "$lifecycle_phase" = activated ] || [ "$lifecycle_phase" = observing ] || [ "$lifecycle_phase" = complete ]; then
   run_observation_phase
   return $?
 fi
@@ -293,6 +312,32 @@ fi
 # actual server Pods are Ready and their TLS status reports initialized/unsealed.
 "${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$source_root/scripts/ops/verify-hoodi-vault-readiness.sh" --mode post-init-ready
 
+if [ "$lifecycle_phase" = audit-started ]; then
+  python3 -I -B "$resume_helper" reconcile-audit-complete --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json" || { printf '%s\n' 'PENDING: audit ceremony outcome is unknown; do not replay administrator ceremony.' >&2; return 75; }
+  lifecycle_phase=audit-complete
+fi
+if [ "$lifecycle_phase" = vault-complete ]; then
+  step 'Applying verified validator log collector'
+  "${selected_tunnel_env[@]}" python3 -I -B "$collector_apply" --bundle-root "$bundle_root" --state-dir "$output_dir" --work-dir "$output_dir/deployment-work" --inputs-dir "$output_dir/inputs" --session "$session" --baseline-config "$selected_baseline" --account "$account" --region "$region" --deployment "$deployment_name" --validator-set "$validator_set" --profile "$selected_profile" --release-sha "$release_revision" || return 65
+  advance_lifecycle collector-complete || return $?
+fi
+if [ "$lifecycle_phase" = collector-complete ]; then
+  audit_dir="$output_dir/audit"
+  if [ ! -e "$audit_dir" ] && [ ! -L "$audit_dir" ]; then mkdir -m 700 "$audit_dir" || return 65; fi
+  python3 - "$audit_dir" <<'PY' || return 65
+import os, stat, sys
+info = os.lstat(sys.argv[1])
+raise SystemExit(not (stat.S_ISDIR(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o700 and info.st_uid == os.geteuid()))
+PY
+  audit_operation="$(python3 -I -B "$resume_helper" prepare-audit --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json")" || return 65
+  audit_operation_id="$(jq -er '.operation_id | select(test("^[0-9a-f]{32}$"))' <<<"$audit_operation")" || return 65
+  advance_lifecycle audit-started || return $?
+  step 'Configuring Vault audit devices before custody'
+  "${selected_tunnel_env[@]}" PRIVATE_VAULT_TARGET=pod/vault-0 "$source_root/scripts/ops/with-private-vault.sh" -- env PRIVATE_VAULT_SESSION=1 AUDIT_RECEIPT="$audit_dir/audit-challenge.json" AUDIT_ACCOUNT="$account" AUDIT_REGION="$region" AUDIT_DEPLOYMENT="$deployment_name" AUDIT_RELEASE_REVISION="$release_revision" AUDIT_OPERATION_ID="$audit_operation_id" "$source_root/scripts/ops/recover-and-configure-private-vault-validator-audit.sh" || return $?
+  python3 -I -B "$resume_helper" reconcile-audit-complete --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json" || return 75
+  lifecycle_phase=audit-complete
+fi
+
 if [ "$lifecycle_phase" = custody-started ]; then
   # A completed onboarding receipt can recover the narrow crash window after
   # token cleanup. Missing or mismatched proof never triggers another ceremony.
@@ -302,7 +347,7 @@ if [ "$lifecycle_phase" = custody-started ]; then
   lifecycle_phase=custody-complete
 fi
 
-if [ "$lifecycle_phase" = vault-complete ]; then
+if [ "$lifecycle_phase" = audit-complete ]; then
 custody_operation="$(python3 -I -B "$resume_helper" prepare-custody --work-dir "$output_dir" --manifest "$bundle_root/bundle-manifest.json" --validator-set "$validator_set")" || return 65
 custody_operation_id="$(jq -er '.operation_id | select(test("^[0-9a-f]{32}$"))' <<<"$custody_operation")" || return 65
 custody_result_output="$(jq -er '.result_output | select(startswith("/"))' <<<"$custody_operation")" || return 65
@@ -313,15 +358,6 @@ lifecycle_phase=custody-complete
 fi
 
 if [ "$lifecycle_phase" = custody-complete ]; then
-step 'Applying verified validator log collector'
-[ -f "$collector_apply" ] && [ ! -L "$collector_apply" ] || { printf '%s\n' 'release bundle lacks the verified validator log collector installer' >&2; return 65; }
-"${selected_tunnel_env[@]}" python3 -I -B "$collector_apply" \
-  --bundle-root "$bundle_root" --state-dir "$output_dir" --work-dir "$output_dir/deployment-work" \
-  --inputs-dir "$output_dir/inputs" --session "$session" --baseline-config "$selected_baseline" \
-  --account "$account" --region "$region" --deployment "$deployment_name" --validator-set "$validator_set" \
-  --profile "$selected_profile" --release-sha "$release_revision" || {
-    printf '%s\n' 'verified validator log collector was not applied; runtime was not applied' >&2; return 65;
-  }
 step 'Applying Vault-backed validator runtime'
 runtime_manifest="$(dirname "$inputs")/validator-deployment/runtime.yaml"
 client_manifest="$(dirname "$inputs")/validator-deployment/client-and-fence.yaml"
@@ -659,7 +695,6 @@ prepare_args=(--aws-account-id "$account" --aws-region "$region" --name "$deploy
 prepare_args+=(--manage-config-recorder "$manage_config_recorder")
 # Bind workload log labels to this verified bundle, never a caller environment
 # override or the unrelated HEAD of a local development checkout.
-release_revision="$(jq -er '.source_revision | select(test("^[0-9a-f]{40}$"))' "$bundle_root/bundle-manifest.json")" || exit 65
 prepare_args+=(--release-revision "$release_revision")
 [ -n "$DEFAULT_BACKEND_PRINCIPAL_ARN" ] && prepare_args+=(--backend-principal-arn "$DEFAULT_BACKEND_PRINCIPAL_ARN")
 "$prepare" "${prepare_args[@]}"

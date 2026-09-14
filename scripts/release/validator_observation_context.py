@@ -120,6 +120,10 @@ def load_context(bundle_root: Path, work_dir: Path) -> dict[str, Any]:
         activation, activation_raw = strict_object(work_dir / "evidence/activation-receipt.json")
         if hashlib.sha256(activation_raw).hexdigest() != continuation.get("activation_receipt_sha256"):
             raise ContextError("activation receipt changed after resume validation")
+        audit, audit_raw = strict_object(work_dir / "audit/audit-challenge.json")
+        if hashlib.sha256(audit_raw).hexdigest() != continuation.get("audit_completion_sha256"):
+            raise ContextError("audit challenge changed after resume validation")
+        audit_challenge = {key: audit.get(key) for key in ("marker_hmac", "after_ms", "request_id")}
         beacon = activation.get("private_beacon")
         if not isinstance(beacon, dict):
             raise ContextError("activation receipt has no private Beacon identity")
@@ -145,6 +149,9 @@ def load_context(bundle_root: Path, work_dir: Path) -> dict[str, Any]:
                 or namespace != "validator-observability" or service_account != "validator-audit-reader"
                 or role_match is None or role_match.group(1) != account or kms_match is None
                 or kms_match.group(1) != region or kms_match.group(2) != account
+                or not isinstance(audit_challenge["marker_hmac"], str) or not re.fullmatch(r"hmac-sha256:[0-9a-f]{64}", audit_challenge["marker_hmac"])
+                or type(audit_challenge["after_ms"]) is not int or audit_challenge["after_ms"] < 0
+                or not isinstance(audit_challenge["request_id"], str) or not re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", audit_challenge["request_id"])
                 or not isinstance(validator_index, str) or not validator_index.isdigit()
                 or type(head_slot) is not int or head_slot < 0):
             raise ContextError("observer context fields are invalid")
@@ -156,6 +163,8 @@ def load_context(bundle_root: Path, work_dir: Path) -> dict[str, Any]:
             "reader": {"image": image, "bucket": bucket, "prefix": prefix, "namespace": namespace,
                        "service_account": service_account, "role_arn": role_arn, "kms_key_arn": kms_key_arn},
             "operational_log_delivery": delivery,
+            "audit_challenge": audit_challenge,
+            "vault_security_log_group": f"/aws/eks/{saved['deployment_name']}/validator-security",
             "artifact_index_sha256": index_sha256,
             "activation_receipt_sha256": hashlib.sha256(activation_raw).hexdigest(),
         }

@@ -25,6 +25,11 @@ chmod 700 "$scripts/run-platform-bootstrap.sh" "$scripts/render-private-vault-va
 chmod 700 "$temporary/work"
 printf '%s\n' '{"name":"test-node","aws_account_id":"123456789012","aws_region":"ap-northeast-2"}' > "$temporary/baseline.tfvars.json"
 printf '%s\n' '{"schema_version":1,"aws_region":"ap-northeast-2","cluster_name":"test-node","ssm_ops_instance_id":"i-0123456789abcdef0"}' > "$temporary/private-eks-session.json"
+# Platform bootstrap consumes an already verified, deployment-bound client
+# values file. Its content is intentionally inert here; the fixture verifies
+# the Vault authority handoff before the fake Argo plan, not values rendering.
+printf '%s\n' '{}' > "$temporary/client-values.json"
+chmod 600 "$temporary/client-values.json"
 
 cat > "$scripts/apply-argocd-bootstrap.sh" <<'EOF'
 #!/usr/bin/env bash
@@ -84,7 +89,7 @@ receipt_path.write_text(json.dumps(receipt,sort_keys=True))
 PY
 
 toolchain_image="123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/test-node-baseline-gitops-vault@sha256:$(printf 'b%.0s' {1..64})"
-common=(--baseline-work-dir "$temporary/work" --baseline-config "$temporary/baseline.tfvars.json" --account 123456789012 --region ap-northeast-2 --argocd-image "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/test-node-baseline-gitops-argocd@sha256:$(printf 'a%.0s' {1..64})" --vault-image "$toolchain_image" --client-chart-version 0.1.37 --client-chart-digest "sha256:$(printf 'd%.0s' {1..64})" --vault-chart-version 0.31.0 --vault-chart-digest sha256:85cfa6b40396a198a104fbf06c7cccaf75428db7201394f9061c272441bcd0e4 --cert-manager-chart-digest "sha256:$(printf 'e%.0s' {1..64})" --vault-approved-catalog "$catalog" --vault-artifact-index "$index" --vault-mirror-receipt "$receipt" --private-eks-session-handoff "$temporary/private-eks-session.json" --subnet-id subnet-0123456789abcdef0)
+common=(--baseline-work-dir "$temporary/work" --baseline-config "$temporary/baseline.tfvars.json" --account 123456789012 --region ap-northeast-2 --argocd-image "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/test-node-baseline-gitops-argocd@sha256:$(printf 'a%.0s' {1..64})" --vault-image "$toolchain_image" --client-chart-version 0.1.37 --client-chart-digest "sha256:$(printf 'd%.0s' {1..64})" --client-values "$temporary/client-values.json" --vault-chart-version 0.31.0 --vault-chart-digest sha256:85cfa6b40396a198a104fbf06c7cccaf75428db7201394f9061c272441bcd0e4 --cert-manager-chart-digest "sha256:$(printf 'e%.0s' {1..64})" --vault-approved-catalog "$catalog" --vault-artifact-index "$index" --vault-mirror-receipt "$receipt" --private-eks-session-handoff "$temporary/private-eks-session.json" --subnet-id subnet-0123456789abcdef0)
 
 # An ambient marker cannot bypass the inherited whole-platform kernel lock.
 set +e

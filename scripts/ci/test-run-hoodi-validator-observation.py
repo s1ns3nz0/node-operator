@@ -103,10 +103,15 @@ class ObservationPipeline(unittest.TestCase):
         self.context = {"identity":self.identity, "aws_account_id":"123456789012", "aws_region":"ap-northeast-2",
                         "reader":{"image":"123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/approved@sha256:" + "a" * 64,
                                   "bucket":"node-audit-123", "prefix":"validator/", "namespace":"validator-observability",
-                                  "service_account":"validator-audit-reader", "role_arn":"arn:aws:iam::123456789012:role/audit-reader"}}
+                                  "service_account":"validator-audit-reader", "role_arn":"arn:aws:iam::123456789012:role/audit-reader",
+                                  "kms_key_arn":"arn:aws:kms:ap-northeast-2:123456789012:key/11111111-2222-3333-4444-555555555555"}}
         deployment = self.identity["deployment_name"]
         self.context["operational_log_delivery"] = delivery_fixture.fixture_contract("123456789012", "ap-northeast-2", deployment)
+        self.context["audit_challenge"] = {"marker_hmac":"hmac-sha256:" + "b" * 64, "after_ms":1,
+                                           "request_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}
+        self.context["vault_security_log_group"] = f"/aws/eks/{deployment}/validator-security"
         self.metadata_present = True
+        self.audit_mode, self.audit_calls = "matched", []
         self.epoch, self.role, self.entered, self.closed = 10, "audit-reader", 0, 0
         fixture = archive_test.ArchiveCollection()
         events = []
@@ -169,7 +174,19 @@ class ObservationPipeline(unittest.TestCase):
 
     def observe(self):
         def actual(*args): return runner.observer.observe(*args, fetch=self.fetch)
-        return runner.observe_once(self.context, self.work, "https://public.example", 19501, self.beacon, self.reader, actual)
+        return runner.observe_once(self.context, self.work, "https://public.example", 19501, self.beacon, self.reader, actual,
+                                   vault_audit_verifier=self.audit)
+
+    def audit(self, transport, bucket, prefix, region, account, group, marker, after_ms, kms, token=None, matches=None):
+        self.audit_calls.append((transport, bucket, prefix, region, account, group, marker, after_ms, kms, token, matches))
+        self.assertEqual((bucket, prefix, region, account, group, marker, after_ms, kms),
+                         ("node-audit-123", "validator/", "ap-northeast-2", "123456789012",
+                          self.context["vault_security_log_group"], self.context["audit_challenge"]["marker_hmac"], 1,
+                          self.context["reader"]["kms_key_arn"]))
+        if self.audit_mode == "pending": return {"state":"pending", "continuation_token":"next", "matches":[]}
+        if self.audit_mode == "mismatch": return {"state":"matched", "bucket":bucket, "key":"validator/a.gz", "version_id":"v1", "event_id":"event-1", "request_id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "timestamp_ms":2}
+        if self.audit_mode == "unavailable": raise RuntimeError("reader unavailable")
+        return {"state":"matched", "bucket":bucket, "key":"validator/a.gz", "version_id":"v1", "event_id":"event-1", "request_id":self.context["audit_challenge"]["request_id"], "timestamp_ms":2}
 
     def test_two_passes_accumulate_actual_archive_and_canonical_proofs(self):
         rc, first = self.observe()
@@ -177,6 +194,8 @@ class ObservationPipeline(unittest.TestCase):
         self.epoch = 11
         rc, second = self.observe()
         self.assertEqual(rc, 0); self.assertEqual(second["consecutive_finalized_epochs"], ["10", "11", "12"])
+        self.assertEqual(second["vault_audit"]["state"], "matched")
+        self.assertTrue(hasattr(self.audit_calls[-1][0], "_exec"))
         self.assertEqual((self.entered, self.closed), (2, 2))
         checkpoint = json.loads((self.work / "evidence/observation/finalized-attestation-observer.json").read_text())
         self.assertEqual(len(checkpoint["proofs"]), 3)
@@ -207,6 +226,31 @@ class ObservationPipeline(unittest.TestCase):
         self.assertEqual(proof["operational_log_delivery"]["result"], "PASS_OPERATIONAL_METADATA")
         self.assertEqual((self.entered, self.closed), (3, 3))
 
+    def test_vault_pending_cursor_blocks_three_finalized_duties_and_persists(self):
+        self.observe(); self.epoch = 11; self.audit_mode = "pending"
+        rc, proof = self.observe()
+        self.assertEqual(rc, 75); self.assertTrue(proof["duties_complete"])
+        self.assertEqual(proof["vault_audit"], {"state":"pending", "reason":"archive-correlation-pending"})
+        cursor = json.loads((self.work / "evidence/observation/vault-audit-cursor.json").read_text())
+        self.assertEqual(cursor["continuation_token"], "next")
+        self.assertNotIn(self.context["audit_challenge"]["marker_hmac"], json.dumps(cursor))
+
+    def test_vault_request_id_mismatch_blocks_three_finalized_duties(self):
+        self.observe(); self.epoch = 11; self.audit_mode = "mismatch"
+        rc, proof = self.observe()
+        self.assertEqual(rc, 75); self.assertTrue(proof["duties_complete"])
+        self.assertEqual(proof["vault_audit"], {"state":"pending", "reason":"request-id-mismatch"})
+
+    def test_vault_reader_failure_is_pending_not_completion(self):
+        self.audit_mode = "unavailable"
+        with self.assertRaisesRegex(runner.Pending, "Vault audit archive correlation is unavailable"):
+            self.observe()
+
+    def test_missing_validated_audit_context_is_pending_not_completion(self):
+        del self.context["audit_challenge"]
+        with self.assertRaisesRegex(runner.Pending, "validated Vault audit challenge context is unavailable"):
+            self.observe()
+
     def test_final_beacon_recheck_blocks_available_emission(self):
         emitted, calls = [], []
         def unstable_beacon(port):
@@ -222,7 +266,7 @@ class ObservationPipeline(unittest.TestCase):
             runner.observe_once(self.context, self.work, "https://public.example", 19501,
                                 unstable_beacon, self.reader,
                                 lambda *args: runner.observer.observe(*args, fetch=self.fetch),
-                                lambda *args: emitted.append(args))
+                                lambda *args: emitted.append(args), self.audit)
         self.assertEqual(len(calls), 2)
         self.assertEqual(emitted, [])
 

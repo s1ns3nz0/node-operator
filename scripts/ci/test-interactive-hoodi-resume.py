@@ -63,6 +63,20 @@ class ResumeWrapper(unittest.TestCase):
         platform = rel / "run-platform-bootstrap.sh"
         platform.write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "$PLATFORM_LOG"\nwork=""; while [ "$#" -gt 0 ]; do [ "$1" = --baseline-work-dir ] && work="$2"; shift; done\n[ "${PLATFORM_RC:-0}" = 0 ] && touch "$work/.replay-ready"\nexit "${PLATFORM_RC:-0}"\n')
         platform.chmod(0o755)
+        # The wrapper now creates verified deployment-bound client values
+        # before invoking platform bootstrap.  This test double keeps the
+        # production hook and its private-file contract in the exercised
+        # path; it only replaces the external artifact verification itself.
+        values_builder = rel / "build-deployment-bound-chart-values-input.py"
+        values_builder.write_text(
+            '#!/usr/bin/env python3\n'
+            'import json, os, pathlib, stat, sys\n'
+            'args = sys.argv\n'
+            'output = pathlib.Path(args[args.index("--output") + 1])\n'
+            'output.write_text(json.dumps({"schema_version": 1}) + "\\n")\n'
+            'output.chmod(stat.S_IRUSR | stat.S_IWUSR)\n'
+        )
+        values_builder.chmod(0o755)
         replay = rel / "platform_bootstrap_replay.py"
         replay.write_text('#!/usr/bin/env python3\nimport pathlib, sys\na=sys.argv; w=pathlib.Path(a[a.index("--work-dir") + 1]);\nif not (w / ".replay-ready").exists(): raise SystemExit(65)\nprint("complete")\n')
         replay.chmod(0o755)
@@ -127,6 +141,10 @@ class ResumeWrapper(unittest.TestCase):
         aws = fake / "aws"
         aws.write_text('#!/usr/bin/env bash\ncase "$1:$2" in sts:get-caller-identity) printf \'{"Account":"%s"}\\n\' "${AWS_ACCOUNT:-123456789012}" ;; ecr:describe-images) for x in "$@"; do case "$x" in imageDigest=*) echo "${x#imageDigest=}"; exit;; imageTag=*) echo "sha256:' + "7" * 64 + '"; exit;; esac; done;; *) exit 88;; esac\n')
         aws.chmod(0o755)
+        for name in ("helm", "ruby"):
+            command = fake / name
+            command.write_text("#!/usr/bin/env bash\nexit 99\n")
+            command.chmod(0o755)
         return d, work, fake
 
     def invoke(self, d, work, fake, rc="0", account="123456789012", use_env=True):
@@ -205,10 +223,23 @@ class ResumeWrapper(unittest.TestCase):
 
     def test_manifest_mismatch_blocks_before_aws(self):
         d, w, b = self.fixture()
-        (d / "bundle-manifest.json").write_text('{"changed":true}')
+        # Preserve a valid release-manifest shape so this reaches the receipt
+        # binding check rather than the earlier malformed-manifest boundary.
+        (d / "bundle-manifest.json").write_text(
+            '{"schema_version":"v1","source_revision":"' + "b" * 40
+            + '","entries":[]}\n'
+        )
         rc, out = self.invoke(d, w, b)
         self.assertEqual(rc, 65)
         self.assertIn("different release bundle", out)
+        self.assertFalse((d / "log").exists())
+
+    def test_malformed_manifest_blocks_before_aws(self):
+        d, w, b = self.fixture()
+        (d / "bundle-manifest.json").write_text('{"changed":true}\n')
+        rc, out = self.invoke(d, w, b)
+        self.assertEqual(rc, 65)
+        self.assertIn("release bundle revision is invalid", out)
         self.assertFalse((d / "log").exists())
 
     def test_platform_phase_refuses_replay_before_deploy(self):
@@ -375,6 +406,14 @@ class ResumeContinuation(unittest.TestCase):
         self.bind(work, manifest, keystore, attestation)
         self.call("phase", "--work-dir", work, "--manifest", manifest, "--phase", "vault-started")
         self.call("phase", "--work-dir", work, "--manifest", manifest, "--phase", "vault-complete")
+        self.call("phase", "--work-dir", work, "--manifest", manifest, "--phase", "collector-complete")
+        audit = work / "audit"; audit.mkdir(mode=0o700)
+        prepared = json.loads(self.call("prepare-audit", "--work-dir", work, "--manifest", manifest).stdout)
+        self.call("phase", "--work-dir", work, "--manifest", manifest, "--phase", "audit-started")
+        receipt = audit / "audit-challenge.json"
+        receipt.write_text(json.dumps({"schema_version":1,"result":"socket-audit-challenge-emitted-and-root-revoked","aws_account_id":"123456789012","aws_region":"ap-northeast-2","deployment_name":"node-op-123","release_revision":"a"*40,"operation_id":prepared["operation_id"],"marker_hmac":"hmac-sha256:"+"a"*64,"request_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","after_ms":1}))
+        receipt.chmod(0o600)
+        self.call("reconcile-audit-complete", "--work-dir", work, "--manifest", manifest)
 
     def prepare_custody(self, work, manifest, validator_set="hoodi-001"):
         result = self.call(
@@ -519,6 +558,32 @@ class ResumeContinuation(unittest.TestCase):
         known_clients.write_text("tampered\n")
         self.call("read", "--work-dir", work, "--manifest", manifest, ok=False)
 
+    def test_audit_prepare_binds_fresh_operation_and_unknown_started_state_fails_closed(self):
+        _, work, manifest = self.fixture()
+        self.platform_complete(work, manifest)
+        keystore, attestation, _ = self.bindable_context(work)
+        self.bind(work, manifest, keystore, attestation)
+        for phase in ("vault-started", "vault-complete", "collector-complete"):
+            self.call("phase", "--work-dir", work, "--manifest", manifest, "--phase", phase)
+        audit = work / "audit"; audit.mkdir(mode=0o700)
+        prepared = json.loads(self.call("prepare-audit", "--work-dir", work, "--manifest", manifest).stdout)
+        self.assertRegex(prepared["operation_id"], r"^[0-9a-f]{32}$")
+        self.assertEqual(prepared["receipt_output"], str(audit / "audit-challenge.json"))
+        self.assertEqual(json.loads(self.call("prepare-audit", "--work-dir", work, "--manifest", manifest).stdout), prepared)
+        self.call("phase", "--work-dir", work, "--manifest", manifest, "--phase", "audit-started")
+        self.call("reconcile-audit-complete", "--work-dir", work, "--manifest", manifest, ok=False)
+        self.call("phase", "--work-dir", work, "--manifest", manifest, "--phase", "audit-complete", ok=False)
+        receipt = audit / "audit-challenge.json"
+        receipt.write_text(json.dumps({
+            "schema_version": 1, "result": "socket-audit-challenge-emitted-and-root-revoked",
+            "aws_account_id": ACCOUNT, "aws_region": REGION, "deployment_name": DEPLOYMENT,
+            "release_revision": "a" * 40, "operation_id": "0" * 32,
+            "marker_hmac": "hmac-sha256:" + "a" * 64,
+            "request_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "after_ms": 1,
+        }))
+        receipt.chmod(0o600)
+        self.call("reconcile-audit-complete", "--work-dir", work, "--manifest", manifest, ok=False)
+
     def test_custody_prepare_rejects_unbound_set_and_mismatched_result(self):
         _, work, manifest = self.fixture()
         self.custody_ready(work, manifest)
@@ -596,6 +661,13 @@ class ResumeContinuation(unittest.TestCase):
         self.call("reconcile-activation", "--work-dir", work, "--manifest", manifest, ok=False)
         self.call("phase", "--work-dir", work, "--manifest", manifest, "--phase", "activated", ok=False)
         self.call("read", "--work-dir", work, "--manifest", manifest)
+
+    def test_complete_requires_the_observation_transition(self):
+        _, work, manifest = self.fixture()
+        self.activation_pending(work, manifest)
+        self.prepare_activation(work, manifest)
+        self.call("phase", "--work-dir", work, "--manifest", manifest, "--phase", "activation-started")
+        self.call("phase", "--work-dir", work, "--manifest", manifest, "--phase", "complete", ok=False)
 
     def test_activation_receipt_identity_and_lower_bound_validation_fail_closed(self):
         _, work, manifest = self.fixture()

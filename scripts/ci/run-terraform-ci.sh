@@ -29,6 +29,7 @@ run_suite() {
     runtime)
       run test-validator-runtime-mirror-enabled-plan.sh
       run test-argocd-bootstrap-enabled-plan.sh /output/deployment-tags-plan.json
+      run test-argocd-bootstrap-destination-contract.sh
       run test-pre-eks-artifact-plan.sh --plan-output /output/pre-eks-plan.json
       python3 "$root/scripts/release/installer_artifact_prerequisites.py" plan \
         --plan "$output/pre-eks-plan.json" --account 123456789012 --region ap-northeast-2 --name node-operator

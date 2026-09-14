@@ -1,26 +1,26 @@
 {
   "schema_version": 1,
-  "source_revision": "c8c2b724d4ab80fbecb6ab40ce3d047f6baae925",
+  "source_revision": "745d9f5df2244a7296b2d9f94fadb97e6cb41bec",
   "publication": {
     "repository": "s1ns3nz0/node-operator-gitops",
     "workflow": "publish-oci.yml",
-    "run_id": "34804914772",
-    "artifact_id": "10332119296",
-    "artifact_name": "gitops-chart-evidence-34804914772",
-    "run_number": "41"
+    "run_id": "34841956316",
+    "artifact_id": "10346876335",
+    "artifact_name": "gitops-chart-evidence-34841956316",
+    "run_number": "42"
   },
   "target": {
-    "image_ref": "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-op-2609140157-baseline-gitops-client/node-operator-client@sha256:ff0122a76257aa042e89d3597fe14694e49f6230b4c85186e55d266dba99fdcb",
-    "manifest_digest": "sha256:ff0122a76257aa042e89d3597fe14694e49f6230b4c85186e55d266dba99fdcb",
-    "chart_archive_digest": "sha256:a8bc5d74b6ac1567d98dd531963c8cfabf63d3bbe05f7f9fb7146cfddca173c4",
-    "chart_version": "0.1.41"
+    "image_ref": "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-op-2609140157-baseline-gitops-client/node-operator-client@sha256:46157b2d44ce74a61f0d5a74aa534b031f3bb4b57419c4984be49d7357d4044e",
+    "manifest_digest": "sha256:46157b2d44ce74a61f0d5a74aa534b031f3bb4b57419c4984be49d7357d4044e",
+    "chart_archive_digest": "sha256:ade336689503e6cbebd602f9028113e9f430d164fc4e00a9a9e92a96d8e4fad7",
+    "chart_version": "0.1.42"
   },
   "evidence_sha256": {
-    "gitops-chart-subject.json": "b269c27d8086e768f15384c372ca98465d90e54450121f494e52d08ec95eb150",
-    "gitops-chart-sbom.json": "8c7e0dc856fc67755c10d792f2dceb1d1cadc58b060c24920a3002cabf1a4ee4",
-    "gitops-chart-grype.json": "97a224d73154cf229ce6f6b41230ca70f584d14f9280ee59959871322bd28fe6",
-    "gitops-chart-provenance-predicate.json": "5f066968a232022610a08486fa568a82fbe83f61d976b8526293f5ed938311e9",
-    "gitops-chart-provenance-verified.json": "9761eb60ee1b204f3da589e7fb640eb0fa603415a0c3a305cc17fd7d7c29814d"
+    "gitops-chart-subject.json": "f3c37a5b9b5f3cc9d8f28eac65fa4d749eca82e67724faa8f51eaea85c7078df",
+    "gitops-chart-sbom.json": "e5e60a07b616c85c17f5f5799bbf2e9abb2dc7ab232edefff548819bf29e4c8a",
+    "gitops-chart-grype.json": "7187032f548a54237ddfbe2185283a8198a117bc9e5d323b648242cb9ddf9a6d",
+    "gitops-chart-provenance-predicate.json": "7a3544e0a2c61119c665d8eae2e7ad561ebf7dc4dd640bc39dce505810a08bb0",
+    "gitops-chart-provenance-verified.json": "053e44dd04903f2607751468e5996ba7083c08f5fa4395f5e92a284c7a27d8ad"
   },
   "approvals": {
     "stage_approved": true,

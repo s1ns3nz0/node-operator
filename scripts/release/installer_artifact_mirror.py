@@ -345,7 +345,7 @@ def mirror(state_dir: Path, bundle_root: Path, discovery: dict, profile: str, re
             try: lock.rmdir()
             except OSError: pass
 
-def verify_pre_eks_vault_mirror(state_dir: Path, bundle_root: Path, discovery: dict, profile: str, release_sha: str, inputs_dir: Path | None = None, *, work_dir: Path | None = None) -> dict:
+def verify_pre_eks_vault_mirror(state_dir: Path, bundle_root: Path, discovery: dict, profile: str, release_sha: str, inputs_dir: Path | None = None, *, work_dir: Path | None = None, return_manifest: bool = False) -> dict:
     """Re-read the projection, binding, and all ten ECR digests without Docker."""
     from installer_artifact_prerequisites import load_projection, PrerequisiteError
     prerequisite_work_dir=_pre_eks_work_dir(state_dir,work_dir)
@@ -373,7 +373,7 @@ def verify_pre_eks_vault_mirror(state_dir: Path, bundle_root: Path, discovery: d
         item=index["components"][name]; digest=artifacts[name]["manifest_digest"]
         tag=item.get("tag",digest.removeprefix("sha256:"))
         _describe_digest(discovery["aws_account_id"],discovery["aws_region"],destination.split('/',1)[1],tag,digest,env)
-    return binding
+    return {"binding":binding,"manifest":expected_manifest} if return_manifest else binding
 
 _mirror_impl = mirror
 def mirror(*args, **kwargs):

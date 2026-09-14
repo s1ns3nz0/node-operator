@@ -49,6 +49,63 @@ variable "gitops_client_chart_oci_digest" {
   }
 }
 
+variable "gitops_client_chart_values" {
+  description = "Exact non-secret deployment-profile values rendered from the approved chart and mirror receipts."
+  type = object({
+    deployment = object({
+      profile         = string
+      storageKmsKeyId = string
+    })
+    dast = object({
+      enabled = bool
+    })
+    clients = object({
+      vaultAgentImage = string
+      deployment = object({
+        nethermindImage = string
+        prysmImage      = string
+        prysmP2PHostIp  = string
+      })
+    })
+  })
+  default  = null
+  nullable = true
+
+  validation {
+    condition = var.gitops_client_chart_values == null ? true : (
+      var.gitops_client_chart_values.deployment.profile == "deployment" &&
+      var.gitops_client_chart_values.dast.enabled == false &&
+      can(regex("^arn:aws:kms:[a-z]{2}-[a-z0-9-]+-[0-9]+:[0-9]{12}:key/[A-Za-z0-9-]+$", var.gitops_client_chart_values.deployment.storageKmsKeyId)) &&
+      can(regex("^(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}$", var.gitops_client_chart_values.clients.deployment.prysmP2PHostIp)) &&
+      alltrue([for image in [
+        var.gitops_client_chart_values.clients.vaultAgentImage,
+        var.gitops_client_chart_values.clients.deployment.nethermindImage,
+        var.gitops_client_chart_values.clients.deployment.prysmImage,
+      ] : can(regex("^[0-9]{12}\\.dkr\\.ecr\\.[a-z]{2}-[a-z0-9-]+-[0-9]+\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", image))])
+    )
+    error_message = "gitops_client_chart_values must be the complete deployment profile: DAST disabled, a KMS ARN, an IPv4 Prysm P2P host, and three private-ECR digest references."
+  }
+}
+
+variable "offline_hoodi_nat_public_ip" {
+  description = "Synthetic authoritative Hoodi NAT public IP for network-isolated validation only. Never set for an apply."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.offline_hoodi_nat_public_ip == null || can(regex("^(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}$", var.offline_hoodi_nat_public_ip))
+    error_message = "offline_hoodi_nat_public_ip must be an IPv4 address."
+  }
+}
+
+locals {
+  # Offline plans cannot query AWS data sources. The fixture must provide a
+  # synthetic NAT address explicitly; live plans always use the existing NAT
+  # gateway lookup and never accept this mock.
+  argocd_hoodi_nat_public_ip = var.offline_validation ? var.offline_hoodi_nat_public_ip : try(data.aws_nat_gateway.hoodi_egress[0].public_ip, null)
+}
+
 variable "cert_manager_chart_manifest_digest" {
   description = "OCI manifest digest for the reviewed cert-manager chart mirrored into the private ECR repository."
   type        = string
@@ -176,10 +233,6 @@ data "aws_iam_policy_document" "argocd_bootstrap" {
       "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.private_gitops_repositories.cert_manager}",
       "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.private_gitops_repositories.cert_manager_chart}",
       aws_ecr_repository.gitops_client_chart[0].arn,
-      # The v0.1.x release contract points Argo at the immutable baseline
-      # chart repository. Keep this read-only ARN alongside the per-environment
-      # repository so a zero-resource bootstrap can consume an approved bundle.
-      "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/node-operator-baseline-gitops-client/node-operator-client",
     ]
   }
 }
@@ -329,12 +382,65 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
               password="$(aws ecr get-login-password --region ${var.aws_region})"
               kubectl -n argocd create secret generic argocd-ecr-oci \
                 --from-literal=type=helm \
-                --from-literal=url=${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/node-operator-baseline-gitops-client \
+                --from-literal=url=${aws_ecr_repository.gitops_client[0].repository_url} \
                 --from-literal=username=AWS \
                 --from-literal=password="$password" \
                 --from-literal=enableOCI=true \
                 --dry-run=client -o yaml | kubectl -n argocd apply -f -
               kubectl -n argocd label secret argocd-ecr-oci argocd.argoproj.io/secret-type=repo-creds --overwrite
+            - |
+              cat <<'EOF' | kubectl apply -f -
+              apiVersion: v1
+              kind: ServiceAccount
+              metadata: {name: argocd-ecr-refresher, namespace: argocd}
+              ---
+              apiVersion: rbac.authorization.k8s.io/v1
+              kind: Role
+              metadata: {name: argocd-ecr-repo-creds-writer, namespace: argocd}
+              rules:
+                - apiGroups: [""]
+                  resources: ["secrets"]
+                  resourceNames: ["argocd-ecr-oci"]
+                  verbs: ["get", "patch", "update"]
+              ---
+              apiVersion: rbac.authorization.k8s.io/v1
+              kind: RoleBinding
+              metadata: {name: argocd-ecr-repo-creds-writer, namespace: argocd}
+              subjects: [{kind: ServiceAccount, name: argocd-ecr-refresher, namespace: argocd}]
+              roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: argocd-ecr-repo-creds-writer}
+              ---
+              apiVersion: batch/v1
+              kind: CronJob
+              metadata: {name: argocd-ecr-oci-credentials, namespace: argocd}
+              spec:
+                schedule: "17 */6 * * *"
+                concurrencyPolicy: Forbid
+                successfulJobsHistoryLimit: 1
+                failedJobsHistoryLimit: 2
+                jobTemplate:
+                  spec:
+                    backoffLimit: 2
+                    template:
+                      spec:
+                        serviceAccountName: argocd-ecr-refresher
+                        restartPolicy: OnFailure
+                        securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+                        containers:
+                          - name: refresh
+                            image: ${var.argocd_bootstrap_image}
+                            command: ["/bin/sh", "-ec"]
+                            args:
+                              - |
+                                password="$(aws ecr get-login-password --region ${var.aws_region})"
+                                test -n "$password"
+                                kubectl -n argocd create secret generic argocd-ecr-oci --from-literal=type=helm --from-literal=url=${aws_ecr_repository.gitops_client[0].repository_url} --from-literal=username=AWS --from-literal=password="$password" --from-literal=enableOCI=true --dry-run=client -o yaml | kubectl -n argocd apply -f -
+                                kubectl -n argocd label secret argocd-ecr-oci argocd.argoproj.io/secret-type=repo-creds --overwrite
+                            securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}, readOnlyRootFilesystem: true, runAsNonRoot: true}
+                            resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {cpu: 200m, memory: 128Mi}}
+                            env: [{name: HOME, value: /tmp}]
+                            volumeMounts: [{name: tmp, mountPath: /tmp}]
+                        volumes: [{name: tmp, emptyDir: {}}]
+              EOF
             - |
               cat <<'EOF' | kubectl apply -f -
               apiVersion: argoproj.io/v1alpha1
@@ -345,9 +451,11 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
               spec:
                 project: default
                 source:
-                  repoURL: ${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/node-operator-baseline-gitops-client
+                  repoURL: ${aws_ecr_repository.gitops_client[0].repository_url}
                   chart: node-operator-client
                   targetRevision: ${var.gitops_client_chart_version}
+                  helm:
+                    valuesObject: ${jsonencode(var.gitops_client_chart_values)}
                 destination:
                   server: https://kubernetes.default.svc
                   namespace: node-operator
@@ -358,16 +466,47 @@ resource "aws_codebuild_project" "argocd_bootstrap" {
                   syncOptions:
                     - CreateNamespace=false
               EOF
+            # Applying the Application only stores its desired state. Wait for
+            # Argo CD to compare and sync the digest-verified source, but do
+            # not treat workload health as readiness: a first Vault install is
+            # expected to remain sealed and uninitialized until its separate
+            # approved ceremony.
+            - |
+              if ! kubectl -n argocd wait --for=jsonpath='{.status.sync.status}'=Synced application/node-operator-client --timeout=10m; then
+                kubectl -n argocd get application/node-operator-client -o jsonpath='sync={.status.sync.status} health={.status.health.status} message={.status.operationState.message}{"\\n"}' || true
+                printf '%s\n' 'Argo CD did not sync the digest-verified node-operator-client source; inspect its comparison error before retrying.' >&2
+                exit 70
+              fi
     YAML
   }
 
   lifecycle {
+    # Keep the NAT binding independent of resource-derived values below. This
+    # makes a mismatched deployment P2P address fail during plan, before an
+    # Argo bootstrap apply can create any resources.
+    precondition {
+      condition = (
+        local.argocd_hoodi_nat_public_ip != null &&
+        var.gitops_client_chart_values != null &&
+        var.gitops_client_chart_values.clients.deployment.prysmP2PHostIp == local.argocd_hoodi_nat_public_ip &&
+        (!local.use_foundation_network || try(var.foundation_network.hoodi_nat_public_ip == local.argocd_hoodi_nat_public_ip, false))
+      )
+      error_message = "Argo NAT binding precondition failed."
+    }
+
     precondition {
       condition = (
         var.enable_private_gitops_foundation &&
         can(regex("^${var.aws_account_id}\\.dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/${local.private_gitops_repositories.argocd}@sha256:[a-f0-9]{64}$", var.argocd_bootstrap_image)) &&
         can(regex("^0\\.1\\.[0-9]+$", var.gitops_client_chart_version)) &&
         can(regex("^sha256:[a-f0-9]{64}$", var.gitops_client_chart_oci_digest)) &&
+        var.gitops_client_chart_values != null &&
+        var.gitops_client_chart_values.deployment.profile == "deployment" &&
+        var.gitops_client_chart_values.dast.enabled == false &&
+        var.gitops_client_chart_values.deployment.storageKmsKeyId == aws_kms_key.ebs.arn &&
+        can(regex("^${var.aws_account_id}\\.dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/${local.private_gitops_repositories.vault}@sha256:[a-f0-9]{64}$", var.gitops_client_chart_values.clients.vaultAgentImage)) &&
+        can(regex("^${var.aws_account_id}\\.dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/${local.private_gitops_repositories.nodes}@sha256:[a-f0-9]{64}$", var.gitops_client_chart_values.clients.deployment.nethermindImage)) &&
+        can(regex("^${var.aws_account_id}\\.dkr\\.ecr\\.${var.aws_region}\\.amazonaws\\.com/${local.private_gitops_repositories.nodes}@sha256:[a-f0-9]{64}$", var.gitops_client_chart_values.clients.deployment.prysmImage)) &&
         length(var.argocd_bootstrap_subnet_ids) > 0 &&
         alltrue([for subnet_id in var.argocd_bootstrap_subnet_ids : can(regex("^subnet-[a-z0-9]+$", subnet_id))])
       )
