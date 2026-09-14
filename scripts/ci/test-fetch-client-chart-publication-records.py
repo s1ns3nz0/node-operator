@@ -34,9 +34,9 @@ class FetchClientChartTests(unittest.TestCase):
 
     def tearDown(self) -> None: self.temp.cleanup()
 
-    def _evidence(self) -> dict[str, bytes]:
+    def _evidence(self, image: str = IMAGE, subject_digest: str = MANIFEST) -> dict[str, bytes]:
         predicate = {"buildDefinition": {"buildType": "https://node-operator.example/gitops-chart/v1", "resolvedDependencies": [{"uri": "git+https://github.com/s1ns3nz0/node-operator-gitops", "digest": {"gitCommit": SOURCE}}]}, "runDetails": {"builder": {"id": authz.BUILDER}}}
-        statement = {"_type": "https://in-toto.io/Statement/v1", "subject": [{"name": "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-client/node-operator-client", "digest": {"sha256": MANIFEST.split(":", 1)[1]}}], "predicateType": "https://slsa.dev/provenance/v1", "predicate": predicate}
+        statement = {"_type": "https://in-toto.io/Statement/v1", "subject": [{"name": image.rsplit("@", 1)[0], "digest": {"sha256": subject_digest.split(":", 1)[1]}}], "predicateType": "https://slsa.dev/provenance/v1", "predicate": predicate}
         values = {
             authz.NAMES[0]: {"schema_version": "v1", "oci_digest": MANIFEST, "chart_archive_digest": ARCHIVE, "chart_version": "0.1.37"},
             authz.NAMES[1]: {"bomFormat": "CycloneDX", "metadata": {"component": {"name": "node-operator-client-0.1.37.tgz", "version": ARCHIVE}, "tools": {"components": [{"name": "syft"}]}}},
@@ -46,9 +46,9 @@ class FetchClientChartTests(unittest.TestCase):
         }
         return {name: json.dumps(value, sort_keys=True, separators=(",", ":")).encode() + b"\n" for name, value in values.items()}
 
-    def _write(self, evidence: dict[str, bytes], *, run: dict | None = None, artifacts: dict | None = None, members: list[tuple[str, bytes]] | None = None) -> None:
+    def _write(self, evidence: dict[str, bytes], *, image: str = IMAGE, run: dict | None = None, artifacts: dict | None = None, members: list[tuple[str, bytes]] | None = None) -> None:
         hashes = {name: hashlib.sha256(raw).hexdigest() for name, raw in evidence.items()}
-        value = {"schema_version": 1, "source_revision": SOURCE, "publication": {"repository": authz.REPOSITORY, "workflow": authz.WORKFLOW, "run_id": RUN, "artifact_id": ARTIFACT, "artifact_name": "gitops-chart-evidence-node-operator-redeploy-20260912b", "run_number": NUMBER}, "target": {"image_ref": IMAGE, "manifest_digest": MANIFEST, "chart_archive_digest": ARCHIVE, "chart_version": "0.1.37"}, "evidence_sha256": hashes, "approvals": {"stage_approved": True, "activation_approved": False}}
+        value = {"schema_version": 1, "source_revision": SOURCE, "publication": {"repository": authz.REPOSITORY, "workflow": authz.WORKFLOW, "run_id": RUN, "artifact_id": ARTIFACT, "artifact_name": "gitops-chart-evidence-node-operator-redeploy-20260912b", "run_number": NUMBER}, "target": {"image_ref": image, "manifest_digest": MANIFEST, "chart_archive_digest": ARCHIVE, "chart_version": "0.1.37"}, "evidence_sha256": hashes, "approvals": {"stage_approved": True, "activation_approved": False}}
         self.authorization.write_text(json.dumps(value, sort_keys=True))
         run = run or {"id": int(RUN), "run_number": int(NUMBER), "repository": {"full_name": authz.REPOSITORY}, "head_repository": {"full_name": authz.REPOSITORY}, "head_sha": SOURCE, "head_branch": "main", "event": "workflow_dispatch", "status": "completed", "conclusion": "success", "path": ".github/workflows/publish-oci.yml"}
         artifacts = artifacts or {"total_count": 1, "artifacts": [{"id": int(ARTIFACT), "name": value["publication"]["artifact_name"], "expired": False, "workflow_run": {"id": int(RUN), "head_sha": SOURCE}}]}
@@ -79,6 +79,23 @@ sys.stdout.buffer.write((base/name).read_bytes())
         self.assertEqual({path.name for path in self.output.iterdir()}, set(authz.NAMES))
         for name, raw in self.evidence.items(): self.assertEqual((self.output / name).read_bytes(), raw)
         self.assertEqual(stat.S_IMODE(self.output.stat().st_mode), 0o700)
+
+    def test_accepts_scoped_target_and_rejects_sibling_or_forged_provenance(self) -> None:
+        scoped = f"106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-op-2609140157-baseline-gitops-client/node-operator-client@{MANIFEST}"
+        evidence = self._evidence(scoped); self._write(evidence, image=scoped)
+        self.assertEqual(self.invoke().returncode, 0)
+        self.output.rename(self.root / "accepted")
+        sibling = f"106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-op-2609140157-baseline-gitops-client/node-operator-client-forged@{MANIFEST}"
+        self._write(self._evidence(sibling), image=sibling); self.assert_fail()
+        self._write(self._evidence(), image=scoped); self.assert_fail()
+        self._write(self._evidence(scoped, "sha256:" + "f" * 64), image=scoped); self.assert_fail()
+        for image in (
+            f"999999999999.dkr.ecr.ap-northeast-2.amazonaws.com/node-op-2609140157-baseline-gitops-client/node-operator-client@{MANIFEST}",
+            f"106760547719.dkr.ecr.us-east-1.amazonaws.com/node-op-2609140157-baseline-gitops-client/node-operator-client@{MANIFEST}",
+            f"106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/2invalid-deployment-baseline-gitops-client/node-operator-client@{MANIFEST}",
+        ):
+            with self.subTest(image=image):
+                self._write(self._evidence(image), image=image); self.assert_fail()
 
     def test_rejects_run_artifact_and_zip_binding_failures(self) -> None:
         baseline_run = json.loads((self.fixtures / "run.json").read_text()); baseline_artifacts = json.loads((self.fixtures / "artifacts.json").read_text())
