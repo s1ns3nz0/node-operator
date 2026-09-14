@@ -8,6 +8,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/workflow-contract.sh"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 release="$root/.github/workflows/release-bundle.yml"
 reproducibility="$(workflow_job_source "$release" reproducibility)"
+# Both bundle passes must use the reviewed Python-capable executor, not the
+# retired image that stopped at the first Python-based evidence validator.
+expected_executor='ghcr.io/s1ns3nz0/node-operator/release-build@sha256:5221febd3278d7081ec6e5655b2d5036b4c22c5cca6755be036517d10eb05254'
+[ "$(grep -Fc "RELEASE_BUILD_IMAGE: $expected_executor" "$release")" -eq 2 ]
 grep -Fq 'environment: gitops-evidence-reader' <<<"$reproducibility"
 grep -Fq 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1' <<<"$reproducibility"
 grep -Fq 'client-id: ${{ vars.GITOPS_EVIDENCE_APP_CLIENT_ID }}' <<<"$reproducibility"
