@@ -286,6 +286,14 @@ jobs:
           path: ${{ runner.temp }}/prysm-publication-records/prysm-mtls-publication-record.json
           if-no-files-found: error
           retention-days: 30
+      # Role: Keep raw scan and verified signatures separate from the one-file admission record.
+      - name: Prysm review evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: prysm-mtls-review-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/prysm-publication-records/evidence/
+          if-no-files-found: error
+          retention-days: 30
 
   # Role: Build and publish the first-party signer identity probe through the protected validator ECR environment.
   signer-probe-publish:

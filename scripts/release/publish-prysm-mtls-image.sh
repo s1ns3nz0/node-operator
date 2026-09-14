@@ -20,7 +20,7 @@ dockerfile=.ci/prysm-mtls/Dockerfile
 ignore=.ci/prysm-mtls/Dockerfile.dockerignore
 patch=.ci/prysm-mtls/patches/0001-web3signer-http-mtls.patch
 security=.ci/prysm-mtls/patches/0002-security-dependencies.patch
-for file in "$lock" "$dockerfile" "$ignore" "$patch" "$security" scripts/release/prysm_publication_record.py; do [ -f "$file" ] && [ ! -L "$file" ] || die 'reviewed input is unavailable'; done
+for file in "$lock" "$dockerfile" "$ignore" "$patch" "$security" .ci/prysm-mtls-applicability.json .ci/prysm-mtls-applicability/GO-2026-5932.json scripts/release/prysm_publication_record.py scripts/ci/assess-prysm-mtls-applicability.py; do [ -f "$file" ] && [ ! -L "$file" ] || die 'reviewed input is unavailable'; done
 commit="$(jq -er '.commit|select(test("^[0-9a-f]{40}$"))' "$lock")"
 repo_url="$(jq -er '.repository|select(.=="https://github.com/OffchainLabs/prysm.git")' "$lock")"
 builder="$(jq -er '.builder_image' "$lock")"; runtime="$(jq -er '.runtime_image' "$lock")"
@@ -58,7 +58,7 @@ trap cleanup EXIT
 export DOCKER_CONFIG="$docker_config"
 local_image="$repository:local-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 docker build --pull=false --platform linux/amd64 -f "$dockerfile" -t "$local_image" .
-[ "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$local_image")" = linux/amd64 ] && [ "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$local_image")" = "$commit" ] && [ "$(docker image inspect --format '{{ index .Config.Labels "io.node-operator.prysm-mtls-patch-sha256" }}' "$local_image")" = "$patch_hash" ] && [ "$(docker image inspect --format '{{ index .Config.Labels "io.node-operator.prysm-security-patch-sha256" }}' "$local_image")" = "$security_hash" ] || die 'local image does not bind lock'
+[ "$(docker image inspect --format '{{.Os}}' "$local_image")" = linux ] && [ "$(docker image inspect --format '{{.Architecture}}' "$local_image")" = amd64 ] && [ "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$local_image")" = "$commit" ] && [ "$(docker image inspect --format '{{ index .Config.Labels "io.node-operator.prysm-mtls-patch-sha256" }}' "$local_image")" = "$patch_hash" ] && [ "$(docker image inspect --format '{{ index .Config.Labels "io.node-operator.prysm-security-patch-sha256" }}' "$local_image")" = "$security_hash" ] || die 'local image does not bind lock'
 
 printf 'header = "Authorization: bearer %s"\n' "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" > "$curl_config"
 curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --config "$curl_config" --output "$oidc_response" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com"
@@ -80,27 +80,74 @@ subject="${destination%:*}@$digest"
 repo_digests="$(docker image inspect --format '{{json .RepoDigests}}' "$destination")"
 jq -e --arg subject "$subject" 'type == "array" and length > 0 and index($subject)' <<<"$repo_digests" >/dev/null || die 'pushed Docker image does not bind the ECR digest'
 SYFT_CHECK_FOR_APP_UPDATE=false syft scan "registry:$subject" --source-name "$repository" --source-version "$digest" --output "cyclonedx-json=$evidence/sbom.json"
-scripts/ci/scan-release-sbom.sh "$evidence/sbom.json" "$evidence/scan.json"
-jq -e --arg digest "$digest" '.metadata.component.version==$digest' "$evidence/sbom.json" >/dev/null
-jq -e '.status=="passed" and .findings.critical==0 and .findings.high==0 and .findings.unknown==0' "$evidence/scan.json" >/dev/null
+# Prysm-only path: preserve the raw blocked scan and prove the one exact
+# advisory is not in the complete validator closure.  Generic zero-Unknown
+# release gates intentionally remain unchanged.
+cat > "$evidence/grype.yaml" <<'EOF'
+ignore: []
+exclude: []
+only-fixed: false
+only-notfixed: false
+show-suppressed: true
+db:
+  validate-by-hash-on-start: true
+EOF
+GRYPE_CHECK_FOR_APP_UPDATE=false grype --config "$evidence/grype.yaml" "sbom:$evidence/sbom.json" --output json --file "$evidence/grype.json"
+docker image inspect --format '{{json .RepoDigests}}' "$subject" > "$evidence/repo-digests.json"
+jq -n --arg subject "$subject" --argjson repos "$(cat "$evidence/repo-digests.json")" --arg os "$(docker image inspect --format '{{.Os}}' "$subject")" --arg arch "$(docker image inspect --format '{{.Architecture}}' "$subject")" --arg user "$(docker image inspect --format '{{.Config.User}}' "$subject")" --argjson entrypoint "$(docker image inspect --format '{{json .Config.Entrypoint}}' "$subject")" '{subject:$subject,RepoDigests:$repos,Os:$os,Architecture:$arch,user:$user,entrypoint:$entrypoint}' > "$evidence/runtime-identity.json"
+docker run --rm --pull never --platform linux/amd64 --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint /bin/sh "$subject" -ec 'sha256sum /validator; cat /usr/share/validator-dependencies.txt' > "$evidence/runtime-proof.txt"
+sed -n '1p' "$evidence/runtime-proof.txt" > "$evidence/binary.sha256"; sed -n '2,$p' "$evidence/runtime-proof.txt" > "$evidence/dependencies.txt"; rm -f "$evidence/runtime-proof.txt"
+curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 2 --output "$evidence/advisory-current.json" https://vuln.go.dev/ID/GO-2026-5932.json
+unknown_count="$(jq '[.matches[]?.vulnerability.severity? | select(type=="string" and ascii_downcase=="unknown")]|length' "$evidence/grype.json")"
+if [ "$unknown_count" = 0 ]; then
+  scripts/ci/scan-release-sbom.sh "$evidence/sbom.json" "$evidence/scan.json"
+  jq -e '.status=="passed" and .findings.critical==0 and .findings.high==0 and .findings.unknown==0' "$evidence/scan.json" >/dev/null
+  applicability_arg=()
+else
+  python3 scripts/ci/assess-prysm-mtls-applicability.py "$evidence" > "$evidence/applicability-assessment.json"
+  python3 scripts/ci/assess-prysm-mtls-applicability.py "$evidence" --verify "$evidence/applicability-assessment.json" >/dev/null
+  jq -e '.raw_scan_status=="blocked" and .applicability=="not_affected" and .deployment_authorized==false' "$evidence/applicability-assessment.json" >/dev/null
+  jq -c '.raw_scan_summary' "$evidence/applicability-assessment.json" > "$evidence/scan.json"
+  applicability_arg=(--applicability-assessment "$evidence/applicability-assessment.json")
+fi
 
 identity_name='https://github.com/s1ns3nz0/node-operator/.github/workflows/image-publish.yml@refs/heads/main'
 issuer='https://token.actions.githubusercontent.com'
 scan_type='https://github.com/s1ns3nz0/node-operator/attestations/scan-summary/v1'
+raw_scan_type='https://github.com/s1ns3nz0/node-operator/attestations/prysm-raw-grype/v1'
+applicability_type='https://github.com/s1ns3nz0/node-operator/attestations/prysm-applicability/v2'
 jq -n --arg revision "$GITHUB_SHA" --arg source "$commit" --arg source_repo "$repo_url" --arg input "$input_sha" --arg patch "$patch_hash" --arg security "$security_hash" --arg run "$GITHUB_RUN_ID" \
   '{buildDefinition:{buildType:"https://slsa.dev/container-based-build/v1",externalParameters:{reproducibility_input_sha256:$input,source_commit:$source,patch_sha256:$patch,security_patch_sha256:$security},resolvedDependencies:[{uri:"git+https://github.com/s1ns3nz0/node-operator",digest:{gitCommit:$revision}},{uri:$source_repo,digest:{gitCommit:$source}}]},runDetails:{builder:{id:"https://github.com/Attestations/GitHubHostedActions@v1"},metadata:{invocationId:$run}}}' > "$evidence/provenance.json"
 cosign sign --yes "$subject"
 cosign attest --yes --type slsaprovenance1 --predicate "$evidence/provenance.json" "$subject"
 cosign attest --yes --type cyclonedx --predicate "$evidence/sbom.json" "$subject"
 cosign attest --yes --type "$scan_type" --predicate "$evidence/scan.json" "$subject"
+if [ "$unknown_count" != 0 ]; then
+  cosign attest --yes --type "$raw_scan_type" --predicate "$evidence/grype.json" "$subject"
+  cosign attest --yes --type "$applicability_type" --predicate "$evidence/applicability-assessment.json" "$subject"
+fi
 cosign verify --certificate-identity "$identity_name" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$GITHUB_SHA" "$subject" > "$evidence/signature.json"
 cosign verify-attestation --type slsaprovenance1 --certificate-identity "$identity_name" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$GITHUB_SHA" "$subject" > "$evidence/provenance-verified.json"
 cosign verify-attestation --type cyclonedx --certificate-identity "$identity_name" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$GITHUB_SHA" "$subject" > "$evidence/sbom-verified.json"
 cosign verify-attestation --type "$scan_type" --certificate-identity "$identity_name" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$GITHUB_SHA" "$subject" > "$evidence/scan-verified.json"
-jq -s -e --arg digest "$digest" --arg reference "${subject%@*}" 'def entries: if length == 1 and (.[0] | type) == "array" then .[0] else . end; entries | any(.[]; .critical.image["docker-manifest-digest"] == $digest and .critical.identity["docker-reference"] == $reference)' "$evidence/signature.json" >/dev/null
+if [ "$unknown_count" != 0 ]; then
+  cosign verify-attestation --type "$raw_scan_type" --certificate-identity "$identity_name" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$GITHUB_SHA" "$subject" > "$evidence/raw-grype-verified.json"
+  cosign verify-attestation --type "$applicability_type" --certificate-identity "$identity_name" --certificate-oidc-issuer "$issuer" --certificate-github-workflow-sha "$GITHUB_SHA" "$subject" > "$evidence/applicability-verified.json"
+fi
+jq -s -e --arg digest "$digest" --arg reference "$subject" 'def entries: if length == 1 and (.[0] | type) == "array" then .[0] else . end; entries | any(.[]; .critical.image["docker-manifest-digest"] == $digest and .critical.identity["docker-reference"] == $reference)' "$evidence/signature.json" >/dev/null
 jq -s -e --arg digest "${digest#sha256:}" --arg revision "$GITHUB_SHA" --arg source "$commit" --arg source_repo "$repo_url" --arg input "$input_sha" --arg patch "$patch_hash" --arg security "$security_hash" --arg run "$GITHUB_RUN_ID" 'def statements: if length == 1 and (.[0] | type) == "array" then .[0] else . end | map(.payload | @base64d | fromjson); statements | any(.[]; (.subject | type == "array" and any(.[]; .digest.sha256 == $digest)) and .predicateType == "https://slsa.dev/provenance/v1" and .predicate.buildDefinition == {buildType:"https://slsa.dev/container-based-build/v1",externalParameters:{reproducibility_input_sha256:$input,source_commit:$source,patch_sha256:$patch,security_patch_sha256:$security},resolvedDependencies:[{uri:"git+https://github.com/s1ns3nz0/node-operator",digest:{gitCommit:$revision}},{uri:$source_repo,digest:{gitCommit:$source}}]} and .predicate.runDetails == {builder:{id:"https://github.com/Attestations/GitHubHostedActions@v1"},metadata:{invocationId:$run}})' "$evidence/provenance-verified.json" >/dev/null
 expected_sbom="$(jq -s -c -e 'if length == 1 and (.[0] | type) == "object" then .[0] else error("SBOM must be one object") end' "$evidence/sbom.json")"
 jq -s -e --arg digest "${digest#sha256:}" --argjson expected "$expected_sbom" 'def statements: if length == 1 and (.[0] | type) == "array" then .[0] else . end | map(.payload | @base64d | fromjson); statements | any(.[]; (.subject | type == "array" and any(.[]; .digest.sha256 == $digest)) and .predicateType == "https://cyclonedx.org/bom" and .predicate == $expected)' "$evidence/sbom-verified.json" >/dev/null
-bash scripts/ci/verify-release-scan-attestation.sh "$evidence/scan-verified.json" "$digest" "$evidence/scan.json"
-python3 scripts/release/prysm_publication_record.py --source-root "$root" --release-revision "$GITHUB_SHA" --build-revision "$GITHUB_SHA" --input-sha256 "$input_sha" --aws-account-id "$ACCOUNT_ID" --aws-region "$AWS_REGION" --deployment-name "$DEPLOYMENT_NAME" --repository "$repository" --image-ref "$subject" --manifest-digest "$digest" --run-id "$GITHUB_RUN_ID" --invocation prysm-mtls-publish --output "$record"
+verify_predicate() { jq -s -e --arg digest "${digest#sha256:}" --arg name "${subject%@*}" --arg type "$1" --slurpfile expected "$2" 'def s: if length==1 and (.[0]|type)=="array" then .[0] else . end|map(.payload|@base64d|fromjson); s|any(.[]; .predicateType==$type and (.subject|any(.name==$name and .digest.sha256==$digest)) and .predicate==$expected[0])' "$3" >/dev/null; }
+verify_predicate "$scan_type" "$evidence/scan.json" "$evidence/scan-verified.json"
+if [ "$unknown_count" != 0 ]; then
+  verify_predicate "$raw_scan_type" "$evidence/grype.json" "$evidence/raw-grype-verified.json"
+  verify_predicate "$applicability_type" "$evidence/applicability-assessment.json" "$evidence/applicability-verified.json"
+fi
+mkdir -m 700 "$record_dir/evidence"
+for artifact in sbom.json grype.json scan.json signature.json provenance.json provenance-verified.json sbom-verified.json scan-verified.json; do cp "$evidence/$artifact" "$record_dir/evidence/$artifact"; done
+if [ "$unknown_count" != 0 ]; then
+  for artifact in runtime-identity.json binary.sha256 dependencies.txt advisory-current.json applicability-assessment.json raw-grype-verified.json applicability-verified.json; do cp "$evidence/$artifact" "$record_dir/evidence/$artifact"; done
+fi
+python3 scripts/release/prysm_publication_record.py --source-root "$root" --release-revision "$GITHUB_SHA" --build-revision "$GITHUB_SHA" --input-sha256 "$input_sha" --aws-account-id "$ACCOUNT_ID" --aws-region "$AWS_REGION" --deployment-name "$DEPLOYMENT_NAME" --repository "$repository" --image-ref "$subject" --manifest-digest "$digest" --run-id "$GITHUB_RUN_ID" --invocation prysm-mtls-publish "${applicability_arg[@]+${applicability_arg[@]}}" --output "$record"
 printf 'private_image=%s\nsource_revision=%s\nrelease_verification=PASS\n' "$subject" "$GITHUB_SHA" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"

@@ -198,7 +198,11 @@ class ArtifactInventoryTests(unittest.TestCase):
         self.assertIn("vault-bootstrap", {entry["component"] for entry in value["unresolved_authority"]})
 
     def test_stage_authorization_uses_candidate_source_without_activation(self):
-        candidate="c"*40; release="d"*40; shutil.copytree(ROOT/".ci/prysm-mtls", self.source/".ci/prysm-mtls")
+        candidate="c"*40; release="d"*40
+        for relative in prysm_record.BUILD_INPUTS:
+            destination = self.source / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / relative, destination)
         self.bundle.joinpath("rendered/installer-artifact-index.json").write_text(json.dumps({**vault_index(),"release_revision":release}))
         image=f"123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-prysm@{DIGEST}"
         record=prysm_record.create_record(self.source,release_revision=candidate,build_revision=candidate,input_sha256=prysm_record.build_input_sha256(self.source),aws_account_id="123456789012",aws_region="ap-northeast-2",deployment_name="node-operator",repository="node-operator-baseline-validator-prysm",image_ref=image,manifest_digest=DIGEST,run_id="42")

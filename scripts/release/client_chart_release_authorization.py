@@ -14,7 +14,8 @@ SHA40=re.compile(r"^[0-9a-f]{40}$"); SHA256=re.compile(r"^[0-9a-f]{64}$"); DIGES
 AUTH_PATH="source/release/client-chart-publication-authorization.json"; RECORD_DIR="rendered/client-chart-publication-records"
 NAMES=("gitops-chart-subject.json","gitops-chart-sbom.json","gitops-chart-grype.json","gitops-chart-provenance-predicate.json","gitops-chart-provenance-verified.json")
 REPOSITORY="s1ns3nz0/node-operator-gitops"; WORKFLOW="publish-oci.yml"; BUILDER="https://github.com/s1ns3nz0/node-operator-gitops/.github/workflows/publish-oci.yml@refs/heads/main"
-IMAGE_RE=re.compile(r"^106760547719\.dkr\.ecr\.ap-northeast-2\.amazonaws\.com/node-operator-baseline-gitops-client/node-operator-client@sha256:[0-9a-f]{64}$")
+DEPLOYMENT=r"[a-z][a-z0-9-]{1,18}[a-z0-9]"
+IMAGE_RE=re.compile(rf"^106760547719\.dkr\.ecr\.ap-northeast-2\.amazonaws\.com/{DEPLOYMENT}-baseline-gitops-client/node-operator-client@sha256:[0-9a-f]{{64}}$")
 MAX=4*1024*1024
 class ClientChartAuthorizationError(ValueError): pass
 def _dups(items:list[tuple[str,Any]])->dict[str,Any]:
@@ -73,7 +74,7 @@ def _evidence(values:dict[str,Any], target:dict[str,Any], revision:str)->None:
  statement=_obj(statement,{"_type","subject","predicateType","predicate"},"in-toto statement")
  if statement["_type"] not in {"https://in-toto.io/Statement/v0.1","https://in-toto.io/Statement/v1"} or statement["predicateType"]!="https://slsa.dev/provenance/v1" or not isinstance(statement["subject"],list) or len(statement["subject"])!=1 or _canonical(statement["predicate"])!=_canonical(predicate):raise ClientChartAuthorizationError("provenance statement is invalid")
  sub=_obj(statement["subject"][0],{"name","digest"},"provenance subject"); dig=_obj(sub["digest"],{"sha256"},"provenance digest")
- if sub["name"]!="106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-client/node-operator-client" or dig["sha256"]!=target["manifest_digest"].split(":",1)[1]:raise ClientChartAuthorizationError("provenance subject is invalid")
+ if sub["name"]!=target["image_ref"].rsplit("@",1)[0] or dig["sha256"]!=target["manifest_digest"].split(":",1)[1]:raise ClientChartAuthorizationError("provenance subject is invalid")
  if not isinstance(predicate,dict) or not isinstance(predicate.get("buildDefinition"),dict) or not isinstance(predicate.get("runDetails"),dict):raise ClientChartAuthorizationError("provenance source is invalid")
  build=predicate["buildDefinition"]; run=predicate["runDetails"]
  if build.get("buildType")!="https://node-operator.example/gitops-chart/v1" or build.get("resolvedDependencies")!=[{"uri":"git+https://github.com/s1ns3nz0/node-operator-gitops","digest":{"gitCommit":revision}}] or not isinstance(run.get("builder"),dict) or run["builder"].get("id")!=BUILDER:raise ClientChartAuthorizationError("provenance source is invalid")

@@ -7,6 +7,7 @@ producer must complete those checks before it records the passed claims.
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -36,9 +37,12 @@ BUILD_INPUTS = (
     ".ci/prysm-mtls/Dockerfile.dockerignore",
     PATCHES["patch_sha256"],
     PATCHES["security_patch_sha256"],
+    ".ci/prysm-mtls-applicability.json",
+    ".ci/prysm-mtls-applicability/GO-2026-5932.json",
 )
 LOCK_KEYS = {"schema_version", "repository", "tag", "commit", "go_version", "target", "release_platform", "patch_directory", "patch_sha256", "security_patch_sha256", "builder_image", "runtime_image", "status"}
 RECORD_KEYS = {"schema_version", "component", "release_revision", "build_revision", "input_sha256", "source", "target", "publication", "verification"}
+V2_RECORD_KEYS = RECORD_KEYS | {"applicability"}
 
 
 class PrysmPublicationRecordError(ValueError):
@@ -163,7 +167,7 @@ def create_record(source_root: Path, *, release_revision: str, build_revision: s
                   input_sha256: str, aws_account_id: str, aws_region: str,
                   deployment_name: str, repository: str, image_ref: str,
                   manifest_digest: str, run_id: str | int,
-                  invocation: str = "prysm-mtls-publish") -> dict[str, Any]:
+                  invocation: str = "prysm-mtls-publish", applicability_assessment: Path | None = None) -> dict[str, Any]:
     """Create a validated in-memory record; this does not publish or write it."""
     record = {
         "schema_version": 1, "component": "prysm-mtls",
@@ -176,14 +180,23 @@ def create_record(source_root: Path, *, release_revision: str, build_revision: s
         "verification": {"method": "scan-cosign-and-provenance", "status": "passed",
                          "scan_passed": True, "cosign_verified": True, "provenance_verified": True},
     }
+    if applicability_assessment is not None:
+        assessment = _json(applicability_assessment)
+        keys = {"schema_version", "component", "status", "raw_scan_status", "applicability", "advisory_id", "subject", "sbom_sha256", "raw_grype_sha256", "raw_scan_summary", "advisory_sha256", "reviewed_at", "expires_at", "validator_sha256", "dependency_closure_sha256", "dependency_closure_count", "deployment_authorized"}
+        if not isinstance(assessment, dict) or set(assessment) != keys or assessment.get("schema_version") != "v2" or assessment.get("component") != "prysm-mtls" or assessment.get("status") != "passed-with-non-applicability" or assessment.get("raw_scan_status") != "blocked" or assessment.get("applicability") != "not_affected" or assessment.get("deployment_authorized") is not False:
+            raise PrysmPublicationRecordError("Prysm applicability assessment is invalid")
+        if assessment.get("subject") != image_ref or any(not isinstance(assessment.get(k), str) or not SHA256.fullmatch(assessment[k]) for k in ("sbom_sha256", "raw_grype_sha256", "advisory_sha256", "validator_sha256", "dependency_closure_sha256")):
+            raise PrysmPublicationRecordError("Prysm applicability assessment does not bind image evidence")
+        record["schema_version"] = 2
+        record["applicability"] = {"assessment_sha256": _sha256(applicability_assessment), "raw_grype_sha256": assessment["raw_grype_sha256"], "sbom_sha256": assessment["sbom_sha256"], "raw_scan_status": "blocked", "decision": "not_affected", "advisory_id": assessment["advisory_id"], "advisory_sha256": assessment["advisory_sha256"], "subject": assessment["subject"], "expires_at": assessment["expires_at"]}
+        record["verification"] = {"method": "scan-applicability-cosign-and-provenance", "status": "passed-with-non-applicability", "scan_passed": False, "cosign_verified": True, "provenance_verified": True}
     return validate_record(record, source_root)
 
 
 def validate_record(record: Any, source_root: Path, *, expected_release_revision: str | None = None,
                     expected_context: dict[str, str] | None = None) -> dict[str, Any]:
     """Validate all record fields against local source identity and caller context."""
-    record = _exact(record, RECORD_KEYS, "Prysm publication record")
-    if type(record["schema_version"]) is not int or record["schema_version"] != 1 or record["component"] != "prysm-mtls":
+    if not isinstance(record, dict) or type(record.get("schema_version")) is not int or record["schema_version"] not in (1,2) or set(record) != (V2_RECORD_KEYS if record["schema_version"] == 2 else RECORD_KEYS) or record["component"] != "prysm-mtls":
         raise PrysmPublicationRecordError("Prysm publication record identity is invalid")
     release = _text(record["release_revision"], "release revision", SHA40)
     build = _text(record["build_revision"], "build revision", SHA40)
@@ -212,10 +225,19 @@ def validate_record(record: Any, source_root: Path, *, expected_release_revision
             or not re.fullmatch(r"[1-9][0-9]*", str(run_id))):
         raise PrysmPublicationRecordError("Prysm publication is invalid")
     verification = _exact(record["verification"], {"method", "status", "scan_passed", "cosign_verified", "provenance_verified"}, "Prysm verification")
-    if (verification.get("method") != "scan-cosign-and-provenance" or verification.get("status") != "passed"
-            or any(type(verification[key]) is not bool or verification[key] is not True
-                   for key in ("scan_passed", "cosign_verified", "provenance_verified"))):
+    v2 = record["schema_version"] == 2
+    if ((not v2 and (verification.get("method") != "scan-cosign-and-provenance" or verification.get("status") != "passed" or verification.get("scan_passed") is not True))
+            or (v2 and (verification.get("method") != "scan-applicability-cosign-and-provenance" or verification.get("status") != "passed-with-non-applicability" or verification.get("scan_passed") is not False))
+            or any(type(verification[key]) is not bool or verification[key] is not True for key in ("cosign_verified", "provenance_verified"))):
         raise PrysmPublicationRecordError("Prysm verification is not a passed scan, cosign, and provenance result")
+    if v2:
+        app = _exact(record["applicability"], {"assessment_sha256", "raw_grype_sha256", "sbom_sha256", "raw_scan_status", "decision", "advisory_id", "advisory_sha256", "subject", "expires_at"}, "Prysm applicability")
+        manifest = _json(_source_path(source_root, ".ci/prysm-mtls-applicability.json"))
+        advisory = _source_path(source_root, ".ci/prysm-mtls-applicability/GO-2026-5932.json")
+        try: expiry = datetime.fromisoformat(app["expires_at"].replace("Z", "+00:00"))
+        except (TypeError, ValueError): raise PrysmPublicationRecordError("Prysm applicability expiry is invalid")
+        if any(not isinstance(app[k], str) or not SHA256.fullmatch(app[k]) for k in ("assessment_sha256", "raw_grype_sha256", "sbom_sha256", "advisory_sha256")) or app["raw_scan_status"] != "blocked" or app["decision"] != "not_affected" or app["advisory_id"] != "GO-2026-5932" or app["advisory_sha256"] != _sha256(advisory) or app["subject"] != target["image_ref"] or manifest.get("expires_at") != app["expires_at"] or expiry <= datetime.now(timezone.utc):
+            raise PrysmPublicationRecordError("Prysm applicability binding is invalid")
     return record
 
 
@@ -263,6 +285,7 @@ def main() -> int:
     parser.add_argument("--manifest-digest", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--invocation", default="prysm-mtls-publish")
+    parser.add_argument("--applicability-assessment", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     try:
@@ -271,7 +294,7 @@ def main() -> int:
                               aws_account_id=args.aws_account_id, aws_region=args.aws_region,
                               deployment_name=args.deployment_name, repository=args.repository,
                               image_ref=args.image_ref, manifest_digest=args.manifest_digest,
-                              run_id=args.run_id, invocation=args.invocation)
+                              run_id=args.run_id, invocation=args.invocation, applicability_assessment=args.applicability_assessment)
         write_record(args.output, value, args.source_root)
     except PrysmPublicationRecordError as error:
         parser.error(str(error))
