@@ -180,7 +180,10 @@ spec:
       securityContext: {runAsNonRoot: true, runAsUser: 999, runAsGroup: 999, fsGroup: 999, fsGroupChangePolicy: OnRootMismatch, seccompProfile: {type: RuntimeDefault}}
       volumes:
         - name: public-import
-          configMap: {name: $config, defaultMode: 0400}
+          # The interchange record contains only public metadata and a public
+          # key. Web3Signer runs as UID 999, so do not rely on fsGroup mode
+          # mutation to make a root-owned ConfigMap file readable.
+          configMap: {name: $config, defaultMode: 0444}
         - name: vault-auth
           projected: {sources: [{serviceAccountToken: {audience: vault, expirationSeconds: 600, path: token}}]}
         - name: maintenance-tmp

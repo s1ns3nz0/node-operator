@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Mocked fail-closed execution test for the Hoodi maintenance command."""
-import os, subprocess, tempfile, textwrap, unittest
+import os, shutil, subprocess, tempfile, textwrap, unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -43,7 +43,9 @@ if args[-2:]==["-o","json"] and "get" in args:
   else: print(json.dumps(obj(kind,names[0])))
   raise SystemExit
 if args[-2:]==["-o","yaml"]: print("apiVersion: v1\nkind: ConfigMap"); raise SystemExit
-if "create" in args and "configmap" in args and args[-2:]==["-o","json"]: print(json.dumps({"metadata":{"uid":"config-uid","resourceVersion":"1"}})); raise SystemExit
+if "create" in args and "configmap" in args and args[-2:]==["-o","json"]:
+  source=next(value.split("=",2)[2] for value in args if value.startswith("--from-file=import.json="))
+  print(json.dumps({"metadata":{"uid":"config-uid","resourceVersion":"1"},"data":{"import.json":open(source).read()}})); raise SystemExit
 if ("apply" in args or "create" in args) and "-f" in args:
   source=args[args.index("-f")+1]
   body=sys.stdin.read() if source == "-" else open(source).read()
@@ -71,10 +73,24 @@ class PrepareTest(unittest.TestCase):
    result, body, receipts = self.run_command()
    self.assertEqual(result.returncode,0,result.stderr)
    self.assertIn('/opt/web3signer/bin/web3signer',body); self.assertIn('watermark-repair',body); self.assertIn('strict-singleton-preflight',body); self.assertIn('encode(public_key',body)
-   yaml="\n".join("\n".join(line for line in part.splitlines() if not line.startswith("ARGS=")) for part in body.split("---MOCK---") if "apiVersion:" in part)
-   parsed=subprocess.run(["ruby","-ryaml","-e","YAML.load_stream(STDIN.read)"],input=yaml,text=True,capture_output=True)
-   self.assertEqual(parsed.returncode,0,parsed.stderr)
+   yaml="\n---\n".join("\n".join(line for line in part.splitlines() if not line.startswith("ARGS=")) for part in body.split("---MOCK---") if "apiVersion:" in part)
+   parser=shutil.which("kubectl")
+   self.assertIsNotNone(parser, "kubectl kustomize is required for offline rendered-manifest parsing")
+   with tempfile.TemporaryDirectory() as rendered:
+    rendered_path=Path(rendered)
+    (rendered_path/"manifest.yaml").write_text(yaml)
+    (rendered_path/"kustomization.yaml").write_text("resources:\n  - manifest.yaml\n")
+    parsed_manifest=subprocess.run([parser,"kustomize",str(rendered_path)],text=True,capture_output=True)
+    self.assertEqual(parsed_manifest.returncode,0,parsed_manifest.stderr)
+    self.assertIn("kind: Job",parsed_manifest.stdout)
+   if shutil.which("ruby"):
+    parsed=subprocess.run(["ruby","-ryaml","-rjson","-e","docs=YAML.load_stream(STDIN.read).compact; job=docs.find { |d| d[\"kind\"] == \"Job\" }; abort unless job && job.dig(\"spec\", \"template\", \"spec\", \"volumes\").any? { |v| v[\"name\"] == \"public-import\" && v.dig(\"configMap\", \"defaultMode\") == 292 }; puts JSON.generate(job)"],input=yaml,text=True,capture_output=True)
+    self.assertEqual(parsed.returncode,0,parsed.stderr)
+   else:
+    # kubectl kustomize above is the mandatory parser in release images.
+    self.assertIn("defaultMode: 0444", yaml)
    self.assertIn('slashing-history-maintenance',body); self.assertNotIn('keystore.json',body); self.assertNotIn('signer-api',body)
+   self.assertIn('interchange_format_version', body); self.assertNotIn('privateKey', body)
    self.assertIn('kind: Job',body); self.assertTrue(receipts)
 
  def test_fail_closed_modes_never_emit_receipt(self):
