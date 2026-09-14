@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build, scan, sign, attest, and publish the pinned Kyverno CLI only from main.
+# Check objective: Publish only the pinned Kyverno CLI with passing scans and verified signatures from main.
 set -euo pipefail
 umask 077
 die(){ printf '%s\n' "$1" >&2; exit 65; }
