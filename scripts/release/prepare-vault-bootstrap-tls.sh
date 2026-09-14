@@ -30,10 +30,11 @@ done
 
 namespace="$(kubectl get namespace vault --ignore-not-found -o name)"
 if [ -n "$namespace" ] && [ -n "$(kubectl -n vault get statefulset vault --ignore-not-found -o name)" ]; then
+  # An existing Vault may be OnDelete, sealed, or uninitialized. Those are
+  # post-install lifecycle states; this TLS-only phase checks certificates only.
   kubectl -n vault wait --for=condition=Ready certificate/vault-internal-ca --timeout=10m
   kubectl -n vault wait --for=condition=Ready certificate/vault-server-tls --timeout=10m
   kubectl -n vault get secret vault-tls -o name | grep -qx 'secret/vault-tls'
-  kubectl -n vault rollout status statefulset/vault --timeout=15m
   printf '%s\n' 'PASS: existing Vault TLS prerequisites are ready; no bootstrap mutation was performed.'
   exit 0
 fi

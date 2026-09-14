@@ -30,8 +30,12 @@ done
 for required in 'kind: NetworkPolicy' 'name: vault-ingress-private-only' 'node-operator.io/vault-client-access: "true"' 'node-operator.io/vault-client: "true"' 'port: 8201'; do
   grep -Fq "$required" "$network_policy" || fail "network policy omits $required"
 done
-grep -Fq 'rollout status statefulset/vault --timeout=15m' "$root/scripts/release/prepare-vault-bootstrap-tls.sh" || fail 'Vault readiness gate is missing'
+if grep -Fq 'rollout status statefulset/vault' "$root/scripts/release/prepare-vault-bootstrap-tls.sh"; then
+  fail 'TLS-only preparation must not require Vault StatefulSet rollout readiness'
+fi
+grep -Fq 'verify-hoodi-vault-readiness.sh" --mode post-init-ready' "$root/scripts/release/interactive-hoodi-release.sh" || fail 'post-install Vault readiness gate is missing'
 grep -Fq 'kubectl label namespace vault --overwrite' "$root/scripts/release/prepare-vault-bootstrap-tls.sh" || fail 'Vault namespace labels are not reconciled for an interrupted first preparation'
+"$root/scripts/ci/test-prepare-vault-bootstrap-tls.sh"
 
 if rg -n -i '(secret(data)?\s*:|tls\.key:|BEGIN (CERTIFICATE|.*PRIVATE KEY))' "$values" "$tls" "$network_policy" "$runbook" >/dev/null; then
   fail 'TLS delivery inputs contain Secret data or key material'
