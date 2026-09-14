@@ -15,6 +15,30 @@ require_command cmp
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
 
+# Zero-argument tests exercise legacy/index construction without remote inputs.
+# Isolate that fixture from real release authorizations; explicit evidence calls
+# still test the selected release unchanged and must supply all required records.
+if [ "$offline_fixture" = true ] && [ -z "$publication_records_directory$prysm_publication_record$fence_publication_record$client_chart_records$signer_probe_publication_record" ] &&
+   { [ -f "$(repo_root)/release/prysm-publication-authorization.json" ] ||
+     [ -f "$(repo_root)/release/fence-publication-authorization.json" ] ||
+     [ -f "$(repo_root)/release/client-chart-publication-authorization.json" ] ||
+     [ -f "$(repo_root)/release/signer-probe-publication-authorization.json" ]; }; then
+  fixture="$temporary_directory/offline-source"
+  mkdir "$fixture"
+  git -C "$(repo_root)" archive HEAD | tar -xf - -C "$fixture"
+  for component in prysm fence client-chart signer-probe; do
+    path="$fixture/release/$component-publication-authorization.json"
+    [ ! -f "$path" ] || unlink "$path"
+  done
+  # Exercise this test revision, including uncommitted test-only changes.
+  cp "$script_dir/test-build-release-bundle.sh" "$fixture/scripts/ci/test-build-release-bundle.sh"
+  git -C "$fixture" init -q
+  git -C "$fixture" add .
+  git -C "$fixture" -c user.name=Fixture -c user.email=fixture@example.invalid -c commit.gpgsign=false commit -qm 'Offline legacy bundle fixture'
+  (cd "$fixture" && bash scripts/ci/test-build-release-bundle.sh)
+  exit 0
+fi
+
 # The production builder must require the pinned Syft executable. Only this
 # zero-argument offline fixture path supplies the local scan interface it
 # exercises. Explicit-output or publication-record invocations therefore keep

@@ -33,7 +33,11 @@ printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' \
   'esac' > "$workspace/bin/docker"
 chmod +x "$workspace/bin/docker"
 
-source_revision="$(git -C "$root" rev-parse HEAD)"
+legacy_workspace="$workspace/legacy-repository"
+git clone --quiet --no-local "$root" "$legacy_workspace"
+python3 "$root/scripts/ci/reset-release-authorization-fixture.py" "$legacy_workspace"
+git -C "$legacy_workspace" -c user.name=Fixture -c user.email=fixture@example.invalid -c commit.gpgsign=false commit --allow-empty -qm 'Legacy publication test fixture'
+source_revision="$(git -C "$legacy_workspace" rev-parse HEAD)"
 write_records() {
   local directory="$1" revision="$2" mode="${3:-valid}"
   python3 - "$directory" "$revision" "$mode" <<'PY'
@@ -72,7 +76,7 @@ mkdir "$valid_records"
 write_records "$valid_records" "$source_revision"
 
 invoke() {
-  local workspace_root="${TEST_WORKSPACE:-$root}"
+  local workspace_root="${TEST_WORKSPACE:-$legacy_workspace}"
   PATH="$workspace/bin:$PATH" FAKE_DOCKER_LOG="$log" REGISTRY_TOKEN=token REGISTRY_USERNAME=actor \
     RELEASE_BUILD_IMAGE=ghcr.io/example/release-build APPROVED_ARTIFACT_DIGEST="${APPROVED_ARTIFACT_DIGEST:-}" \
     GITHUB_WORKSPACE="$workspace_root" RUNNER_TEMP="$workspace/runner" PUBLICATION_RECORDS_DIR="${PUBLICATION_RECORDS_DIR:-}" FENCE_PUBLICATION_RECORD="${FENCE_PUBLICATION_RECORD:-}" CLIENT_CHART_PUBLICATION_RECORDS="${CLIENT_CHART_PUBLICATION_RECORDS:-}" SIGNER_PROBE_PUBLICATION_RECORD="${SIGNER_PROBE_PUBLICATION_RECORD:-}" \
@@ -148,6 +152,7 @@ grep -F 'login ghcr.io' "$log" >/dev/null || fail 'digest mismatch did not reach
 # and mounts the same immutable file for the in-container bundle builder.
 prysm_workspace="$workspace/repository"
 git clone --quiet --no-local "$root" "$prysm_workspace"
+python3 "$root/scripts/ci/reset-release-authorization-fixture.py" "$prysm_workspace"
 git -C "$prysm_workspace" config user.email test@example.invalid
 git -C "$prysm_workspace" config user.name 'release wrapper test'
 cp "$root/scripts/release/prysm_publication_record.py" "$prysm_workspace/scripts/release/"
@@ -218,6 +223,7 @@ assert_no_docker 'tampered frozen Prysm record'
 # the real canonical validator before Docker, then the narrow immutable mount.
 fence_workspace="$workspace/fence-repository"
 git clone --quiet --no-local "$root" "$fence_workspace"
+python3 "$root/scripts/ci/reset-release-authorization-fixture.py" "$fence_workspace"
 git -C "$fence_workspace" config user.email test@example.invalid
 git -C "$fence_workspace" config user.name 'release wrapper test'
 cp "$root/scripts/release/fence_build_inputs.py" "$root/scripts/release/fence_release_authorization.py" "$fence_workspace/scripts/release/"
@@ -264,6 +270,7 @@ if APPROVED_ARTIFACT_DIGEST="$expected" PUBLICATION_RECORDS_DIR="$fence_records"
 assert_no_docker 'tampered frozen Fence record'
 
 chart_workspace="$workspace/chart-repository"; git clone --quiet --no-local "$root" "$chart_workspace"
+python3 "$root/scripts/ci/reset-release-authorization-fixture.py" "$chart_workspace"
 git -C "$chart_workspace" config user.email test@example.invalid; git -C "$chart_workspace" config user.name 'release wrapper test'
 cp "$root/scripts/release/client_chart_release_authorization.py" "$chart_workspace/scripts/release/"
 printf '%s\n' 'synthetic chart candidate revision' > "$chart_workspace/.release-wrapper-test-chart-candidate"
@@ -306,6 +313,7 @@ assert_no_docker 'orphan client chart records'
 # context is independently checked before Docker and only the exact record is
 # mounted into the builder.
 signer_workspace="$workspace/signer-repository"; git clone --quiet --no-local "$root" "$signer_workspace"
+python3 "$root/scripts/ci/reset-release-authorization-fixture.py" "$signer_workspace"
 git -C "$signer_workspace" config user.email test@example.invalid; git -C "$signer_workspace" config user.name 'release wrapper test'
 cp "$root/scripts/release/fence_build_inputs.py" "$root/scripts/release/signer_probe_build_inputs.py" "$root/scripts/release/signer_probe_publication_record.py" "$root/scripts/release/signer_probe_release_authorization.py" "$signer_workspace/scripts/release/"
 printf '%s\n' 'synthetic signer candidate revision' > "$signer_workspace/.release-wrapper-test-signer-candidate"

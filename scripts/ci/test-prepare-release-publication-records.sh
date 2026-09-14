@@ -11,6 +11,7 @@ log="$workspace/log"
 fail() { printf 'FAIL prepare release publication records: %s\n' "$*" >&2; exit 1; }
 
 mkdir "$workspace/bin"
+mkdir "$workspace/legacy-source"
 # shellcheck disable=SC2016 # The fake commands must receive these expansions literally.
 printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'printf "gh %s\\n" "$*" >> "$FAKE_LOG"' 'if [ "${FAKE_GH_MODE:-success}" = empty ]; then exit 0; fi' 'printf "%s\\n" "${FAKE_GH_RUN_ID:-123}"' > "$workspace/bin/gh"
 # shellcheck disable=SC2016 # The fake Python program must receive these expansions literally.
@@ -18,7 +19,7 @@ printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'printf "python %s\\n" "
 chmod +x "$workspace/bin/gh" "$workspace/bin/python3"
 
 invoke() {
-  local source_root="${SOURCE_ROOT:-$root}"
+  local source_root="${SOURCE_ROOT:-$workspace/legacy-source}"
   (cd "$source_root" && PATH="$workspace/bin:$PATH" FAKE_LOG="$log" GITHUB_SHA="$sha" GITHUB_REPOSITORY=owner/repository RUNNER_TEMP="$workspace/runner" bash "$helper")
 }
 

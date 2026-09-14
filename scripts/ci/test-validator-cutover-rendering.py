@@ -18,6 +18,17 @@ spec.loader.exec_module(verifier)
 class Rendering(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # Test legacy manifest shape in an isolated source fixture. The separate
+        # authorized-client suite tests bundle-bound publication authorization.
+        fixture = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(fixture.cleanup)
+        cls.render_root = Path(fixture.name) / "source"
+        for relative in ("scripts/ops/render-hoodi-validator-runtime.sh", "scripts/ops/render-hoodi-validator-client.sh",
+                         "deploy/validator/runtime-template.yaml", "deploy/validator/client-template.yaml",
+                         "deploy/validator/client-lease-fence-template.yaml", ".ci/validator/approved-client-images.json"):
+            target = cls.render_root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / relative, target)
         approved = json.loads((ROOT / ".ci/validator/approved-client-images.json").read_text())
         image = next(item["private_image"] for item in approved["images"]
                      if item.get("stage_approved") and item.get("release_channel") in
@@ -32,11 +43,11 @@ class Rendering(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             runtime = Path(directory) / "runtime.yaml"
             client = Path(directory) / "client.yaml"
-            subprocess.run(["bash", str(ROOT / "scripts/ops/render-hoodi-validator-runtime.sh"),
+            subprocess.run(["bash", str(cls.render_root / "scripts/ops/render-hoodi-validator-runtime.sh"),
                             *base, "--web3signer-image", registry + "/signer@sha256:" + "a" * 64,
                             "--postgres-image", registry + "/postgres@sha256:" + "b" * 64,
                             "--output", str(runtime)], check=True, capture_output=True)
-            subprocess.run(["bash", str(ROOT / "scripts/ops/render-hoodi-validator-client.sh"),
+            subprocess.run(["bash", str(cls.render_root / "scripts/ops/render-hoodi-validator-client.sh"),
                             *base, "--validator-public-key", cls.key, "--prysm-validator-image", image,
                             "--signing-fence-image", registry + "/node-operator-baseline-validator-fence@sha256:" + "c" * 64,
                             "--kubernetes-api-cidr", "172.20.0.1/32", "--output", str(client)],
@@ -90,11 +101,11 @@ class Rendering(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             runtime = Path(directory) / "runtime.yaml"
             client = Path(directory) / "client.yaml"
-            subprocess.run(["bash", str(ROOT / "scripts/ops/render-hoodi-validator-runtime.sh"), *base,
+            subprocess.run(["bash", str(self.render_root / "scripts/ops/render-hoodi-validator-runtime.sh"), *base,
                             "--web3signer-image", self.images["WEB3SIGNER_IMAGE"],
                             "--postgres-image", self.images["POSTGRES_IMAGE"], "--output", str(runtime)],
                            check=True, capture_output=True)
-            subprocess.run(["bash", str(ROOT / "scripts/ops/render-hoodi-validator-client.sh"), *base,
+            subprocess.run(["bash", str(self.render_root / "scripts/ops/render-hoodi-validator-client.sh"), *base,
                             "--validator-public-key", self.key, "--prysm-validator-image", image,
                             "--signing-fence-image", self.images["SIGNING_FENCE_IMAGE"],
                             "--kubernetes-api-cidr", "172.20.0.1/32", "--output", str(client)],

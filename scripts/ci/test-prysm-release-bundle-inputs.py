@@ -26,6 +26,7 @@ class PrysmBundleInputTests(unittest.TestCase):
         root = Path(self.temporary.name)
         self.fixture = root / "fixture"
         subprocess.run(["git", "clone", "--quiet", "--no-local", str(ROOT), str(self.fixture)], check=True)
+        subprocess.run(["python3", str(ROOT / "scripts/ci/reset-release-authorization-fixture.py"), str(self.fixture)], check=True)
         subprocess.run(["git", "-C", str(self.fixture), "config", "user.email", "test@example.invalid"], check=True)
         subprocess.run(["git", "-C", str(self.fixture), "config", "user.name", "release test"], check=True)
         for relative in (

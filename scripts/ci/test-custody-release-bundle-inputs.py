@@ -27,6 +27,7 @@ class CustodyReleaseBundleInputsTests(unittest.TestCase):
         self.bin = base / "bin"; self.bin.mkdir()
         self.output = base / "output"
         subprocess.run(["git", "clone", "--quiet", "--no-local", str(ROOT), str(self.fixture)], check=True)
+        subprocess.run(["python3", str(ROOT / "scripts/ci/reset-release-authorization-fixture.py"), str(self.fixture)], check=True)
         subprocess.run(["git", "-C", str(self.fixture), "config", "user.email", "test@example.invalid"], check=True)
         subprocess.run(["git", "-C", str(self.fixture), "config", "user.name", "release test"], check=True)
         for relative in (BUILDER, KEY_GUARD, TLS_GUARD, CRYPTO_GUARD, CRYPTO_LOCK, RUNTIME_HELPER):
