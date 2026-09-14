@@ -5,6 +5,7 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd "$script_dir/../.." && pwd -P)"
 helper="$root/scripts/release/reconcile-bootstrap-state.py"
+python3 "$script_dir/test-bootstrap-kms-discovery.py"
 release="$root/scripts/release/node-operator-release.sh"
 workspace="$(mktemp -d)"
 trap 'rm -rf "$workspace"' EXIT
@@ -35,8 +36,12 @@ cat > "$workspace/bin/aws" <<'MOCK'
 set -euo pipefail
 printf '%s\n' "$*" >> "$AWS_CALL_LOG"
 service="$1"; operation="$2"
-if [ "${AWS_NO_KMS:-0}" = 1 ] && [ "$service:$operation" = 'kms:list-keys' ]; then
-  printf '{"Keys":[]}'
+if [ "${AWS_DUPLICATE_KMS:-0}" = 1 ] && [ "$service:$operation" = 'resourcegroupstaggingapi:get-resources' ]; then
+  printf '{"ResourceTagMappingList":[{"ResourceARN":"arn:aws:kms:ap-northeast-2:106760547719:key/key-123"},{"ResourceARN":"arn:aws:kms:ap-northeast-2:106760547719:key/key-123"}]}'
+  exit 0
+fi
+if [ "${AWS_NO_KMS:-0}" = 1 ] && [ "$service:$operation" = 'resourcegroupstaggingapi:get-resources' ]; then
+  printf '{"ResourceTagMappingList":[]}'
   exit 0
 fi
 if [ "${AWS_BUCKET_OBJECT:-0}" = 1 ] && [ "$service:$operation" = 's3api:list-objects-v2' ]; then
@@ -50,13 +55,13 @@ case "$AWS_SCENARIO:$service:$operation" in
   existing:s3api:list-objects-v2) printf '{"Contents":[]}' ;;
   existing:dynamodb:describe-table) printf '{"Table":{"TableArn":"arn:aws:dynamodb:ap-northeast-2:106760547719:table/hoodi-terraform-lock"}}' ;;
   existing:dynamodb:list-tags-of-resource) printf '{"Tags":[{"Key":"Project","Value":"node-operator"},{"Key":"Deployment","Value":"hoodi"},{"Key":"DeploymentRegion","Value":"ap-northeast-2"},{"Key":"ManagedBy","Value":"terraform"},{"Key":"Purpose","Value":"terraform-state-bootstrap"}]}' ;;
-  existing:kms:list-keys) printf '{"Keys":[{"KeyId":"key-123","KeyArn":"arn:aws:kms:ap-northeast-2:106760547719:key/key-123"}]}' ;;
+  existing:resourcegroupstaggingapi:get-resources) printf '{"ResourceTagMappingList":[{"ResourceARN":"arn:aws:kms:ap-northeast-2:106760547719:key/key-123"}]}' ;;
   existing:kms:describe-key) printf '{"KeyMetadata":{"Arn":"arn:aws:kms:ap-northeast-2:106760547719:key/key-123","KeyState":"Enabled","KeyManager":"CUSTOMER"}}' ;;
   existing:kms:list-resource-tags) printf '{"Tags":[{"TagKey":"Project","TagValue":"node-operator"},{"TagKey":"Deployment","TagValue":"hoodi"},{"TagKey":"DeploymentRegion","TagValue":"ap-northeast-2"},{"TagKey":"ManagedBy","TagValue":"terraform"},{"TagKey":"Purpose","TagValue":"terraform-state-bootstrap"}]}' ;;
   existing:kms:list-aliases) printf '{"Aliases":[{"AliasName":"alias/node-operator-hoodi-bootstrap-state","TargetKeyId":"arn:aws:kms:ap-northeast-2:106760547719:key/key-123"}]}' ;;
   none:s3api:list-buckets) printf '{"Buckets":[]}' ;;
   none:dynamodb:describe-table) printf 'An error occurred (ResourceNotFoundException)' >&2; exit 255 ;;
-  none:kms:list-keys) printf '{"Keys":[]}' ;;
+  none:resourcegroupstaggingapi:get-resources) printf '{"ResourceTagMappingList":[]}' ;;
   unowned:s3api:list-buckets) printf '{"Buckets":[{"Name":"node-operator-tfstate-106760547719-apnortheast2"}]}' ;;
   unowned:s3api:get-bucket-tagging) printf '{"TagSet":[{"Key":"Project","Value":"someone-else"}]}' ;;
   *) printf 'unexpected mock AWS call: %s\n' "$AWS_SCENARIO:$service:$operation" >&2; exit 64 ;;
@@ -73,6 +78,10 @@ run_helper() {
 }
 
 run_helper existing > "$workspace/existing.tsv"
+if AWS_DUPLICATE_KMS=1 run_helper existing > "$workspace/duplicate.tsv" 2> "$workspace/duplicate.err"; then
+  fail 'ambiguous KMS discovery was allowed to choose a key'
+fi
+grep -F 'refusing to choose between multiple owned bootstrap KMS keys' "$workspace/duplicate.err" >/dev/null || fail 'ambiguous key rejection was not explicit'
 diff -u <(printf '%s\n' \
   $'aws_s3_bucket.state\tnode-operator-tfstate-106760547719-apnortheast2' \
   $'aws_s3_bucket.state_access_logs\tnode-operator-tfstate-106760547719-apnortheast2-01234567-logs' \
