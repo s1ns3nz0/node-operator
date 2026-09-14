@@ -5,6 +5,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 bash scripts/ci/test-build-release-bundle.sh
 python3 scripts/ci/test-vault-artifact-authority.py
 python3 scripts/ci/test-installer-vault-inputs.py
+python3 scripts/ci/test-kyverno-cli-publication-record.py
+python3 scripts/ci/test-apply-kyverno-bootstrap.py
 bash scripts/ci/test-vault-audit-relay-publication-record.sh
 bash scripts/ci/test-toolchain-publication-record.sh
 python3 scripts/ci/test-prysm-publication-record.py
