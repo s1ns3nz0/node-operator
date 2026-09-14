@@ -100,10 +100,10 @@ class FinalizedAttestationObserver(unittest.TestCase):
         self.assertEqual(checkpoint["proofs"][0]["private"]["aggregation_bit_index"], 0)
         self.assertIn("workload_sha256", checkpoint["proofs"][0])
 
-    def test_two_epoch_threshold_is_explicit_and_default_remains_three(self):
-        self.write_inputs([10, 11])
-        rc, result = observer.observe(self.work, IDENTITY, "http://private.example", "https://public.example", self.workload, self.logs, 1, self.fetch(), required_count=2)
-        self.assertEqual(rc, 0); self.assertEqual(result["required_finalized_epochs"], 2)
+    def test_single_epoch_threshold_is_explicit_and_default_remains_three(self):
+        self.write_inputs([10])
+        rc, result = observer.observe(self.work, IDENTITY, "http://private.example", "https://public.example", self.workload, self.logs, 1, self.fetch(), required_count=1)
+        self.assertEqual(rc, 0); self.assertEqual(result["required_finalized_epochs"], 1)
         rc, result = self.observe(self.fetch())
         self.assertEqual(rc, 75); self.assertEqual(result["required_finalized_epochs"], 3)
 
@@ -111,7 +111,7 @@ class FinalizedAttestationObserver(unittest.TestCase):
         self.write_inputs([10, 10])
         with self.assertRaises(observer.ObservationError):
             observer.observe(self.work, IDENTITY, "http://private.example", "https://public.example", self.workload, self.logs, 1, self.fetch(), required_count=2)
-        for invalid in (True, False, 1, 4):
+        for invalid in (True, False, 0, 4):
             with self.assertRaises(observer.ObservationError):
                 observer.observe(self.work, IDENTITY, "http://private.example", "https://public.example", self.workload, self.logs, 1, self.fetch(), required_count=invalid)
 

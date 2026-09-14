@@ -164,7 +164,7 @@ class Workflow(unittest.TestCase):
         source = (ROOT / ".github/workflows/image-publish.yml").read_text()
         jobs = dict(re.findall(r"^  ([\w-]+):\n([\s\S]*?)(?=^  [\w-]+:\n|\Z)", source.split("jobs:\n", 1)[1], re.M))
         self.assertEqual(set(jobs), {"select", "scanner-build", "scanner-publish", "toolchain-build",
-                                    "toolchain-publish", "fence-security", "fence-publish", "prysm-mtls-publish", "signer-probe-publish", "relay-publish"})
+                                "toolchain-publish", "fence-security", "fence-publish", "prysm-mtls-publish", "signer-probe-publish", "kyverno-cli-publish", "relay-publish"})
         for name in ("select", "scanner-build", "toolchain-build", "fence-security"):
             self.assertNotIn(": write", jobs[name])
         for name in ("scanner-publish", "toolchain-publish", "fence-publish", "prysm-mtls-publish", "signer-probe-publish", "relay-publish"):

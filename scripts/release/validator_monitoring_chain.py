@@ -55,7 +55,7 @@ def _epochs(result: dict[str, Any], expected: dict[str, str]) -> list[int]:
     if any(identity[field] != expected[field] for field in IDENTITY_FIELDS) or any(not isinstance(identity[field], str) or not identity[field] for field in RESULT_EXTRA_FIELDS):
         raise ChainMonitoringError("observer identity differs from expected context")
     count = result["required_finalized_epochs"]
-    if type(count) is not int or count not in (2, 3) or type(result["complete"]) is not bool:
+    if type(count) is not int or count not in (1, 2, 3) or type(result["complete"]) is not bool:
         raise ChainMonitoringError("invalid observer threshold state")
     rows = result["consecutive_finalized_epochs"]
     if not isinstance(rows, list) or len(rows) > MAX_EPOCHS:

@@ -36,6 +36,7 @@ resume_helper="$source_root/scripts/release/interactive-hoodi-resume.py"
 artifact_inventory="$source_root/scripts/release/installer_artifact_inventory.py"
 existing_validator_verify="$source_root/scripts/release/verify-existing-hoodi-validator.py"
 collector_apply="$source_root/scripts/release/apply-validator-log-collector.py"
+kyverno_apply="$source_root/scripts/release/apply-kyverno-bootstrap.py"
 for file in "$release" "$prepare" "$keystore" "$deposit_validate" "$vault_tls" "$resume_helper" "$existing_validator_verify"; do [ -x "$file" ] || { printf 'missing executable in release bundle: %s\n' "$file" >&2; exit 65; }; done
 [ -f "$artifact_inventory" ] || { printf '%s\n' 'release bundle lacks installer artifact authority inventory' >&2; exit 65; }
 # Bind the release identity before either the fresh or resume path can invoke
@@ -182,7 +183,7 @@ if [ -n "$env_file" ]; then
   while IFS='=' read -r key value; do
     key="${key%%[[:space:]]*}"; value="${value##[[:space:]]}"
     case "$key" in ''|'#'*) continue ;; esac
-    case "$key" in WORK_DIR) WORK_DIR="$value" ;; REGION) DEFAULT_REGION="$value" ;; DEPLOYMENT_NAME) DEFAULT_DEPLOYMENT_NAME="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; EXISTING_KEYSTORE_DIR) DEFAULT_KEYSTORE_DIR="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; CLIENT_CHART_SOURCE_REGION) DEFAULT_CLIENT_CHART_SOURCE_REGION="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; CERT_MANAGER_CHART_DIGEST) DEFAULT_CERT_MANAGER_CHART_DIGEST="$value" ;; DEPOSIT_TX_HASH) DEFAULT_DEPOSIT_TX_HASH="$value" ;; HOODI_PUBLIC_RPC_URL) DEFAULT_HOODI_PUBLIC_RPC_URL="$value" ;; HOODI_PUBLIC_BEACON_URL) DEFAULT_HOODI_PUBLIC_BEACON_URL="$value" ;; esac
+    case "$key" in WORK_DIR) WORK_DIR="$value" ;; REGION) DEFAULT_REGION="$value" ;; DEPLOYMENT_NAME) DEFAULT_DEPLOYMENT_NAME="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; EXISTING_KEYSTORE_DIR) DEFAULT_KEYSTORE_DIR="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; CLIENT_CHART_SOURCE_REGION) DEFAULT_CLIENT_CHART_SOURCE_REGION="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; CERT_MANAGER_CHART_DIGEST) DEFAULT_CERT_MANAGER_CHART_DIGEST="$value" ;; DEPOSIT_TX_HASH) DEFAULT_DEPOSIT_TX_HASH="$value" ;; HOODI_PUBLIC_RPC_URL) DEFAULT_HOODI_PUBLIC_RPC_URL="$value" ;; HOODI_PUBLIC_BEACON_URL) DEFAULT_HOODI_PUBLIC_BEACON_URL="$value" ;; REQUIRED_FINALIZED_EPOCHS) DEFAULT_REQUIRED_FINALIZED_EPOCHS="$value" ;; esac
   done < "$env_file"
 fi
 DEFAULT_REGION="${DEFAULT_REGION:-ap-northeast-2}"
@@ -210,6 +211,8 @@ DEFAULT_CERT_MANAGER_CHART_DIGEST="${DEFAULT_CERT_MANAGER_CHART_DIGEST:-}"
 DEFAULT_DEPOSIT_TX_HASH="${DEFAULT_DEPOSIT_TX_HASH:-}"
 DEFAULT_HOODI_PUBLIC_RPC_URL="${DEFAULT_HOODI_PUBLIC_RPC_URL:-}"
 DEFAULT_HOODI_PUBLIC_BEACON_URL="${DEFAULT_HOODI_PUBLIC_BEACON_URL:-https://ethereum-hoodi-beacon-api.publicnode.com}"
+DEFAULT_REQUIRED_FINALIZED_EPOCHS="${DEFAULT_REQUIRED_FINALIZED_EPOCHS:-${REQUIRED_FINALIZED_EPOCHS:-3}}"
+case "$DEFAULT_REQUIRED_FINALIZED_EPOCHS" in 1|2|3) ;; *) printf '%s\n' 'REQUIRED_FINALIZED_EPOCHS must be 1, 2, or 3' >&2; exit 64 ;; esac
 
 [ -d "$bundle_root/source" ] && [ -f "$bundle_root/bundle-manifest.json" ] || {
   printf '%s\n' 'a verified v0.1.20 release bundle is required' >&2; exit 65;
@@ -241,7 +244,8 @@ run_observation_phase() {
   step 'Observing finalized validator duties and archived signing activity'
   if ! "${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 \
     python3 -I -B "$source_root/scripts/release/run-hoodi-validator-observation.py" \
-    --bundle-root "$bundle_root" --work-dir "$output_dir" --public-beacon-url "$DEFAULT_HOODI_PUBLIC_BEACON_URL"; then
+    --bundle-root "$bundle_root" --work-dir "$output_dir" --public-beacon-url "$DEFAULT_HOODI_PUBLIC_BEACON_URL" \
+    --required-finalized-epochs "$DEFAULT_REQUIRED_FINALIZED_EPOCHS"; then
     printf '%s\n' 'PENDING: finalized-duty, archive, Vault challenge, or delivery-metadata gate did not pass; lifecycle remains unchanged.' >&2
     return 75
   fi
@@ -317,6 +321,8 @@ if [ "$lifecycle_phase" = audit-started ]; then
   lifecycle_phase=audit-complete
 fi
 if [ "$lifecycle_phase" = vault-complete ]; then
+  step 'Installing verified private Kyverno before dependent policy consumers'
+  "${selected_tunnel_env[@]}" python3 -I -B "$kyverno_apply" --bundle-root "$bundle_root" --state-dir "$output_dir" --work-dir "$output_dir/deployment-work" --inputs-dir "$output_dir/inputs" --session "$session" --baseline-config "$selected_baseline" --account "$account" --region "$region" --deployment "$deployment_name" --profile "$selected_profile" --release-sha "$release_revision" || return 65
   step 'Applying verified validator log collector'
   "${selected_tunnel_env[@]}" python3 -I -B "$collector_apply" --bundle-root "$bundle_root" --state-dir "$output_dir" --work-dir "$output_dir/deployment-work" --inputs-dir "$output_dir/inputs" --session "$session" --baseline-config "$selected_baseline" --account "$account" --region "$region" --deployment "$deployment_name" --validator-set "$validator_set" --profile "$selected_profile" --release-sha "$release_revision" || return 65
   advance_lifecycle collector-complete || return $?
@@ -365,11 +371,23 @@ client_manifest="$(dirname "$inputs")/validator-deployment/client-and-fence.yaml
   printf '%s\n' 'staged validator runtime manifests are missing' >&2
   exit 65
 }
+baseline_output="$output_dir/deployment-work/baseline-output.json"
+storage_class_template="$source_root/deploy/validator/storage-class.yaml"
+storage_class_helper="$source_root/scripts/ops/ensure-validator-encrypted-storageclass.sh"
+[ -f "$baseline_output" ] && [ ! -L "$baseline_output" ] && [ -f "$storage_class_template" ] && [ ! -L "$storage_class_template" ] && [ -x "$storage_class_helper" ] || {
+  printf '%s\n' 'verified baseline EBS output or validator StorageClass helper is unavailable; runtime was not applied' >&2
+  exit 65
+}
+validator_ebs_kms_key_arn="$(jq -er '.ebs_kms_key_arn.value | select(type == "string" and test("^arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[^/]+$"))' "$baseline_output")" || {
+  printf '%s\n' 'verified baseline output lacks a valid EBS CMK ARN; runtime was not applied' >&2
+  exit 65
+}
 printf '%s\n' 'Synchronizing the public Vault CA trust anchor and applying non-secret manifests.' >&2
 # The custody receipt proves secret onboarding and cleanup, not Kubernetes
 # publication. Reapply this non-secret ConfigMap on every runtime-stage retry.
 known_clients_file="$output_dir/ceremony/known-clients.txt"
 [ -f "$known_clients_file" ] && [ ! -L "$known_clients_file" ] || { printf '%s\n' 'verified public known-clients output is missing; runtime was not applied' >&2; return 65; }
+"${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$storage_class_helper" --template "$storage_class_template" --kms-key-arn "$validator_ebs_kms_key_arn"
 "${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 kubectl -n validator-operations create configmap "validator-${validator_set}-known-clients" --from-file="known-clients=$known_clients_file" --dry-run=client -o yaml | "${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 kubectl apply -f - >/dev/null
 "${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$source_root/scripts/ops/ensure-vault-agent-ca.sh" --namespace validator-operations --namespace node-operator
 cat "$runtime_manifest" "$client_manifest" | "${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 kubectl apply -f - >/dev/null

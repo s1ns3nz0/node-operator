@@ -99,7 +99,7 @@ class OnboardingLifecycleTest(unittest.TestCase):
             "  elif [ \"${VAULT_TOKEN:-}\" = root-sentinel ] && [ \"${3:-}\" = -self ]; then\n"
             "    [ \"${FAIL_ROOT_REVOKE:-0}\" != 1 ] || exit 9\n"
             "  else exit 64; fi ;;\n"
-            "kv:get) name=${!#}; name=${name##*/}; if [ -f \"$RECORD_STATE/$name.json\" ]; then printf '{\\\"data\\\":{\\\"data\\\":'; cat \"$RECORD_STATE/$name.json\"; printf '}}\\n'; elif [ \"${READ_ERROR_RECORD:-}\" = \"$name\" ]; then printf 'permission denied\\n' >&2; exit 2; else printf 'No value found at %s\\n' \"${!#}\" >&2; exit 2; fi ;;\n"
+            "kv:get) name=${!#}; name=${name##*/}; if [ -f \"$RECORD_STATE/$name.json\" ]; then printf '{\\\"data\\\":{\\\"data\\\":'; cat \"$RECORD_STATE/$name.json\"; printf '}}\\n'; elif [ \"${READ_ERROR_RECORD:-}\" = \"$name\" ]; then printf 'permission denied\\n' >&2; exit 2; else missing_path=\"${MISSING_RESPONSE_PATH:-node-operator-runtime/data/validators/hoodi/hoodi-001/runtime/$name}\"; printf 'No value found at %s\\n' \"$missing_path\" >&2; exit \"${MISSING_STATUS:-2}\"; fi ;;\n"
             "kv:metadata) exit 2 ;;\n"
             "kv:put) name=${4##*/}; source=${5#@}; if [ -f \"$RECORD_STATE/$name.json\" ]; then exit 9; fi; cp \"$source\" \"$RECORD_STATE/$name.json\"; [ \"${CAS_RACE_RECORD:-}\" != \"$name\" ] || exit 9 ;;\n"
             "write:-format=json) printf '%s\\n' '{\"data\":{\"private_key\":\"key\",\"certificate\":\"cert\",\"ca_chain\":[\"ca\"]}}' ;;\n"
@@ -411,6 +411,25 @@ class OnboardingLifecycleTest(unittest.TestCase):
         self.assertFalse(any(line.startswith("bootstrap") for line in calls))
         self.assertFalse(any(line.startswith("kv put") for line in calls))
         self.assertIn("stored custody record could not be read: keystore", result.stderr)
+
+    def test_only_exact_physical_kv2_absence_is_permitted_before_writes(self):
+        physical = "node-operator-runtime/data/validators/hoodi/hoodi-001/runtime/keystore"
+        cases = {
+            "logical-path": ("node-operator-runtime/validators/hoodi/hoodi-001/runtime/keystore", "2"),
+            "unrelated-path": ("node-operator-runtime/data/other/keystore", "2"),
+            "wrong-status": (physical, "1"),
+        }
+        for name, (path, status) in cases.items():
+            with self.subTest(name=name):
+                result = self.invoke("share\nkeystore-password\n", refresh=False,
+                                     MISSING_RESPONSE_PATH=path, MISSING_STATUS=status)
+                self.assertEqual(result.returncode, 69, result.stderr)
+                calls = self.trace_lines()
+                self.assertFalse(any(line.startswith("bootstrap") for line in calls))
+                self.assertFalse(any(line.startswith("kv put") for line in calls))
+                self.assertIn("token revoke -self", calls)
+                self.assertIn("stored custody record could not be read: keystore", result.stderr)
+                self.trace.unlink(missing_ok=True)
 
     def test_cas_race_reloads_and_validates_full_winning_record_set(self):
         result = self.invoke("share\nkeystore-password\n", refresh=False, CAS_RACE_RECORD="password")

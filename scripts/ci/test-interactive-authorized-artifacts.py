@@ -22,13 +22,15 @@ def authority():
 def fixture(work):
     bundle = work / "bundle"; source = bundle / "source"; release = source / "scripts/release"; ops = source / "scripts/ops"
     release.mkdir(parents=True); ops.mkdir(parents=True)
+    (source / "deploy/validator").mkdir(parents=True)
+    shutil.copy2(ROOT / "deploy/validator/storage-class.yaml", source / "deploy/validator/storage-class.yaml")
     (bundle / "bundle-manifest.json").write_text('{"source_revision":"' + "a" * 40 + '"}\n')
     shutil.copy(ROOT / "scripts/release/interactive-hoodi-release.sh", release / "interactive-hoodi-release.sh"); (release / "interactive-hoodi-release.sh").chmod(0o755)
     exe(release / "node-operator-release.sh", "#!/usr/bin/env bash\n[ \"$1\" = verify ] && exit 0\nexit 99\n")
     exe(release / "installer_artifact_inventory.py", "#!/usr/bin/env python3\nprint(" + repr(authority()) + ")\n")
     prepare = "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" > \"$PREPARE_LOG\"\nout=''; while [ \"$#\" -gt 0 ]; do [ \"$1\" = --output-dir ] && out=$2; shift; done\nif [ \"${PREPARE_EXIT:-97}\" = 0 ]; then mkdir -p \"$out/zero-resource\" \"$out/validator-deployment\"; printf '{\"name\":\"node-op-auth\"}\\n' > \"$out/zero-resource/baseline.tfvars.json\"; printf '{\"baseline_config\":\"%s/zero-resource/baseline.tfvars.json\"}\\n' \"$out\" > \"$out/zero-resource/zero-resource-inputs.json\"; printf '{\"zero_resource_inputs\":\"%s/zero-resource/zero-resource-inputs.json\"}\\n' \"$out\" > \"$out/hoodi-zero-release-inputs.json\"; : > \"$out/validator-deployment/runtime.yaml\"; : > \"$out/validator-deployment/client-and-fence.yaml\"; exit 0; fi\nexit \"${PREPARE_EXIT:-97}\"\n"
     exe(release / "prepare-hoodi-zero-release-inputs.sh", prepare)
-    deploy = "#!/usr/bin/env bash\nprintf '%s %s\\n' \"$1\" \"${2:-}\" >> \"$RELEASE_LOG\"\n[ \"$1\" = deploy ] || exit 0\nwork=''; session=''; while [ \"$#\" -gt 0 ]; do [ \"$1\" = --work-dir ] && work=$2; [ \"$1\" = --private-eks-session-handoff ] && session=$2; shift; done\nmkdir -p \"$work\"; [ -z \"$session\" ] || printf '{}' > \"$session\"; printf '{\"hoodi_subnet_ids\":[\"subnet-a\"]}\\n' > \"$work/foundation-output.json\"; printf '{\"bucket\":\"bucket\",\"dynamodb_table\":\"table\",\"kms_key_id\":\"key\"}\\n' > \"$work/bootstrap-output.json\"; printf '{\"artifacts\":{\"vault-chart\":{\"version\":\"0.31.0\",\"manifest_digest\":\"sha256:8888888888888888888888888888888888888888888888888888888888888888\"},\"cert-manager-chart\":{\"manifest_digest\":\"sha256:9999999999999999999999999999999999999999999999999999999999999999\"}}}\\n' > \"$work/vault-artifact-mirror-receipt.json\"\n"
+    deploy = "#!/usr/bin/env bash\nprintf '%s %s\\n' \"$1\" \"${2:-}\" >> \"$RELEASE_LOG\"\n[ \"$1\" = deploy ] || exit 0\nwork=''; session=''; while [ \"$#\" -gt 0 ]; do [ \"$1\" = --work-dir ] && work=$2; [ \"$1\" = --private-eks-session-handoff ] && session=$2; shift; done\nmkdir -p \"$work\"; [ -z \"$session\" ] || printf '{}' > \"$session\"; printf '{\"hoodi_subnet_ids\":[\"subnet-a\"]}\\n' > \"$work/foundation-output.json\"; printf '{\"ebs_kms_key_arn\":{\"value\":\"arn:aws:kms:ap-northeast-2:123456789012:key/12345678-1234-1234-1234-123456789abc\"}}\\n' > \"$work/baseline-output.json\"; printf '{\"bucket\":\"bucket\",\"dynamodb_table\":\"table\",\"kms_key_id\":\"key\"}\\n' > \"$work/bootstrap-output.json\"; printf '{\"artifacts\":{\"vault-chart\":{\"version\":\"0.31.0\",\"manifest_digest\":\"sha256:8888888888888888888888888888888888888888888888888888888888888888\"},\"cert-manager-chart\":{\"manifest_digest\":\"sha256:9999999999999999999999999999999999999999999999999999999999999999\"}}}\\n' > \"$work/vault-artifact-mirror-receipt.json\"\n"
     deploy = deploy.replace('[ "$1" = deploy ] || exit 0', '''if [ "$1" = custody ]; then
 ceremony=''; while [ "$#" -gt 0 ]; do [ "$1" = --ceremony-dir ] && ceremony=$2; shift; done
 mkdir -p "$ceremony"; printf 'synthetic-public-fingerprint\\n' > "$ceremony/known-clients.txt"; exit 0
@@ -55,6 +57,7 @@ raise SystemExit(65 if sys.argv[1:2] == ['bind-continuation'] and os.environ.get
     # before the resumed validator runtime.  This boundary test doubles only
     # its external apply, retaining an argument log as the invocation proof.
     exe(release / "apply-validator-log-collector.py", "#!/usr/bin/env python3\nimport os, sys\nopen(os.environ['COLLECTOR_LOG'], 'w').write(' '.join(sys.argv[1:]))\nraise SystemExit(int(os.environ.get('COLLECTOR_RC', '0')))\n")
+    exe(release / "apply-kyverno-bootstrap.py", "#!/usr/bin/env python3\nimport os, sys\nopen(os.environ['COLLECTOR_LOG'], 'a').write('kyverno ' + ' '.join(sys.argv[1:]) + '\\n')\nraise SystemExit(int(os.environ.get('KYVERNO_RC', '0')))\n")
     exe(release / "custody_verifier_runtime.py", "#!/usr/bin/env python3\nimport os, sys\nraise SystemExit(int(os.environ.get('CUSTODY_PREFLIGHT_RC', '0')))\n")
     exe(release / "run-hoodi-validator-observation.py", "#!/usr/bin/env python3\nimport os, sys\nwith open(os.environ['EKS_LOG'], 'a') as log: log.write('observe-only:' + ' '.join(sys.argv[1:]) + '\\n')\nraise SystemExit(int(os.environ.get('OBSERVE_RC', '75')))\n")
     exe(ops / "generate-hoodi-validator-keystore.sh", "#!/usr/bin/env bash\nmkdir -p \"$2/validator_keys\"; jq -n --arg p \"$(printf 'a%.0s' {1..96})\" '{version:4,pubkey:$p,path:\"m/12381/3600/0/0/0\",uuid:\"00000000-0000-4000-8000-000000000000\",crypto:{kdf:{function:\"scrypt\",params:{dklen:32,n:262144,r:8,p:1,salt:(\"a\"*64)},message:\"\"},checksum:{function:\"sha256\",params:{},message:(\"b\"*64)},cipher:{function:\"aes-128-ctr\",params:{iv:(\"c\"*32)},message:(\"d\"*64)}}}' > \"$2/validator_keys/keystore-test.json\"; printf '{}' > \"$2/deposit_data-1.json\"\n")
@@ -66,6 +69,7 @@ raise SystemExit(65 if sys.argv[1:2] == ['bind-continuation'] and os.environ.get
     exe(ops / "verify-hoodi-vault-readiness.sh", "#!/usr/bin/env bash\nexit \"${READINESS_RC:-0}\"\n")
     exe(ops / "with-private-eks.sh", "#!/usr/bin/env bash\nprintf '%s\\n' \"$AWS_PROFILE|$AWS_REGION|$AWS_DEFAULT_REGION|$AWS_EC2_METADATA_DISABLED|$EKS_CLUSTER_NAME|$SSM_OPS_INSTANCE_ID|${AWS_ACCESS_KEY_ID:-}|${KUBECONFIG:-}\" >> \"$EKS_LOG\"\n[ \"$1\" = -- ] && shift\nKUBECONFIG=generated-kube \"$@\"\n")
     exe(ops / "ensure-vault-agent-ca.sh", "#!/usr/bin/env bash\nprintf 'ca:%s\\n' \"${KUBECONFIG:-}\" >> \"$EKS_LOG\"\n")
+    exe(ops / "ensure-validator-encrypted-storageclass.sh", "#!/usr/bin/env bash\nprintf 'validator-storageclass:%s\\n' \"$*\" >> \"$EKS_LOG\"\n")
     fake = work / "bin"; fake.mkdir()
     (source / ".ci/gitops").mkdir(parents=True); (source / ".ci/gitops/approved-oci-artifacts.json").write_text("{}\n")
     (bundle / "rendered").mkdir()
@@ -177,7 +181,10 @@ def postplatform_session_boundary():
         assert outer_ready == "chosen|ap-northeast-2|ap-northeast-2|true|node-op-auth|i-0123456789abcdef0||", outer_ready
         # The first failing publication is now known-clients; runtime/CA must
         # not proceed when either side of that ConfigMap pipeline fails.
-        assert lines.count(outer_ready) == 3, lines
+        assert lines.count(outer_ready) == 4, lines
+        storage_call = next(index for index, line in enumerate(lines) if line.startswith("validator-storageclass:"))
+        runtime_publish = next(index for index, line in enumerate(lines) if line == "kubectl:generated-kube")
+        assert storage_call < runtime_publish, lines
         assert lines.count("kubectl:generated-kube") == 2, lines
         assert not any(line.startswith("ca:") for line in lines), lines
 
@@ -213,6 +220,8 @@ def bound_continuation_resume():
             (inputs / "hoodi-zero-release-inputs.json").write_text(json.dumps({"validator_set":"hoodi-001"}))
             manifests = inputs / "validator-deployment"; manifests.mkdir()
             for name in ("runtime.yaml", "client-and-fence.yaml"): (manifests / name).write_text("# synthetic\n")
+            deployment = selected / "deployment-work"; deployment.mkdir(mode=0o700)
+            (deployment / "baseline-output.json").write_text('{"ebs_kms_key_arn":{"value":"arn:aws:kms:ap-northeast-2:123456789012:key/12345678-1234-1234-1234-123456789abc"}}')
             (selected / "ceremony").mkdir(mode=0o700)
             (selected / "ceremony/known-clients.txt").write_text("synthetic-public-fingerprint\n")
             saved_phase = "custody-started" if phase.endswith("-unproven") else phase
@@ -228,6 +237,8 @@ def bound_continuation_resume():
                 assert code == 75 and "custody completion is unproven" in out, (code, out)
             else:
                 assert code == 76 and (work / "eks.log").exists(), (code, out)
+                assert "validator-storageclass:--template" in (work / "eks.log").read_text(), (code, out)
+                assert "--kms-key-arn arn:aws:kms:ap-northeast-2:123456789012:key/12345678-1234-1234-1234-123456789abc" in (work / "eks.log").read_text(), (code, out)
                 collector = (work / "collector.log")
                 # Collection now completes before the audit and custody
                 # ceremonies. A resume already past custody must never replay
@@ -286,6 +297,7 @@ def actual_custody_receipt_resume_contract():
             for name in ("runtime.yaml", "client-and-fence.yaml"):
                 (handoff_dir / name).write_text("# staged\n")
             deployment = selected / "deployment-work"; deployment.mkdir(mode=0o700)
+            (deployment / "baseline-output.json").write_text('{"ebs_kms_key_arn":{"value":"arn:aws:kms:ap-northeast-2:123456789012:key/12345678-1234-1234-1234-123456789abc"}}')
             manifest = bundle / "bundle-manifest.json"
             subprocess.run(["python3", str(helper), "record", "--work-dir", str(selected), "--manifest", str(manifest), "--account", ACCOUNT, "--region", REGION, "--deployment", DEPLOYMENT, "--inputs", str(input_file), "--work", str(deployment), "--session", str(selected / "private-eks-session.json")], check=True)
             for phase in ("infrastructure-complete", "platform-started", "platform-complete"):
@@ -349,18 +361,28 @@ def actual_custody_receipt_resume_contract():
                 assert code == 75 and "reconciled without reactivation" in out, (code, out)
                 assert json.loads((selected / "interactive-resume.json").read_text())["phase"] == "observing"
                 assert "observe-only:" in (work / "eks.log").read_text() and not (work / "release.log").exists(), (code, out)
-                code, out = run(script, fake, work, "RESUME\n", WORK_DIR=str(selected), AWS_PROFILE="chosen", OBSERVE_RC="0")
+                assert "--required-finalized-epochs 3" in (work / "eks.log").read_text(), (code, out)
+                code, out = run(script, fake, work, "RESUME\n", WORK_DIR=str(selected), AWS_PROFILE="chosen", REQUIRED_FINALIZED_EPOCHS="1", OBSERVE_RC="0")
                 assert code == 0 and "delivery-metadata gates currently pass" in out, (code, out)
                 assert json.loads((selected / "interactive-resume.json").read_text())["phase"] == "complete", (code, out)
                 assert (work / "eks.log").read_text().count("observe-only:") == 2
+                assert "--required-finalized-epochs 1" in (work / "eks.log").read_text(), (code, out)
                 assert not (work / "release.log").exists(), (code, out)
                 activation_receipt.write_text(activation_receipt.read_text() + "\n")
                 code, out = run(script, fake, work, "", WORK_DIR=str(selected), AWS_PROFILE="chosen")
                 assert code == 65 and "activation receipt changed" in out, (code, out)
 
+def invalid_finalized_duty_threshold_is_rejected_before_aws():
+    with tempfile.TemporaryDirectory() as temporary:
+        work = pathlib.Path(temporary); _, fake, script = fixture(work)
+        code, out = run(script, fake, work, "", REQUIRED_FINALIZED_EPOCHS="4")
+        assert code == 64 and "REQUIRED_FINALIZED_EPOCHS must be 1, 2, or 3" in out, (code, out)
+        assert not (work / "aws.log").exists(), (code, out)
+
 bound_continuation_resume()
 vault_initialization_resume_verification()
 actual_custody_receipt_resume_contract()
+invalid_finalized_duty_threshold_is_rejected_before_aws()
 continuation_binding_failure()
 custody_preflight_failure()
 positive()

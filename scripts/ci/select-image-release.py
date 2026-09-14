@@ -37,7 +37,7 @@ SIGNING = {
 def select(paths=(), target=None, all_inputs=False):
     paths = set(paths)
     all_inputs = all_inputs or bool(paths & SHARED) or target == "all"
-    allowed = {"all", "installer-prerequisites", "scanner", "toolchains", "fence", "relay", "prysm-mtls", "signer-probe"} | {item["image"] for item in TOOLCHAINS}
+    allowed = {"all", "installer-prerequisites", "scanner", "toolchains", "fence", "relay", "prysm-mtls", "signer-probe", "kyverno-cli"} | {item["image"] for item in TOOLCHAINS}
     if target is not None and target not in allowed:
         raise ValueError("unknown image release target")
     scanner = all_inputs or target == "scanner" or bool(paths & IMAGE_SBOM_INPUTS) or any(
@@ -78,8 +78,14 @@ def select(paths=(), target=None, all_inputs=False):
             "scripts/release/publish-signer-identity-probe.sh",
             "scripts/release/fence_build_inputs.py",
         } for path in paths)
+    kyverno_cli = all_inputs or target == "kyverno-cli" or bool(paths & SIGNING) or any(
+        path.startswith(".ci/kyverno-cli/") or path in {
+            "scripts/release/kyverno_cli_publication_record.py",
+            "scripts/release/generate-kyverno-cli-manifest-approval.py",
+            "scripts/release/publish-kyverno-cli-image.sh",
+        } for path in paths)
     return {"scanner": bool(scanner), "toolchains": bool(selected), "fence": bool(fence), "relay": bool(relay),
-            "prysm_mtls": bool(prysm_mtls), "signer_probe": bool(signer_probe),
+            "prysm_mtls": bool(prysm_mtls), "signer_probe": bool(signer_probe), "kyverno_cli": bool(kyverno_cli),
             "toolchain_matrix": {"include": selected}}
 
 

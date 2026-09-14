@@ -172,8 +172,8 @@ class ObservationPipeline(unittest.TestCase):
             def __exit__(self, *args): owner.closed += 1
         return Reader()
 
-    def observe(self):
-        def actual(*args): return runner.observer.observe(*args, fetch=self.fetch)
+    def observe(self, required_count=3):
+        def actual(*args): return runner.observer.observe(*args, fetch=self.fetch, required_count=required_count)
         return runner.observe_once(self.context, self.work, "https://public.example", 19501, self.beacon, self.reader, actual,
                                    vault_audit_verifier=self.audit)
 
@@ -199,6 +199,15 @@ class ObservationPipeline(unittest.TestCase):
         self.assertEqual((self.entered, self.closed), (2, 2))
         checkpoint = json.loads((self.work / "evidence/observation/finalized-attestation-observer.json").read_text())
         self.assertEqual(len(checkpoint["proofs"]), 3)
+
+    def test_one_explicit_finalized_duty_retains_delivery_and_vault_proof_predicates(self):
+        rc, proof = self.observe(required_count=1)
+        self.assertEqual(rc, 0)
+        self.assertTrue(proof["duties_complete"])
+        self.assertEqual(proof["required_finalized_epochs"], 1)
+        self.assertEqual(proof["consecutive_finalized_epochs"], ["10", "11"])
+        self.assertEqual(proof["operational_log_delivery"]["result"], "PASS_OPERATIONAL_METADATA")
+        self.assertEqual(proof["vault_audit"]["state"], "matched")
 
     def test_wrong_pod_role_is_rejected_and_reader_is_cleaned(self):
         self.role = "wrong-role"
@@ -272,7 +281,7 @@ class ObservationPipeline(unittest.TestCase):
 
     def test_continuous_mode_rechecks_after_pass_and_reports_unavailable_fresh_failure(self):
         trusted = {"consecutive_finalized_epochs":["10", "11"], "operational_log_delivery":{"pending":[]}}
-        fresh_result = {"schema_version":1, "identity":self.identity | {"private_beacon_url":"http://private.example", "public_beacon_url":"https://public.example", "workload_proof_path":"/safe/workload.json", "log_delivery_proof_path":"/safe/logs.json"}, "consecutive_finalized_epochs":["10", "11"], "required_finalized_epochs":2, "complete":True}
+        fresh_result = {"schema_version":1, "identity":self.identity | {"private_beacon_url":"http://private.example", "public_beacon_url":"https://public.example", "workload_proof_path":"/safe/workload.json", "log_delivery_proof_path":"/safe/logs.json"}, "consecutive_finalized_epochs":["10"], "required_finalized_epochs":1, "complete":True}
         output = io.StringIO()
         calls = []
         def fresh(*args, **kwargs):
@@ -285,7 +294,7 @@ class ObservationPipeline(unittest.TestCase):
              patch.object(runner.observer, "validate_url", return_value="https://public.example"), \
              patch.object(runner, "observe_once", side_effect=fresh) as observed, \
              patch.object(runner.time, "sleep", side_effect=[None, KeyboardInterrupt]), \
-             patch.object(runner.sys, "argv", ["runner", "--bundle-root", str(self.work), "--work-dir", str(self.work), "--public-beacon-url", "https://public.example", "--continuous", "--required-finalized-epochs", "2", "--emit-emf"]), \
+             patch.object(runner.sys, "argv", ["runner", "--bundle-root", str(self.work), "--work-dir", str(self.work), "--public-beacon-url", "https://public.example", "--continuous", "--required-finalized-epochs", "1", "--emit-emf"]), \
              patch.dict(os.environ, {"PRIVATE_EKS_SESSION":"1"}, clear=False), contextlib.redirect_stdout(output):
             self.assertEqual(runner.main(), 75)
         self.assertEqual(observed.call_count, 2)
@@ -293,7 +302,7 @@ class ObservationPipeline(unittest.TestCase):
         states = [record["state"] for record in records if "state" in record]
         self.assertEqual(states, ["verified", "unavailable"])
         verified = next(record for record in records if record.get("state") == "verified")
-        self.assertEqual(verified["required_finalized_epochs"], 2)
+        self.assertEqual(verified["required_finalized_epochs"], 1)
         self.assertIsInstance(verified["timestamp_ms"], int)
         emf = [record for record in records if "ChainObservationAvailable" in record]
         self.assertEqual([record["ChainObservationAvailable"] for record in emf], [1, 0])

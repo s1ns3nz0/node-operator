@@ -87,7 +87,9 @@ if [ "$audit_receipt_mode" = true ]; then marker="$(openssl rand -hex 32)"; afte
 challenge="$(VAULT_TOKEN="$root_token" vault write -format=json sys/audit-hash/validator-socket input="$marker")"; unset marker
 marker_hmac="$(jq -er '.data.hash | select(test("^hmac-sha256:[0-9a-f]{64}$"))' <<<"$challenge")"; request_id="$(jq -er '.request_id | select(test("^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$"))' <<<"$challenge")"; unset challenge; fi
 VAULT_TOKEN="$root_token" vault token revoke -self >/dev/null 2>&1 || { printf '%s\n' 'generated root token revocation was not confirmed' >&2; exit 75; }
-if lookup_output="$(VAULT_TOKEN="$root_token" vault token lookup -self -format=json 2>&1)"; then
+# Without a token argument, lookup uses auth/token/lookup-self. Unlike revoke,
+# lookup does not support -self; that flag fails locally before contacting Vault.
+if lookup_output="$(VAULT_TOKEN="$root_token" vault token lookup -format=json 2>&1)"; then
   printf '%s\n' 'generated root token revocation rejection was not confirmed' >&2; exit 75
 fi
 # A transport or server failure is not evidence of revocation. Vault CLI exposes

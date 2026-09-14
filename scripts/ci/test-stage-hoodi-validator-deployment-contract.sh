@@ -4,6 +4,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 script="$root/scripts/release/stage-hoodi-validator-deployment.sh"
 policy="$root/deploy/validator/vault-runtime-egress-policy.yaml"
+service_accounts="$root/deploy/validator/service-accounts.yaml"
 scratch="$(mktemp -d /private/tmp/node-operator-stage-validator.XXXXXX)"
 tools="$scratch/tools"; mkdir "$tools"
 handoff_dir="$scratch/handoff"; mkdir -m 700 "$handoff_dir"
@@ -34,12 +35,16 @@ EOF
 chmod 700 "$tools/kubectl"
 
 test -f "$policy"
+test -f "$service_accounts"
+grep -Fq -- '--ebs-kms-key-arn' "$script" || { printf '%s\n' 'stage command does not accept an explicit validator EBS CMK ARN' >&2; exit 1; }
+grep -Fq 'ensure-validator-encrypted-storageclass.sh' "$script" || { printf '%s\n' 'stage command does not invoke the validator StorageClass helper' >&2; exit 1; }
 grep -Fq 'vault-runtime-egress-policy.yaml' "$script" || { printf '%s\n' 'stage command does not install the dedicated Vault egress policy' >&2; exit 1; }
+grep -Fq 'service-accounts.yaml' "$script" || { printf '%s\n' 'stage command does not install dedicated ServiceAccounts' >&2; exit 1; }
 # shellcheck disable=SC2016 # literal source contract, not interpolation
 grep -Fq 'field-manager=node-operator-release-stage -f "$vault_egress_policy"' "$script" || { printf '%s\n' 'stage command does not apply Vault egress before workloads' >&2; exit 1; }
 
 KUBECTL_TRACE="$scratch/kubectl.trace" PATH="$tools:$PATH" PRIVATE_EKS_SESSION=1 "$script" plan --handoff "$handoff" --private-eks-session-handoff "$session" >/dev/null
-rg -F -- "--server-side --field-manager=node-operator-release-stage --dry-run=server -f $policy -f $runtime -f $client" "$scratch/kubectl.trace" >/dev/null
+rg -F -- "--server-side --field-manager=node-operator-release-stage --dry-run=server -f $service_accounts -f $policy -f $runtime -f $client" "$scratch/kubectl.trace" >/dev/null
 sed -i.bak 's/\*\x27 get \x27\*) exit 1 ;;/\*\x27 get \x27\*) exit 0 ;;/ ' "$tools/kubectl"
 if KUBECTL_TRACE="$scratch/existing.trace" PATH="$tools:$PATH" PRIVATE_EKS_SESSION=1 "$script" plan --handoff "$handoff" --private-eks-session-handoff "$session" >"$scratch/existing.out" 2>&1; then
   printf '%s\n' 'existing validator target unexpectedly accepted' >&2; exit 1
