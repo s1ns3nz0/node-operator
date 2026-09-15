@@ -48,7 +48,7 @@ def assess(root,evidence,input_sha):
     if s.get("bomFormat")!="CycloneDX" or not isinstance(digest,str) or not DIGEST.fullmatch(digest): fail("SBOM does not bind a digest")
     if g.get("source",{}).get("target",{}).get("manifestDigest") != digest: fail("raw Grype scan does not bind SBOM digest")
     d=g.get("descriptor",{}); db=d.get("db",{}).get("status",{}); cfg=d.get("configuration",{})
-    if d.get("name")!="grype" or d.get("version")!="0.111.0" or db.get("valid") is not True or not db.get("built") or cfg.get("exclude")!=[] or cfg.get("only-fixed") is not False or cfg.get("only-notfixed") is not False or g.get("ignoredMatches") not in (None,[]): fail("raw Grype scan is filtered or invalid")
+    if d.get("name")!="grype" or d.get("version")!="0.118.0" or db.get("valid") is not True or not db.get("built") or cfg.get("exclude")!=[] or cfg.get("only-fixed") is not False or cfg.get("only-notfixed") is not False or g.get("ignoredMatches") not in (None,[]): fail("raw Grype scan is filtered or invalid")
     matches=g.get("matches")
     if not isinstance(matches,list): fail("raw Grype matches are invalid")
     counts={k:0 for k in ("critical","high","medium","low","unknown")}; observed=[]
