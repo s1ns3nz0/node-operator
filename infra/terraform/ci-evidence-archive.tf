@@ -164,7 +164,7 @@ data "aws_iam_policy_document" "github_ci_evidence_archive_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["${var.github_oidc_subject_prefix}:environment:ci-evidence-archive"]
+      values   = ["${local.github_destination_oidc_subject_prefix}:environment:ci-evidence-archive"]
     }
   }
 }

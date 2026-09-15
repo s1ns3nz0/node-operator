@@ -18,7 +18,7 @@ while [ "$#" -gt 0 ]; do case "$1" in
 case "$output_dir" in /*) ;; *) usage;; esac
 [ "$execute" = true ] || usage
 operation="missing-history-$(date -u +%Y%m%d%H%M%S)-$RANDOM"
-for command in kubectl jq python3 mktemp mkdir chmod date rm tee; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
+for command in kubectl jq python3 mktemp mkdir chmod date rm sleep tee; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 [ ! -L "$output_dir" ] || { printf '%s\n' 'output directory must not be a symlink' >&2; exit 65; }
 case "$output_dir" in /|/tmp|/private/tmp|/Users|"$HOME"|"$PWD") printf '%s\n' 'use a dedicated evidence subdirectory' >&2; exit 65;; esac
 mkdir -p "$output_dir"; output_dir="$(cd "$output_dir" && pwd -P)"
@@ -208,14 +208,26 @@ spec:
         - name: native-watermark-repair
           image: $web3signer_image
           command: ["/bin/sh", "-ec"]
-          args: ["test \$(date +%s) -lt $((1742213400 + planned_slot * 12)); test ! -e /work-state/import-needed || exec /opt/web3signer/bin/web3signer eth2 --slashing-protection-db-url=jdbc:postgresql://$database.$namespace.svc:5432/web3signer --slashing-protection-db-username=web3signer --slashing-protection-db-pool-configuration-file=/vault/secrets/slashing-db.properties import --from /work/import.json"]
+          args:
+            - |
+              test \$(date +%s) -lt $((1742213400 + planned_slot * 12))
+              test ! -e /work-state/import-needed || {
+                export WEB3SIGNER_ETH2_SLASHING_PROTECTION_DB_PASSWORD="\$(cat /vault/secrets/postgres-password)"
+                test -n "\${WEB3SIGNER_ETH2_SLASHING_PROTECTION_DB_PASSWORD}"
+                exec /opt/web3signer/bin/web3signer eth2 --slashing-protection-db-url=jdbc:postgresql://$database.$namespace.svc:5432/web3signer --slashing-protection-db-username=web3signer --slashing-protection-db-pool-configuration-file=/vault/secrets/slashing-db.properties import --from /work/import.json
+              }
           volumeMounts: [{name: public-import, mountPath: /work, readOnly: true}, {name: vault-auth, mountPath: /var/run/secrets/vault.hashicorp.com/serviceaccount, readOnly: true}, {name: maintenance-tmp, mountPath: /tmp}, {name: maintenance-tmp, mountPath: /work-state}]
           resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {cpu: 500m, memory: 512Mi}}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
         - name: native-watermark-repair-floor
           image: $web3signer_image
           command: ["/bin/sh", "-ec"]
-          args: ["test \$(date +%s) -lt $((1742213400 + planned_slot * 12)); exec /opt/web3signer/bin/web3signer eth2 --slashing-protection-db-url=jdbc:postgresql://$database.$namespace.svc:5432/web3signer --slashing-protection-db-username=web3signer --slashing-protection-db-pool-configuration-file=/vault/secrets/slashing-db.properties watermark-repair --slot $planned_slot --epoch $planned_epoch"]
+          args:
+            - |
+              test \$(date +%s) -lt $((1742213400 + planned_slot * 12))
+              export WEB3SIGNER_ETH2_SLASHING_PROTECTION_DB_PASSWORD="\$(cat /vault/secrets/postgres-password)"
+              test -n "\${WEB3SIGNER_ETH2_SLASHING_PROTECTION_DB_PASSWORD}"
+              exec /opt/web3signer/bin/web3signer eth2 --slashing-protection-db-url=jdbc:postgresql://$database.$namespace.svc:5432/web3signer --slashing-protection-db-username=web3signer --slashing-protection-db-pool-configuration-file=/vault/secrets/slashing-db.properties watermark-repair --slot $planned_slot --epoch $planned_epoch
           volumeMounts: [{name: vault-auth, mountPath: /var/run/secrets/vault.hashicorp.com/serviceaccount, readOnly: true}, {name: maintenance-tmp, mountPath: /tmp}]
           resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {cpu: 500m, memory: 512Mi}}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
@@ -246,7 +258,26 @@ assert_stopped
 read_fresh_floor
 [ "$beacon_head" -lt "$planned_slot" ] || refuse 'fresh Beacon head has overtaken prepared floor'
 kubectl -n "$namespace" patch job "$job" --type=json -p "[{\"op\":\"test\",\"path\":\"/metadata/uid\",\"value\":\"$job_uid\"},{\"op\":\"test\",\"path\":\"/metadata/resourceVersion\",\"value\":\"$job_rv\"},{\"op\":\"replace\",\"path\":\"/spec/suspend\",\"value\":false}]" >/dev/null || refuse 'recovery mutex changed before release'
-kubectl -n "$namespace" wait --for=condition=complete "job/$job" --timeout=10m >/dev/null || { kubectl -n "$namespace" get "job/$job" -o json | jq -c '{failed:(.status.failed // 0),succeeded:(.status.succeeded // 0)}' >&2 || true; refuse 'native maintenance Job failed; signing remains stopped'; }
+wait_for_native_job() {
+  local deadline status
+  deadline="$(( $(date +%s) + 180 ))"
+  while :; do
+    status="$(kubectl -n "$namespace" get "job/$job" -o json)" || refuse 'cannot read native maintenance Job status; signing remains stopped'
+    if jq -e 'any(.status.conditions[]?; .type == "Complete" and .status == "True")' <<<"$status" >/dev/null; then
+      return
+    fi
+    if jq -e '(.status.failed // 0) > 0 or any(.status.conditions[]?; .type == "Failed" and .status == "True")' <<<"$status" >/dev/null; then
+      jq -c '{failed:(.status.failed // 0),succeeded:(.status.succeeded // 0)}' <<<"$status" >&2 || true
+      refuse 'native maintenance Job failed; signing remains stopped'
+    fi
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      jq -c '{failed:(.status.failed // 0),succeeded:(.status.succeeded // 0)}' <<<"$status" >&2 || true
+      refuse 'native maintenance Job did not complete before bounded deadline; signing remains stopped'
+    fi
+    sleep 2
+  done
+}
+wait_for_native_job
 assert_stopped
 [ "$(bindings)" = "$binding_before" ] || refuse 'controller, PVC, Pod, or Service binding changed during native preparation'
 [ "$(kubectl -n "$namespace" get pvc "$pvc" -o jsonpath='{.metadata.uid}')" = "$pvc_uid" ] || refuse 'retained slashing DB PVC identity changed during preparation'

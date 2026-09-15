@@ -184,10 +184,11 @@ jobs:
     if: >-
       (github.event_name == 'push' || inputs.mode == 'publish') &&
       needs.eligibility.result == 'success' && needs.reproducibility.result == 'success'
-    # A CodeBuild-hosted runner is ephemeral per workflow job and is bound to
-    # the dedicated private project by its name plus run identity. A
-    # GitHub-hosted or broadly shared runner must never acquire this path.
-    runs-on: codebuild-node-operator-baseline-private-release-${{ github.run_id }}-${{ github.run_attempt }}
+    # PRIVATE_RELEASE_RUNNER_PROJECT is a repository variable: runs-on is
+    # resolved before the release Environment is available. It selects only
+    # the dedicated CodeBuild project; the exact run identity remains fixed.
+    # A GitHub-hosted or broadly shared runner must never acquire this path.
+    runs-on: codebuild-${{ vars.PRIVATE_RELEASE_RUNNER_PROJECT || 'node-operator-baseline-private-release' }}-${{ github.run_id }}-${{ github.run_attempt }}
     environment: release
     permissions:
       contents: write
@@ -250,6 +251,9 @@ jobs:
           AWS_ROLE_ARN: ${{ vars.RELEASE_RUNNER_ROLE_ARN }}
           AWS_REGION: ap-northeast-2
           INPUT_BUCKET: ${{ vars.RELEASE_ARTIFACT_BUCKET }}
+          # RELEASE_SIGNER_PROJECT is a release Environment variable because
+          # it is read only after the protected runner has started.
+          RELEASE_SIGNER_PROJECT: ${{ vars.RELEASE_SIGNER_PROJECT }}
         run: scripts/release/sign-release-bundle.sh
       # Role: Create or update the GitHub release and attach its verified assets.
       - name: GitHub Release

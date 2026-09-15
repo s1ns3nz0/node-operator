@@ -67,7 +67,7 @@ data "aws_iam_policy_document" "github_validator_log_collector_mirror_assume_rol
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["${var.github_oidc_subject_prefix}:environment:validator-log-collector-ecr-mirror"]
+      values   = ["${local.github_destination_oidc_subject_prefix}:environment:validator-log-collector-ecr-mirror"]
     }
   }
 }
@@ -81,6 +81,12 @@ resource "aws_iam_role" "github_validator_log_collector_mirror" {
   name               = length(local.validator_log_collector_publisher_role_name) <= 64 ? local.validator_log_collector_publisher_role_name : "${substr(local.validator_log_collector_publisher_role_name, 0, 55)}-${substr(sha256(local.validator_log_collector_publisher_role_name), 0, 8)}"
   assume_role_policy = data.aws_iam_policy_document.github_validator_log_collector_mirror_assume_role[0].json
   tags               = local.common_tags
+  lifecycle {
+    precondition {
+      condition     = local.github_destination_identity_is_explicit
+      error_message = "A custom GitHub destination repository requires explicit numeric owner and repository IDs; it cannot inherit the maintainer identity."
+    }
+  }
 }
 
 data "aws_iam_policy_document" "github_validator_log_collector_mirror" {

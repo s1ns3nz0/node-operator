@@ -186,6 +186,27 @@ class ArtifactInventoryTests(unittest.TestCase):
         runtime_path.write_text(json.dumps(runtime))
         self.assertEqual(self.invoke().returncode, 2)
 
+    def test_task_scoped_live_prysm_approval_is_not_a_fresh_deployment_source(self):
+        catalog_path = self.source / ".ci/validator/approved-client-images.json"
+        catalog = json.loads(catalog_path.read_text())
+        global_manual = next(item for item in catalog["images"] if item.get("component") == "prysm-validator" and item.get("release_channel") == "manual-native-mtls")
+        scoped = json.loads(json.dumps(global_manual))
+        scoped["private_image"] = "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-op-live-baseline-validator-prysm@sha256:" + "c" * 64
+        scoped["approval_basis"] = {"task_scoped_activation_approval": True}
+        catalog["images"].append(scoped)
+        catalog_path.write_text(json.dumps(catalog))
+
+        result = self.invoke(None, "--deployment-name", "fresh-node")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        prysm = next(item for item in json.loads(result.stdout)["artifacts"] if item["component"] == "prysm-validator")
+        self.assertIsNone(prysm["source"])
+        self.assertEqual(prysm["destination"], "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/fresh-node-baseline-validator-prysm@" + global_manual["private_image"].rsplit("@", 1)[1])
+
+        duplicate = json.loads(json.dumps(global_manual))
+        catalog["images"].append(duplicate)
+        catalog_path.write_text(json.dumps(catalog))
+        self.assertEqual(self.invoke().returncode, 2)
+
     def test_malformed_sources_and_identity_are_rejected(self):
         catalog_path = self.source / ".ci/gitops/approved-oci-artifacts.json"
         catalog = json.loads(catalog_path.read_text())
@@ -237,6 +258,7 @@ class ArtifactInventoryTests(unittest.TestCase):
         result=self.invoke(None,"--release-sha",release); self.assertEqual(result.returncode,1,result.stderr)
         prysm=next(item for item in json.loads(result.stdout)["artifacts"] if item["component"]=="prysm-validator"); self.assertEqual(prysm["authority"],"prysm-release-authorization"); self.assertEqual(prysm["source"],image)
         remapped=self.invoke(None,"--release-sha",release,"--deployment-name","other-node"); remapped_prysm=next(item for item in json.loads(remapped.stdout)["artifacts"] if item["component"]=="prysm-validator"); self.assertEqual(remapped_prysm["destination"],f"123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/other-node-baseline-validator-prysm@{DIGEST}")
+        selected=self.invoke(None,"--release-sha",release,"--aws-account-id","222222222222","--aws-region","ap-northeast-1","--deployment-name","dated-node"); self.assertEqual(selected.returncode,1,selected.stderr); selected_prysm=next(item for item in json.loads(selected.stdout)["artifacts"] if item["component"]=="prysm-validator"); self.assertEqual(selected_prysm["source"],image); self.assertEqual(selected_prysm["destination"],f"222222222222.dkr.ecr.ap-northeast-1.amazonaws.com/dated-node-baseline-validator-prysm@{DIGEST}")
 
     def _write_signer_probe_authorization(self) -> tuple[str, str]:
         candidate = "c" * 40

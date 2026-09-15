@@ -147,7 +147,7 @@ class ResumeWrapper(unittest.TestCase):
             command.chmod(0o755)
         return d, work, fake
 
-    def invoke(self, d, work, fake, rc="0", account="123456789012", use_env=True):
+    def invoke(self, d, work, fake, rc="0", account="123456789012", use_env=True, **extra):
         master, slave = pty.openpty()
         env = {
             **os.environ,
@@ -156,6 +156,7 @@ class ResumeWrapper(unittest.TestCase):
             "PLATFORM_LOG": str(d / "platform-log"),
             "DEPLOY_RC": rc,
             "AWS_ACCOUNT": account,
+            **extra,
         }
         if use_env:
             env["WORK_DIR"] = str(work)
@@ -320,6 +321,53 @@ class ResumeWrapper(unittest.TestCase):
         rc, out = self.invoke(d, w, b, use_env=False)
         self.assertEqual(rc, 0)
         self.assertIn("platform-only recovery completed", out)
+
+    def test_root_dotenv_relative_path_and_safe_literal_expansion(self):
+        d, w, b = self.fixture()
+        rc, _ = self.invoke(d, w, b)
+        self.assertEqual(rc, 0)
+        (d / ".env").write_text("WORK_DIR=work\nEXISTING_KEYSTORE_DIR=~/keys\n")
+        rc, out = self.invoke(d, w, b, use_env=False)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("Using non-secret configuration:", out)
+        self.assertIn(".env", out)
+        self.assertIn("platform-only recovery was already complete", out)
+
+        sentinel = d / "executed"
+        (d / ".env").write_text(f"WORK_DIR=$(touch {sentinel})\n")
+        rc, out = self.invoke(d, w, b, use_env=False)
+        self.assertEqual(rc, 65)
+        self.assertIn("WORK_DIR is unavailable or unsafe", out)
+        self.assertFalse(sentinel.exists())
+
+    def test_config_conflict_symlink_and_failure_log_redaction(self):
+        d, w, b = self.fixture()
+        (d / ".env").write_text("WORK_DIR=work\n")
+        (d / "release").mkdir()
+        (d / "release/env").write_text("WORK_DIR=work\n")
+        rc, out = self.invoke(d, w, b, use_env=False)
+        self.assertEqual(rc, 65)
+        self.assertIn("multiple configuration files", out)
+        (d / "release/env").unlink()
+        (d / ".env").unlink()
+        (d / ".env").symlink_to(d / "release/env")
+        rc, out = self.invoke(d, w, b, use_env=False)
+        self.assertEqual(rc, 65)
+        self.assertIn("regular non-symlink", out)
+        (d / ".env").unlink()
+
+        rc, _ = self.invoke(d, w, b, rc="9", AWS_SECRET_ACCESS_KEY="sensitive-sentinel")
+        self.assertEqual(rc, 9)
+        logs = list((w / "diagnostics").glob("installer-*"))
+        self.assertTrue(logs)
+        log = logs[-1].read_text()
+        self.assertIn("status=failed", log)
+        self.assertIn("exit_code=9", log)
+        self.assertNotIn("sensitive-sentinel", log)
+        rc, _ = self.invoke(d, w, b, rc="9")
+        self.assertEqual(rc, 9)
+        logs = list((w / "diagnostics").glob("installer-*"))
+        self.assertGreaterEqual(len(logs), 2)
 
 
 class ResumeContinuation(unittest.TestCase):

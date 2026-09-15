@@ -34,6 +34,26 @@
         "registry_scan": "Exact private ECR index rescanned Critical 0 / High 0.",
         "live_tls_positive": "Verified signer GET over HTTP mTLS passed."
       }
+    },
+    {
+      "component": "prysm-validator",
+      "version": "v7.1.8",
+      "private_image": "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-op-2609140157-baseline-validator-prysm@sha256:2789e2433b907019958b6d558c6e19b27dc9af7fe10e38684a1a64fccb48263d",
+      "linux_amd64_manifest": "sha256:2789e2433b907019958b6d558c6e19b27dc9af7fe10e38684a1a64fccb48263d",
+      "release_channel": "manual-native-mtls",
+      "mirror_eligible": false,
+      "stage_approved": true,
+      "activation_approved": true,
+      "activation_expires_at": "2026-09-21T00:00:00Z",
+      "provenance_status": "manual-reviewed-live-build",
+      "approval_basis": {
+        "direct_activation_decision": "release/direct-hoodi-activation-approval.json",
+        "publication_authorization": "release/prysm-publication-authorization.json",
+        "publication_authorization_activation_approved": false,
+        "task_scoped_activation_approval": true,
+        "fence_image": "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-op-2609140157-baseline-validator-fence@sha256:951312f79c693eae0a9b3e54961701944e0e1339d997f0f3315a25112dcb7fb8",
+        "verified_native_mtls_identity": "current task-scoped live mTLS identity probe passed"
+      }
     }
   ]
 }

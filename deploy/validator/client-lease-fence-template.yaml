@@ -151,6 +151,8 @@ kind: NetworkPolicy
 metadata:
   name: validator-REPLACE_WITH_VALIDATOR_SET-signing-fence-egress
   namespace: validator-operations
+  annotations:
+    node-operator.io/runtime-api-egress: kubernetes-service-and-endpoints
 spec:
   podSelector: {matchLabels: {app.kubernetes.io/component: validator-signing-fence, node-operator.io/validator-set: REPLACE_WITH_VALIDATOR_SET}}
   policyTypes: [Egress]

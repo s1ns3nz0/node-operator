@@ -2,8 +2,13 @@
 # Check objective: Verify installer recovery, artifact-first ordering and validator preparation without live cloud calls.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
+python3 scripts/ci/test-installer-startup-guidance.py
+python3 scripts/ci/test-private-release-runner-contract.py
+python3 scripts/ci/test-release-project-selection.py
 python3 scripts/ci/test-interactive-hoodi-resume.py
+python3 scripts/ci/test-installer-generated-inputs.py
 python3 scripts/ci/test-zero-input-zone-discovery.py
+python3 scripts/ci/test-installer-network-profile.py
 python3 scripts/ci/test-interactive-artifact-authority-gate.py
 python3 scripts/ci/test-interactive-authorized-artifacts.py
 # Check canonical finalized inclusion, real log-envelope parsing and

@@ -18,7 +18,7 @@ test -f "$contract" || fail 'missing private release-runner contract'
 test -f "$operations_workflow" || fail 'missing operations workflow'
 
 # shellcheck disable=SC2016 # The literal GitHub expression is part of the workflow contract.
-grep -Fq 'runs-on: codebuild-node-operator-baseline-private-release-${{ github.run_id }}-${{ github.run_attempt }}' "$workflow" || fail 'release workflow is not bound to the dedicated CodeBuild runner and workflow-run identity'
+grep -Fq "runs-on: codebuild-\${{ vars.PRIVATE_RELEASE_RUNNER_PROJECT || 'node-operator-baseline-private-release' }}-\${{ github.run_id }}-\${{ github.run_attempt }}" "$workflow" || fail 'release workflow is not bound to the selected dedicated CodeBuild runner and workflow-run identity'
 grep -Eq '^    environment: release$' "$workflow" || fail 'release workflow does not require the protected release environment'
 
 publication_job="$(sed -n '/^  build-and-publish:/,$p' "$workflow")"
@@ -30,10 +30,16 @@ fi
 for required in \
   'RELEASE_RUNNER_ROLE_ARN' \
   'RELEASE_ARTIFACT_BUCKET' \
+  'PRIVATE_RELEASE_RUNNER_PROJECT' \
+  'RELEASE_SIGNER_PROJECT' \
   'test -n "$AWS_ROLE_ARN"; test -n "$INPUT_BUCKET"' \
   'verify-release-signature.sh'; do
   grep -Fq "$required" <(workflow_source "$workflow") || fail "release workflow omits fail-closed prerequisite: $required"
 done
+
+if grep -Fq 'runs-on: ubuntu-' <<<"$publication_job"; then
+  fail 'release publication permits a GitHub-hosted runner'
+fi
 
 # The manual smoke is the non-deployment proof that the private CodeBuild
 # runner can obtain the reviewed build image and reach only required AWS APIs.

@@ -63,6 +63,10 @@ resource "aws_ecr_repository" "vault_audit_relay" {
   tags = merge(local.common_tags, { Name = local.vault_audit_relay_repository_name, Purpose = "private-vault-audit-relay-image" })
   lifecycle {
     prevent_destroy = true
+    precondition {
+      condition     = local.github_destination_identity_is_explicit
+      error_message = "A custom GitHub destination repository requires explicit numeric owner and repository IDs; it cannot inherit the maintainer identity."
+    }
   }
 }
 
@@ -87,7 +91,7 @@ data "aws_iam_policy_document" "github_vault_audit_relay_publisher_assume_role" 
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["${var.github_oidc_subject_prefix}:environment:vault-audit-relay-ecr-publish"]
+      values   = ["${local.github_destination_oidc_subject_prefix}:environment:vault-audit-relay-ecr-publish"]
     }
   }
 }

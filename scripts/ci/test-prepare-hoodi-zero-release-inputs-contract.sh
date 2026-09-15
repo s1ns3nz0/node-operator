@@ -2,8 +2,30 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-script="$root/scripts/release/prepare-hoodi-zero-release-inputs.sh"
 scratch="$(mktemp -d /private/tmp/node-operator-zero-release-inputs.XXXXXX)"
+cleanup() { rm -rf -- "$scratch"; }
+trap cleanup EXIT INT TERM
+fixture_root="$scratch/source"
+# Build only the non-secret source files used by the real preparation path.
+# In particular, do not inherit optional authorization inputs from a developer
+# checkout or any sibling release bundle.
+mkdir -p "$fixture_root/scripts/release" "$fixture_root/scripts/ops" "$fixture_root/deploy/validator" "$fixture_root/.ci/validator"
+for file in \
+  scripts/release/prepare-hoodi-zero-release-inputs.sh \
+  scripts/release/prepare-zero-resource-inputs.sh \
+  scripts/release/prepare-hoodi-validator-deployment.sh \
+  scripts/release/validator_monitoring_dashboard.py \
+  scripts/release/validator_monitoring_config.py \
+  scripts/release/validator_monitoring_chain.py \
+  scripts/ops/render-hoodi-validator-runtime.sh \
+  scripts/ops/render-hoodi-validator-client.sh \
+  deploy/validator/runtime-template.yaml \
+  deploy/validator/client-template.yaml \
+  deploy/validator/client-lease-fence-template.yaml \
+  .ci/validator/approved-client-images.json; do
+  cp "$root/$file" "$fixture_root/$file"
+done
+script="$fixture_root/scripts/release/prepare-hoodi-zero-release-inputs.sh"
 output="$scratch/inputs"
 key='0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 web3signer='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-runtime-web3signer@sha256:9a20e02a5821ad72fd318fa2a3ec0158a9a5acd9db80aa9214e9cc991ad4dbc3'
@@ -11,7 +33,7 @@ postgres='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseli
 prysm='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-prysm@sha256:7fe554adf0efd27c0e5c5a3f80a3bbbec3d3872626208cf0a003b0dee7761f89'
 fence='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-fence@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 
-"$script" --aws-account-id 106760547719 --availability-zone ap-northeast-2a --availability-zone ap-northeast-2b --backend-principal-arn arn:aws:iam::106760547719:role/NodeOperatorTerraformApply --validator-set hoodi-zero-001 --validator-public-key "$key" --withdrawal-address 0x403ff64383b8ddf994d5563550c8040d89f025ac --web3signer-image "$web3signer" --postgres-image "$postgres" --prysm-validator-image "$prysm" --signing-fence-image "$fence" --kubernetes-api-cidr 10.100.0.1/32 --output-dir "$output" >/dev/null
+"$script" --aws-account-id 106760547719 --availability-zone ap-northeast-2a --availability-zone ap-northeast-2b --backend-principal-arn arn:aws:iam::106760547719:role/NodeOperatorTerraformApply --release-revision 1111111111111111111111111111111111111111 --validator-set hoodi-zero-001 --validator-public-key "$key" --withdrawal-address 0x403ff64383b8ddf994d5563550c8040d89f025ac --web3signer-image "$web3signer" --postgres-image "$postgres" --prysm-validator-image "$prysm" --signing-fence-image "$fence" --kubernetes-api-cidr 10.100.0.1/32 --output-dir "$output" >/dev/null
 [ "$(stat -f '%Lp' "$output")" = 700 ]
 for file in zero-resource/zero-resource-inputs.json validator-deployment/validator-deployment-handoff.json hoodi-zero-release-inputs.json; do
   [ -f "$output/$file" ] || { printf 'missing release input: %s\n' "$file" >&2; exit 1; }

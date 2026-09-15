@@ -10,8 +10,8 @@ variable "gitops_private_cd_runner_connection_arn" {
   default     = ""
 
   validation {
-    condition     = var.gitops_private_cd_runner_connection_arn == "" || can(regex("^arn:aws:codeconnections:ap-northeast-2:[0-9]{12}:connection/[0-9a-f-]{36}$", var.gitops_private_cd_runner_connection_arn))
-    error_message = "gitops_private_cd_runner_connection_arn must be empty while disabled or an ap-northeast-2 CodeConnections ARN."
+    condition     = var.gitops_private_cd_runner_connection_arn == "" || can(regex("^arn:aws:codeconnections:[a-z0-9-]+:[0-9]{12}:connection/[0-9a-f-]{36}$", var.gitops_private_cd_runner_connection_arn))
+    error_message = "gitops_private_cd_runner_connection_arn must be empty while disabled or a CodeConnections ARN."
   }
 }
 
@@ -218,6 +218,7 @@ resource "aws_codebuild_project" "gitops_private_cd_runner" {
     precondition {
       condition = (
         var.gitops_private_cd_runner_connection_arn != "" &&
+        can(regex("^arn:aws:codeconnections:${var.aws_region}:${var.aws_account_id}:connection/[0-9a-f-]{36}$", var.gitops_private_cd_runner_connection_arn)) &&
         length(var.gitops_private_cd_runner_subnet_ids) > 0 &&
         alltrue([for subnet_id in var.gitops_private_cd_runner_subnet_ids : can(regex("^subnet-[a-z0-9]+$", subnet_id))])
       )

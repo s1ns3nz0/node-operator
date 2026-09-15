@@ -46,6 +46,7 @@ jobs:
         run: |
           python3 scripts/ci/test-validator-runtime-probe-renderer.py
           python3 scripts/ci/test-web3signer-audit-contract.py
+          bash scripts/ci/test-apply-hoodi-validator-runtime.sh
           docker build --platform linux/amd64 -f .ci/validator-runtime-probe/Dockerfile -t node-operator-runtime-probe:ci .
       # Role: Run UC-5 regression fixtures; this is not the deferred live revocation ceremony.
       - name: UC-5 Offline Contracts

@@ -251,7 +251,21 @@ def build_inventory(bundle_root: Path, release_sha: str, account: str, region: s
         except PrysmReleaseAuthorizationError as error: raise InventoryError("Prysm release authorization is invalid") from error
     elif record_present:
         raise InventoryError("Prysm publication record is orphaned from release authorization")
-    manual = [item for item in clients["images"] if isinstance(item, dict) and item.get("component") == "prysm-validator" and item.get("activation_approved") is True and item.get("release_channel") == "manual-native-mtls"]
+    # A task-scoped live activation is evidence for its already-selected live
+    # deployment, never a default source for a fresh deployment. Keep it out
+    # of the legacy fallback while retaining ambiguity rejection for global
+    # manual approvals.
+    manual = [
+        item for item in clients["images"]
+        if isinstance(item, dict)
+        and item.get("component") == "prysm-validator"
+        and item.get("activation_approved") is True
+        and item.get("release_channel") == "manual-native-mtls"
+        and not (
+            isinstance(item.get("approval_basis"), dict)
+            and item["approval_basis"].get("task_scoped_activation_approval") is True
+        )
+    ]
     if len(manual) != 1:
         raise InventoryError("selected manual-native-mtls Prysm approval is ambiguous or missing")
     if prysm_authorization is None:
