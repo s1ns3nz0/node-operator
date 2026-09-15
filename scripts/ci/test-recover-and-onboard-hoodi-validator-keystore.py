@@ -9,6 +9,7 @@ real-OpenSSL suites; this fixture proves no live deployment behavior.
 import hashlib
 import json
 import os
+import select
 import shutil
 import signal
 import subprocess
@@ -263,19 +264,28 @@ class OnboardingLifecycleTest(unittest.TestCase):
             ["bash", str(self.script), "--validator-set", "hoodi-001", "--keystore-dir", str(self.keys),
              "--signer-ca-output", str(self.base / "signer-ca.crt"), "--known-clients-output", str(self.base / "known-clients.txt"),
              "--refresh-auth-only"],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment,
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment,
         )
         try:
+            stderr_prefix = b""
             deadline = time.monotonic() + 5
-            while not self.ready.exists() and time.monotonic() < deadline:
-                time.sleep(0.02)
-            self.assertTrue(self.ready.exists(), "fake Vault did not receive generate-root init")
+            while b"Recovery key share 1 of 1:" not in stderr_prefix and time.monotonic() < deadline:
+                readable, _, _ = select.select([process.stderr], [], [], 0.05)
+                if readable:
+                    stderr_prefix += os.read(process.stderr.fileno(), 4096)
+            self.assertIn(b"Recovery key share 1 of 1:", stderr_prefix, "ceremony did not reach share entry")
             process.send_signal(signal.SIGINT)
-            stdout, stderr = process.communicate(timeout=5)
+            process.wait(timeout=5)
+            stdout = process.stdout.read().decode()
+            stderr = process.stderr.read()
+            process.stdin.close()
+            process.stdout.close()
+            process.stderr.close()
         finally:
             if process.poll() is None:
                 process.kill()
                 process.wait(timeout=5)
+        stderr = (stderr_prefix + stderr).decode()
         self.assertEqual(process.returncode, 130, stderr)
         calls = "\n".join(self.trace_lines())
         self.assertNotIn("generate-root -cancel", calls)
