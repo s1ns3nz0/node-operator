@@ -13,6 +13,8 @@ def main() -> int:
     parser=argparse.ArgumentParser(description=__doc__); parser.add_argument("--source-root",type=Path,required=True); parser.add_argument("--record",type=Path,required=True); args=parser.parse_args()
     try:
         value=json.loads(args.record.read_text()); target=value["target"]
+        if value.get("schema_version") == 2:
+            raise KyvernoPublicationRecordError("residual-risk Kyverno records require a compatible downstream promotion review")
         expected=create_record(args.source_root, release_revision=value["release_revision"], image_ref=target["image_ref"], manifest_digest=target["manifest_digest"], run_id=str(value["publication"]["run_id"]))
         if value != expected: raise KyvernoPublicationRecordError("record does not pass the local source binding")
         print(json.dumps({"source":target["image_ref"],"destination":"nodes","ecrTag":target["manifest_digest"].removeprefix("sha256:"),"purpose":"Reviewed Kyverno CLI "+value["source"]["tag"]+" built from "+value["source"]["commit"]},sort_keys=True))

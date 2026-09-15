@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import re
@@ -17,7 +18,7 @@ REGION = re.compile(r"^ap-northeast-[12]$")
 NAME = re.compile(r"^[a-z][a-z0-9-]{1,18}[a-z0-9]$")
 RUN = re.compile(r"^[1-9][0-9]*$")
 MAX = 1024 * 1024
-INPUTS = (".ci/kyverno-cli/Dockerfile", ".ci/kyverno-cli/source-lock.json", ".ci/kyverno-cli/scripts/update-etcd.sh")
+INPUTS = (".ci/kyverno-cli/Dockerfile", ".ci/kyverno-cli/source-lock.json", ".ci/kyverno-cli/scripts/update-etcd.sh", ".ci/kyverno-cli/risk-acceptance.json", "scripts/ci/assess-kyverno-cli-risk-acceptance.py")
 
 class KyvernoPublicationRecordError(ValueError): pass
 
@@ -67,8 +68,22 @@ def source(root: Path) -> dict[str, str]:
     if commits != [value["commit"]] or targets != [value["tag"]] or origins != [value["repository"]]: raise KyvernoPublicationRecordError("Dockerfile source defaults differ from source lock")
     return {"repository": value["repository"], "tag": value["tag"], "commit": value["commit"], "platform": "linux/amd64"}
 
-def create_record(root: Path, *, release_revision: str, image_ref: str, manifest_digest: str, run_id: str) -> dict[str, Any]:
+def create_record(root: Path, *, release_revision: str, image_ref: str, manifest_digest: str, run_id: str, risk_decision: Path | None = None) -> dict[str, Any]:
     if not SHA40.fullmatch(release_revision) or not DIGEST.fullmatch(manifest_digest) or not RUN.fullmatch(run_id): raise KyvernoPublicationRecordError("publication context is invalid")
     match = re.fullmatch(r"([0-9]{12})\.dkr\.ecr\.(ap-northeast-[12])\.amazonaws\.com/([a-z][a-z0-9-]{1,18}[a-z0-9])-baseline-gitops-nodes@(" + DIGEST.pattern[1:-1] + r")", image_ref)
     if not match or match.group(4) != manifest_digest: raise KyvernoPublicationRecordError("publication target is invalid")
-    return {"schema_version": 1, "component": "kyverno-cli", "release_revision": release_revision, "input_sha256": input_sha256(root), "source": source(root), "target": {"aws_account_id": match.group(1), "aws_region": match.group(2), "deployment_name": match.group(3), "repository": match.group(3)+"-baseline-gitops-nodes", "image_ref": image_ref, "manifest_digest": manifest_digest, "platform": "linux/amd64"}, "publication": {"workflow": "image-publish.yml", "run_id": run_id, "invocation": "kyverno-cli-publish"}, "verification": {"method": "scan-cosign-and-provenance", "status": "passed", "scan_passed": True, "cosign_verified": True, "provenance_verified": True}}
+    result={"schema_version": 1, "component": "kyverno-cli", "release_revision": release_revision, "input_sha256": input_sha256(root), "source": source(root), "target": {"aws_account_id": match.group(1), "aws_region": match.group(2), "deployment_name": match.group(3), "repository": match.group(3)+"-baseline-gitops-nodes", "image_ref": image_ref, "manifest_digest": manifest_digest, "platform": "linux/amd64"}, "publication": {"workflow": "image-publish.yml", "run_id": run_id, "invocation": "kyverno-cli-publish"}, "verification": {"method": "scan-cosign-and-provenance", "status": "passed", "scan_passed": True, "cosign_verified": True, "provenance_verified": True}}
+    if risk_decision is not None:
+        decision=_read(risk_decision)
+        required={"schema_version","component","decision","status","scope","subject","source_commit","input_sha256","policy_sha256","reviewed_build_inputs_sha256","sbom_sha256","raw_grype_sha256","raw_scan_summary","accepted_findings","expires_at"}
+        if not isinstance(decision,dict) or set(decision)!=required or decision.get("component")!="kyverno-cli" or decision.get("decision")!="accepted-residual-risk" or decision.get("status")!="accepted-with-residual-risk" or decision.get("subject")!=manifest_digest or decision.get("source_commit")!=source(root)["commit"] or decision.get("input_sha256")!=input_sha256(root) or any(not isinstance(decision.get(key),str) or not SHA256.fullmatch(decision[key]) for key in ("policy_sha256","sbom_sha256","raw_grype_sha256")):
+            raise KyvernoPublicationRecordError("risk decision is invalid")
+        spec=importlib.util.spec_from_file_location("kyverno_risk_assessor", root/"scripts/ci/assess-kyverno-cli-risk-acceptance.py")
+        module=importlib.util.module_from_spec(spec) if spec else None
+        if module is None or spec.loader is None: raise KyvernoPublicationRecordError("risk assessor is unavailable")
+        spec.loader.exec_module(module)
+        if module.assess(root, risk_decision.parent, input_sha256(root)) != decision:
+            raise KyvernoPublicationRecordError("risk decision does not reverify retained raw evidence")
+        result["schema_version"]=2; result["risk_decision"]={"sha256":hashlib.sha256(risk_decision.read_bytes()).hexdigest(),"raw_grype_sha256":decision["raw_grype_sha256"],"sbom_sha256":decision["sbom_sha256"],"expires_at":decision["expires_at"],"decision":"accepted-residual-risk"}
+        result["verification"]={"method":"risk-decision-cosign-and-provenance","status":"accepted-with-residual-risk","scan_passed":False,"cosign_verified":True,"provenance_verified":True}
+    return result
