@@ -30,29 +30,35 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Download exact OPA evidence
+      # A successful CI Evidence Gate run has exactly one producer: the scanner
+      # gate or a review-refresh decision. Keep their extraction roots separate;
+      # Resolve evidence subject fails closed when neither or both is available.
+      - name: Download exact gate evidence
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5.0.0
+        continue-on-error: true
         with:
           pattern: ci-evidence-gate-*
-          merge-multiple: true
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/ci-evidence
+          path: ${{ runner.temp }}/ci-evidence/gate
+      - name: Download exact review decision
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5.0.0
+        continue-on-error: true
+        with:
+          pattern: ci-review-decision-${{ github.event.workflow_run.id }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/ci-evidence/review
       - name: Resolve evidence subject
         id: subject
         env:
           EVIDENCE_ROOT: ${{ runner.temp }}/ci-evidence
-        run: |
-          evidence_file="$(find "$EVIDENCE_ROOT" -type f -name evidence.json -print -quit)"
-          test -n "$evidence_file"
-          subject_sha="$(jq -er '.subject.commit_sha' "$evidence_file")"
-          printf 'subject_sha=%s\n' "$subject_sha" >> "$GITHUB_OUTPUT"
+          EXPECTED_GATE_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: scripts/ci/resolve-ci-evidence-archive-subject.sh
       - name: Short-lived archive identity
         run: scripts/ci/assume-ci-evidence-archive-role.sh
       - name: Cosign sign, verify, and archive
         env:
           RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
-          evidence_file="$(find "${{ runner.temp }}/ci-evidence" -type f -name evidence.json -print -quit)"
-          evidence_root="$(dirname "$evidence_file")"
-          scripts/ci/archive-ci-evidence.sh "$evidence_root" "${{ steps.subject.outputs.subject_sha }}" "$RUN_ID" "$RUNNER_TEMP/ci-evidence-signed"
+          scripts/ci/archive-ci-evidence.sh "${{ steps.subject.outputs.evidence_directory }}" "${{ steps.subject.outputs.subject_sha }}" "$RUN_ID" "$RUNNER_TEMP/ci-evidence-signed"
