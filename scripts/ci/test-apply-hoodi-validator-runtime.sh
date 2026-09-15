@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Check objective: Verify service-first runtime application and fail-closed private Kubernetes API egress discovery.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
