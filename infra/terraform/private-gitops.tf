@@ -143,6 +143,24 @@ resource "aws_iam_role_policy" "github_gitops_oci_mirror" {
   policy = data.aws_iam_policy_document.github_gitops_oci_mirror[0].json
 }
 
+# Syft reads manifest layers after the Kyverno CLI publisher has written the
+# reviewed image. Keep this permission separate from the mirror's push policy
+# and confined to the one canonical repository that contains the CLI.
+resource "aws_iam_role_policy" "github_kyverno_cli_layer_read" {
+  count = var.enable_private_gitops_foundation ? 1 : 0
+  name  = "${local.name_prefix}-kyverno-cli-layer-read"
+  role  = aws_iam_role.github_gitops_oci_mirror[0].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "ReadKyvernoCliLayers"
+      Effect   = "Allow"
+      Action   = ["ecr:GetDownloadUrlForLayer"]
+      Resource = [aws_ecr_repository.private_gitops["nodes"].arn]
+    }]
+  })
+}
+
 output "private_gitops_ecr_repository_urls" {
   description = "Private ECR OCI destinations; empty until the GitOps foundation is explicitly enabled."
   value       = { for key, repository in aws_ecr_repository.private_gitops : key => repository.repository_url }

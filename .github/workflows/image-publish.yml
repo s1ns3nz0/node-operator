@@ -357,11 +357,12 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Kyverno CLI review evidence
+        if: ${{ always() }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: kyverno-cli-review-evidence-${{ github.sha }}
           path: ${{ runner.temp }}/kyverno-cli-publication-records/evidence/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
 
   # Role: Build, scan, sign and publish the audit relay through its dedicated OIDC environment.

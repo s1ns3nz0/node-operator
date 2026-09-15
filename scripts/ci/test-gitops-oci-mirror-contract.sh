@@ -45,6 +45,14 @@ for required in \
   grep -Fq "$required" "$terraform_file" || fail "Terraform contract omits: $required"
 done
 
+kyverno_layer_read_policy="$(sed -n '/resource "aws_iam_role_policy" "github_kyverno_cli_layer_read" {/,/^}/p' "$terraform_file")"
+test -n "$kyverno_layer_read_policy" || fail 'missing Kyverno CLI layer-read inline policy'
+grep -Fqx '  count = var.enable_private_gitops_foundation ? 1 : 0' <<<"$kyverno_layer_read_policy" || fail 'Kyverno CLI layer-read policy is not foundation-gated'
+grep -Fqx '  name  = "${local.name_prefix}-kyverno-cli-layer-read"' <<<"$kyverno_layer_read_policy" || fail 'Kyverno CLI layer-read policy name is not exact'
+grep -Fqx '  role  = aws_iam_role.github_gitops_oci_mirror[0].id' <<<"$kyverno_layer_read_policy" || fail 'Kyverno CLI layer-read policy is not attached to the GitOps mirror role'
+grep -Fqx '      Action   = ["ecr:GetDownloadUrlForLayer"]' <<<"$kyverno_layer_read_policy" || fail 'Kyverno CLI layer-read policy action is not exact'
+grep -Fqx '      Resource = [aws_ecr_repository.private_gitops["nodes"].arn]' <<<"$kyverno_layer_read_policy" || fail 'Kyverno CLI layer-read policy resource is not exact'
+
 if grep -Eq 'ecr:(DeleteRepository|DeleteImage|SetRepositoryPolicy|PutLifecyclePolicy|\*)' "$terraform_file"; then
   fail 'mirror role exceeds the required ECR read-and-push permission boundary'
 fi
