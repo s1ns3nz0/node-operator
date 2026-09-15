@@ -6,6 +6,8 @@
 # Side effects: The same guarded release flow provisions infrastructure, private
 # access, Vault, workloads, custody and activation in dependency order.
 set -euo pipefail
+# Keep the authenticated source tree immutable while running Python helpers.
+export PYTHONDONTWRITEBYTECODE=1
 [ "$#" -eq 0 ] || { printf '%s\n' 'This is the sole release entrypoint and accepts no command-line options. Run it without arguments.' >&2; exit 64; }
 
 print_startup_guidance() {
@@ -42,6 +44,12 @@ print_startup_guidance() {
 print_startup_guidance
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd "$script_dir/../.." && pwd -P)"
+
+# Extracted bundles keep this executable under source/scripts/release. Do not
+# mistake that source subtree for a Git checkout and rebuild the signed bundle.
+if [ "$(basename "$repo_root")" = source ] && [ -f "$repo_root/../bundle-manifest.json" ] && [ ! -L "$repo_root/../bundle-manifest.json" ]; then
+  exec "$script_dir/interactive-hoodi-release.sh"
+fi
 
 # A checked-out repository does not contain the outer verified-bundle
 # manifest. Build that manifest locally so the public command remains a

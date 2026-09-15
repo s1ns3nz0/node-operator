@@ -3,6 +3,7 @@ import base64, hashlib, importlib.util, json, os, tempfile, unittest
 from pathlib import Path
 import sys
 from unittest.mock import patch
+from contextlib import nullcontext
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/"release"))
 import installer_artifact_mirror as mirror_module
 from installer_artifact_mirror import MirrorError, _describe_digest, mirror, verify_pre_eks_vault_mirror, NAMES, AWS_TIMEOUT, DOCKER_TIMEOUT
@@ -42,6 +43,35 @@ def mock_chart_layout(work, name, manifest, config, layers, archives):
  path=work/"oci"/name/"blobs/sha256";path.mkdir(parents=True,exist_ok=True);(path/hashlib.sha256(manifest).hexdigest()).write_bytes(manifest)
  return path.parents[2],"mirror-"+hashlib.sha256(manifest).hexdigest()
 class Mirror(unittest.TestCase):
+ def test_environment_cannot_redirect_aws_evidence(self):
+  overrides={"AWS_ENDPOINT_URL":"http://invalid", "AWS_ENDPOINT_URL_STS":"http://invalid", "AWS_ENDPOINT_URL_ECR":"http://invalid", "AWS_IGNORE_CONFIGURED_ENDPOINT_URLS":"false", "AWS_DEFAULT_REGION":"us-east-1", "AWS_DEFAULT_PROFILE":"other", "GITHUB_TOKEN":"unchanged-fixture"}
+  with patch.dict(os.environ,overrides):
+   value=mirror_module._mirror_env("selected","ap-northeast-2")
+   self.assertFalse(any(key.startswith("AWS_ENDPOINT_URL") for key in value))
+   self.assertEqual(value["AWS_IGNORE_CONFIGURED_ENDPOINT_URLS"],"true")
+   self.assertEqual(value["AWS_DEFAULT_REGION"],"ap-northeast-2")
+   self.assertEqual(value["AWS_DEFAULT_PROFILE"],"selected")
+   self.assertEqual(value["GITHUB_TOKEN"],"unchanged-fixture")
+   self.assertEqual(os.environ["AWS_ENDPOINT_URL"],"http://invalid")
+ def test_release_payload_copies_images_and_charts_without_vendor_download(self):
+  with tempfile.TemporaryDirectory() as temporary:
+   state,bundle,digest=self.fixture(Path(temporary)); layouts=state/"verified-oci"; layouts.mkdir()
+   calls=[]
+   class Result:
+    def __init__(self,stdout=""): self.stdout=stdout
+   def run(command,**kwargs):
+    calls.append(command)
+    if command[:3]==["aws","sts","get-caller-identity"]: return Result("123456789012")
+    if command[:3]==["aws","ecr","get-login-password"]: return Result("fixture")
+    return Result()
+   with patch("installer_oci_binding.payload_context",return_value=nullcontext(layouts)), patch.object(mirror_module.subprocess,"run",side_effect=run), patch.object(mirror_module,"_describe_digest",side_effect=lambda a,r,repo,tag,expected,*args,**kwargs: expected):
+    mirror(state,bundle,{"aws_account_id":"123456789012","aws_region":"ap-northeast-1","deployment_name":"fixture"},"test","c"*40,payload_dir=state,authenticated_bundle_manifest_sha256="a"*64)
+   copies=[command for command in calls if command[:2]==["docker","run"]]
+   self.assertEqual(len(copies),10)
+   self.assertTrue(all(any(value.startswith("oci:/payload/") for value in command) for command in copies))
+   self.assertTrue(all("--preserve-digests" in command for command in copies))
+   self.assertFalse(any("curl" in value for command in calls for value in command))
+   self.assertFalse(any(command[:3]==["aws","ecr","put-image"] for command in calls))
  def setUp(self):
   self.chart_patcher=patch.object(mirror_module,"_chart_fixture",side_effect=mock_chart_fixture);self.layout_patcher=patch.object(mirror_module,"_chart_layout",side_effect=mock_chart_layout);self.chart_patcher.start();self.layout_patcher.start()
   self.stage_patcher=patch.object(mirror_module,"_staged_chart_manifest");self.stage_patcher.start()

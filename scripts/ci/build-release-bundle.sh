@@ -16,6 +16,7 @@ prysm_publication_record=''
 fence_publication_record=''
 client_chart_publication_records=''
 signer_probe_publication_record=''
+oci_payload_manifest=''
 while [ "$#" -gt 1 ]; do
   case "$1" in
     --publication-records-dir) publication_records_directory="${2:-}"; shift 2 ;;
@@ -23,10 +24,11 @@ while [ "$#" -gt 1 ]; do
     --fence-publication-record) fence_publication_record="${2:-}"; shift 2 ;;
     --client-chart-publication-records) client_chart_publication_records="${2:-}"; shift 2 ;;
     --signer-probe-publication-record) signer_probe_publication_record="${2:-}"; shift 2 ;;
-    *) printf 'usage: %s [--publication-records-dir ABSOLUTE_DIRECTORY] [--prysm-publication-record ABSOLUTE_FILE] [--fence-publication-record ABSOLUTE_FILE] [--client-chart-publication-records ABSOLUTE_DIRECTORY] [--signer-probe-publication-record ABSOLUTE_FILE] OUTPUT_DIRECTORY\n' "$0" >&2; exit 64 ;;
+    --oci-payload-manifest) oci_payload_manifest="${2:-}"; shift 2 ;;
+    *) printf 'usage: %s [--publication-records-dir ABSOLUTE_DIRECTORY] [--prysm-publication-record ABSOLUTE_FILE] [--fence-publication-record ABSOLUTE_FILE] [--client-chart-publication-records ABSOLUTE_DIRECTORY] [--signer-probe-publication-record ABSOLUTE_FILE] [--oci-payload-manifest ABSOLUTE_FILE] OUTPUT_DIRECTORY\n' "$0" >&2; exit 64 ;;
   esac
 done
-[ "$#" -eq 1 ] || { printf 'usage: %s [--publication-records-dir ABSOLUTE_DIRECTORY] [--prysm-publication-record ABSOLUTE_FILE] [--fence-publication-record ABSOLUTE_FILE] [--client-chart-publication-records ABSOLUTE_DIRECTORY] [--signer-probe-publication-record ABSOLUTE_FILE] OUTPUT_DIRECTORY\n' "$0" >&2; exit 64; }
+[ "$#" -eq 1 ] || { printf 'usage: %s [--publication-records-dir ABSOLUTE_DIRECTORY] [--prysm-publication-record ABSOLUTE_FILE] [--fence-publication-record ABSOLUTE_FILE] [--client-chart-publication-records ABSOLUTE_DIRECTORY] [--signer-probe-publication-record ABSOLUTE_FILE] [--oci-payload-manifest ABSOLUTE_FILE] OUTPUT_DIRECTORY\n' "$0" >&2; exit 64; }
 output_directory="$1"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -70,6 +72,11 @@ if [ -n "$signer_probe_publication_record" ]; then
   [ -f "$signer_probe_publication_record" ] && [ ! -L "$signer_probe_publication_record" ] || { printf '%s\n' 'signer-probe publication record must be an absolute regular file' >&2; exit 65; }
 fi
 
+if [ -n "$oci_payload_manifest" ]; then
+  case "$oci_payload_manifest" in /*) ;; *) printf '%s\n' 'OCI payload manifest must be an absolute regular file' >&2; exit 64 ;; esac
+  [ -f "$oci_payload_manifest" ] && [ ! -L "$oci_payload_manifest" ] || { printf '%s\n' 'OCI payload manifest must be an absolute regular file' >&2; exit 65; }
+fi
+
 if [ -n "$client_chart_publication_records" ]; then
   case "$client_chart_publication_records" in /*) ;; *) printf '%s\n' 'client chart publication records directory must be absolute' >&2; exit 64 ;; esac
   [ -d "$client_chart_publication_records" ] && [ ! -L "$client_chart_publication_records" ] || { printf '%s\n' 'client chart publication records directory must be a regular directory' >&2; exit 65; }
@@ -88,6 +95,23 @@ mkdir -p "$stage_directory/source" "$stage_directory/rendered"
 
 path_is_in_release_boundary() {
   case "$1" in
+    .env.example|release/.env.example|release/env.example)
+      return 0
+      ;;
+    # Temporary private publication transport is not a deployment dependency.
+    release/oci-payload-source.json)
+      return 1
+      ;;
+    # Operator-local inputs never ship, even if accidentally committed under
+    # an otherwise eligible source directory. Keep example schemas only.
+    */.env|*/env|*/.env.*|*/env.*.local|*/keystore-*.json|*/deposit_data-*.json|*/deposit-data-*.json|*/terraform.tfstate*|*/terraform.tfvars|*/terraform.tfvars.json|*.tfplan|*.p12|*.pfx|*.key)
+      return 1
+      ;;
+    # Historical maintenance tools are bound to the maintainer's old identity,
+    # validator key or deleted resource IDs, not a new installer deployment.
+    scripts/ops/verify-hoodi-001-signer-tls-rejection.sh|scripts/ops/configure-private-vault-operator-auth.sh|scripts/ops/recover-and-configure-private-vault-operator-auth.sh|scripts/ops/with-private-vault-operator.sh|scripts/ops/publish-reviewed-vault-grpc-candidates.sh|scripts/ci/check-ops-access-ssm-retention-plan.sh)
+      return 1
+      ;;
     # Missing-history preparation verifies this exact non-secret source pin.
     .ci/web3signer-hardened/source.lock.json|scripts/ops/lib/uc5-beacon-reader.py)
       return 0
@@ -177,6 +201,13 @@ done
 
 kubectl kustomize "$stage_directory/source/deploy/prysm" > "$stage_directory/rendered/prysm.yaml"
 kubectl kustomize "$stage_directory/source/deploy/nethermind" > "$stage_directory/rendered/nethermind.yaml"
+
+# OCI chunk assets are GitHub release assets, deliberately outside this primary
+# bundle.  Bind only their bounded, strict manifest to the candidate bundle.
+if [ -n "$oci_payload_manifest" ]; then
+  cp "$oci_payload_manifest" "$stage_directory/rendered/installer-oci-payload-manifest.json"
+  chmod 600 "$stage_directory/rendered/installer-oci-payload-manifest.json"
+fi
 
 # The committed authorization is the explicit decision to bind a prior
 # candidate publication to this release.  The record itself is supplied only
@@ -351,6 +382,92 @@ import sys
 from client_chart_release_authorization import validate_release_authorization
 
 validate_release_authorization(Path(sys.argv[1]), sys.argv[2], "stage")
+PY
+fi
+
+# Bind an OCI payload only to the exact approved roots from this candidate's
+# source.  These placeholders affect destination projection only; no AWS call,
+# credential lookup, image approval, or image creation occurs here.
+if [ -n "$oci_payload_manifest" ]; then
+  PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$stage_directory/source/scripts/release" python3 -B - "$stage_directory" "$source_revision" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+from pathlib import PurePosixPath
+
+from installer_artifact_inventory import InventoryError, build_inventory
+from installer_oci_selection import SelectionError, approved_roots
+from installer_oci_payload import MAX_ENTRIES, MAX_METADATA_BYTES, OciPayloadError
+
+stage, revision = Path(sys.argv[1]), sys.argv[2]
+path = stage / "rendered/installer-oci-payload-manifest.json"
+
+def reject(message):
+    raise OciPayloadError(message)
+
+def no_duplicates(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            reject("payload manifest contains duplicate JSON object key")
+        result[key] = value
+    return result
+
+try:
+    raw = path.read_bytes()
+    if len(raw) > MAX_METADATA_BYTES:
+        reject("payload manifest metadata is too large")
+    manifest = json.loads(raw.decode("utf-8"), object_pairs_hook=no_duplicates)
+    if not isinstance(manifest, dict) or set(manifest) != {"schema_version", "roots", "entries", "chunks"} or manifest["schema_version"] != 1:
+        reject("payload manifest schema is invalid")
+    roots = manifest["roots"]
+    if not isinstance(roots, dict) or not roots:
+        reject("payload manifest roots are invalid")
+    digest = re.compile(r"sha256:[0-9a-f]{64}\Z")
+    label = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
+    actual = {}
+    for name, value in roots.items():
+        if not isinstance(name, str) or not label.fullmatch(name) or not isinstance(value, dict) or set(value) != {"root_digest", "root_media_type", "root_annotations"} or not isinstance(value["root_digest"], str) or not digest.fullmatch(value["root_digest"]) or not isinstance(value["root_media_type"], str) or not isinstance(value["root_annotations"], dict):
+            reject("payload manifest root is invalid")
+        actual[name] = value["root_digest"]
+    if not isinstance(manifest["entries"], list) or not isinstance(manifest["chunks"], list) or len(manifest["entries"]) > MAX_ENTRIES or not manifest["chunks"]:
+        reject("payload manifest entries or chunks are invalid")
+    def safe_member(name):
+        if not isinstance(name, str) or not name or "\\" in name:
+            reject("payload manifest member path is invalid")
+        item = PurePosixPath(name)
+        if item.is_absolute() or any(part in ("", ".", "..") for part in item.parts) or str(item) != name:
+            reject("payload manifest member path is invalid")
+        return name
+    entries = {}
+    for item in manifest["entries"]:
+        if not isinstance(item, dict) or set(item) != {"path", "sha256", "size"}:
+            reject("payload manifest entry schema is invalid")
+        name = safe_member(item.get("path"))
+        if name in entries or not isinstance(item.get("sha256"), str) or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"]) or not isinstance(item.get("size"), int) or isinstance(item["size"], bool) or item["size"] < 0:
+            reject("payload manifest entry is invalid")
+        entries[name] = item
+    chunk_members = []
+    chunk_names = set()
+    for item in manifest["chunks"]:
+        if not isinstance(item, dict) or set(item) != {"name", "sha256", "size", "entries"} or not isinstance(item.get("name"), str) or not re.fullmatch(r"chunks/oci-payload-[0-9]{5}\.tar", item["name"]) or not isinstance(item.get("sha256"), str) or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"]) or not isinstance(item.get("size"), int) or isinstance(item["size"], bool) or item["size"] <= 0 or item["size"] >= 2 * 1024 * 1024 * 1024 or not isinstance(item.get("entries"), list):
+            reject("payload manifest chunk is invalid")
+        members = [safe_member(name) for name in item["entries"]]
+        if item["name"] in chunk_names:
+            reject("payload manifest chunk names are duplicated")
+        chunk_names.add(item["name"])
+        if len(members) != len(set(members)) or any(name not in entries for name in members):
+            reject("payload manifest chunk members are invalid")
+        chunk_members.extend(members)
+    if sorted(chunk_members) != sorted(entries) or len(chunk_members) != len(set(chunk_members)):
+        reject("payload manifest chunks do not cover entries exactly")
+    expected = approved_roots(build_inventory(stage, revision, "000000000000", "ap-northeast-2", "release-check", require_signer_probe=True))
+    if actual != expected:
+        reject("payload roots differ from this release candidate inventory")
+except (OSError, UnicodeDecodeError, json.JSONDecodeError, InventoryError, SelectionError, OciPayloadError) as error:
+    print(f"OCI payload manifest binding failed: {error}", file=sys.stderr)
+    raise SystemExit(65)
 PY
 fi
 

@@ -206,6 +206,12 @@ case "$command_name" in
     [ "$operation" = apply ] && [ -n "$work_dir" ] && [ -z "$session_handoff$output_dir" ] || usage
     [[ "$profile" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]] || { printf '%s\n' 'AWS profile is invalid' >&2; exit 64; }
     revision="$(jq -er '.source_revision | select(test("^[0-9a-f]{40}$"))' "$bundle_root/bundle-manifest.json")" || { printf '%s\n' 'bundle revision is invalid' >&2; exit 65; }
+    payload_args=()
+    if [ -e "$bundle_root/rendered/installer-oci-payload-manifest.json" ] || [ -n "${NODE_OPERATOR_OCI_PAYLOAD_DIR:-}${NODE_OPERATOR_AUTHENTICATED_BUNDLE_MANIFEST_SHA256:-}" ]; then
+      case "${NODE_OPERATOR_OCI_PAYLOAD_DIR:-}" in /*) ;; *) printf '%s\n' 'authenticated release launcher must supply the OCI payload directory before infrastructure creation' >&2; exit 65 ;; esac
+      [[ "${NODE_OPERATOR_AUTHENTICATED_BUNDLE_MANIFEST_SHA256:-}" =~ ^[a-f0-9]{64}$ ]] || { printf '%s\n' 'authenticated release manifest hash is required before infrastructure creation' >&2; exit 65; }
+      payload_args=(--oci-payload-dir "$NODE_OPERATOR_OCI_PAYLOAD_DIR" --verified-bundle-manifest-sha256 "$NODE_OPERATOR_AUTHENTICATED_BUNDLE_MANIFEST_SHA256")
+    fi
     expected_baseline="$(dirname "$zero_inputs")/baseline.tfvars.json"
     [ "$(jq -er '.baseline_config' "$zero_inputs")" = "$expected_baseline" ] && [ -f "$expected_baseline" ] && [ ! -L "$expected_baseline" ] || { printf '%s\n' 'zero-resource baseline configuration path is invalid' >&2; exit 65; }
     deployment_name="$(jq -er '.name | select(test("^[a-z][a-z0-9-]{1,18}[a-z0-9]$"))' "$expected_baseline")" || { printf '%s\n' 'zero-resource baseline configuration lacks deployment name' >&2; exit 65; }
@@ -217,9 +223,9 @@ case "$command_name" in
     mirror_args=(--bundle-root "$bundle_root" --state-dir "$work_dir" --work-dir "$work_dir" --inputs-dir "$(dirname "$zero_inputs")" --account "$account" --region "$input_region" --deployment-name "$deployment_name" --profile "$profile" --release-sha "$revision")
     if [ -e "$work_dir/vault-artifact-mirror-receipt.json" ] || [ -e "$work_dir/vault-artifact-manifest.json" ] || [ -e "$work_dir/vault-pre-eks-artifact-mirror-binding.json" ] || [ -e "$work_dir/vault-pre-eks-artifact-mirror-verified.json" ] || [ -e "$work_dir/vault-pre-eks-artifact-mirror-uncertain.json" ] || [ -L "$work_dir/vault-artifact-mirror-receipt.json" ] || [ -L "$work_dir/vault-artifact-manifest.json" ] || [ -L "$work_dir/vault-pre-eks-artifact-mirror-uncertain.json" ]; then vault_operation=resume; else vault_operation=mirror; fi
     if [ -e "$work_dir/full-artifact-mirror-receipt.json" ] || [ -e "$work_dir/full-artifact-mirror-uncertain.json" ] || [ -L "$work_dir/full-artifact-mirror-receipt.json" ] || [ -L "$work_dir/full-artifact-mirror-uncertain.json" ]; then non_vault_operation=resume; else non_vault_operation=mirror; fi
-    "${selected_env[@]}" python3 "${adapter[0]}" "$vault_operation" "${mirror_args[@]}"
+    "${selected_env[@]}" python3 "${adapter[0]}" "$vault_operation" "${mirror_args[@]}" ${payload_args[@]+"${payload_args[@]}"}
     "${selected_env[@]}" python3 "${adapter[0]}" verify "${mirror_args[@]}"
-    "${selected_env[@]}" python3 "${adapter[0]}" "$non_vault_operation" --scope non-vault "${mirror_args[@]}"
+    "${selected_env[@]}" python3 "${adapter[0]}" "$non_vault_operation" --scope non-vault "${mirror_args[@]}" ${payload_args[@]+"${payload_args[@]}"}
     "${selected_env[@]}" python3 "${adapter[0]}" verify --scope non-vault "${mirror_args[@]}"
     "${selected_env[@]}" "$release_dir/node-operator-release.sh" zero apply --bundle-root "$bundle_root" --inputs "$zero_inputs" --work-dir "$work_dir"
     ;;

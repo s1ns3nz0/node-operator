@@ -2,8 +2,8 @@
 # Check objective: Prove release-bundle generation is deterministic and contains required reviewed inputs.
 set -euo pipefail
 
-publication_records_directory=''; prysm_publication_record=''; fence_publication_record=''; client_chart_records=''; signer_probe_publication_record=''
-while [ "$#" -gt 1 ]; do case "$1" in --publication-records-dir) [ -n "${2:-}" ] || exit 64; publication_records_directory="$2"; shift 2 ;; --prysm-publication-record) [ -n "${2:-}" ] || exit 64; prysm_publication_record="$2"; shift 2 ;; --fence-publication-record) [ -n "${2:-}" ] || exit 64; fence_publication_record="$2"; shift 2 ;; --client-chart-publication-records) [ -n "${2:-}" ] || exit 64; client_chart_records="$2"; shift 2 ;; --signer-probe-publication-record) [ -n "${2:-}" ] || exit 64; signer_probe_publication_record="$2"; shift 2 ;; *) exit 64 ;; esac; done
+publication_records_directory=''; prysm_publication_record=''; fence_publication_record=''; client_chart_records=''; signer_probe_publication_record=''; oci_payload_manifest=''
+while [ "$#" -gt 1 ]; do case "$1" in --publication-records-dir) [ -n "${2:-}" ] || exit 64; publication_records_directory="$2"; shift 2 ;; --prysm-publication-record) [ -n "${2:-}" ] || exit 64; prysm_publication_record="$2"; shift 2 ;; --fence-publication-record) [ -n "${2:-}" ] || exit 64; fence_publication_record="$2"; shift 2 ;; --client-chart-publication-records) [ -n "${2:-}" ] || exit 64; client_chart_records="$2"; shift 2 ;; --signer-probe-publication-record) [ -n "${2:-}" ] || exit 64; signer_probe_publication_record="$2"; shift 2 ;; --oci-payload-manifest) [ -n "${2:-}" ] || exit 64; oci_payload_manifest="$2"; shift 2 ;; *) exit 64 ;; esac; done
 if [ "$#" -eq 0 ]; then first=''; offline_fixture=true; elif [ "$#" -eq 1 ]; then first="$1"; offline_fixture=false; else exit 64; fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,7 +20,7 @@ trap 'rm -rf "$temporary_directory"' EXIT
 # Zero-argument tests exercise legacy/index construction without remote inputs.
 # Isolate that fixture from real release authorizations; explicit evidence calls
 # still test the selected release unchanged and must supply all required records.
-if [ "$offline_fixture" = true ] && [ -z "$publication_records_directory$prysm_publication_record$fence_publication_record$client_chart_records$signer_probe_publication_record" ] &&
+if [ "$offline_fixture" = true ] && [ -z "$publication_records_directory$prysm_publication_record$fence_publication_record$client_chart_records$signer_probe_publication_record$oci_payload_manifest" ] &&
    { [ -f "$(repo_root)/release/prysm-publication-authorization.json" ] ||
      [ -f "$(repo_root)/release/fence-publication-authorization.json" ] ||
      [ -f "$(repo_root)/release/client-chart-publication-authorization.json" ] ||
@@ -49,7 +49,7 @@ fi
 # zero-argument offline fixture path supplies the local scan interface it
 # exercises. Explicit-output or publication-record invocations therefore keep
 # requiring the real scanner and cannot publish synthetic SBOM evidence.
-if [ "$offline_fixture" = true ] && [ -z "$publication_records_directory$prysm_publication_record$fence_publication_record$client_chart_records$signer_probe_publication_record" ]; then
+if [ "$offline_fixture" = true ] && [ -z "$publication_records_directory$prysm_publication_record$fence_publication_record$client_chart_records$signer_probe_publication_record$oci_payload_manifest" ]; then
   fake_tools="$temporary_directory/fake-tools"
   mkdir -m 700 "$fake_tools"
   cat > "$fake_tools/syft" <<'EOF'
@@ -84,6 +84,7 @@ build_bundle() {
   [ -z "$fence_publication_record" ] || arguments+=(--fence-publication-record "$fence_publication_record")
   [ -z "$client_chart_records" ] || arguments+=(--client-chart-publication-records "$client_chart_records")
   [ -z "$signer_probe_publication_record" ] || arguments+=(--signer-probe-publication-record "$signer_probe_publication_record")
+  [ -z "$oci_payload_manifest" ] || arguments+=(--oci-payload-manifest "$oci_payload_manifest")
   "$script_dir/build-release-bundle.sh" "${arguments[@]}" "$2"
 }
 if [ -n "$publication_records_directory" ]; then
@@ -91,8 +92,10 @@ if [ -n "$publication_records_directory" ]; then
   build_bundle "$publication_records_directory" "$temporary_directory/second" >/dev/null
 else
   [ -z "$prysm_publication_record" ] && [ -z "$fence_publication_record" ] && [ -z "$client_chart_records" ] && [ -z "$signer_probe_publication_record" ] || { printf '%s\n' 'candidate records require publication records' >&2; exit 64; }
-  "$script_dir/build-release-bundle.sh" "$first" >/dev/null
-  "$script_dir/build-release-bundle.sh" "$temporary_directory/second" >/dev/null
+  arguments=()
+  [ -z "$oci_payload_manifest" ] || arguments+=(--oci-payload-manifest "$oci_payload_manifest")
+  "$script_dir/build-release-bundle.sh" ${arguments[@]+"${arguments[@]}"} "$first" >/dev/null
+  "$script_dir/build-release-bundle.sh" ${arguments[@]+"${arguments[@]}"} "$temporary_directory/second" >/dev/null
 fi
 
 for filename in node-operator-release-bundle.tar node-operator-release-bundle.sha256 manifest.json provenance-input.json; do
@@ -204,7 +207,6 @@ for required_path in \
   source/infra/ops-access/.terraform.lock.hcl \
   source/infra/ops-access/backend.hcl.example \
   source/infra/ops-access/terraform.tfvars.example \
-  source/scripts/ci/check-ops-access-ssm-retention-plan.sh \
   source/infra/baseline/variables.tf \
   source/release/hoodi-release-contract.json \
   source/scripts/release/node-operator-release.sh \
@@ -260,6 +262,12 @@ for required_path in \
   grep -F -x -- "$required_path" "$temporary_directory/archive-paths.txt" >/dev/null
 done
 for excluded_path in \
+  source/scripts/ops/verify-hoodi-001-signer-tls-rejection.sh \
+  source/scripts/ops/configure-private-vault-operator-auth.sh \
+  source/scripts/ops/recover-and-configure-private-vault-operator-auth.sh \
+  source/scripts/ops/with-private-vault-operator.sh \
+  source/scripts/ops/publish-reviewed-vault-grpc-candidates.sh \
+  source/scripts/ci/check-ops-access-ssm-retention-plan.sh \
   source/deploy/validator/vault/remote-signer-kubernetes-auth-role.json \
   source/deploy/validator/vault/remote-signer.hcl \
   source/deploy/validator/vault/tls-rotation.hcl; do

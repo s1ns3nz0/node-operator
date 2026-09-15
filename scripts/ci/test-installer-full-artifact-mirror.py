@@ -5,12 +5,36 @@ from __future__ import annotations
 import base64, importlib.util, json, os, subprocess, sys, tempfile, unittest
 from unittest import mock
 from pathlib import Path
+from contextlib import nullcontext
 
 ROOT=Path(__file__).resolve().parents[2]; sys.path.insert(0,str(ROOT/"scripts/release"))
 spec=importlib.util.spec_from_file_location("full",ROOT/"scripts/release/installer_full_artifact_mirror.py"); full=importlib.util.module_from_spec(spec); assert spec.loader; spec.loader.exec_module(full)
 SHA="a"*40; DIGEST="sha256:"+"b"*64; ACCOUNT="123456789012"; REGION="ap-northeast-2"; NAME="node-operator"
 
 class FullMirrorTests(unittest.TestCase):
+ def test_payload_uses_local_source_without_source_registry_login(self):
+  inventory=self.inventory()
+  inventory["artifacts"][1]["source"]="999999999999.dkr.ecr.ap-northeast-1.amazonaws.com/deleted-source@"+DIGEST
+  full.build_inventory=lambda *a,**k:inventory
+  layouts=self.state/"verified-oci"; layouts.mkdir()
+  calls,run=self.runner()
+  with mock.patch("installer_oci_binding.payload_context", return_value=nullcontext(layouts)), mock.patch.object(full,"_describe",side_effect=[False,True,True]):
+   full.mirror(self.state,self.bundle,self.discovery,"fixture",SHA,work_dir=self.work,inputs_dir=self.inputs,runner=run,payload_dir=self.state,authenticated_bundle_manifest_sha256="a"*64)
+  copies=[command for command,_ in calls if command[:2]==["docker","run"]]
+  self.assertEqual(len(copies),1)
+  self.assertIn("oci:/payload/argo-cd:root-"+DIGEST[7:19],copies[0])
+  self.assertIn(str(layouts)+":/payload:ro",copies[0])
+  self.assertIn("--preserve-digests",copies[0])
+  self.assertFalse(any(value.startswith("docker://ghcr.io") for value in copies[0]))
+  logins=[command for command,_ in calls if command[:3]==["aws","ecr","get-login-password"]]
+  self.assertEqual(len(logins),1)
+  self.assertEqual(logins[0][-1],REGION)
+ def test_payload_required_rejection_has_no_runner_calls(self):
+  (self.bundle/"rendered").mkdir(); (self.bundle/"rendered/installer-oci-payload-manifest.json").write_text("{}")
+  calls,run=self.runner()
+  with self.assertRaises(ValueError):
+   full.mirror(self.state,self.bundle,self.discovery,"fixture",SHA,work_dir=self.work,inputs_dir=self.inputs,runner=run)
+  self.assertEqual(calls,[])
  def setUp(self):
   self.temp=tempfile.TemporaryDirectory(); self.state=Path(self.temp.name)/"state"; self.work=self.state/"terraform-work"; self.inputs=Path(self.temp.name)/"inputs"; self.bundle=Path(self.temp.name)/"bundle"
   self.state.mkdir(mode=0o700); self.work.mkdir(mode=0o700); self.inputs.mkdir(); self.bundle.mkdir(); (self.work/"artifact-prerequisites.json").write_text("{}")

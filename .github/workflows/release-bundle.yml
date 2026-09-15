@@ -80,12 +80,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITOPS_EVIDENCE_TOKEN: ${{ steps.gitops-reader.outputs.token }}
         run: bash scripts/ci/prepare-release-publication-records.sh
+      # Role: Read exact versioned private staging objects without persisting AWS credentials across steps.
+      - name: Version-bound OCI release inputs
+        # Historical verification may omit OCI transport; every new publication must include it.
+        if: hashFiles('release/oci-payload-source.json') != '' || github.event_name == 'push' || inputs.mode == 'publish'
+        env:
+          OCI_STAGING_READ_ROLE_ARN: ${{ vars.OCI_STAGING_READ_ROLE_ARN }}
+        run: bash scripts/ci/workflows/fetch-release-oci-payload.sh
       # Role: Build the bundle with the pinned toolchain and compare repeat builds for deterministic output.
       - name: Reproducible Release Bundle
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
           GH_TOKEN: ${{ github.token }}
+          OCI_PAYLOAD_MANIFEST: ${{ (hashFiles('release/oci-payload-source.json') != '' || github.event_name == 'push' || inputs.mode == 'publish') && format('{0}/release-oci/payload/payload-manifest.json', runner.temp) || '' }}
         run: bash scripts/ci/workflows/check-reproducible-release.sh
       # Role: Freeze the independently verified source records for same-release publication consumption.
       - name: Freeze publication records
@@ -232,12 +240,18 @@ jobs:
         with:
           name: signer-probe-publication-record-${{ github.sha }}
           path: ${{ runner.temp }}/signer-probe-publication-record
+      # Role: Refetch the same versioned OCI inputs used by the integrity job.
+      - name: Version-bound OCI release inputs
+        env:
+          OCI_STAGING_READ_ROLE_ARN: ${{ vars.OCI_STAGING_READ_ROLE_ARN }}
+        run: bash scripts/ci/workflows/fetch-release-oci-payload.sh
       # Role: Rebuild the release and verify it matches the approved bundle and SBOM digest.
       - name: Release Bundle
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USERNAME: ${{ github.actor }}
           APPROVED_ARTIFACT_DIGEST: ${{ needs.reproducibility.outputs.artifact_digest }}
+          OCI_PAYLOAD_MANIFEST: ${{ format('{0}/release-oci/payload/payload-manifest.json', runner.temp) }}
           PUBLICATION_RECORDS_DIR: ${{ runner.temp }}/release-publication-records
           GH_TOKEN: ${{ github.token }}
           PRYSM_PUBLICATION_RECORD: ${{ runner.temp }}/prysm-publication-record/prysm-mtls-publication-record.json
@@ -259,4 +273,6 @@ jobs:
       - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          APPROVED_ARTIFACT_DIGEST: ${{ needs.reproducibility.outputs.artifact_digest }}
+          OCI_PAYLOAD_DIR: ${{ format('{0}/release-oci/payload', runner.temp) }}
         run: scripts/release/create-github-release.sh

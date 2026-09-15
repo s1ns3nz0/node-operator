@@ -38,6 +38,16 @@ python3 scripts/ci/test-mirror-installer-vault-artifacts.py
 python3 scripts/ci/test-installer-artifact-mirror.py
 python3 scripts/ci/test-installer-registry-auth.py
 python3 scripts/ci/test-installer-artifact-inventory.py
+python3 scripts/ci/test-installer-oci-selection.py
+python3 scripts/ci/test-installer-oci-payload.py
+python3 scripts/ci/test-installer-oci-binding.py
+python3 scripts/ci/test-installer-release-signature.py
+python3 scripts/ci/test-installer-release-download.py
+python3 scripts/ci/test-release-bundle-oci-payload-binding.py
+python3 scripts/ci/test-release-oci-assets.py
+python3 scripts/ci/test-release-oci-staging.py
+python3 scripts/ci/test-release-oci-fetch-wrapper.py
+bash scripts/ci/test-oci-payload-release-wrapper-forwarding.sh
 python3 scripts/ci/test-installer-full-artifact-mirror.py
 python3 scripts/ci/test-hoodi-artifact-first.py
 bash scripts/ci/test-interactive-hoodi-config-recorder-contract.sh

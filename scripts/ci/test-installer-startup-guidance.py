@@ -53,6 +53,19 @@ class InstallerStartupGuidanceTests(unittest.TestCase):
         self.assertIn("accepts no command-line options", result.stderr)
         self.assertNotIn("BUILDER_REACHED", result.stderr)
 
+    def test_extracted_bundle_does_not_rebuild_its_signed_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            installer = self.make_fixture(root / "source")
+            (root / "bundle-manifest.json").write_text('{"schema_version":"v1"}')
+            flow = installer.with_name("interactive-hoodi-release.sh")
+            flow.write_text('#!/usr/bin/env bash\n[ "$PYTHONDONTWRITEBYTECODE" = 1 ] || exit 92\nprintf "%s\\n" DOWNLOADED_BUNDLE_FLOW\n')
+            flow.chmod(0o755)
+            result = subprocess.run(["bash", str(installer)], text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("DOWNLOADED_BUNDLE_FLOW", result.stdout)
+        self.assertNotIn("BUILDER_REACHED", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

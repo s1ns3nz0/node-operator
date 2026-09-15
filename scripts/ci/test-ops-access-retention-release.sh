@@ -8,7 +8,8 @@ scratch="$(mktemp -d "${TMPDIR:-/tmp}/ops-access-release.XXXXXX")"
 trap 'rm -rf "$scratch"' EXIT
 bundle="$scratch/bundle"; mkdir -p "$bundle/infra" "$bundle/scripts/ci" "$scratch/bin" "$scratch/private"
 chmod 700 "$scratch/private"
-cp -R "$root/infra/ops-access" "$bundle/infra/ops-access"
+mkdir -p "$bundle/infra/ops-access"
+cp "$root/infra/ops-access/"*.tf "$bundle/infra/ops-access/"
 cp "$root/scripts/ci/check-ops-access-ssm-retention-plan.sh" "$bundle/scripts/ci/"
 chmod +x "$bundle/scripts/ci/check-ops-access-ssm-retention-plan.sh"
 : > "$scratch/config.tfvars"; : > "$scratch/backend.hcl"
@@ -97,6 +98,16 @@ for scope_variable in existing_ssm_endpoint_security_group_id manage_existing_en
   if run_apply "$scratch/fresh-missing-scope-value.json" true >/dev/null 2>&1; then printf 'fresh plan with missing scope value applied\n' >&2; exit 1; fi
 done
 test "$(wc -l < "$scratch/trace" | tr -d ' ')" = 3
+
+# Published bundles omit the obsolete maintainer-specific checker. Fresh
+# deployment remains functional, while historical retention cannot be used.
+mv "$bundle/scripts/ci/check-ops-access-ssm-retention-plan.sh" "$scratch/historical-checker"
+run_apply "$scratch/fresh.json" true
+if run_apply "$scratch/retention.json" >/dev/null 2>&1; then
+  printf 'release without legacy checker accepted maintainer host retention\n' >&2
+  exit 1
+fi
+mv "$scratch/historical-checker" "$bundle/scripts/ci/check-ops-access-ssm-retention-plan.sh"
 
 # --allow-create cannot transform a retained or malformed plan into fresh mode.
 if run_apply "$scratch/retention.json" true >/dev/null 2>&1; then printf 'allow-create bypassed retention guard\n' >&2; exit 1; fi
