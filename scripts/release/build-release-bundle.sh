@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Check objective: Build the approved release bundle and bind its SBOM to the reproducibility digest.
 # Purpose: Rebuild the release bundle and reject it unless its tarball and SBOM match the approved digest.
-# Inputs: REGISTRY_TOKEN, REGISTRY_USERNAME, RELEASE_BUILD_IMAGE, APPROVED_ARTIFACT_DIGEST, GITHUB_WORKSPACE, RUNNER_TEMP, and PUBLICATION_RECORDS_DIR.
+# Inputs: REGISTRY_TOKEN, REGISTRY_USERNAME, RELEASE_BUILD_IMAGE, APPROVED_ARTIFACT_DIGEST, GITHUB_WORKSPACE, RUNNER_TEMP, PUBLICATION_RECORDS_DIR, and optional OCI_PAYLOAD_MANIFEST.
 # Outputs: Bundle and SBOM under RUNNER_TEMP/release.
 # Side effects: Authenticates to GHCR, pulls an image, and runs a local Docker build container.
 set -euo pipefail
@@ -153,6 +153,19 @@ elif [ -n "${SIGNER_PROBE_PUBLICATION_RECORD:-}" ]; then
   printf '%s\n' 'signer-probe publication record was supplied without a selected release authorization' >&2; exit 65
 fi
 
+oci_payload_mount=()
+oci_payload_argument=()
+oci_payload_manifest="${OCI_PAYLOAD_MANIFEST:-}"
+if [ -n "$oci_payload_manifest" ]; then
+  case "$oci_payload_manifest" in
+    /*) ;;
+    *) printf '%s\n' 'OCI_PAYLOAD_MANIFEST must be an absolute file' >&2; exit 64 ;;
+  esac
+  [ -f "$oci_payload_manifest" ] && [ ! -L "$oci_payload_manifest" ] || { printf '%s\n' 'OCI_PAYLOAD_MANIFEST must be a regular non-symlink file' >&2; exit 65; }
+  oci_payload_mount=(--volume "$oci_payload_manifest:/oci-payload-manifest.json:ro")
+  oci_payload_argument=(--oci-payload-manifest /oci-payload-manifest.json)
+fi
+
 release_output="$RUNNER_TEMP/release"
 mkdir -p "$release_output"
 [ -d "$release_output" ] && [ ! -L "$release_output" ] || { printf '%s\n' 'release output directory must be a regular directory' >&2; exit 65; }
@@ -171,7 +184,7 @@ for raw in sys.argv[2:]:
 PY
 echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
 docker pull "$RELEASE_BUILD_IMAGE"
-docker run --rm --user "$(id -u):$(id -g)" --volume "$GITHUB_WORKSPACE:/workspace:ro" --volume "$release_output:/output/release" --volume "$publication_records_directory:/publication-records:ro" ${prysm_mount[@]+"${prysm_mount[@]}"} ${fence_mount[@]+"${fence_mount[@]}"} ${client_chart_mount[@]+"${client_chart_mount[@]}"} ${signer_probe_mount[@]+"${signer_probe_mount[@]}"} --workdir /workspace "$RELEASE_BUILD_IMAGE" bash scripts/ci/build-release-bundle.sh --publication-records-dir /publication-records ${prysm_argument[@]+"${prysm_argument[@]}"} ${fence_argument[@]+"${fence_argument[@]}"} ${client_chart_argument[@]+"${client_chart_argument[@]}"} ${signer_probe_argument[@]+"${signer_probe_argument[@]}"} /output/release
+docker run --rm --user "$(id -u):$(id -g)" --volume "$GITHUB_WORKSPACE:/workspace:ro" --volume "$release_output:/output/release" --volume "$publication_records_directory:/publication-records:ro" ${prysm_mount[@]+"${prysm_mount[@]}"} ${fence_mount[@]+"${fence_mount[@]}"} ${client_chart_mount[@]+"${client_chart_mount[@]}"} ${signer_probe_mount[@]+"${signer_probe_mount[@]}"} ${oci_payload_mount[@]+"${oci_payload_mount[@]}"} --workdir /workspace "$RELEASE_BUILD_IMAGE" bash scripts/ci/build-release-bundle.sh --publication-records-dir /publication-records ${prysm_argument[@]+"${prysm_argument[@]}"} ${fence_argument[@]+"${fence_argument[@]}"} ${client_chart_argument[@]+"${client_chart_argument[@]}"} ${signer_probe_argument[@]+"${signer_probe_argument[@]}"} ${oci_payload_argument[@]+"${oci_payload_argument[@]}"} /output/release
 actual_artifact_digest="sha256:$(sha256sum "$RUNNER_TEMP/release/node-operator-release-bundle.tar" | awk '{print $1}')"
 test "$actual_artifact_digest" = "$APPROVED_ARTIFACT_DIGEST"
 test "$(jq -er '.metadata.component.version' "$RUNNER_TEMP/release/sbom.cyclonedx.json")" = "$APPROVED_ARTIFACT_DIGEST"

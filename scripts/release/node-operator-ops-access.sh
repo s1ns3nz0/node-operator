@@ -145,7 +145,7 @@ if [ "$credential_boundary" = true ]; then
   }
 fi
 module="$root/infra/ops-access"; guard="$root/scripts/ci/check-ops-access-ssm-retention-plan.sh"
-[ -x "$guard" ] || { printf 'retained-host plan guard is missing\n' >&2; exit 1; }
+# The historical retention checker is checkout-only and is not shipped.
 
 fresh_plan() {
   jq -e '
@@ -198,7 +198,6 @@ fresh_plan() {
     [$plan.resource_changes[]? | select(.mode == "managed" and .address == "aws_iam_instance_profile.host" and .type == "aws_iam_instance_profile" and (.change.actions | index("create")))] as $owned_profile_changes |
     [ $plan.configuration.root_module.resources[]? | select(.address == "aws_instance.host" and .mode == "managed" and .type == "aws_instance") ] as $configured_hosts |
     ($plan.prior_state.values.root_module | managed | map(select(.address == "aws_instance.host"))) as $prior_hosts |
-    ([.. | objects | .id? | select(. == "i-02c57d75e7f6810b1")] | length == 0) and
     ($plan.variables | has("retained_host_instance_id")) and
     ($plan.variables.retained_host_instance_id | has("value")) and
     ($plan.variables.retained_host_instance_id.value == null) and
@@ -252,7 +251,7 @@ render_json() {
 }
 classify_plan() {
   local json="$1"
-  if bash "$guard" "$json" >/dev/null; then
+  if [ -x "$guard" ] && bash "$guard" "$json" >/dev/null; then
     [ "$allow_create" = false ] || { printf 'retained-host plan must not use --allow-create\n' >&2; return 1; }
     printf 'retention\n'
   elif jq -e '

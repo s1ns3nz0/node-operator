@@ -23,9 +23,12 @@ def fixture(work):
     bundle = work / "bundle"; source = bundle / "source"; release = source / "scripts/release"; ops = source / "scripts/ops"
     release.mkdir(parents=True); ops.mkdir(parents=True)
     (source / "deploy/validator").mkdir(parents=True)
+    (source / "deploy/prysm").mkdir(parents=True)
     shutil.copy2(ROOT / "deploy/validator/storage-class.yaml", source / "deploy/validator/storage-class.yaml")
+    shutil.copy2(ROOT / "deploy/prysm/service.yaml", source / "deploy/prysm/service.yaml")
     (bundle / "bundle-manifest.json").write_text('{"source_revision":"' + "a" * 40 + '"}\n')
     shutil.copy(ROOT / "scripts/release/interactive-hoodi-release.sh", release / "interactive-hoodi-release.sh"); (release / "interactive-hoodi-release.sh").chmod(0o755)
+    shutil.copy(ROOT / "scripts/release/apply-hoodi-validator-runtime.sh", release / "apply-hoodi-validator-runtime.sh"); (release / "apply-hoodi-validator-runtime.sh").chmod(0o755)
     exe(release / "node-operator-release.sh", "#!/usr/bin/env bash\n[ \"$1\" = verify ] && exit 0\nexit 99\n")
     exe(release / "installer_artifact_inventory.py", "#!/usr/bin/env python3\nprint(" + repr(authority()) + ")\n")
     prepare = "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" > \"$PREPARE_LOG\"\nout=''; while [ \"$#\" -gt 0 ]; do [ \"$1\" = --output-dir ] && out=$2; shift; done\nif [ \"${PREPARE_EXIT:-97}\" = 0 ]; then mkdir -p \"$out/zero-resource\" \"$out/validator-deployment\"; printf '{\"name\":\"node-op-auth\"}\\n' > \"$out/zero-resource/baseline.tfvars.json\"; printf '{\"baseline_config\":\"%s/zero-resource/baseline.tfvars.json\"}\\n' \"$out\" > \"$out/zero-resource/zero-resource-inputs.json\"; printf '{\"zero_resource_inputs\":\"%s/zero-resource/zero-resource-inputs.json\"}\\n' \"$out\" > \"$out/hoodi-zero-release-inputs.json\"; : > \"$out/validator-deployment/runtime.yaml\"; : > \"$out/validator-deployment/client-and-fence.yaml\"; exit 0; fi\nexit \"${PREPARE_EXIT:-97}\"\n"
@@ -92,6 +95,9 @@ def run(script, fake, work, answers, **extra):
         env.pop(key, None)
     for key in tuple(env):
         if key.startswith("DEFAULT_"): env.pop(key)
+    # Artifact/custody tests supply an explicit synthetic user configuration;
+    # the production installer must not supply a maintainer-wallet default.
+    env["DEFAULT_WITHDRAWAL"] = "0x" + "1" * 40
     env.update(extra)  # Explicit fixture inputs take precedence over ambient cleanup.
     proc = subprocess.Popen([str(script)], stdin=slave, stdout=slave, stderr=slave, env=env); os.close(slave); os.write(master, answers.encode()); out = bytearray(); deadline = time.monotonic() + 15
     try:

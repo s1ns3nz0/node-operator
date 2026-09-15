@@ -26,7 +26,12 @@ docker volume create "$volume" >/dev/null; volume_created=true
 docker run -d --name "$database" --network "$network" --mount "type=volume,src=$volume,dst=/var/lib/postgresql/data" -e POSTGRES_USER=web3signer -e POSTGRES_DB=web3signer -e POSTGRES_PASSWORD="$database_password" "$postgres_source" >/dev/null; database_created=true
 for _ in $(seq 1 60); do docker exec "$database" pg_isready -U web3signer -d web3signer >/dev/null 2>&1 && break; sleep 1; done
 docker exec "$database" pg_isready -U web3signer -d web3signer >/dev/null || { printf '%s\n' 'FAIL: disposable PostgreSQL did not become ready' >&2; exit 1; }
-native=(docker run --rm --network "$network" --mount "type=bind,src=$fixture,dst=/work,readonly" "$web_source" eth2 --slashing-protection-db-url="jdbc:postgresql://$database:5432/web3signer" --slashing-protection-db-username=web3signer --slashing-protection-db-password="$database_password")
+# The maintenance subcommands must receive the password through Web3Signer's
+# eth2-scoped environment default, not an argv option.  This exercises the
+# same image digest and command shape used by the maintenance Job.
+printf 'WEB3SIGNER_ETH2_SLASHING_PROTECTION_DB_PASSWORD=%s\n' "$database_password" >"$fixture/web3signer.env"
+chmod 600 "$fixture/web3signer.env"
+native=(docker run --rm --network "$network" --mount "type=bind,src=$fixture,dst=/work,readonly" --env-file "$fixture/web3signer.env" "$web_source" eth2 --slashing-protection-db-url="jdbc:postgresql://$database:5432/web3signer" --slashing-protection-db-username=web3signer)
 # Subcommands require an already-migrated schema.  Copy only the migration SQL
 # packaged in this exact image, then apply it to this owned disposable database.
 docker create --name "$migration_source" "$web_source" >/dev/null; migration_source_created=true

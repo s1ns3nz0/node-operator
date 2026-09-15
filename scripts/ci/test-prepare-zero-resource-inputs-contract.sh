@@ -6,7 +6,7 @@ script="$root/scripts/release/prepare-zero-resource-inputs.sh"
 scratch="$(mktemp -d /private/tmp/node-operator-zero-inputs.XXXXXX)"
 output="$scratch/inputs"
 
-"$script" --aws-account-id 106760547719 --name hoodi-operator --backend-principal-arn arn:aws:iam::106760547719:role/NodeOperatorTerraformApply --output-dir "$output" >/dev/null
+"$script" --aws-account-id 106760547719 --availability-zone ap-northeast-2a --availability-zone ap-northeast-2c --name hoodi-operator --backend-principal-arn arn:aws:iam::106760547719:role/NodeOperatorTerraformApply --output-dir "$output" >/dev/null
 for file in bootstrap-state.tfvars.json foundation-network.tfvars.json baseline.tfvars.json zero-resource-inputs.json; do
   [ -f "$output/$file" ] || { printf 'missing generated input: %s\n' "$file" >&2; exit 1; }
   [ "$(stat -f '%Lp' "$output/$file")" = 600 ] || { printf 'generated input has unsafe mode: %s\n' "$file" >&2; exit 1; }

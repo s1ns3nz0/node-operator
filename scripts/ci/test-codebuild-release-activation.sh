@@ -8,10 +8,12 @@ fail() { printf 'FAIL CodeBuild release activation: %s\n' "$*" >&2; exit 1; }
 
 terraform_file="$root/infra/terraform/vault-signer.tf"
 workflow="$root/.github/workflows/release-bundle.yml"
+signer_script="$root/scripts/release/sign-release-bundle.sh"
 contract="$root/docs/gitops/codebuild-signing-input-contract.md"
-for file in "$terraform_file" "$workflow" "$contract"; do
+for file in "$terraform_file" "$workflow" "$signer_script" "$contract"; do
   test -f "$file" || fail "missing required file: $file"
 done
+grep -Fq 'scripts/release/sign-release-bundle.sh' "$workflow" || fail 'release workflow must delegate signing to the reviewed signer helper'
 
 terraform_project="$(awk '
   /^resource "aws_codebuild_project" "release_signer" \{/ { in_project=1 }
@@ -24,7 +26,7 @@ test -n "$terraform_project" || fail 'release signer CodeBuild project is missin
 for required in \
   'variable "release_signer_image"' \
   'default     = ""' \
-  'dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com' \
+  'dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com' \
   '@sha256:' \
   'var.enable_release_signer_ecr_mirror' \
   'image                       = var.release_signer_image' \
@@ -61,8 +63,6 @@ printf '%s\n' "$github_release_runner_policy" | grep -Fq 'Action   = ["s3:GetObj
 printf '%s\n' "$github_release_runner_policy" | grep -Fq "$expected_input_resource" || fail 'release runner immutable-input read scope is missing or broadened'
 
 for required in \
-  "input_archive=\"\$RUNNER_TEMP/\${GITHUB_SHA}.zip\"" \
-  "input_key=\"release-input/sha256/\${GITHUB_SHA}.zip\"" \
   'buildspec-release-sign.yml' \
   'node-operator-release-bundle.tar' \
   'node-operator-release-bundle.sha256' \
@@ -75,19 +75,23 @@ for required in \
   '--query VersionId --output text' \
   "--source-version \"\$input_version\"" \
   "--source-location-override \"\${INPUT_BUCKET}/\${input_key}\"" \
+  'release_signer_project="${RELEASE_SIGNER_PROJECT:-node-operator-baseline-release-signer}"' \
+  '--project-name "$release_signer_project"' \
   'release-verification.json' \
   "scripts/ci/verify-release-signature.sh \"\$signer_output\"" \
   'release-signer-output.zip'; do
-  grep -Fq -- "$required" "$workflow" || fail "release workflow omits required immutable signer boundary: $required"
+  grep -Fq -- "$required" "$signer_script" || fail "signer helper omits required immutable signer boundary: $required"
 done
 
-if grep -Eq 'release-input/\$\{?GITHUB_SHA\}?\.zip|signature\.json|verify\.json' "$workflow"; then
+grep -Fq 'output "release_signer_project_name"' "$root/infra/terraform/private-release-runner.tf" || fail 'Terraform does not expose the optional signer project name'
+
+if grep -Eq 'release-input/\$\{?GITHUB_SHA\}?\.zip|signature\.json|verify\.json' "$signer_script"; then
   fail 'release workflow retains a legacy source key or raw Transit response consumption'
 fi
 
 # The workflow uses only a short-lived STS response. Literal access keys,
 # secret values, Vault tokens, and public Vault URLs are prohibited here.
-if grep -Eq 'AKIA[0-9A-Z]{16}|(?i:aws_secret_access_key)[[:space:]]*:|(?i:vault_token)[[:space:]]*:|https?://[^"[:space:]]*(vault|8200)' "$workflow"; then
+if grep -Eq 'AKIA[0-9A-Z]{16}|(?i:aws_secret_access_key)[[:space:]]*:|(?i:vault_token)[[:space:]]*:|https?://[^"[:space:]]*(vault|8200)' "$workflow" "$signer_script"; then
   fail 'activation code introduces static credentials or a public Vault endpoint'
 fi
 

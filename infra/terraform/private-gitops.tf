@@ -98,7 +98,7 @@ data "aws_iam_policy_document" "github_gitops_oci_mirror_assume_role" {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "${var.github_oidc_subject_prefix}:environment:gitops-oci-mirror",
+        "${local.github_destination_oidc_subject_prefix}:environment:gitops-oci-mirror",
       ]
     }
   }

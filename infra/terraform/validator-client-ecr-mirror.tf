@@ -81,7 +81,7 @@ data "aws_iam_policy_document" "github_validator_client_mirror_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["${var.github_oidc_subject_prefix}:environment:validator-client-ecr-mirror"]
+      values   = ["${local.github_destination_oidc_subject_prefix}:environment:validator-client-ecr-mirror"]
     }
   }
 }
@@ -91,6 +91,12 @@ resource "aws_iam_role" "github_validator_client_mirror" {
   name               = "${local.name_prefix}-github-validator-client-mirror"
   assume_role_policy = data.aws_iam_policy_document.github_validator_client_mirror_assume_role[0].json
   tags               = local.common_tags
+  lifecycle {
+    precondition {
+      condition     = local.github_destination_identity_is_explicit
+      error_message = "A custom GitHub destination repository requires explicit numeric owner and repository IDs; it cannot inherit the maintainer identity."
+    }
+  }
 }
 
 data "aws_iam_policy_document" "github_validator_client_mirror" {

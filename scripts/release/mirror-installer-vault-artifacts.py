@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+sys.dont_write_bytecode = True
 from pathlib import Path
 
 from installer_artifact_mirror import MirrorError, mirror, verify_pre_eks_vault_mirror
@@ -60,15 +61,23 @@ def main(argv: list[str] | None = None) -> int:
         item.add_argument("--deployment-name", required=True)
         item.add_argument("--profile", required=True)
         item.add_argument("--release-sha", required=True)
+        item.add_argument("--oci-payload-dir", help="Downloaded release OCI assets directory")
+        item.add_argument("--verified-bundle-manifest-sha256", help="Manifest hash from the authenticated release context, not an untrusted download")
     args = parser.parse_args(argv)
     try:
         bundle, state, work, inputs, discovery = _context(args)
+        payload_kwargs = {}
+        if args.oci_payload_dir is not None or args.verified_bundle_manifest_sha256 is not None:
+            if args.command == "verify" or not args.oci_payload_dir or not re.fullmatch(r"[a-f0-9]{64}", args.verified_bundle_manifest_sha256 or ""):
+                raise CLIError("mirror requires both release payload and authenticated manifest hash")
+            payload_kwargs = {"payload_dir": _directory(args.oci_payload_dir, "OCI payload directory"),
+                              "authenticated_bundle_manifest_sha256": args.verified_bundle_manifest_sha256}
         if args.scope == "vault":
             if args.command in ("mirror", "resume"):
                 kwargs = {"prerequisites_path": work / "artifact-prerequisites.json", "inputs_dir": inputs, "work_dir": work}
                 if args.command == "resume":
                     kwargs["resume"] = True
-                mirror(state, bundle, discovery, args.profile, args.release_sha, **kwargs)
+                mirror(state, bundle, discovery, args.profile, args.release_sha, **kwargs, **payload_kwargs)
             else:
                 verify_pre_eks_vault_mirror(state, bundle, discovery, args.profile, args.release_sha,
                                             inputs_dir=inputs, work_dir=work)
@@ -82,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
                                  work_dir=work, inputs_dir=inputs)
             else:
                 non_vault_mirror(state, bundle, discovery, args.profile, args.release_sha,
-                                 work_dir=work, inputs_dir=inputs, resume=args.command == "resume")
+                                 work_dir=work, inputs_dir=inputs, resume=args.command == "resume", **payload_kwargs)
     except (CLIError, MirrorError, RuntimeError, OSError, ValueError):
         print(("Vault" if args.scope == "vault" else "Non-Vault") + " pre-EKS artifact operation failed; no full installer artifact gate is implied.", file=sys.stderr)
         return 2

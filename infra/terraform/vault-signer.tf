@@ -32,8 +32,8 @@ variable "release_signer_image" {
   default     = ""
 
   validation {
-    condition     = var.release_signer_image == "" || can(regex("^[0-9]{12}\\.dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", var.release_signer_image))
-    error_message = "release_signer_image must be empty while disabled or an ap-northeast-2 ECR image pinned by a sha256 digest."
+    condition     = var.release_signer_image == "" || can(regex("^[0-9]{12}\\.dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$", var.release_signer_image))
+    error_message = "release_signer_image must be empty while disabled or a private ECR image pinned by a sha256 digest."
   }
 }
 
@@ -68,19 +68,58 @@ resource "aws_security_group" "release_signer" {
 }
 
 variable "github_repository" {
-  description = "GitHub repository allowed to start the release signer, owner/name."
+  description = "Exact non-secret GitHub repository allowed to use destination publisher roles, owner/name."
   type        = string
   default     = "s1ns3nz0/node-operator"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.github_repository))
+    error_message = "github_repository must be an exact owner/repository name."
+  }
 }
 
+variable "github_owner_id" {
+  description = "Exact non-secret numeric GitHub owner ID for github_repository."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.github_owner_id == "" || can(regex("^[0-9]+$", var.github_owner_id))
+    error_message = "github_owner_id must be blank or a numeric GitHub owner ID."
+  }
+}
+
+variable "github_repository_id" {
+  description = "Exact non-secret numeric GitHub repository ID for github_repository."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.github_repository_id == "" || can(regex("^[0-9]+$", var.github_repository_id))
+    error_message = "github_repository_id must be blank or a numeric GitHub repository ID."
+  }
+}
+
+# Retained for old tfvars compatibility. Destination trust is derived from the
+# explicit repository and numeric IDs below; this historical source pin cannot
+# introduce an arbitrary trust subject.
 variable "github_oidc_subject_prefix" {
-  description = "Immutable GitHub OIDC subject prefix for this repository, including owner and repository IDs."
+  description = "Deprecated reviewed release-source OIDC subject prefix; retained for compatibility with existing tfvars."
   type        = string
   default     = "repo:s1ns3nz0@258690008/node-operator@1353388960"
   validation {
-    condition     = can(regex("^repo:[A-Za-z0-9_.-]+@[0-9]+/[A-Za-z0-9_.-]+@[0-9]+$", var.github_oidc_subject_prefix))
-    error_message = "github_oidc_subject_prefix must contain exact repository and owner IDs, without wildcard claims."
+    condition     = var.github_oidc_subject_prefix == "repo:s1ns3nz0@258690008/node-operator@1353388960"
+    error_message = "github_oidc_subject_prefix is a fixed legacy release-source pin; use github_repository and numeric IDs for destination trust."
   }
+}
+
+# Destination publisher trust is selected explicitly and never discovered at
+# installer runtime. The release signer remains pinned to its reviewed source.
+locals {
+  github_destination_identity_is_legacy     = var.github_repository == "s1ns3nz0/node-operator" && var.github_owner_id == "" && var.github_repository_id == ""
+  github_destination_owner_id               = local.github_destination_identity_is_legacy ? "258690008" : var.github_owner_id
+  github_destination_repository_id          = local.github_destination_identity_is_legacy ? "1353388960" : var.github_repository_id
+  github_destination_oidc_subject_prefix    = "repo:${split("/", var.github_repository)[0]}@${local.github_destination_owner_id}/${split("/", var.github_repository)[1]}@${local.github_destination_repository_id}"
+  github_destination_identity_is_explicit   = local.github_destination_identity_is_legacy || (var.github_owner_id != "" && var.github_repository_id != "")
+  release_signer_source_oidc_subject_prefix = var.github_oidc_subject_prefix
 }
 
 resource "aws_vpc_security_group_egress_rule" "release_signer_s3_gateway_https" {
@@ -817,7 +856,7 @@ resource "aws_iam_role" "github_release_runner" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "${var.github_oidc_subject_prefix}:environment:release"
+          "token.actions.githubusercontent.com:sub" = "${local.release_signer_source_oidc_subject_prefix}:environment:release"
         }
       }
     }]

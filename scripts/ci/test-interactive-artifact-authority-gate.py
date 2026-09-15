@@ -184,7 +184,9 @@ def assert_release_verification(work: Path, bundle: Path) -> None:
 
 
 def fresh_answers() -> str:
-    return f"DEPLOY\n\n\n{DEPLOYMENT}\n\nCONFIRM\n"
+    # An artifact-gate fixture must explicitly provide its synthetic withdrawal
+    # address; the installer intentionally has no maintainer-wallet default.
+    return f"DEPLOY\n\n\n{DEPLOYMENT}\n0x{'1' * 40}\nCONFIRM\n"
 
 
 def write_resume_context(bundle: Path, work: Path) -> Path:
@@ -212,6 +214,16 @@ def write_resume_context(bundle: Path, work: Path) -> Path:
     receipt_file.write_text(json.dumps(receipt), encoding="utf-8")
     receipt_file.chmod(0o600)
     return resume
+
+
+def test_missing_withdrawal_stops_before_aws() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        work = Path(temporary)
+        _, fake_bin, script = make_bundle(work)
+        answers = f"DEPLOY\n\n\n{DEPLOYMENT}\n\n"
+        code, output = run_tty(script, fake_bin, work, answers)
+        assert code == 64 and "withdrawal address must be explicitly configured" in output, (code, output)
+        assert calls(work) == [], calls(work)
 
 
 def test_unresolved_actual_inventory_stops_at_gate() -> None:
@@ -326,6 +338,7 @@ def test_negative_assertion_detects_a_bypassed_gate_mutant() -> None:
         assert_no_aws_mutation(observed)
 
 
+test_missing_withdrawal_stops_before_aws()
 test_unresolved_actual_inventory_stops_at_gate()
 test_successful_gate_reaches_only_next_iam_read_boundary()
 test_resume_context_passes_gate_before_recovery_boundary()

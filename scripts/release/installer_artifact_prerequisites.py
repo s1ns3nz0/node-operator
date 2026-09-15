@@ -53,6 +53,8 @@ PUBLISHER_SUBJECTS = {
     "github-vault-audit-relay-publisher": "repo:s1ns3nz0/node-operator:environment:vault-audit-relay-ecr-publish",
     "github-gitops-client-ecr-publisher": "repo:s1ns3nz0/node-operator-gitops:environment:gitops-client-ecr-publish",
 }
+DEFAULT_GITHUB_IDENTITY = ("s1ns3nz0/node-operator", "258690008", "1353388960")
+DEFAULT_GITOPS_IDENTITY = ("s1ns3nz0/node-operator-gitops", "", "")
 PUBLISHER_REPOSITORIES = {
     "aws_iam_role_policy.github_validator_client_mirror[0]": {"validator-prysm", "validator-fence", "validator-signer-identity-probe"},
     "aws_iam_role_policy.github_validator_signer_identity_probe_mirror[0]": {"validator-signer-identity-probe"},
@@ -64,13 +66,17 @@ ECR_PUSH = frozenset({"ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "e
 ECR_READ = frozenset({"ecr:GetDownloadUrlForLayer"})
 
 
-def _publisher_subjects(suffix: str) -> tuple[str, ...]:
+def _publisher_subjects(suffix: str, github_identity: tuple[str, str, str] = DEFAULT_GITHUB_IDENTITY, gitops_identity: tuple[str, str, str] = DEFAULT_GITOPS_IDENTITY) -> tuple[str, ...]:
     subject = PUBLISHER_SUBJECTS[suffix]
     if suffix == "github-gitops-client-ecr-publisher":
-        return (subject, "repo:s1ns3nz0@*/node-operator-gitops@*:environment:gitops-client-ecr-publish")
-    # Match the repository identity pinned by infra/terraform/vault-signer.tf;
-    # accepting arbitrary owner/repository IDs would widen the trust boundary.
-    return (subject.replace("repo:s1ns3nz0/node-operator:", "repo:s1ns3nz0@258690008/node-operator@1353388960:"),)
+        repository, owner_id, repository_id = gitops_identity
+        if owner_id == repository_id == "":
+            # Compatibility only for the reviewed default profile. A selected
+            # custom profile is never permitted to retain this wildcard form.
+            return (subject, "repo:s1ns3nz0@*/node-operator-gitops@*:environment:gitops-client-ecr-publish")
+        return (f"repo:{repository.split('/')[0]}@{owner_id}/{repository.split('/')[1]}@{repository_id}:environment:gitops-client-ecr-publish",)
+    repository, owner_id, repository_id = github_identity
+    return (f"repo:{repository.split('/')[0]}@{owner_id}/{repository.split('/')[1]}@{repository_id}:environment:{subject.rsplit(':environment:', 1)[1]}",)
 
 
 class PrerequisiteError(ValueError):
@@ -134,8 +140,40 @@ def _expected(name: str) -> tuple[dict[str, tuple[str, str | None]], dict[str, s
     return repositories, keys, allowed
 
 
+def _identity(value: Any, default: tuple[str, str, str], label: str) -> tuple[str, str, str]:
+    if value is None:
+        return default
+    if not isinstance(value, dict) or set(value) != {"repository", "owner_id", "repository_id"}:
+        raise PrerequisiteError(f"Terraform plan {label} identity is invalid")
+    identity = tuple(value.get(key) for key in ("repository", "owner_id", "repository_id"))
+    if not all(isinstance(item, str) for item in identity) or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", identity[0]):
+        raise PrerequisiteError(f"Terraform plan {label} identity is invalid")
+    if label == "GitOps" and identity == DEFAULT_GITOPS_IDENTITY:
+        return identity
+    if label == "GitHub" and identity == (DEFAULT_GITHUB_IDENTITY[0], "", ""):
+        return DEFAULT_GITHUB_IDENTITY
+    if not all(re.fullmatch(r"[0-9]+", item) for item in identity[1:]):
+        raise PrerequisiteError(f"Terraform plan {label} identity requires exact numeric IDs")
+    return identity
+
+
+def _plan_identities(plan: dict[str, Any]) -> tuple[tuple[str, str, str], tuple[str, str, str]]:
+    values = plan.get("variables")
+    if values is None:
+        return DEFAULT_GITHUB_IDENTITY, DEFAULT_GITOPS_IDENTITY
+    if not isinstance(values, dict):
+        raise PrerequisiteError("Terraform plan variables are invalid")
+    def value(name: str) -> Any:
+        row = values.get(name)
+        return row.get("value") if isinstance(row, dict) and set(row) == {"value"} else None
+    github = _identity({"repository": value("github_repository"), "owner_id": value("github_owner_id"), "repository_id": value("github_repository_id")}, DEFAULT_GITHUB_IDENTITY, "GitHub")
+    gitops = _identity({"repository": value("gitops_client_github_repository"), "owner_id": value("gitops_client_github_owner_id"), "repository_id": value("gitops_client_github_repository_id")}, DEFAULT_GITOPS_IDENTITY, "GitOps")
+    return github, gitops
+
+
 def validate_plan(plan: dict[str, Any], account: str, region: str, name: str, include_publishers: bool = False) -> None:
     _context(account, region, name)
+    github_identity, gitops_identity = _plan_identities(plan)
     expected_repositories, expected_keys, allowed = _expected(name)
     if include_publishers:
         allowed = allowed | set(PUBLISHER_RESOURCES)
@@ -204,7 +242,7 @@ def validate_plan(plan: dict[str, Any], account: str, region: str, name: str, in
             before = detail.get("before")
             if not isinstance(before, dict):
                 raise PrerequisiteError("Terraform plan existing prerequisite lacks prior ownership")
-            _validate_before(address, before, expected_repositories, expected_keys, before_values, account, region, name)
+            _validate_before(address, before, expected_repositories, expected_keys, before_values, account, region, name, github_identity, gitops_identity)
         if address in expected_repositories:
             repository_name, kms_label = expected_repositories[address]
             if after.get("name") != repository_name or after.get("image_tag_mutability") != "IMMUTABLE":
@@ -256,7 +294,7 @@ def validate_plan(plan: dict[str, Any], account: str, region: str, name: str, in
             _tags(after, account, region, name, f"{name}-baseline-kms-administrator", include_name=False)
             _known_or_unknown(detail, "arn", f"arn:aws:iam::{account}:role/{name}-baseline-kms-administrator")
         elif address in PUBLISHER_RESOURCES:
-            _validate_publisher(address, after, detail, source, account, region, name)
+            _validate_publisher(address, after, detail, source, account, region, name, github_identity, gitops_identity)
         elif address.startswith("aws_ecr_lifecycle_policy."):
             # The exact address allowlist above limits these to a repository
             # lifecycle policy.  The configuration must still refer to its
@@ -269,7 +307,7 @@ def validate_plan(plan: dict[str, Any], account: str, region: str, name: str, in
         raise PrerequisiteError("Terraform plan omitted an exact artifact prerequisite")
 
 
-def _validate_publisher(address: str, after: dict[str, Any], detail: dict[str, Any], source: dict[str, Any], account: str, region: str, name: str) -> None:
+def _validate_publisher(address: str, after: dict[str, Any], detail: dict[str, Any], source: dict[str, Any], account: str, region: str, name: str, github_identity: tuple[str, str, str] = DEFAULT_GITHUB_IDENTITY, gitops_identity: tuple[str, str, str] = DEFAULT_GITOPS_IDENTITY) -> None:
     suffix = PUBLISHER_RESOURCES[address]
     expected_name = f"{name}-baseline-{suffix}"
     if address.startswith("aws_iam_role."):
@@ -278,7 +316,7 @@ def _validate_publisher(address: str, after: dict[str, Any], detail: dict[str, A
         raise PrerequisiteError("publisher prerequisite name is invalid")
     if address.startswith("aws_iam_role."):
         _tags(after, account, region, name, expected_name, include_name=False)
-        _validate_publisher_trust(after.get("assume_role_policy"), suffix, account)
+        _validate_publisher_trust(after.get("assume_role_policy"), suffix, account, github_identity, gitops_identity)
         return
     role = after.get("role")
     expected_role = _publisher_role_name(f"{name}-baseline-github-validator-client-mirror" if "signer_identity_probe" in address else expected_name)
@@ -305,7 +343,7 @@ def _exact_reference(value: Any, expected: str) -> bool:
     return isinstance(references, list) and all(isinstance(item, str) for item in references) and expected in references and set(references) <= allowed
 
 
-def _validate_publisher_trust(raw: Any, suffix: str, account: str) -> None:
+def _validate_publisher_trust(raw: Any, suffix: str, account: str, github_identity: tuple[str, str, str], gitops_identity: tuple[str, str, str]) -> None:
     try: value = json.loads(raw, object_pairs_hook=_pairs) if isinstance(raw, str) else None
     except (json.JSONDecodeError, PrerequisiteError): value = None
     statements = value.get("Statement") if isinstance(value, dict) and set(value) <= {"Version", "Statement"} and value.get("Version", "2012-10-17") == "2012-10-17" else None
@@ -314,8 +352,9 @@ def _validate_publisher_trust(raw: Any, suffix: str, account: str) -> None:
     if not set(row) <= {"Sid", "Effect", "Action", "Principal", "Condition"} or ("Sid" in row and not isinstance(row["Sid"], str)) or row.get("Effect") != "Allow" or row.get("Action") not in ("sts:AssumeRoleWithWebIdentity", ["sts:AssumeRoleWithWebIdentity"]) or row.get("Principal") != {"Federated": f"arn:aws:iam::{account}:oidc-provider/token.actions.githubusercontent.com"} or not isinstance(conditions, dict): raise PrerequisiteError("publisher OIDC trust is invalid")
     subject_key = "StringLike" if suffix in {"github-vault-audit-relay-publisher", "github-gitops-client-ecr-publisher"} else "StringEquals"
     expected = {"StringEquals": {"token.actions.githubusercontent.com:aud": "sts.amazonaws.com"}}
-    expected.setdefault(subject_key, {})["token.actions.githubusercontent.com:sub"] = list(_publisher_subjects(suffix)) if len(_publisher_subjects(suffix)) > 1 else _publisher_subjects(suffix)[0]
-    repository = "s1ns3nz0/node-operator-gitops" if suffix == "github-gitops-client-ecr-publisher" else ("s1ns3nz0/node-operator" if suffix == "github-vault-audit-relay-publisher" else None)
+    subjects = _publisher_subjects(suffix, github_identity, gitops_identity)
+    expected.setdefault(subject_key, {})["token.actions.githubusercontent.com:sub"] = list(subjects) if len(subjects) > 1 else subjects[0]
+    repository = gitops_identity[0] if suffix == "github-gitops-client-ecr-publisher" else (github_identity[0] if suffix == "github-vault-audit-relay-publisher" else None)
     if repository: expected["StringEquals"]["token.actions.githubusercontent.com:repository"] = repository
     if conditions != expected: raise PrerequisiteError("publisher OIDC trust is invalid")
 
@@ -393,7 +432,7 @@ def _known_or_unknown(detail: dict[str, Any], field: str, expected: str | None, 
         raise PrerequisiteError("Terraform plan KMS identity is foreign")
 
 
-def _validate_before(address: str, before: dict[str, Any], repositories: dict[str, tuple[str, str | None]], keys: dict[str, str], all_before: dict[str, Any], account: str, region: str, name: str) -> None:
+def _validate_before(address: str, before: dict[str, Any], repositories: dict[str, tuple[str, str | None]], keys: dict[str, str], all_before: dict[str, Any], account: str, region: str, name: str, github_identity: tuple[str, str, str] = DEFAULT_GITHUB_IDENTITY, gitops_identity: tuple[str, str, str] = DEFAULT_GITOPS_IDENTITY) -> None:
     """Prove a planned update/no-op continues an owned prerequisite, not adoption."""
     if address in repositories:
         repository_name, kms_label = repositories[address]
@@ -425,7 +464,7 @@ def _validate_before(address: str, before: dict[str, Any], repositories: dict[st
         _tags(before, account, region, name, f"{name}-baseline-kms-administrator", include_name=False)
         return
     if address in PUBLISHER_RESOURCES:
-        _validate_publisher(address, before, {"after_unknown": {}}, {}, account, region, name)
+        _validate_publisher(address, before, {"after_unknown": {}}, {}, account, region, name, github_identity, gitops_identity)
         return
     repository_address = address.replace("aws_ecr_lifecycle_policy", "aws_ecr_repository")
     repository = repositories.get(repository_address)

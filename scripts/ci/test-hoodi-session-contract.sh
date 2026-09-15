@@ -31,6 +31,9 @@ fi
 grep -Fq 'scripts/ops/hoodi-session.sh' "$runbook" || fail 'runbook does not point to the operator script'
 
 wrapper="$root/scripts/ops/with-private-eks.sh"
+# The installer supplies the discovered host; tests must not inherit a retired
+# maintainer instance ID from production defaults.
+export SSM_OPS_INSTANCE_ID=i-0123456789abcdef0
 test -f "$wrapper" || fail 'missing private EKS wrapper'
 bash -n "$wrapper"
 

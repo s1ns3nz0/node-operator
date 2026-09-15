@@ -9,7 +9,7 @@ umask 077
 
 [ "$#" -eq 0 ] || { printf '%s\n' 'This release has one execution path and accepts no command-line options. Put non-secret overrides in ./env.' >&2; exit 64; }
 
-bundle_root=''; env_file=''
+bundle_root=''; env_file=''; env_file_line=0; env_file_dir=''
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 if [ -z "$bundle_root" ]; then
@@ -173,28 +173,74 @@ PY
 }
 for command in aws jq find shasum python3 helm ruby; do command -v "$command" >/dev/null 2>&1 || { printf 'missing command: %s\n' "$command" >&2; exit 69; }; done
 
+# Configuration is data, never shell input.  Path-bearing values accept only
+# literal ~/ or $HOME/ prefixes; all other relative paths are resolved from
+# the selected configuration file, not an unpacked temporary bundle.
+expand_config_path() {
+  local value="$1"
+  case "$value" in
+    '~') printf '%s\n' "$HOME" ;;
+    '~/'*) printf '%s/%s\n' "$HOME" "${value#\~/}" ;;
+    '$HOME') printf '%s\n' "$HOME" ;;
+    '$HOME/'*) printf '%s/%s\n' "$HOME" "${value#\$HOME/}" ;;
+    /*|'') printf '%s\n' "$value" ;;
+    *) printf '%s/%s\n' "$env_file_dir" "$value" ;;
+  esac
+}
+config_error() { printf 'configuration rejected at %s line %s\n' "$env_file" "$env_file_line" >&2; exit 64; }
+
 # Optional non-secret .env-style overrides. Values are never exported and
-# unknown keys are ignored. This file may contain addresses/digests only.
-if [ -z "$env_file" ] && [ -f "$bundle_root/env" ]; then env_file="$bundle_root/env"; fi
-if [ -z "$env_file" ] && [ -f "$bundle_root/release/env" ]; then env_file="$bundle_root/release/env"; fi
+# unknown keys fail closed. Exactly one source is selected so no configuration
+# can silently shadow another. A release bundle's env is its copied local
+# provenance; a checked-out repository supports root .env or release/env.
+env_candidates=("$bundle_root/env" "$bundle_root/.env" "$bundle_root/release/env")
+env_present=()
+for candidate in "${env_candidates[@]}"; do
+  if [ -e "$candidate" ] || [ -L "$candidate" ]; then
+    [ -f "$candidate" ] && [ ! -L "$candidate" ] || { printf '%s\n' 'configuration file must be a regular non-symlink file' >&2; exit 65; }
+    env_present+=("$candidate")
+  fi
+done
+if [ "${#env_present[@]}" -gt 1 ]; then
+  printf '%s\n' 'multiple configuration files found; keep exactly one of env, .env, or release/env' >&2
+  exit 65
+fi
+if [ "${#env_present[@]}" -eq 1 ]; then env_file="${env_present[0]}"; fi
 if [ -n "$env_file" ]; then
-  case "$env_file" in /*) ;; *) printf '%s\n' '--env-file must be absolute' >&2; exit 64 ;; esac
-  [ -f "$env_file" ] && [ ! -L "$env_file" ] || { printf '%s\n' 'env file must be a regular file' >&2; exit 65; }
+  env_file="$(cd "$(dirname "$env_file")" && pwd -P)/$(basename "$env_file")"
+  config_source_path="${NODE_OPERATOR_CONFIG_SOURCE_PATH:-$env_file}"
+  case "$config_source_path" in /*) ;; *) printf '%s\n' 'configuration provenance must be absolute' >&2; exit 65 ;; esac
+  env_file_dir="$(dirname "$config_source_path")"
+  printf 'Using non-secret configuration: %s\n' "$config_source_path" >&2
   while IFS='=' read -r key value; do
+    env_file_line=$((env_file_line + 1))
     key="${key%%[[:space:]]*}"; value="${value##[[:space:]]}"
     case "$key" in ''|'#'*) continue ;; esac
-    case "$key" in WORK_DIR) WORK_DIR="$value" ;; REGION) DEFAULT_REGION="$value" ;; DEPLOYMENT_NAME) DEFAULT_DEPLOYMENT_NAME="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; EXISTING_KEYSTORE_DIR) DEFAULT_KEYSTORE_DIR="$value" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; CLIENT_CHART_SOURCE_REGION) DEFAULT_CLIENT_CHART_SOURCE_REGION="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; CERT_MANAGER_CHART_DIGEST) DEFAULT_CERT_MANAGER_CHART_DIGEST="$value" ;; DEPOSIT_TX_HASH) DEFAULT_DEPOSIT_TX_HASH="$value" ;; HOODI_PUBLIC_RPC_URL) DEFAULT_HOODI_PUBLIC_RPC_URL="$value" ;; HOODI_PUBLIC_BEACON_URL) DEFAULT_HOODI_PUBLIC_BEACON_URL="$value" ;; REQUIRED_FINALIZED_EPOCHS) DEFAULT_REQUIRED_FINALIZED_EPOCHS="$value" ;; esac
+    case "$key" in WORK_DIR) WORK_DIR="$(expand_config_path "$value")" ;; REGION) DEFAULT_REGION="$value" ;; AUDIT_REPLICA_REGION) DEFAULT_AUDIT_REPLICA_REGION="$value" ;; GITHUB_REPOSITORY) DEFAULT_GITHUB_REPOSITORY="$value" ;; GITHUB_OWNER_ID) DEFAULT_GITHUB_OWNER_ID="$value" ;; GITHUB_REPOSITORY_ID) DEFAULT_GITHUB_REPOSITORY_ID="$value" ;; GITOPS_CLIENT_GITHUB_REPOSITORY) DEFAULT_GITOPS_CLIENT_GITHUB_REPOSITORY="$value" ;; GITOPS_CLIENT_GITHUB_OWNER_ID) DEFAULT_GITOPS_CLIENT_GITHUB_OWNER_ID="$value" ;; GITOPS_CLIENT_GITHUB_REPOSITORY_ID) DEFAULT_GITOPS_CLIENT_GITHUB_REPOSITORY_ID="$value" ;; DEPLOYMENT_NAME) DEFAULT_DEPLOYMENT_NAME="$value" ;; VALIDATOR_SET) DEFAULT_VALIDATOR_SET="$value" ;; VALIDATOR_PUBLIC_KEY) DEFAULT_VALIDATOR_KEY="$value" ;; WITHDRAWAL_ADDRESS) DEFAULT_WITHDRAWAL="$value" ;; EXISTING_KEYSTORE_DIR) DEFAULT_KEYSTORE_DIR="$(expand_config_path "$value")" ;; WEB3SIGNER_IMAGE) DEFAULT_WEB3SIGNER_IMAGE="$value" ;; POSTGRES_IMAGE) DEFAULT_POSTGRES_IMAGE="$value" ;; PRYSM_IMAGE) DEFAULT_PRYSM_IMAGE="$value" ;; FENCE_IMAGE) DEFAULT_FENCE_IMAGE="$value" ;; BACKEND_PRINCIPAL_ARN) DEFAULT_BACKEND_PRINCIPAL_ARN="$value" ;; ARGOCD_BOOTSTRAP_IMAGE) DEFAULT_ARGOCD_BOOTSTRAP_IMAGE="$value" ;; VAULT_BOOTSTRAP_IMAGE) DEFAULT_VAULT_BOOTSTRAP_IMAGE="$value" ;; CLIENT_CHART_VERSION) DEFAULT_CLIENT_CHART_VERSION="$value" ;; CLIENT_CHART_DIGEST) DEFAULT_CLIENT_CHART_DIGEST="$value" ;; CLIENT_CHART_SOURCE_REGION) DEFAULT_CLIENT_CHART_SOURCE_REGION="$value" ;; VAULT_CHART_VERSION) DEFAULT_VAULT_CHART_VERSION="$value" ;; VAULT_CHART_DIGEST) DEFAULT_VAULT_CHART_DIGEST="$value" ;; CERT_MANAGER_CHART_DIGEST) DEFAULT_CERT_MANAGER_CHART_DIGEST="$value" ;; DEPOSIT_TX_HASH) DEFAULT_DEPOSIT_TX_HASH="$value" ;; HOODI_PUBLIC_RPC_URL) DEFAULT_HOODI_PUBLIC_RPC_URL="$value" ;; HOODI_PUBLIC_BEACON_URL) DEFAULT_HOODI_PUBLIC_BEACON_URL="$value" ;; REQUIRED_FINALIZED_EPOCHS) DEFAULT_REQUIRED_FINALIZED_EPOCHS="$value" ;; *) config_error ;; esac
   done < "$env_file"
 fi
 DEFAULT_REGION="${DEFAULT_REGION:-ap-northeast-2}"
 # Fresh runs must not accidentally adopt a prior baseline. Keep an explicit
 # env override available, but default to a compact UTC date/time deployment name.
 # The 20-character Terraform naming limit requires a short prefix and YYMMDDHHMM.
-DEFAULT_DEPLOYMENT_NAME="${DEFAULT_DEPLOYMENT_NAME:-node-op-$(date -u +%y%m%d%H%M)}"
+DEFAULT_DEPLOYMENT_NAME="${DEFAULT_DEPLOYMENT_NAME:-node-$(date -u +%y%m%d%H%M)-$(printf '%04x' "$RANDOM")}"
 DEFAULT_KEYSTORE_DIR="${DEFAULT_KEYSTORE_DIR:-}"
 DEFAULT_VALIDATOR_SET="${DEFAULT_VALIDATOR_SET:-hoodi-001}"
 DEFAULT_VALIDATOR_KEY="${DEFAULT_VALIDATOR_KEY:-}"
-DEFAULT_WITHDRAWAL="${DEFAULT_WITHDRAWAL:-0x403FF64383B8ddf994D5563550c8040d89F025Ac}"
+DEFAULT_WITHDRAWAL="${DEFAULT_WITHDRAWAL:-}"
+DEFAULT_AUDIT_REPLICA_REGION="${DEFAULT_AUDIT_REPLICA_REGION:-}"
+DEFAULT_GITHUB_REPOSITORY="${DEFAULT_GITHUB_REPOSITORY:-}"; DEFAULT_GITHUB_OWNER_ID="${DEFAULT_GITHUB_OWNER_ID:-}"; DEFAULT_GITHUB_REPOSITORY_ID="${DEFAULT_GITHUB_REPOSITORY_ID:-}"
+DEFAULT_GITOPS_CLIENT_GITHUB_REPOSITORY="${DEFAULT_GITOPS_CLIENT_GITHUB_REPOSITORY:-}"; DEFAULT_GITOPS_CLIENT_GITHUB_OWNER_ID="${DEFAULT_GITOPS_CLIENT_GITHUB_OWNER_ID:-}"; DEFAULT_GITOPS_CLIENT_GITHUB_REPOSITORY_ID="${DEFAULT_GITOPS_CLIENT_GITHUB_REPOSITORY_ID:-}"
+validate_selected_github_identity() {
+  local repository="$1" owner_id="$2" repository_id="$3"
+  [ -z "$repository$owner_id$repository_id" ] && return 0
+  [[ "$repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ && "$owner_id" =~ ^[1-9][0-9]*$ && "$repository_id" =~ ^[1-9][0-9]*$ ]] || {
+    printf '%s\n' 'Custom GitHub trust requires an exact repository and both positive numeric owner/repository IDs; no AWS mutation requested.' >&2
+    return 64
+  }
+}
+validate_selected_github_identity "$DEFAULT_GITHUB_REPOSITORY" "$DEFAULT_GITHUB_OWNER_ID" "$DEFAULT_GITHUB_REPOSITORY_ID" || exit $?
+validate_selected_github_identity "$DEFAULT_GITOPS_CLIENT_GITHUB_REPOSITORY" "$DEFAULT_GITOPS_CLIENT_GITHUB_OWNER_ID" "$DEFAULT_GITOPS_CLIENT_GITHUB_REPOSITORY_ID" || exit $?
 DEFAULT_WEB3SIGNER_IMAGE="${DEFAULT_WEB3SIGNER_IMAGE:-}"
 DEFAULT_POSTGRES_IMAGE="${DEFAULT_POSTGRES_IMAGE:-}"
 DEFAULT_PRYSM_IMAGE="${DEFAULT_PRYSM_IMAGE:-}"
@@ -223,8 +269,25 @@ prompt_default() { local label="$1" fallback="$2" value; printf '%s [%s]: ' "$la
 prompt_secret() { local label="$1" value; printf '%s: ' "$label" >&2; IFS= read -r -s value; printf '\n' >&2; printf '%s' "$value"; }
 if [ -t 2 ]; then ui_reset=$'\033[0m'; ui_cyan=$'\033[1;36m'; ui_green=$'\033[1;32m'; ui_yellow=$'\033[1;33m'; ui_red=$'\033[1;31m'; else ui_reset=''; ui_cyan=''; ui_green=''; ui_yellow=''; ui_red=''; fi
 step_number=0
-step() { step_number=$((step_number + 1)); printf '\n%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n%s◆ STEP %02d/10%s  %s%s%s\n%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$ui_cyan" "$ui_reset" "$ui_cyan" "$step_number" "$ui_reset" "$ui_green" "$1" "$ui_reset" "$ui_cyan" "$ui_reset" >&2; }
-display_digest() { case "$1" in *@sha256:????????????????????????????????????????????????????????????????) printf '%s@sha256:%s...%s' "${1%@*}" "${1##*@sha256:}" "${1: -8}" ;; *) printf '%s' "$1" ;; esac; }
+diagnostic_log=''; diagnostic_stage='startup'; diagnostic_stage_started=''
+diagnostic_event() { [ -n "$diagnostic_log" ] || return 0; printf '%s stage=%s status=%s%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$diagnostic_stage" "$1" "${2:+ duration_seconds=$2}" >> "$diagnostic_log"; }
+init_diagnostics() {
+  local root="$1" mode="$2" directory stamp
+  [ -d "$root" ] && [ ! -L "$root" ] || { printf '%s\n' 'diagnostic root is unavailable or unsafe' >&2; return 65; }
+  directory="$root/diagnostics"
+  [ ! -e "$directory" ] && [ ! -L "$directory" ] && mkdir -m 700 "$directory"
+  [ -d "$directory" ] && [ ! -L "$directory" ] || { printf '%s\n' 'diagnostic directory is unavailable or unsafe' >&2; return 65; }
+  chmod 700 "$directory"
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  diagnostic_log="$(umask 077; mktemp "$directory/installer-$stamp.XXXXXX")" || return 65
+  [ -f "$diagnostic_log" ] && [ ! -L "$diagnostic_log" ] && chmod 600 "$diagnostic_log" || return 65
+  printf '%s stage=%s status=start mode=%s source_revision=%.12s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$diagnostic_stage" "$mode" "$release_revision" >> "$diagnostic_log"
+  printf 'Diagnostic log: %s (%s)\n' "$diagnostic_log" "$mode" >&2
+}
+diagnostic_failed() { local status="$1" line="$2" now elapsed; [ -n "$diagnostic_log" ] || return 0; now="$(date +%s)"; elapsed=$((now - diagnostic_stage_started)); printf '%s stage=%s status=failed duration_seconds=%s source=%s line=%s exit_code=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$diagnostic_stage" "$elapsed" "${BASH_SOURCE[1]##*/}" "$line" "$status" >> "$diagnostic_log"; }
+diagnostic_finish() { local status="$1" now elapsed; [ -n "$diagnostic_log" ] || return 0; now="$(date +%s)"; elapsed=0; [ -z "$diagnostic_stage_started" ] || elapsed=$((now - diagnostic_stage_started)); if [ "$status" -eq 0 ]; then diagnostic_event complete "$elapsed"; else printf '%s stage=%s status=failed duration_seconds=%s source=exit line=unavailable exit_code=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$diagnostic_stage" "$elapsed" "$status" >> "$diagnostic_log"; fi; }
+step() { local now elapsed; now="$(date +%s)"; if [ -n "$diagnostic_stage_started" ]; then elapsed=$((now - diagnostic_stage_started)); diagnostic_event complete "$elapsed"; fi; diagnostic_stage="$1"; diagnostic_stage_started="$now"; diagnostic_event start; step_number=$((step_number + 1)); printf '\n%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n%s◆ STEP %02d/10%s  %s%s%s\n%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$ui_cyan" "$ui_reset" "$ui_cyan" "$step_number" "$ui_reset" "$ui_green" "$1" "$ui_reset" "$ui_cyan" "$ui_reset" >&2; }
+display_digest() { local digest; case "$1" in *@sha256:????????????????????????????????????????????????????????????????) digest="${1##*@sha256:}"; printf '%s@sha256:%s...%s' "${1%@*}" "${digest:0:12}" "${digest: -8}" ;; *) printf '%s' "$1" ;; esac; }
 absolute_new_dir() { case "$1" in /*) ;; *) printf '%s\n' 'path must be absolute' >&2; exit 64 ;; esac; [ ! -e "$1" ] && [ ! -L "$1" ] || { printf 'path already exists: %s\n' "$1" >&2; exit 65; }; }
 
 advance_lifecycle() {
@@ -232,6 +295,7 @@ advance_lifecycle() {
     printf '%s\n' 'lifecycle checkpoint could not be committed; stop and reconcile this WORK_DIR' >&2; return 75;
   }
   lifecycle_phase="$1"
+  [ -z "$diagnostic_log" ] || printf '%s stage=%s status=checkpoint phase=%s source_revision=%.12s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$diagnostic_stage" "$lifecycle_phase" "$release_revision" >> "$diagnostic_log"
 }
 
 run_observation_phase() {
@@ -374,7 +438,8 @@ client_manifest="$(dirname "$inputs")/validator-deployment/client-and-fence.yaml
 baseline_output="$output_dir/deployment-work/baseline-output.json"
 storage_class_template="$source_root/deploy/validator/storage-class.yaml"
 storage_class_helper="$source_root/scripts/ops/ensure-validator-encrypted-storageclass.sh"
-[ -f "$baseline_output" ] && [ ! -L "$baseline_output" ] && [ -f "$storage_class_template" ] && [ ! -L "$storage_class_template" ] && [ -x "$storage_class_helper" ] || {
+runtime_apply_helper="$source_root/scripts/release/apply-hoodi-validator-runtime.sh"
+[ -f "$baseline_output" ] && [ ! -L "$baseline_output" ] && [ -f "$storage_class_template" ] && [ ! -L "$storage_class_template" ] && [ -x "$storage_class_helper" ] && [ -x "$runtime_apply_helper" ] || {
   printf '%s\n' 'verified baseline EBS output or validator StorageClass helper is unavailable; runtime was not applied' >&2
   exit 65
 }
@@ -390,7 +455,8 @@ known_clients_file="$output_dir/ceremony/known-clients.txt"
 "${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$storage_class_helper" --template "$storage_class_template" --kms-key-arn "$validator_ebs_kms_key_arn"
 "${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 kubectl -n validator-operations create configmap "validator-${validator_set}-known-clients" --from-file="known-clients=$known_clients_file" --dry-run=client -o yaml | "${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 kubectl apply -f - >/dev/null
 "${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$source_root/scripts/ops/ensure-vault-agent-ca.sh" --namespace validator-operations --namespace node-operator
-cat "$runtime_manifest" "$client_manifest" | "${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 kubectl apply -f - >/dev/null
+runtime_client_manifest="$output_dir/deployment-work/client-and-fence-runtime.yaml"
+"${selected_tunnel_env[@]}" "$source_root/scripts/ops/with-private-eks.sh" -- env PRIVATE_EKS_SESSION=1 "$runtime_apply_helper" --runtime "$runtime_manifest" --client "$client_manifest" --rendered-client "$runtime_client_manifest" --beacon-service "$source_root/deploy/prysm/service.yaml" --validator-set "$validator_set"
 printf '%s\n' 'PASS: Vault-backed runtime is staged; signer, validator client, and fence remain at their guarded replica counts.' >&2
 advance_lifecycle runtime-complete || return $?
 fi
@@ -444,15 +510,18 @@ return $?
 # stop at platform completion; a bound continuation reuses the selected key
 # and durable lifecycle phase without generating a key or depositing again.
 if [ -n "${WORK_DIR:-}" ]; then
-  [ -t 0 ] && [ -t 1 ] || { printf '%s\n' 'infrastructure recovery requires an interactive terminal' >&2; exit 69; }
+  [ -d "$WORK_DIR" ] && [ ! -L "$WORK_DIR" ] || { printf '%s\n' 'WORK_DIR is unavailable or unsafe' >&2; exit 65; }
   context="$(python3 "$resume_helper" read --work-dir "$WORK_DIR" --manifest "$bundle_root/bundle-manifest.json")" || exit $?
+  init_diagnostics "$WORK_DIR" resume || exit $?
+  trap 'diagnostic_failed "$?" "$LINENO"' ERR
+  [ -t 0 ] && [ -t 1 ] || { printf '%s\n' 'infrastructure recovery requires an interactive terminal' >&2; exit 69; }
   account="$(jq -er '.aws_account_id' <<<"$context")"; region="$(jq -er '.aws_region' <<<"$context")"; deployment_name="$(jq -er '.deployment_name' <<<"$context")"; phase="$(jq -er '.phase' <<<"$context")"
   identity="$(aws sts get-caller-identity --output json)"; observed="$(jq -er '.Account | select(test("^[0-9]{12}$"))' <<<"$identity")" || { printf '%s\n' 'AWS identity did not return an account' >&2; exit 65; }
   [ "$observed" = "$account" ] || { printf '%s\n' 'saved deployment account differs from current AWS identity' >&2; exit 65; }
   load_authorized_artifacts || exit $?
   printf 'Resume verified deployment for account %s, Region %s, deployment %s at phase %s. Type RESUME to continue: ' "$account" "$region" "$deployment_name" "$phase" >&2
   IFS= read -r confirmation; [ "$confirmation" = RESUME ] || { printf '%s\n' 'infrastructure recovery cancelled' >&2; exit 0; }
-  lock="$WORK_DIR/.interactive-resume.lock"; mkdir "$lock" 2>/dev/null || { printf '%s\n' 'another recovery invocation holds the WORK_DIR lock' >&2; exit 75; }; trap 'rmdir "$lock" 2>/dev/null || true' EXIT
+  lock="$WORK_DIR/.interactive-resume.lock"; mkdir "$lock" 2>/dev/null || { printf '%s\n' 'another recovery invocation holds the WORK_DIR lock' >&2; exit 75; }; trap 'status=$?; diagnostic_finish "$status"; rmdir "$lock" 2>/dev/null || true; exit "$status"' EXIT
   context="$(python3 "$resume_helper" read --work-dir "$WORK_DIR" --manifest "$bundle_root/bundle-manifest.json")" || { printf '%s\n' 'recovery context changed while awaiting confirmation; no mutation requested' >&2; exit 65; }
   [ "$(jq -er '.phase' <<<"$context")" = "$phase" ] || { printf '%s\n' 'recovery phase changed while awaiting confirmation; no mutation requested' >&2; exit 65; }
   # Re-read the bundle-bound receipt after the explicit confirmation. A stale
@@ -496,7 +565,7 @@ if [ -n "${WORK_DIR:-}" ]; then
 fi
 
 [ -t 0 ] && [ -t 1 ] || { printf '%s\n' 'execute mode requires an interactive terminal' >&2; exit 69; }
-printf '%s\n' 'This will apply the v0.1.20 release to the selected AWS account and Region.' >&2
+printf 'This will apply the v0.1.20 baseline (source revision %.12s) to the selected AWS account and Region.\n' "$release_revision" >&2
 printf 'Type DEPLOY to continue: ' >&2
 IFS= read -r confirmation
 [ "$confirmation" = 'DEPLOY' ] || { printf '%s\n' 'deployment cancelled' >&2; exit 0; }
@@ -509,6 +578,10 @@ validator_set="$(prompt_default 'Validator set' "$DEFAULT_VALIDATOR_SET")"
 deployment_name="$(prompt_default 'Deployment name' "$DEFAULT_DEPLOYMENT_NAME")"
 [[ "$deployment_name" =~ ^[a-z][a-z0-9-]{1,18}[a-z0-9]$ ]] || { printf '%s\n' 'deployment name must be a DNS-compatible name of 3-20 characters' >&2; exit 64; }
 withdrawal="$(prompt_default 'Withdrawal address' "$DEFAULT_WITHDRAWAL")"
+[ -n "$withdrawal" ] && [[ "$withdrawal" =~ ^0x[0-9a-fA-F]{40}$ ]] || { printf '%s\n' 'withdrawal address must be explicitly configured or entered as 0x followed by 40 hexadecimal characters' >&2; exit 64; }
+audit_replica_region="$DEFAULT_AUDIT_REPLICA_REGION"; [ -n "$audit_replica_region" ] || { audit_replica_region=ap-northeast-1; [ "$region" = ap-northeast-1 ] && audit_replica_region=ap-northeast-2; }
+[[ "$audit_replica_region" =~ ^[a-z]{2}-[a-z0-9-]+-[0-9]+$ ]] && [ "$audit_replica_region" != "$region" ] || { printf '%s\n' 'AUDIT_REPLICA_REGION must be a valid Region different from the primary Region' >&2; exit 64; }
+printf 'Planned topology before IAM mutation: primary=%s audit-replica=%s; approved VPC=10.80.0.0/16; system-subnets=10.80.0.0/20,10.80.16.0/20; Hoodi-subnet=10.80.32.0/20; public-subnet=10.80.64.0/24\n' "$region" "$audit_replica_region" >&2
 identity="$(aws sts get-caller-identity --output json)"
 account="$(jq -er '.Account | select(test("^[0-9]{12}$"))' <<<"$identity")" || { printf '%s\n' 'AWS identity did not return a 12-digit account' >&2; exit 65; }
 printf 'Detected AWS account: %s\nType CONFIRM to continue with this account: ' "$account" >&2
@@ -572,7 +645,7 @@ fi
 # validator manifest is applied.
 api_cidr='127.0.0.1/32'
 if [ -n "${NODE_OPERATOR_SOURCE_REPOSITORY_ROOT:-}" ]; then
-  default_output_dir="${TMPDIR:-/tmp}/node-operator-run-$(date -u +%Y%m%dT%H%M%SZ)"
+  default_output_dir="${NODE_OPERATOR_RUNS_DIR:-$HOME/node-operator-runs}/node-operator-run-$(date -u +%Y%m%dT%H%M%SZ)"
 else
   default_output_dir="${PWD}/node-operator-run-$(date -u +%Y%m%dT%H%M%SZ)"
 fi
@@ -585,11 +658,14 @@ if [ -n "$protected_repository_root" ]; then
     "$protected_repository_root"|"$protected_repository_root"/*) printf '%s\n' 'working directory must be outside the source repository' >&2; exit 64 ;;
   esac
 fi
-trap 'unset confirmation validator_key expected_key withdrawal web3signer_image postgres_image prysm_image fence_image ecr_auth source_image; rm -f "$output_dir/.interactive-inputs.tmp" 2>/dev/null || true' EXIT
+mkdir -m 700 "$output_dir"
+init_diagnostics "$output_dir" fresh || exit $?
+trap 'diagnostic_failed "$?" "$LINENO"' ERR
+trap 'status=$?; diagnostic_finish "$status"; unset confirmation validator_key expected_key withdrawal web3signer_image postgres_image prysm_image fence_image ecr_auth source_image; rm -f "$output_dir/.interactive-inputs.tmp" 2>/dev/null || true; exit "$status"' EXIT
 
 step 'Preparing and validating validator key'
 printf '%s\n' 'Existing key is reused when configured; otherwise a new Hoodi ceremony runs.' >&2
-mkdir -m 700 "$output_dir" "$output_dir/custody"
+mkdir -m 700 "$output_dir/custody"
 keystore_dir_for_custody="$output_dir/custody/validator_keys"
 existing_keystore_dir="$DEFAULT_KEYSTORE_DIR"
 if [ -z "$existing_keystore_dir" ]; then
@@ -710,6 +786,8 @@ if [ "$manage_config_recorder" = false ]; then
   printf '%s\n' 'Reusing the existing regional AWS Config recorder; no duplicate recorder will be created.' >&2
 fi
 prepare_args=(--aws-account-id "$account" --aws-region "$region" --name "$deployment_name" --availability-zone "${zones[0]}" --availability-zone "${zones[1]}" --validator-set "$validator_set" --validator-public-key "$validator_key" --withdrawal-address "$withdrawal" --web3signer-image "$web3signer_image" --postgres-image "$postgres_image" --prysm-validator-image "$prysm_image" --signing-fence-image "$fence_image" --kubernetes-api-cidr "$api_cidr" --output-dir "$output_dir/inputs")
+prepare_args+=(--audit-replica-region "$audit_replica_region")
+for pair in "--github-repository:$DEFAULT_GITHUB_REPOSITORY" "--github-owner-id:$DEFAULT_GITHUB_OWNER_ID" "--github-repository-id:$DEFAULT_GITHUB_REPOSITORY_ID" "--gitops-client-github-repository:$DEFAULT_GITOPS_CLIENT_GITHUB_REPOSITORY" "--gitops-client-github-owner-id:$DEFAULT_GITOPS_CLIENT_GITHUB_OWNER_ID" "--gitops-client-github-repository-id:$DEFAULT_GITOPS_CLIENT_GITHUB_REPOSITORY_ID"; do key="${pair%%:*}"; value="${pair#*:}"; [ -z "$value" ] || prepare_args+=("$key" "$value"); done
 prepare_args+=(--manage-config-recorder "$manage_config_recorder")
 # Bind workload log labels to this verified bundle, never a caller environment
 # override or the unrelated HEAD of a local development checkout.

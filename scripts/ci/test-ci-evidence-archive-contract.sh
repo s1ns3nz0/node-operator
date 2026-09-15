@@ -6,7 +6,8 @@ workflow="$root/.github/workflows/evidence-archive.yml"
 iac="$root/infra/terraform/ci-evidence-archive.tf"
 archive="$root/scripts/ci/archive-ci-evidence.sh"
 assume="$root/scripts/ci/assume-ci-evidence-archive-role.sh"
-for file in "$workflow" "$iac" "$archive" "$assume"; do
+resolver="$root/scripts/ci/resolve-ci-evidence-archive-subject.sh"
+for file in "$workflow" "$iac" "$archive" "$assume" "$resolver"; do
   test -f "$file" || { printf 'missing archive contract file: %s\n' "$file" >&2; exit 1; }
 done
 grep -Fq 'workflow_run:' "$workflow"
@@ -38,6 +39,69 @@ with tempfile.TemporaryDirectory() as directory:
 PY
 grep -Fq 'id-token: write' "$workflow"
 grep -Fq 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093' "$workflow"
+python3 - "$workflow" "$resolver" <<'PY'
+from pathlib import Path
+import sys
+
+workflow = Path(sys.argv[1]).read_text()
+resolver = Path(sys.argv[2]).read_text()
+assert 'pattern: ci-evidence-gate-*' in workflow
+assert 'pattern: ci-review-decision-${{ github.event.workflow_run.id }}' in workflow
+assert '${{ runner.temp }}/ci-evidence/gate' in workflow
+assert '${{ runner.temp }}/ci-evidence/review' in workflow
+assert 'EXPECTED_GATE_RUN_ID: ${{ github.event.workflow_run.id }}' in workflow
+assert 'run: scripts/ci/resolve-ci-evidence-archive-subject.sh' in workflow
+assert 'evidence is not in its expected exact-run artifact directory' in resolver
+assert 'cache context does not bind the exact evidence subject' in resolver
+assert 'expected exactly one valid exact-run evidence artifact' in resolver
+PY
+python3 - "$resolver" <<'PY'
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+script = Path(sys.argv[1])
+sha = 'a' * 40
+
+def run(files, expected_gate_run=900):
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory) / 'evidence'
+        output = Path(directory) / 'output'
+        for source, name, value, context_subject, context_gate_run in files:
+            target = root / source / name / 'evidence.json'
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(json.dumps({'subject': {'commit_sha': value}}))
+            (target.parent / 'decision.json').write_text(json.dumps({'summary': {'block': 0, 'require_approval': 0}, 'violations': []}))
+            (target.parent / 'cache-context.json').write_text(json.dumps({
+                'schema_version': 1, 'subject_sha': context_subject, 'base_sha': 'b' * 40,
+                'trusted_sha': 'c' * 40, 'source_run_id': 800, 'gate_run_id': context_gate_run,
+            }))
+        result = subprocess.run(['bash', str(script)], text=True, capture_output=True,
+            env=os.environ | {'EVIDENCE_ROOT': str(root), 'EXPECTED_GATE_RUN_ID': str(expected_gate_run),
+                              'GITHUB_OUTPUT': str(output)})
+        return result, output.read_text() if output.exists() else ''
+
+result, output = run([('gate', f'ci-evidence-gate-{sha}', sha, sha, 900)])
+assert result.returncode == 0, result.stderr
+lines = output.splitlines()
+assert lines[0] == f'subject_sha={sha}'
+assert len(lines) == 2 and lines[1].startswith('evidence_directory=')
+assert lines[1].split('=', 1)[1].endswith(f'/gate/ci-evidence-gate-{sha}')
+result, output = run([('review', 'ci-review-decision-900', sha, sha, 700)])
+assert result.returncode == 0, result.stderr
+for files in (
+    [],
+    [('gate', f'ci-evidence-gate-{sha}', sha, sha, 900), ('review', 'ci-review-decision-900', sha, sha, 700)],
+    [('gate', f'ci-evidence-gate-{sha}', sha, sha, 700)],
+    [('review', 'ci-review-decision-900', sha, 'b' * 40, 700)],
+    [('gate', 'wrong-directory', sha, sha, 900)],
+):
+    result, output = run(files)
+    assert result.returncode != 0, (files, output)
+PY
 grep -Fq 'cosign sign-blob --yes --bundle' "$archive"
 grep -Fq 'cosign verify-blob --bundle' "$archive"
 grep -Fq 'aws s3 cp' "$archive"
@@ -70,6 +134,6 @@ if grep -Eq 'secrets/|VAULT_TOKEN|recovery.key|private_key' "$archive"; then
   printf 'archive script contains a forbidden secret path or token reference\n' >&2
   exit 1
 fi
-bash -n "$archive" "$assume"
+bash -n "$archive" "$assume" "$resolver"
 python3 "$root/scripts/ci/test-ci-evidence-archive-runtime.py"
 printf 'PASS: CI evidence archive is Cosign-signed, verified, redacted, and OIDC-scoped.\n'

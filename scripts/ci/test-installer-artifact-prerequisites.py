@@ -207,6 +207,29 @@ class PrerequisiteTests(unittest.TestCase):
         trust["change"]["after"]["assume_role_policy"] = json.dumps({"Statement":[{"Effect":"Allow","Action":"sts:AssumeRoleWithWebIdentity","Principal":{"Federated":"*"},"Condition":{}}]})
         with self.assertRaises(helper.PrerequisiteError): helper.validate_plan(broad, ACCOUNT, REGION, DEPLOYMENT, include_publishers=True)
 
+    def test_selected_plan_identity_binds_publisher_trust_and_rejects_wrong_trust(self) -> None:
+        plan = plan_fixture()
+        plan["variables"] = {
+            "github_repository": {"value": "destination-owner/destination-repo"},
+            "github_owner_id": {"value": "991"},
+            "github_repository_id": {"value": "992"},
+            "gitops_client_github_repository": {"value": "gitops-owner/gitops-repo"},
+            "gitops_client_github_owner_id": {"value": "993"},
+            "gitops_client_github_repository_id": {"value": "994"},
+        }
+        github, gitops = helper._plan_identities(plan)
+        self.assertEqual(github, ("destination-owner/destination-repo", "991", "992"))
+        self.assertEqual(gitops, ("gitops-owner/gitops-repo", "993", "994"))
+        suffix = "github-gitops-client-ecr-publisher"
+        condition = {"StringEquals": {"token.actions.githubusercontent.com:aud": "sts.amazonaws.com", "token.actions.githubusercontent.com:repository": gitops[0]}, "StringLike": {"token.actions.githubusercontent.com:sub": helper._publisher_subjects(suffix, github, gitops)[0]}}
+        trust = json.dumps({"Statement": [{"Effect": "Allow", "Action": "sts:AssumeRoleWithWebIdentity", "Principal": {"Federated": f"arn:aws:iam::{ACCOUNT}:oidc-provider/token.actions.githubusercontent.com"}, "Condition": condition}]})
+        helper._validate_publisher_trust(trust, suffix, ACCOUNT, github, gitops)
+        with self.assertRaises(helper.PrerequisiteError):
+            helper._validate_publisher_trust(trust, suffix, ACCOUNT, helper.DEFAULT_GITHUB_IDENTITY, helper.DEFAULT_GITOPS_IDENTITY)
+        plan["variables"]["github_owner_id"] = {"value": ""}
+        with self.assertRaises(helper.PrerequisiteError):
+            helper._plan_identities(plan)
+
     def test_plan_rejects_foreign_before_and_create_adoption(self) -> None:
         foreign = owned_existing_plan("update")
         key = next(change for change in foreign["resource_changes"] if change["address"] == "aws_kms_key.validator_runtime_ecr[0]")

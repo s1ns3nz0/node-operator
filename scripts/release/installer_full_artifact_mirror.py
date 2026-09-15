@@ -140,7 +140,14 @@ def _plan(bundle_root: Path, work_dir: Path, inputs_dir: Path, discovery: dict[s
     return projection, sorted(planned, key=lambda x: x["component"]), tool_ref
 
 
-def mirror(state_dir: Path, bundle_root: Path, discovery: dict[str, str], profile: str, release_sha: str, *, work_dir: Path, inputs_dir: Path, runner: Any = subprocess.run, resume: bool = False) -> Path:
+def mirror(state_dir: Path, bundle_root: Path, discovery: dict[str, str], profile: str, release_sha: str, *, work_dir: Path, inputs_dir: Path, runner: Any = subprocess.run, resume: bool = False, payload_dir: Path | None = None, authenticated_bundle_manifest_sha256: str | None = None) -> Path:
+    from installer_oci_binding import payload_context
+    with payload_context(bundle_root, release_sha, discovery, state_dir, payload_dir, authenticated_bundle_manifest_sha256) as layouts:
+        return _mirror(state_dir, bundle_root, discovery, profile, release_sha, work_dir=work_dir,
+                       inputs_dir=inputs_dir, runner=runner, resume=resume, layouts=layouts)
+
+
+def _mirror(state_dir: Path, bundle_root: Path, discovery: dict[str, str], profile: str, release_sha: str, *, work_dir: Path, inputs_dir: Path, runner: Any, resume: bool, layouts: Path | None) -> Path:
     _context(state_dir, work_dir, profile, release_sha)
     projection, plan, tool = _plan(bundle_root, work_dir, inputs_dir, discovery, release_sha)
     projection_bytes = _read(work_dir / "artifact-prerequisites.json")
@@ -206,10 +213,13 @@ def mirror(state_dir: Path, bundle_root: Path, discovery: dict[str, str], profil
         for item in plan:
             exists = _describe(account, region, item["repository"], item["tag"], item["digest"], env, runner, absent_ok=True)
             if not exists:
-                source_ecr = _ecr_registry(item["source"])
+                source_ecr = _ecr_registry(item["source"]) if layouts is None else None
                 if source_ecr is not None: login(source_ecr[1], source_ecr[2])
                 login(region, registry)
-                _run(["docker", "run", "--rm", "--env", "REGISTRY_AUTH_FILE=/auth/config.json", "--volume", f"{auth}:/auth:ro", tool, "copy", "--all", "docker://" + item["source"], "docker://" + registry + "/" + item["repository"] + ":" + item["tag"]], env, runner)
+                mount = ["--volume", f"{layouts}:/payload:ro"] if layouts is not None else []
+                source = ("oci:/payload/" + item["component"] + ":root-" + item["digest"][7:19]
+                          if layouts is not None else "docker://" + item["source"])
+                _run(["docker", "run", "--rm", "--env", "REGISTRY_AUTH_FILE=/auth/config.json", "--volume", f"{auth}:/auth:ro", *mount, tool, "copy", "--all", "--preserve-digests", source, "docker://" + registry + "/" + item["repository"] + ":" + item["tag"]], env, runner)
                 _describe(account, region, item["repository"], item["tag"], item["digest"], env, runner, absent_ok=False)
             verified.append({"component": item["component"], "image_ref": item["destination"], "tag": item["tag"], "manifest_digest": item["digest"]})
         if _read(work_dir / "artifact-prerequisites.json") != projection_bytes: raise FullMirrorError("artifact prerequisite projection changed during mirror")

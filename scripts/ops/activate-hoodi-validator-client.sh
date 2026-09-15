@@ -129,13 +129,16 @@ jq -e --arg namespace validator-operations --arg client "$client" --arg set "$va
 ' <<<"$client_statefulsets" >/dev/null || { printf '%s\n' 'expected exactly one exact, zero-replica staged validator client StatefulSet cluster-wide' >&2; exit 65; }
 client_image="$(jq -er '.items[0].spec.template.spec.containers[0].image' <<<"$client_statefulsets")"
 client_uid="$(jq -er '.items[0].metadata.uid | strings | select(length>0)' <<<"$client_statefulsets")"
-jq -e --arg image "$client_image" '.schema_version == 2 and any(.images[]; .private_image == $image and .activation_approved == true and (.release_channel == "upstream-mirror" or .release_channel == "manual-native-mtls"))' "$allowlist" >/dev/null || { printf '%s\n' 'staged validator client image is not an exact activation-approved reviewed artifact' >&2; exit 65; }
+jq -e --arg image "$client_image" --argjson now "$now_epoch" '.schema_version == 2 and any(.images[]; .private_image == $image and .activation_approved == true and (.release_channel == "upstream-mirror" or .release_channel == "manual-native-mtls") and (.activation_expires_at? == null or (.activation_expires_at | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$") and fromdateiso8601 > $now)))' "$allowlist" >/dev/null || { printf '%s\n' 'staged validator client image is not an exact activation-approved reviewed artifact' >&2; exit 65; }
 [ "$(jq -r '.items | if type == "array" then length else -1 end' <<<"$client_pods")" -eq 0 ] || { printf '%s\n' 'validator client Pods exist cluster-wide; refuse activation' >&2; exit 65; }
-jq -e --arg namespace validator-operations --arg fence "$fence" --arg set "$validator_set" '
+fence_image="$(jq -er '.items[0].spec.template.spec.containers[0].image' <<<"$fences")"
+approved_fence_image="$(jq -r --arg image "$client_image" '[.images[] | select(.private_image == $image and .activation_approved == true) | .approval_basis.fence_image? | select(type == "string")] | first // empty' "$allowlist")"
+jq -e --arg namespace validator-operations --arg fence "$fence" --arg set "$validator_set" --arg image "$fence_image" --arg approved_fence_image "$approved_fence_image" '
   (.items | type == "array" and length == 1) and .items[0].metadata.namespace == $namespace and
   .items[0].metadata.name == $fence and .items[0].metadata.labels["node-operator.io/validator-set"] == $set and
   .items[0].spec.template.metadata.labels["node-operator.io/validator-set"] == $set and .items[0].spec.replicas == 0 and
-  (.items[0].spec.template.spec.containers[0].image | test("/node-operator-baseline-validator-fence@sha256:[a-f0-9]{64}$"))
+  (.items[0].spec.template.spec.containers[0].image == $image) and
+  ($image == $approved_fence_image or ($approved_fence_image == "" and ($image | test("^106760547719\\.dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com/node-operator-baseline-validator-fence@sha256:[a-f0-9]{64}$"))))
 ' <<<"$fences" >/dev/null || { printf '%s\n' 'expected exactly one exact, zero-replica digest-pinned signing fence' >&2; exit 65; }
 fence_controller_uid="$(jq -er '.items[0].metadata.uid | strings | select(length>0)' <<<"$fences")"
 public_service="$(kubectl -n validator-operations get service "$signer" -o json)"

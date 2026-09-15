@@ -7,13 +7,13 @@ umask 077
 # independently authorized operations; this command only removes duplicated
 # operator input while preserving those boundaries.
 usage() {
-  printf '%s\n' "usage: ${0##*/} --aws-account-id <12-digit-id> --validator-set <hoodi-id> --validator-public-key <0x-key> --withdrawal-address <0x-address> --web3signer-image <private-ecr@sha256> --postgres-image <private-ecr@sha256> --prysm-validator-image <private-ecr@sha256> --signing-fence-image <private-ecr@sha256> --kubernetes-api-cidr <ipv4/32> --output-dir <new-absolute-dir> [--aws-region <ap-northeast-1|ap-northeast-2>] [--availability-zone <zone> --availability-zone <zone>] [--name <dns-name>] [--backend-principal-arn <same-account-role-arn>] [--manage-config-recorder true|false]" >&2
+  printf '%s\n' "usage: ${0##*/} --aws-account-id <12-digit-id> --validator-set <hoodi-id> --validator-public-key <0x-key> --withdrawal-address <0x-address> --web3signer-image <private-ecr@sha256> --postgres-image <private-ecr@sha256> --prysm-validator-image <private-ecr@sha256> --signing-fence-image <private-ecr@sha256> --kubernetes-api-cidr <ipv4/32> --output-dir <new-absolute-dir> [--aws-region <ap-northeast-1|ap-northeast-2>] [--audit-replica-region <aws-region>] [--availability-zone <zone> --availability-zone <zone>] [--name <dns-name>] [--backend-principal-arn <same-account-role-arn>] [--manage-config-recorder true|false]" >&2
   exit 64
 }
 
 account=''; validator_set=''; validator_public_key=''; withdrawal_address=''
 release_identity=''
-web3signer_image=''; postgres_image=''; prysm_image=''; fence_image=''; kubernetes_api_cidr=''; output_dir=''; name='node-operator'; aws_region='ap-northeast-2'; availability_zones=(); principals=(); manage_config_recorder=true
+web3signer_image=''; postgres_image=''; prysm_image=''; fence_image=''; kubernetes_api_cidr=''; output_dir=''; name='node-operator'; aws_region='ap-northeast-2'; audit_replica_region=''; github_repository=''; github_owner_id=''; github_repository_id=''; gitops_client_github_repository=''; gitops_client_github_owner_id=''; gitops_client_github_repository_id=''; availability_zones=(); principals=(); manage_config_recorder=true
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --aws-account-id) account="${2:-}"; shift 2 ;;
@@ -27,6 +27,13 @@ while [ "$#" -gt 0 ]; do
     --kubernetes-api-cidr) kubernetes_api_cidr="${2:-}"; shift 2 ;;
     --output-dir) output_dir="${2:-}"; shift 2 ;;
     --aws-region) aws_region="${2:-}"; shift 2 ;;
+    --audit-replica-region) audit_replica_region="${2:-}"; shift 2 ;;
+    --github-repository) github_repository="${2:-}"; shift 2 ;;
+    --github-owner-id) github_owner_id="${2:-}"; shift 2 ;;
+    --github-repository-id) github_repository_id="${2:-}"; shift 2 ;;
+    --gitops-client-github-repository) gitops_client_github_repository="${2:-}"; shift 2 ;;
+    --gitops-client-github-owner-id) gitops_client_github_owner_id="${2:-}"; shift 2 ;;
+    --gitops-client-github-repository-id) gitops_client_github_repository_id="${2:-}"; shift 2 ;;
     --availability-zone) availability_zones+=("${2:-}"); shift 2 ;;
     --name) name="${2:-}"; shift 2 ;;
     --release-revision) release_identity="${2:-}"; shift 2 ;;
@@ -57,6 +64,8 @@ trap cleanup EXIT INT TERM
 
 mkdir -m 700 "$output_dir"
 zero_args=(--aws-account-id "$account" --aws-region "$aws_region" --name "$name" --output-dir "$zero_dir")
+[ -z "$audit_replica_region" ] || zero_args+=(--audit-replica-region "$audit_replica_region")
+for pair in "--github-repository:$github_repository" "--github-owner-id:$github_owner_id" "--github-repository-id:$github_repository_id" "--gitops-client-github-repository:$gitops_client_github_repository" "--gitops-client-github-owner-id:$gitops_client_github_owner_id" "--gitops-client-github-repository-id:$gitops_client_github_repository_id"; do key="${pair%%:*}"; value="${pair#*:}"; [ -z "$value" ] || zero_args+=("$key" "$value"); done
 zero_args+=(--manage-config-recorder "$manage_config_recorder")
 for zone in "${availability_zones[@]-}"; do
   [ -n "$zone" ] && zero_args+=(--availability-zone "$zone")

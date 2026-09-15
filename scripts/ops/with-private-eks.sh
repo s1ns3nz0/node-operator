@@ -22,10 +22,10 @@ done
 
 region="${AWS_REGION:-ap-northeast-2}"
 cluster_name="${EKS_CLUSTER_NAME:-node-operator}"
-instance_id="${SSM_OPS_INSTANCE_ID:-i-02c57d75e7f6810b1}"
+instance_id="${SSM_OPS_INSTANCE_ID:?SSM_OPS_INSTANCE_ID must identify the current deployment SSM host}"
 eks_port="${PRIVATE_EKS_LOCAL_PORT:-9443}"
-session_log="$(mktemp /private/tmp/node-operator-ssm.XXXXXX)"
-kubeconfig_file="$(mktemp /private/tmp/node-operator-kubeconfig.XXXXXX)"
+session_log="$(mktemp "${TMPDIR:-/tmp}/node-operator-ssm.XXXXXX")"
+kubeconfig_file="$(mktemp "${TMPDIR:-/tmp}/node-operator-kubeconfig.XXXXXX")"
 session_pid=''
 session_id=''
 session_id_ambiguous=0

@@ -70,6 +70,28 @@ class CustodyReleaseBundleInputsTests(unittest.TestCase):
         self.assertTrue((extracted / "source" / TLS_GUARD).is_file())
         self.assertTrue((extracted / "source" / CRYPTO_GUARD).is_file(), list((extracted / "source/scripts/ops").iterdir()))
         self.assertTrue((extracted / "source" / CRYPTO_LOCK).is_file())
+
+    def test_operator_files_and_historical_identity_tools_are_not_released(self):
+        forbidden = ("release/keystore-fixture.json", "release/deposit_data-fixture.json",
+                     "release/oci-payload-source.json",
+                     "infra/terraform/terraform.tfvars.json", "infra/terraform/terraform.tfstate.json")
+        for relative in forbidden:
+            path = self.fixture / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('{"synthetic_operator_input":true}\n')
+        subprocess.run(["git", "-C", str(self.fixture), "add", "-f", *forbidden], check=True)
+        subprocess.run(["git", "-C", str(self.fixture), "commit", "--quiet", "-m", "synthetic accidentally tracked operator inputs"], check=True)
+        result = self._run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        extracted = self._archive()
+        for relative in (*forbidden, "scripts/ops/verify-hoodi-001-signer-tls-rejection.sh",
+                         "scripts/ops/with-private-vault-operator.sh", "scripts/ops/publish-reviewed-vault-grpc-candidates.sh"):
+            self.assertFalse((extracted / "source" / relative).exists(), relative)
+        example = extracted / "source/release/env.example"
+        self.assertTrue(example.is_file())
+        self.assertIn("VALIDATOR_PUBLIC_KEY=\n", example.read_text())
+        self.assertIn("WITHDRAWAL_ADDRESS=\n", example.read_text())
+        self.assertIn("EXISTING_KEYSTORE_DIR=\n", example.read_text())
         self.assertTrue((extracted / "source" / RUNTIME_HELPER).is_file())
 
     def test_dirty_and_untracked_worktree_inputs_are_not_materialized(self):

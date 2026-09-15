@@ -9,10 +9,15 @@ region="${AWS_REGION:-ap-northeast-2}"
 bucket="${VAULT_SNAPSHOT_BUCKET:-}"
 kms_key="alias/node-operator-baseline-vault-snapshot"
 
-usage() { printf 'Usage: %s [--bucket BUCKET]\n' "${0##*/}" >&2; exit 64; }
+usage() { printf 'Usage: %s [--bucket BUCKET] [--kms-key KMS_KEY]\n' "${0##*/}" >&2; exit 64; }
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --bucket) bucket="${2:-}"; shift 2 ;;
+    --kms-key)
+      kms_key="${2:-}"
+      [ -n "$kms_key" ] || { printf '%s\n' '--kms-key requires a non-empty KMS key ID or ARN' >&2; exit 64; }
+      shift 2
+      ;;
     *) usage ;;
   esac
 done

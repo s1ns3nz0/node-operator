@@ -67,7 +67,7 @@ data "aws_iam_policy_document" "github_private_dast_mirror_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["${var.github_oidc_subject_prefix}:environment:private-dast-ecr-mirror"]
+      values   = ["${local.github_destination_oidc_subject_prefix}:environment:private-dast-ecr-mirror"]
     }
   }
 }

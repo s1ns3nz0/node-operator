@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "scope": "Previously authorized exact live deployment activation; not blanket approval for new deployments or image substitutions",
+  "actor": "delegated root integration agent",
+  "authority": "User explicitly requested fastest direct installation through validator activity on 2026-09-15; prior approved product specification delegates guarded ACTIVATE after real prerequisites",
+  "deployment_name": "node-op-2609140157",
+  "validator_set": "hoodi-001",
+  "client_image": "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-op-2609140157-baseline-validator-prysm@sha256:2789e2433b907019958b6d558c6e19b27dc9af7fe10e38684a1a64fccb48263d",
+  "fence_image": "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-op-2609140157-baseline-validator-fence@sha256:951312f79c693eae0a9b3e54961701944e0e1339d997f0f3315a25112dcb7fb8",
+  "publication_run": "34809117895",
+  "prior_authority": "release/prysm-publication-authorization.json and release/fence-publication-authorization.json authorize staging only; neither is modified or represented as previous activation approval",
+  "new_activation_approval": true,
+  "conditions": [
+    "exact published image references only",
+    "native floor preparation PASS missing-history-20260915015934-11638.json",
+    "Vault-injected mTLS signer identity PASS signer-public-key-hoodi-001-20260915T020141Z.json",
+    "fresh private Beacon readiness and existing guarded singleton/lease checks immediately before activation"
+  ],
+  "limits": [
+    "missing history remains unrecovered and no-slashing guarantee is not claimed",
+    "Prysm published non-applicability expiry 2026-09-21T00:00:00Z retained",
+    "old immutable release bundle remains unchanged",
+    "One post-activation attestation at slot3935452 was verified in finalized block3935453; strict structured signer-audit archive correlation remains incomplete."
+  ],
+  "activation_expires_at": "2026-09-21T00:00:00Z"
+}

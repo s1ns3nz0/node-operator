@@ -8,6 +8,26 @@ ROOT=Path(__file__).resolve().parents[2]
 CLI=ROOT/"scripts/release/hoodi-validator-release.sh"
 
 class ArtifactFirst(unittest.TestCase):
+ def test_payload_release_requires_authenticated_handoff_before_aws(self):
+  with tempfile.TemporaryDirectory() as temp:
+   root=Path(temp); env,args,log=self.fixture(root)
+   (root/"bundle/rendered").mkdir(); (root/"bundle/rendered/installer-oci-payload-manifest.json").write_text("{}")
+   env.pop("NODE_OPERATOR_OCI_PAYLOAD_DIR",None); env.pop("NODE_OPERATOR_AUTHENTICATED_BUNDLE_MANIFEST_SHA256",None)
+   result=subprocess.run([str(CLI),*args],text=True,capture_output=True,env=env)
+   self.assertNotEqual(result.returncode,0)
+   self.assertIn("authenticated release launcher",result.stderr)
+   self.assertFalse(any(row.startswith("aws:") or "node:zero:" in row for row in log.read_text().splitlines()))
+ def test_payload_arguments_reach_both_copiers_not_readonly_verify(self):
+  with tempfile.TemporaryDirectory() as temp:
+   root=Path(temp); env,args,log=self.fixture(root)
+   payload=root/"payload"; payload.mkdir()
+   env.update(NODE_OPERATOR_OCI_PAYLOAD_DIR=str(payload),NODE_OPERATOR_AUTHENTICATED_BUNDLE_MANIFEST_SHA256="b"*64)
+   helper=root/"bundle/source/scripts/release/mirror-installer-vault-artifacts.py"
+   helper.write_text('import os,sys\na=sys.argv\nif a[1]=="verify":\n assert "--oci-payload-dir" not in a\nelse:\n assert a[a.index("--oci-payload-dir")+1]==os.environ["NODE_OPERATOR_OCI_PAYLOAD_DIR"]\n assert a[a.index("--verified-bundle-manifest-sha256")+1]=="b"*64\nopen(os.environ["LOG"],"a").write("payload-args:"+a[1]+"\\n")\n')
+   result=subprocess.run([str(CLI),*args],text=True,capture_output=True,env=env)
+   self.assertEqual(result.returncode,0,result.stderr)
+   self.assertEqual(log.read_text().count("payload-args:mirror"),2)
+   self.assertEqual(log.read_text().count("payload-args:verify"),2)
  def fixture(self, root, fail=""):
   bundle=root/"bundle"; release=bundle/"source/scripts/release"; release.mkdir(parents=True)
   work=root/"work"; inputs=root/"inputs"; zero=inputs/"zero-resource"; zero.mkdir(parents=True)

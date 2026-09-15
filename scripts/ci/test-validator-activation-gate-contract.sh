@@ -20,7 +20,12 @@ withdrawal_address="0x$(printf 'b%.0s' {1..40})"
 validator_set='hoodi-001'
 client="validator-${validator_set}-client"
 fence="validator-${validator_set}-signing-fence"
-client_image='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-prysm@sha256:f35410bedf15c5a7b710769e1c67c5f77e74f75544fd51084f12d47082c457e3'
+canonical_client_image='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-prysm@sha256:f35410bedf15c5a7b710769e1c67c5f77e74f75544fd51084f12d47082c457e3'
+canonical_fence_image='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-fence@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+client_image="$canonical_client_image"
+fence_image="$canonical_fence_image"
+direct_client_image='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-op-2609140157-baseline-validator-prysm@sha256:2789e2433b907019958b6d558c6e19b27dc9af7fe10e38684a1a64fccb48263d'
+direct_fence_image='106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-op-2609140157-baseline-validator-fence@sha256:951312f79c693eae0a9b3e54961701944e0e1339d997f0f3315a25112dcb7fb8'
 now_epoch="$(date -u +%s)"
 
 timestamp() { jq -nr --argjson epoch "$1" '$epoch | strftime("%Y-%m-%dT%H:%M:%S.123Z")'; }
@@ -37,9 +42,9 @@ write_valid_evidence() {
 write_valid_inventory() {
   printf '%s\n' '{"items":[]}' > "$scratch/deployments.json"
   jq -n --arg client "$client" --arg set "$validator_set" --arg image "$client_image" '{items:[{metadata:{namespace:"validator-operations",name:$client,uid:"client-controller",resourceVersion:"1",labels:{"node-operator.io/validator-set":$set}},spec:{replicas:0,serviceName:("validator-"+$set+"-client-headless"),template:{metadata:{labels:{"node-operator.io/validator-set":$set}},spec:{containers:[{name:"validator",image:$image}]}}}}]}' > "$scratch/statefulsets.json"
-  jq -n --arg fence "$fence" --arg set "$validator_set" '{items:[{
+  jq -n --arg fence "$fence" --arg set "$validator_set" --arg image "$fence_image" '{items:[{
     metadata:{namespace:"validator-operations",name:$fence,uid:"fence-controller",resourceVersion:"1",labels:{"node-operator.io/validator-set":$set}},
-    spec:{replicas:0,template:{metadata:{labels:{"node-operator.io/validator-set":$set}},spec:{containers:[{image:"106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-validator-fence@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}}}
+    spec:{replicas:0,template:{metadata:{labels:{"node-operator.io/validator-set":$set}},spec:{containers:[{image:$image}]}}}
   }]}' > "$scratch/fences.json"
   printf '%s\n' '{"items":[]}' > "$scratch/pods.json"
   jq -n --arg set "$validator_set" '{spec:{selector:{"app.kubernetes.io/component":"validator-signing-fence","node-operator.io/validator-set":$set},ports:[{port:9000,targetPort:"fence-proxy"}]}}' > "$scratch/public-service.json"
@@ -165,7 +170,7 @@ raise SystemExit(process.returncode)
 PY
 }
 reset_fixture() {
-  local observed; observed="$(timestamp "$now_epoch")"; write_valid_evidence "$observed"; write_valid_inventory
+  local observed; client_image="$canonical_client_image"; fence_image="$canonical_fence_image"; observed="$(timestamp "$now_epoch")"; write_valid_evidence "$observed"; write_valid_inventory
   jq -n --arg set "$validator_set" '{metadata:{name:"validator-hoodi-001-client-0",uid:"client-uid",labels:{"node-operator.io/validator-set":$set,"app.kubernetes.io/component":"validator-client"}},status:{podIP:"10.0.0.10",phase:"Running",conditions:[{type:"Ready",status:"True"}]}}' > "$scratch/client-pod.json"
   jq -n --arg set "$validator_set" '{items:[{metadata:{name:"validator-hoodi-001-signing-fence-pod",uid:"fence-uid",labels:{"node-operator.io/validator-set":$set,"app.kubernetes.io/component":"validator-signing-fence"}},status:{phase:"Running",conditions:[{type:"Ready",status:"True"}]}}]}' > "$scratch/fence-pods.json"
   jq -n --arg observed "$observed" '{metadata:{uid:"lease-uid"},spec:{holderIdentity:"fence-uid",leaseDurationSeconds:60,renewTime:$observed}}' > "$scratch/lease.json"
@@ -188,6 +193,15 @@ dry_run_output="$(run_gate)"
 grep -Fq 'PASS: activation preflight passed; client and signing fence remain at zero because --dry-run was set.' <<<"$dry_run_output" || fail 'valid fractional-second evidence did not pass dry-run gate'
 if grep -Fq 'Type exactly ACTIVATE' <<<"$dry_run_output"; then fail 'dry-run prompted for activation confirmation'; fi
 test ! -s "$scratch/trace" || fail 'happy dry-run reached a scale request'
+
+reset_fixture; client_image="$direct_client_image"; fence_image="$direct_fence_image"; write_valid_inventory
+run_gate | grep -Fq 'PASS: activation preflight passed; client and signing fence remain at zero because --dry-run was set.' || fail 'exact task-approved direct client and release-bound fence did not pass dry-run gate'
+test ! -s "$scratch/trace" || fail 'exact direct dry-run reached a scale request'
+
+reset_fixture; client_image="${direct_client_image/node-op-2609140157/other-deployment}"; fence_image="$direct_fence_image"; write_valid_inventory; expect_rejected 'wrong direct client deployment repository'
+reset_fixture; client_image="${direct_client_image/106760547719/123456789012}"; fence_image="$direct_fence_image"; write_valid_inventory; expect_rejected 'wrong direct client registry account'
+reset_fixture; client_image="${direct_client_image%?}0"; fence_image="$direct_fence_image"; write_valid_inventory; expect_rejected 'wrong direct client digest'
+reset_fixture; client_image="$direct_client_image"; fence_image="${direct_fence_image%?}0"; write_valid_inventory; expect_rejected 'wrong release-bound fence digest'
 
 reset_fixture
 if run_gate_actual_tty CANCEL >/dev/null 2>&1; then fail 'cancelled activation unexpectedly passed'; else status=$?; fi

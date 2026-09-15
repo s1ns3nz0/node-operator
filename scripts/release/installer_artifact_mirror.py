@@ -99,9 +99,13 @@ def _staged_chart_manifest(account: str, region: str, repository: str, stage: st
 def _mirror_env(profile: str, region: str) -> dict:
     env=dict(os.environ)
     for key in list(env):
-        if key in {"AWS_ACCESS_KEY_ID","AWS_SECRET_ACCESS_KEY","AWS_SESSION_TOKEN","AWS_SECURITY_TOKEN","BASH_ENV"} or key.startswith("TF_VAR_"):
+        if key in {"AWS_ACCESS_KEY_ID","AWS_SECRET_ACCESS_KEY","AWS_SESSION_TOKEN","AWS_SECURITY_TOKEN","BASH_ENV"} or key.startswith("TF_VAR_") or key.startswith("AWS_ENDPOINT_URL"):
             env.pop(key, None)
-    env.update(AWS_PROFILE=profile, AWS_REGION=region)
+    # Selected local profile/config remains the operator's authentication source,
+    # not a sandbox for hostile local credentials files or executable helpers.
+    # Endpoint overrides must never redirect identity or destination evidence.
+    env.update(AWS_PROFILE=profile, AWS_DEFAULT_PROFILE=profile, AWS_REGION=region,
+               AWS_DEFAULT_REGION=region, AWS_IGNORE_CONFIGURED_ENDPOINT_URLS="true")
     return env
 
 def _describe_digest(account: str, region: str, repository: str, tag: str, digest: str, env: dict, *, absent_ok: bool = False) -> str | None:
@@ -167,7 +171,7 @@ def _pre_eks_work_dir(state_dir: Path, work_dir: Path | None) -> Path:
     if not resolved.is_dir() or resolved.is_symlink(): raise MirrorError("pre-EKS work directory is unsafe")
     return resolved
 
-def mirror(state_dir: Path, bundle_root: Path, discovery: dict, profile: str, release_sha: str, *, prerequisites_path: Path | None = None, inputs_dir: Path | None = None, work_dir: Path | None = None, resume: bool = False) -> Path:
+def mirror(state_dir: Path, bundle_root: Path, discovery: dict, profile: str, release_sha: str, *, prerequisites_path: Path | None = None, inputs_dir: Path | None = None, work_dir: Path | None = None, resume: bool = False, layouts: Path | None = None) -> Path:
     index_path = bundle_root / "rendered/installer-artifact-index.json"; index = _read(index_path)
     index_bytes=index_path.read_bytes()
     if not SHA.fullmatch(release_sha) or set(index) != {"schema_version","release_revision","components"} or index["schema_version"] != 1 or index["release_revision"] != release_sha or set(index["components"]) != NAMES: raise MirrorError("artifact index is not the exact selected release index")
@@ -272,9 +276,10 @@ def mirror(state_dir: Path, bundle_root: Path, discovery: dict, profile: str, re
      if lock: lock.rmdir()
      raise
     try:
-        for image in (tool,chart_tool):
+        tools = (tool, chart_tool) if layouts is None else (tool,)
+        for image in tools:
             subprocess.run(["docker","pull",image],check=True,capture_output=True,text=True,env=env,timeout=DOCKER_TIMEOUT)
-        for command in (["docker","image","inspect",tool],["docker","image","inspect",chart_tool]):
+        for command in (["docker","image","inspect",image] for image in tools):
             subprocess.run(command,check=True,capture_output=True,text=True,env=env,timeout=AWS_TIMEOUT)
         work=Path(tempfile.mkdtemp(prefix=".vault-artifact-mirror-",dir=state_dir)); os.chmod(work,0o700)
         auth=work/"auth"; auth.mkdir(mode=0o700)
@@ -296,7 +301,9 @@ def mirror(state_dir: Path, bundle_root: Path, discovery: dict, profile: str, re
             item=index["components"][name]; source=item.get("image_ref"); digest=item.get("manifest_digest")
             got=_describe_digest(account,region,destination.split('/',1)[1],tag,digest,env,absent_ok=True) if pre_eks else None
             if got is None:
-                subprocess.run(["docker","run","--rm","--env","REGISTRY_AUTH_FILE=/auth/config.json","--volume",f"{auth}:/auth:ro",tool,"copy","--all","docker://"+source,"docker://"+destination+":"+tag],check=True,env=env,timeout=DOCKER_TIMEOUT)
+                mount = ["--volume", f"{layouts}:/payload:ro"] if layouts is not None else []
+                transport = "oci:/payload/"+name+":root-"+digest[7:19] if layouts is not None else "docker://"+source
+                subprocess.run(["docker","run","--rm","--env","REGISTRY_AUTH_FILE=/auth/config.json","--volume",f"{auth}:/auth:ro",*mount,tool,"copy","--all","--preserve-digests",transport,"docker://"+destination+":"+tag],check=True,env=env,timeout=DOCKER_TIMEOUT)
                 got=_describe_digest(account,region,destination.split('/',1)[1],tag,digest,env)
             verified[name]={"image_ref":destination+"@"+got,"manifest_digest":got}
         for name,key in (("vault-chart","vault_chart"),("cert-manager-chart","cert_manager_chart")):
@@ -305,6 +312,9 @@ def mirror(state_dir: Path, bundle_root: Path, discovery: dict, profile: str, re
             chart_manifest_bytes,config,layers=chart_oci[name]; archive=work/(name+".tgz"); archives=[archive]
             command='set -eu; curl --fail --location --silent --show-error --output "$1" "$2"; printf "%s  %s\\n" "$3" "$1" | sha256sum --check --status'
             got=_describe_digest(account,region,repos[key].split('/',1)[1],tag,digest,env,absent_ok=True) if pre_eks else None
+            if got is None and layouts is not None:
+                subprocess.run(["docker","run","--rm","--env","REGISTRY_AUTH_FILE=/auth/config.json","--volume",f"{auth}:/auth:ro","--volume",f"{layouts}:/payload:ro",tool,"copy","--all","--preserve-digests","oci:/payload/"+name+":root-"+digest[7:19],"docker://"+repos[key]+":"+tag],check=True,env=env,timeout=DOCKER_TIMEOUT)
+                got=_describe_digest(account,region,repos[key].split('/',1)[1],tag,digest,env)
             if got is None:
                 subprocess.run(["docker","run","--rm","--volume",f"{work}:/work","--entrypoint","sh",chart_tool,"-c",command,"--","/work/"+archive.name,url,sha],check=True,env=env,timeout=DOCKER_TIMEOUT)
                 if len(layers)==2:
@@ -376,8 +386,12 @@ def verify_pre_eks_vault_mirror(state_dir: Path, bundle_root: Path, discovery: d
     return {"binding":binding,"manifest":expected_manifest} if return_manifest else binding
 
 _mirror_impl = mirror
-def mirror(*args, **kwargs):
+def mirror(state_dir: Path, bundle_root: Path, discovery: dict, profile: str, release_sha: str, *, prerequisites_path: Path | None = None, inputs_dir: Path | None = None, work_dir: Path | None = None, resume: bool = False, payload_dir: Path | None = None, authenticated_bundle_manifest_sha256: str | None = None) -> Path:
+    from installer_oci_binding import payload_context
     try:
-        return _mirror_impl(*args, **kwargs)
+        with payload_context(bundle_root, release_sha, discovery, state_dir, payload_dir, authenticated_bundle_manifest_sha256) as layouts:
+            return _mirror_impl(state_dir, bundle_root, discovery, profile, release_sha,
+                prerequisites_path=prerequisites_path, inputs_dir=inputs_dir, work_dir=work_dir,
+                resume=resume, layouts=layouts)
     except subprocess.CalledProcessError as error:
         raise MirrorError("artifact mirror command failed; the outcome requires reconciliation") from error

@@ -17,7 +17,7 @@ UPLOADER = REPO_ROOT / "scripts/ops/save-private-vault-raft-snapshot.sh"
 
 
 class SnapshotUploadIntegrityTests(unittest.TestCase):
-    def run_uploader(self, case: str) -> subprocess.CompletedProcess[str]:
+    def run_uploader(self, case: str, kms_key: str | None = None) -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary_root = Path(temporary_directory)
             ops = temporary_root / "scripts/ops"
@@ -26,8 +26,9 @@ class SnapshotUploadIntegrityTests(unittest.TestCase):
             mock_bin.mkdir()
             shutil.copy2(UPLOADER, ops / UPLOADER.name)
             (ops / UPLOADER.name).chmod(0o755)
+            vault_called = temporary_root / "vault-called"
             (ops / "with-private-vault.sh").write_text(
-                "#!/usr/bin/env bash\nset -eu\nshift\n\"$@\"\n", encoding="utf-8"
+                "#!/usr/bin/env bash\nset -eu\ntouch \"$MOCK_VAULT_CALLED\"\nshift\n\"$@\"\n", encoding="utf-8"
             )
             (ops / "with-private-vault.sh").chmod(0o755)
             (mock_bin / "vault").write_text(
@@ -49,12 +50,22 @@ operation="${2:-}"
 case "$operation" in
   get-object-lock-configuration) printf '%s\\n' '{"ObjectLockConfiguration":{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"GOVERNANCE","Days":90}}}}' ;;
   get-bucket-versioning) printf '%s\\n' '{"Status":"Enabled"}' ;;
-  describe-key) printf '%s\\n' '{"KeyMetadata":{"Arn":"arn:aws:kms:ap-northeast-2:123:key/snapshot"}}' ;;
-  get-bucket-encryption) printf '%s\\n' '{"ServerSideEncryptionConfiguration":{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"aws:kms","KMSMasterKeyID":"arn:aws:kms:ap-northeast-2:123:key/snapshot"}}]}}' ;;
+  describe-key)
+    case "$*" in
+      *generated*) printf '%s\\n' '{"KeyMetadata":{"Arn":"arn:aws:kms:ap-northeast-2:123:key/generated"}}' ;;
+      *) printf '%s\\n' '{"KeyMetadata":{"Arn":"arn:aws:kms:ap-northeast-2:123:key/snapshot"}}' ;;
+    esac ;;
+  get-bucket-encryption)
+    if [ "$MOCK_CASE" = generatedsuccess ]; then
+      printf '%s\\n' '{"ServerSideEncryptionConfiguration":{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"aws:kms","KMSMasterKeyID":"arn:aws:kms:ap-northeast-2:123:key/generated"}}]}}'
+    else
+      printf '%s\\n' '{"ServerSideEncryptionConfiguration":{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"aws:kms","KMSMasterKeyID":"arn:aws:kms:ap-northeast-2:123:key/snapshot"}}]}}'
+    fi ;;
   put-object)
     [ "$MOCK_CASE" != uploadfailure ] || exit 41
     for ((i=1; i<=$#; i++)); do
       [ "${!i}" != --checksum-sha256 ] || { j=$((i + 1)); printf '%s' "${!j}" > "$MOCK_CHECKSUM"; }
+      [ "${!i}" != --ssekms-key-id ] || { j=$((i + 1)); printf '%s' "${!j}" > "$MOCK_SSEKMS_KEY"; }
     done
     [ "$MOCK_CASE" != inflightdelay ] || sleep 2
     python3 - "$MOCK_METADATA" "$MOCK_CASE" "$(cat "$MOCK_CHECKSUM")" <<'PY'
@@ -76,7 +87,7 @@ if case == "roundingtolerancefail":
     retention = last_modified + timedelta(days=90, seconds=-2)
 metadata = {
     "ServerSideEncryption": "aws:kms",
-    "SSEKMSKeyId": "arn:aws:kms:ap-northeast-2:123:key/snapshot",
+    "SSEKMSKeyId": "arn:aws:kms:ap-northeast-2:123:key/generated" if case == "generatedsuccess" else "arn:aws:kms:ap-northeast-2:123:key/snapshot",
     "VersionId": "version-1",
     "ChecksumType": "FULL_OBJECT",
     "ChecksumSHA256": checksum,
@@ -119,14 +130,23 @@ esac
                 "MOCK_CHECKSUM": str(temporary_root / "checksum"),
                 "TMPDIR": str(temporary_root),
                 "MOCK_METADATA": str(temporary_root / "metadata.json"),
+                "MOCK_SSEKMS_KEY": str(temporary_root / "ssekms-key"),
+                "MOCK_VAULT_CALLED": str(vault_called),
             }
+            command = [str(ops / UPLOADER.name), "--bucket", "test-bucket"]
+            if kms_key is not None:
+                command.extend(["--kms-key", kms_key])
             result = subprocess.run(
-                [str(ops / UPLOADER.name), "--bucket", "test-bucket"],
+                command,
                 text=True,
                 capture_output=True,
                 env=environment,
                 check=False,
             )
+            if case == "bucketkeymismatch":
+                self.assertFalse(vault_called.exists(), "bucket-key mismatch must fail before Vault access")
+            if case == "generatedsuccess":
+                self.assertEqual((temporary_root / "ssekms-key").read_text(), "arn:aws:kms:ap-northeast-2:123:key/generated")
             self.assertEqual(list(temporary_root.glob("node-operator-vault-raft.*")), [])
             return result
 
@@ -184,6 +204,21 @@ esac
         result = self.run_uploader("kmswrong")
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn("PASS:", result.stdout)
+
+    def test_generated_kms_key_mismatch_fails_before_uploader_vault_operation(self) -> None:
+        result = self.run_uploader("bucketkeymismatch", "arn:aws:kms:ap-northeast-2:123:key/generated")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("required SSE-KMS key", result.stderr)
+
+    def test_generated_kms_key_matching_bucket_and_object_succeeds(self) -> None:
+        result = self.run_uploader("generatedsuccess", "arn:aws:kms:ap-northeast-2:123:key/generated")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("PASS:", result.stdout)
+
+    def test_empty_kms_key_is_rejected_before_any_dependency(self) -> None:
+        result = subprocess.run([str(UPLOADER), "--kms-key", ""], text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 64)
+        self.assertIn("--kms-key requires a non-empty", result.stderr)
 
     def test_wrong_version_never_reports_pass(self) -> None:
         result = self.run_uploader("versionwrong")
