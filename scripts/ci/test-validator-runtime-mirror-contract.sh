@@ -8,7 +8,7 @@ terraform_file="$root/infra/terraform/validator-runtime-ecr-mirror.tf"
 workflow="$root/.github/workflows/private-ecr-mirror.yml"
 allowlist="$root/.ci/validator/approved-runtime-images.json"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
-for required in 'enable_validator_runtime_ecr_mirror' 'default     = false' 'aws_ecr_repository" "validator_runtime' 'image_tag_mutability = "IMMUTABLE"' 'encryption_type = "KMS"' 'scan_on_push = true' 'github_oidc_subject_prefix}:environment:validator-runtime-ecr-mirror' 'ecr:BatchGetImage' 'ecr:DescribeImages' 'ecr:PutImage'; do
+for required in 'enable_validator_runtime_ecr_mirror' 'default     = false' 'aws_ecr_repository" "validator_runtime' 'image_tag_mutability = "IMMUTABLE"' 'encryption_type = "KMS"' 'scan_on_push = true' 'local.github_destination_oidc_subject_prefix}:environment:validator-runtime-ecr-mirror' 'ecr:BatchGetImage' 'ecr:DescribeImages' 'ecr:PutImage'; do
   grep -Fq "$required" "$terraform_file" || fail "missing runtime mirror contract: $required"
 done
 grep -Fq 'validator-runtime-web3signer' "$terraform_file" || fail 'runtime mirror can collide with the legacy Web3Signer repository'

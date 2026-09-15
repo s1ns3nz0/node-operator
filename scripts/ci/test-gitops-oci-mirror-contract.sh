@@ -37,7 +37,7 @@ for required in \
   'vault_chart = "${local.name_prefix}-gitops-vault/vault"' \
   'cert_manager_chart = "${local.name_prefix}-gitops-cert-manager/cert-manager"' \
   'token.actions.githubusercontent.com:repository' \
-  '${var.github_oidc_subject_prefix}:environment:gitops-oci-mirror' \
+  '${local.github_destination_oidc_subject_prefix}:environment:gitops-oci-mirror' \
   '"ecr:BatchGetImage"' \
   '"ecr:DescribeImages"' \
   '"ecr:PutImage"' \
