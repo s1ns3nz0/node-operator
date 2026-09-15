@@ -20,6 +20,14 @@ its `/ko-app/kubectl-kyverno` binary SHA-256 is
 `fd049f973d08fad9e6041a56aea901eda5d99a645c2f9a60da06ccbc65996c1f`.
 Grype 0.111.0 reported two Unknown findings and zero High/Critical findings.
 Those two Unknown findings are the two advisory/package/version pairs above.
+This was the local diagnostic scanner, not the release toolchain. The release
+installer `scripts/ci/install-release-sca-tool.sh` pins Grype **0.118.0** with an
+archive checksum. Run `34915568618` generated the same two findings using that
+version for candidate `sha256:585fb3f2a765a0262fcdc6e8be903e2c8e5d2f437a2c7d62f8967ac8eea9c8f1`.
+The original acceptance implementation incorrectly required the local version
+and rejected this valid release-toolchain report. The verifier must require the
+release-pinned version; this correction neither adds accepted findings nor
+changes the accepted dependency/build scope.
 govulncheck 1.1.4 binary/symbol analysis confirms code presence, not exploitation.
 No whole-program proof that the vulnerable paths are unreachable was obtained.
 
