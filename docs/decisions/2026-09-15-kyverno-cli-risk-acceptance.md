@@ -75,9 +75,29 @@ the publication evidence before invoking `apply-kyverno-bootstrap.py`.
 The publisher necessarily pushes an immutable candidate tag before registry
 scanning. Its presence in ECR is not approval: neither that tag nor an unreviewed
 digest may be added to installer inputs or used for live deployment. The existing
-catalog generator rejects risk-accepted v2 records until a separate compatible
-promotion verifier is reviewed; publication alone therefore does not unblock live
-installation.
+catalog proposal renderer requires explicit retained risk evidence for v2 records
+and revalidates the full decision before proposing a row. The caller must verify
+Cosign first; publication alone therefore does not unblock live installation.
+
+## Verified publication candidate
+
+The [Kyverno-only publication run 34916913146](https://github.com/s1ns3nz0/node-operator/actions/runs/34916913146)
+succeeded from main revision `7609863012c2c468b291f7189e8509debf908eb2`.
+The proposed catalog image digest is
+`sha256:9dbbfdb7948a996674d0a99304460ab93863692ce40e62feb64dc2fc7ed6a8e6`.
+An independent Cosign 3.1.2 verification against ECR checked the image signature
+and four attestations (risk decision, raw Grype report, SBOM and provenance),
+requiring the exact main workflow identity, GitHub OIDC issuer and source revision.
+Each independently verified predicate matched the downloaded publication evidence
+and image subject. No live migration or validator activation is implied.
+
+Publication record SHA-256:
+`27a386256fa499b91cc976cd039678e1ec3258c88a6f4c7130b41be3853bf1ed`.
+Risk decision SHA-256:
+`a558a6a558f16b59fd556ac143d71c21991fe8715d52a344df9dd1f01f9b7106`.
+The original blocked scan remains preserved; the two accepted Unknown findings
+were not converted into a clean scan. The expiry and pre-installation migration
+control review above still apply.
 
 ## Remaining risk and exit criteria
 

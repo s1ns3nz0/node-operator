@@ -70,6 +70,27 @@ class ArtifactInventoryTests(unittest.TestCase):
             shutil.copyfile(ROOT / source, self.source / source)
         (self.bundle / "rendered/installer-artifact-index.json").write_text(json.dumps(vault_index()))
 
+    def test_reviewed_private_cli_maps_to_deployment_repository(self):
+        path = self.source / ".ci/gitops/approved-oci-artifacts.json"
+        catalog = json.loads(path.read_text())
+        source = "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-nodes@" + DIGEST
+        catalog["artifacts"] = [entry for entry in catalog["artifacts"] if not entry["source"].startswith(source.split("@")[0] + "@")]
+        row = {"source": source, "destination": "nodes", "ecrTag": DIGEST[7:], "purpose": "Reviewed Kyverno CLI"}
+        catalog["artifacts"].append(row)
+        path.write_text(json.dumps(catalog))
+        result = self.invoke()
+        self.assertEqual(result.returncode, 1, result.stderr)  # Other fixture authorities remain unresolved.
+        value = json.loads(result.stdout)
+        entries = value["artifacts"]
+        item = next(entry for entry in entries if entry["component"] == "kyverno-cli")
+        self.assertEqual(item["source"], source)
+        self.assertEqual(item["destination"], "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-nodes@" + DIGEST)
+        catalog["artifacts"].append(row)
+        path.write_text(json.dumps(catalog))
+        duplicate = self.invoke()
+        self.assertNotEqual(duplicate.returncode, 0)
+        self.assertIn("kyverno-cli", duplicate.stderr)
+
     def tearDown(self):
         self.tmp.cleanup()
 
