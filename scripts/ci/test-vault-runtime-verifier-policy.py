@@ -12,7 +12,7 @@ def block(source, kind, name):
     return match[1]
 
 
-def validate(source):
+def validate(source, signer_source):
     variable = block(source, "variable", "enable_vault_runtime_ci_verifier")
     assert re.search(r"type\s*=\s*bool", variable)
     assert re.search(r"default\s*=\s*false", variable)
@@ -28,7 +28,7 @@ def validate(source):
         '"token.actions.githubusercontent.com:repository"',
         '[var.github_repository]',
         '"token.actions.githubusercontent.com:sub"',
-        '"${var.github_oidc_subject_prefix}:ref:refs/heads/main"',
+        '"${local.github_destination_oidc_subject_prefix}:ref:refs/heads/main"',
     ):
         assert expected in trust, f"OIDC trust condition missing: {expected}"
 
@@ -66,21 +66,48 @@ def validate(source):
     output = block(source, "output", "github_vault_runtime_ci_verifier_role_arn")
     assert "try(aws_iam_role.github_vault_runtime_verifier[0].arn, null)" in output
 
+    # Destination trust is derived from the selected repository and numeric
+    # IDs, while preserving the reviewed legacy defaults when all overrides
+    # are blank. It must not fall back to the release-signer source pin.
+    for expected in (
+        'github_destination_identity_is_legacy     = var.github_repository == "s1ns3nz0/node-operator" && var.github_owner_id == "" && var.github_repository_id == ""',
+        'github_destination_owner_id               = local.github_destination_identity_is_legacy ? "258690008" : var.github_owner_id',
+        'github_destination_repository_id          = local.github_destination_identity_is_legacy ? "1353388960" : var.github_repository_id',
+        'github_destination_oidc_subject_prefix    = "repo:${split("/", var.github_repository)[0]}@${local.github_destination_owner_id}/${split("/", var.github_repository)[1]}@${local.github_destination_repository_id}"',
+        'release_signer_source_oidc_subject_prefix = var.github_oidc_subject_prefix',
+    ):
+        assert expected in signer_source, f"destination identity derivation missing: {expected}"
 
-source = (Path(__file__).resolve().parents[2] / "infra/terraform/vault-runtime-verifier.tf").read_text()
-validate(source)
-for bad in (
-    source.replace('"ecr:DescribeImages", ', '"ecr:PutImage", '),
-    source.replace('values(aws_ecr_repository.vault_runtime)[*].arn', '["*"]'),
-    source.replace('var.enable_vault_runtime_ecr && var.enable_node_runtime_ecr', 'true'),
-    source.replace(':ref:refs/heads/main', ':environment:vault-runtime-verify'),
-    source.replace(':ref:refs/heads/main', ':ref:refs/heads/release'),
-    source.replace(':ref:refs/heads/main', ':ref:refs/tags/v1.0.0'),
-    source.replace(':ref:refs/heads/main', ':pull_request'),
+
+root = Path(__file__).resolve().parents[2]
+source = (root / "infra/terraform/vault-runtime-verifier.tf").read_text()
+signer_source = (root / "infra/terraform/vault-signer.tf").read_text()
+validate(source, signer_source)
+for bad_source, bad_signer_source in (
+    (source.replace('"ecr:DescribeImages", ', '"ecr:PutImage", '), signer_source),
+    (source.replace('values(aws_ecr_repository.vault_runtime)[*].arn', '["*"]'), signer_source),
+    (source.replace('var.enable_vault_runtime_ecr && var.enable_node_runtime_ecr', 'true'), signer_source),
+    (source.replace('local.github_destination_oidc_subject_prefix', '"*"'), signer_source),
+    (source.replace('local.github_destination_oidc_subject_prefix', 'var.github_oidc_subject_prefix'), signer_source),
+    (source.replace(':ref:refs/heads/main', ':environment:vault-runtime-verify'), signer_source),
+    (source.replace(':ref:refs/heads/main', ':ref:refs/heads/release'), signer_source),
+    (source.replace(':ref:refs/heads/main', ':ref:refs/tags/v1.0.0'), signer_source),
+    (source.replace(':ref:refs/heads/main', ':pull_request'), signer_source),
 ):
     try:
-        validate(bad)
+        validate(bad_source, bad_signer_source)
     except AssertionError:
         continue
     raise AssertionError("unsafe verifier policy or trust mutation passed")
+
+for bad_signer_source in (
+    signer_source.replace('"258690008"', '"*"'),
+    signer_source.replace('"1353388960"', '"*"'),
+    signer_source.replace('github_destination_owner_id               = local.github_destination_identity_is_legacy ? "258690008" : var.github_owner_id', 'github_destination_owner_id = var.github_owner_id'),
+):
+    try:
+        validate(source, bad_signer_source)
+    except AssertionError:
+        continue
+    raise AssertionError("unsafe destination identity derivation mutation passed")
 print("PASS: Vault runtime verifier is disabled, prerequisite-bound, main-only, and read-only")
