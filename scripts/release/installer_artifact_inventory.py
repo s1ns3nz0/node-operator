@@ -175,6 +175,11 @@ def build_inventory(bundle_root: Path, release_sha: str, account: str, region: s
         ("nethermind", "nethermind/nethermind@", "nodes", "Hoodi execution node"),
         ("prysm-beacon", "offchainlabs/prysm-beacon-chain@", "nodes", "Hoodi consensus node"),
     )
+    # Older bundles did not approve a private CLI. Only a reviewed canonical
+    # catalog row adds this authority; Kyverno bootstrap independently requires it.
+    cli_prefix = "106760547719.dkr.ecr.ap-northeast-2.amazonaws.com/node-operator-baseline-gitops-nodes@"
+    if catalog is not None and any(item["source"].startswith(cli_prefix) for item in catalog):
+        gitops_components += (("kyverno-cli", cli_prefix, "nodes", "Kyverno resource migration"),)
     for component, prefix, destination, consumer in gitops_components:
         if catalog is None:
             entries.append(_entry(component, consumer, None, None, None, True,
